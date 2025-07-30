@@ -11,6 +11,7 @@ interface StartupDialogProps {
 }
 
 const LOCAL_STORAGE_KEY = 'observer_local_server_address';
+const SERVER_CHOICE_KEY = 'observer_server_choice';
 const DEFAULT_SERVER_ADDRESS = 'http://localhost:3838';
 
 const StartupDialog: React.FC<StartupDialogProps> = ({
@@ -26,6 +27,13 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
 
   useEffect(() => {
+    const savedChoice = localStorage.getItem(SERVER_CHOICE_KEY);
+    if (savedChoice) {
+      const useObServer = savedChoice === 'cloud';
+      if (setUseObServer) setUseObServer(useObServer);
+      onDismiss();
+      return;
+    }
     // Only run this check if in a local context
     if (hostingContext === 'self-hosted' || hostingContext === 'tauri') {
       const checkLocalModels = async () => {
@@ -80,9 +88,10 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
         // If not in a local context, just disable the loading state immediately
         setIsCheckingModels(false);
     }
-  }, [hostingContext]);
+  }, [hostingContext, onDismiss, setUseObServer]);
 
   const handleObServerStart = () => {
+    localStorage.setItem(SERVER_CHOICE_KEY, 'cloud');
     if (!isAuthenticated) {
       if (onLogin) onLogin();
     } else {
@@ -100,7 +109,7 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
       setView('no-models');
       if (setUseObServer) setUseObServer(false);
     } else {
-      // Proceed as normal
+      localStorage.setItem(SERVER_CHOICE_KEY, 'local');
       if (setUseObServer) setUseObServer(false);
       onDismiss();
     }
@@ -108,6 +117,7 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
   
   // --- BUG FIX 2 
   const handleProceedWithLocal = () => {
+    localStorage.setItem(SERVER_CHOICE_KEY, 'local');
     if (hasNoModels) {
         // Set the view AND set the server mode to local
         setView('no-models');
@@ -124,6 +134,7 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
   };
 
   const handleTerminalClose = () => {
+    localStorage.setItem(SERVER_CHOICE_KEY, 'local');
     setIsTerminalOpen(false);
     if (setUseObServer) setUseObServer(false);
     onDismiss();
