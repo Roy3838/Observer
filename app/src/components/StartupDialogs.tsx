@@ -83,13 +83,6 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
               Skip →
             </button>
           )}
-
-          {/* Footer - only show for self-hosted and tauri */}
-          {hostingContext !== 'official-web' && (
-            <p className="text-xs text-gray-500 mt-6">
-              You can always sign in later from the app header to unlock cloud features.
-            </p>
-          )}
         </div>
       </div>
     </div>
