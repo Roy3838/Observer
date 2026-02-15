@@ -50,7 +50,8 @@ export const PricingTable: React.FC<PricingTableProps> = ({
   const isAppleDevice = isIOS();
   const [internalLoading, setInternalLoading] = useState(false);
 
-  // Apple In-App Purchase handlers - handle everything internally
+  // Apple In-App Purchase handler - just purchase and navigate to /upgrade-success
+  // Verification is handled by UpgradeSuccessPage
   const handleApplePurchase = useCallback(async (tier: 'plus' | 'pro' | 'max') => {
     if (!applePayments) return;
 
@@ -58,20 +59,21 @@ export const PricingTable: React.FC<PricingTableProps> = ({
     setInternalLoading(true);
 
     try {
-      const result = await applePayments.purchaseSubscription(tier);
-      Logger.info('PRICING_TABLE', 'Purchase result:', result);
+      const purchaseResult = await applePayments.purchaseProduct(tier);
+      Logger.info('PRICING_TABLE', 'Purchase result:', purchaseResult);
 
-      if (result.success) {
-        Logger.info('PRICING_TABLE', `Purchase successful! Navigating to /upgrade-success`);
+      if (purchaseResult.success) {
+        Logger.info('PRICING_TABLE', 'StoreKit purchase succeeded, navigating to /upgrade-success');
 
         // Close modal if provided
         if (onModalClose) {
           onModalClose();
         }
 
-        // Navigate to success page which will refresh JWT and poll quota
+        // Navigate to success page - it will handle verification and polling
         window.location.href = '/upgrade-success';
       }
+      // If not successful, error is already set by the hook
     } catch (err) {
       Logger.error('PRICING_TABLE', 'Purchase failed:', err);
     } finally {
@@ -422,6 +424,36 @@ export const PricingTable: React.FC<PricingTableProps> = ({
           </button>
         </div>
       )}
+      {/* Terms of Service & Privacy Policy - Required for App Store */}
+      <div className="text-center mt-6 pt-4 border-t border-gray-200">
+        <p className="text-xs text-gray-500">
+          By subscribing, you agree to our{' '}
+          {isIOS() ? (
+            <>
+              <button
+                onClick={() => openUrl('https://observer-ai.com/#/Terms')}
+                className="text-blue-600 hover:text-blue-800 underline"
+              >
+                Terms of Service
+              </button>
+              {' '}and{' '}
+              <button
+                onClick={() => openUrl('https://observer-ai.com/#/Privacy')}
+                className="text-blue-600 hover:text-blue-800 underline"
+              >
+                Privacy Policy
+              </button>
+            </>
+          ) : (
+            <>
+              <a href="https://observer-ai.com/#/Terms" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">Terms of Service</a>
+              {' '}and{' '}
+              <a href="https://observer-ai.com/#/Privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">Privacy Policy</a>
+            </>
+          )}
+          .
+        </p>
+      </div>
     </div>
   );
 };

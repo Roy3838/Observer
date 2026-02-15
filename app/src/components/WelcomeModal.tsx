@@ -25,7 +25,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
   const {
     isLoading: isAppleLoading,
     error: appleError,
-    purchaseSubscription,
+    purchaseProduct,
   } = useApplePayments();
 
   const isAppleDevice = isIOS();
@@ -91,17 +91,19 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
 
   const handleProCheckout = () => handleApiAction('create-checkout-session');
 
-  // Apple In-App Purchase handler for Pro
+  // Apple In-App Purchase handler for Pro - just purchase and navigate
+  // Verification is handled by UpgradeSuccessPage
   const handleApplePurchasePro = useCallback(async () => {
     setIsButtonLoading(true);
     setError(null);
+
     try {
-      const result = await purchaseSubscription('pro');
-      if (result.success) {
-        Logger.info('WELCOME', 'Apple Pro purchase successful', { tier: result.tier });
+      const purchaseResult = await purchaseProduct('pro');
+      if (purchaseResult.success) {
+        Logger.info('WELCOME', 'StoreKit purchase succeeded, navigating to /upgrade-success');
         window.location.href = '/upgrade-success';
       } else {
-        setError(result.error || 'Purchase failed');
+        setError(purchaseResult.error || 'Purchase failed');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Purchase failed';
@@ -109,7 +111,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
     } finally {
       setIsButtonLoading(false);
     }
-  }, [purchaseSubscription]);
+  }, [purchaseProduct]);
 
   const handleStarGithub = () => {
     window.open('https://github.com/Roy3838/Observer', '_blank');

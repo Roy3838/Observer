@@ -26,11 +26,31 @@ interface AppleProduct {
   priceCurrencyCode: string;
 }
 
-interface PurchaseResult {
+interface PurchaseProductResult {
+  success: boolean;
+  jwsRepresentation?: string;
+  productId?: string;
+  error?: string;
+}
+
+interface VerifyTransactionResult {
+  success: boolean;
+  tier?: string;
+  originalTransactionId?: string;
+  error?: string;
+}
+
+interface RestoreResult {
   success: boolean;
   tier?: string;
   error?: string;
   originalTransactionId?: string;
+}
+
+interface ActiveSubscriptionResult {
+  hasActiveSubscription: boolean;
+  jwsRepresentation?: string;
+  productId?: string;
 }
 
 export interface UseApplePaymentsReturn {
@@ -39,8 +59,10 @@ export interface UseApplePaymentsReturn {
   error: string | null;
   products: AppleProduct[];
   loadProducts: () => Promise<void>;
-  purchaseSubscription: (tier: AppleTier) => Promise<PurchaseResult>;
-  restorePurchases: () => Promise<PurchaseResult>;
+  purchaseProduct: (tier: AppleTier) => Promise<PurchaseProductResult>;
+  verifyTransaction: (jwsRepresentation: string) => Promise<VerifyTransactionResult>;
+  getActiveSubscription: () => Promise<ActiveSubscriptionResult | null>;
+  restorePurchases: () => Promise<RestoreResult>;
 }
 
 // Dynamically import the IAP plugin (only available in Tauri iOS)
@@ -159,8 +181,8 @@ export function useApplePayments(): UseApplePaymentsReturn {
     }
   }, [isAppleDevice]);
 
-  // Purchase a subscription tier
-  const purchaseSubscription = useCallback(async (tier: AppleTier): Promise<PurchaseResult> => {
+  // Step 1: Purchase product via StoreKit (returns JWS for verification)
+  const purchaseProduct = useCallback(async (tier: AppleTier): Promise<PurchaseProductResult> => {
     if (!isAppleDevice) {
       return { success: false, error: 'Not an Apple device' };
     }
@@ -195,7 +217,42 @@ export function useApplePayments(): UseApplePaymentsReturn {
         throw new Error('No signed transaction received from Apple');
       }
 
-      // Verify with our backend
+      Logger.info(LOG_SOURCE, 'StoreKit purchase successful, returning JWS for verification');
+
+      return {
+        success: true,
+        jwsRepresentation,
+        productId: purchase.productId,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Purchase failed';
+      Logger.error(LOG_SOURCE, 'Purchase failed', {
+        error: err,
+        tier,
+        productId: APPLE_PRODUCT_IDS[tier],
+        errorType: err instanceof Error ? err.constructor.name : typeof err,
+        errorMessage: message
+      });
+
+      // Provide helpful hints for common errors
+      let userMessage = message;
+      if (message.includes('Product not found') || message.includes('product') || message.includes('invalid')) {
+        userMessage = `Product not found. Please ensure:\n1. All 3 products exist in App Store Connect\n2. Products are "Ready to Submit"\n3. Using sandbox test account\n4. Wait 30+ min after creating products\n\nError: ${message}`;
+      }
+
+      setError(userMessage);
+      return { success: false, error: userMessage };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAppleDevice, isAuthenticated]);
+
+  // Step 2: Verify transaction with backend (call after purchaseProduct succeeds)
+  const verifyTransaction = useCallback(async (jwsRepresentation: string): Promise<VerifyTransactionResult> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
       Logger.info(LOG_SOURCE, 'Verifying transaction with backend...');
       const token = await getAccessToken();
 
@@ -227,30 +284,67 @@ export function useApplePayments(): UseApplePaymentsReturn {
         originalTransactionId: result.original_transaction_id,
       };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Purchase failed';
-      Logger.error(LOG_SOURCE, 'Purchase failed', {
+      const message = err instanceof Error ? err.message : 'Verification failed';
+      Logger.error(LOG_SOURCE, 'Transaction verification failed', {
         error: err,
-        tier,
-        productId: APPLE_PRODUCT_IDS[tier],
         errorType: err instanceof Error ? err.constructor.name : typeof err,
         errorMessage: message
       });
 
-      // Provide helpful hints for common errors
-      let userMessage = message;
-      if (message.includes('Product not found') || message.includes('product') || message.includes('invalid')) {
-        userMessage = `Product not found. Please ensure:\n1. All 3 products exist in App Store Connect\n2. Products are "Ready to Submit"\n3. Using sandbox test account\n4. Wait 30+ min after creating products\n\nError: ${message}`;
-      }
-
-      setError(userMessage);
-      return { success: false, error: userMessage };
+      setError(message);
+      return { success: false, error: message };
     } finally {
       setIsLoading(false);
     }
-  }, [isAppleDevice, isAuthenticated, getAccessToken]);
+  }, [getAccessToken]);
 
-  // Restore previous purchases
-  const restorePurchases = useCallback(async (): Promise<PurchaseResult> => {
+  // Get active subscription from StoreKit (queries local state, doesn't hit API)
+  // Used by UpgradeSuccessPage to get JWS for verification
+  const getActiveSubscription = useCallback(async (): Promise<ActiveSubscriptionResult | null> => {
+    if (!isAppleDevice) {
+      return null;
+    }
+
+    try {
+      const iap = await getIapPlugin();
+      if (!iap) {
+        Logger.warn(LOG_SOURCE, 'IAP plugin not available for getActiveSubscription');
+        return null;
+      }
+
+      Logger.info(LOG_SOURCE, 'Querying StoreKit for active subscription...');
+      const response = await iap.restorePurchases('subs');
+      const purchaseList = response.purchases || [];
+
+      // Find active subscription with JWS
+      // PurchaseState: PURCHASED = 0, CANCELED = 1, PENDING = 2
+      const activePurchase = purchaseList.find((p) =>
+        p.purchaseState === 0 && // PURCHASED
+        p.jwsRepresentation
+      );
+
+      if (activePurchase) {
+        Logger.info(LOG_SOURCE, 'Found active subscription', {
+          productId: activePurchase.productId,
+          hasJws: !!activePurchase.jwsRepresentation,
+        });
+        return {
+          hasActiveSubscription: true,
+          jwsRepresentation: activePurchase.jwsRepresentation,
+          productId: activePurchase.productId,
+        };
+      }
+
+      Logger.info(LOG_SOURCE, 'No active subscription found in StoreKit');
+      return { hasActiveSubscription: false };
+    } catch (err) {
+      Logger.error(LOG_SOURCE, 'Failed to query StoreKit for active subscription', { error: err });
+      return null;
+    }
+  }, [isAppleDevice]);
+
+  // Restore previous purchases (calls backend restore-purchases endpoint)
+  const restorePurchases = useCallback(async (): Promise<RestoreResult> => {
     if (!isAppleDevice) {
       return { success: false, error: 'Not an Apple device' };
     }
@@ -282,8 +376,9 @@ export function useApplePayments(): UseApplePaymentsReturn {
       Logger.info(LOG_SOURCE, 'Found purchases to restore', { count: purchaseList.length });
 
       // Find the most recent active subscription with a JWS
+      // PurchaseState: PURCHASED = 0, CANCELED = 1, PENDING = 2
       const activePurchase = purchaseList.find((p) =>
-        p.purchaseState === 1 && // PURCHASED
+        p.purchaseState === 0 && // PURCHASED
         p.jwsRepresentation
       );
 
@@ -339,7 +434,9 @@ export function useApplePayments(): UseApplePaymentsReturn {
     error,
     products,
     loadProducts,
-    purchaseSubscription,
+    purchaseProduct,
+    verifyTransaction,
+    getActiveSubscription,
     restorePurchases,
   };
 }
