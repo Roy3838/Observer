@@ -47,7 +47,7 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[102] backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-xl p-6 sm:p-8 max-w-md w-full transition-all duration-300 relative">
+      <div className="bg-white rounded-xl shadow-xl p-6 sm:p-8 max-w-md w-full transition-all duration-300">
         <div className="text-center">
           {/* Observer Logo/Icon */}
           <div className="flex justify-center mb-6">
@@ -74,13 +74,13 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
             </button>
           </div>
 
-          {/* Small Skip button positioned bottom-right for Tauri and Self-hosted */}
+          {/* Skip button for Tauri and Self-hosted */}
           {(hostingContext !== 'official-web') && (
             <button
               onClick={handleSkip}
-              className="absolute bottom-4 right-4 text-xs text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1"
+              className="mt-4 text-sm text-gray-400 hover:text-gray-600 transition-colors"
             >
-              Skip →
+              Skip
             </button>
           )}
         </div>
