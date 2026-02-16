@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@contexts/AuthContext';
 import { useApplePayments } from '@hooks/useApplePayments';
 import { X as CloseIcon, X, Loader2, Sparkles, Zap, Heart, Star, Shield, ExternalLink, Check } from 'lucide-react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { Logger } from '@utils/logging';
 import { isIOS } from '../utils/platform';
 
@@ -383,6 +384,21 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
                   {isButtonLoading || isAppleLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
                   Start Free Trial
                 </button>
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  {isAppleDevice ? (
+                    <>
+                      <button onClick={() => openUrl('https://observer-ai.com/#/Terms')} className="hover:underline">Terms</button>
+                      {' · '}
+                      <button onClick={() => openUrl('https://observer-ai.com/#/Privacy')} className="hover:underline">Privacy</button>
+                    </>
+                  ) : (
+                    <>
+                      <a href="https://observer-ai.com/#/Terms" target="_blank" rel="noopener noreferrer" className="hover:underline">Terms</a>
+                      {' · '}
+                      <a href="https://observer-ai.com/#/Privacy" target="_blank" rel="noopener noreferrer" className="hover:underline">Privacy</a>
+                    </>
+                  )}
+                </p>
               </div>
 
               {/* Error Display */}
