@@ -6,7 +6,7 @@ import '@/index.css';
 
 // Import the three possible application entry points
 import App from './web/App'; // Your existing App.tsx, now the "WebApp"
-import LauncherShell from './desktop/LauncherShell'; // The new "DesktopApp"
+//import LauncherShell from './desktop/LauncherShell'; // The new "DesktopApp"
 import OverlayWindow from './desktop/OverlayWindow'; // The overlay window
 
 // Import platform detection utilities
@@ -21,7 +21,7 @@ function getRootComponent() {
 
   // Desktop Tauri: use LauncherShell with desktop-specific features
   if (isDesktop()) {
-    return LauncherShell;
+    return App;
   }
 
   // Mobile Tauri or Web: use App

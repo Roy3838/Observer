@@ -7,6 +7,7 @@ Default permissions for screen capture plugin
 - `allow-start-capture-cmd`
 - `allow-stop-capture-cmd`
 - `allow-get-frame-cmd`
+- `allow-get-broadcast-status`
 
 ## Permission Table
 
@@ -39,6 +40,32 @@ Enables the android command without any pre-configured scope.
 <td>
 
 Denies the android command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`screen-capture:allow-get-broadcast-status`
+
+</td>
+<td>
+
+Enables the get_broadcast_status command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`screen-capture:deny-get-broadcast-status`
+
+</td>
+<td>
+
+Denies the get_broadcast_status command without any pre-configured scope.
 
 </td>
 </tr>

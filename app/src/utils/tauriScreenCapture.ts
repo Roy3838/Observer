@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { isMobile } from './platform';
+import { isTauri } from './platform';
 
 export interface BroadcastStatus {
   isActive: boolean;
@@ -9,12 +9,16 @@ export interface BroadcastStatus {
   frameCount: number;
 }
 
-class MobileScreenCapture {
+/**
+ * Unified Tauri screen capture - works on both mobile and desktop
+ * Uses the screen-capture plugin which handles platform-specific capture internally
+ */
+class TauriScreenCapture {
   private capturing = false;
 
   async startCapture(): Promise<boolean> {
-    if (!isMobile()) {
-      throw new Error('Mobile screen capture only available on iOS/Android');
+    if (!isTauri()) {
+      throw new Error('Screen capture only available in Tauri');
     }
 
     try {
@@ -27,8 +31,8 @@ class MobileScreenCapture {
   }
 
   async stopCapture(): Promise<void> {
-    if (!isMobile()) {
-      throw new Error('Mobile screen capture only available on iOS/Android');
+    if (!isTauri()) {
+      throw new Error('Screen capture only available in Tauri');
     }
 
     try {
@@ -42,17 +46,25 @@ class MobileScreenCapture {
   /**
    * Unified status + frame query - the single source of truth for broadcast state.
    * Returns broadcast state and the latest frame in one call.
+   * Works on both mobile (iOS/Android) and desktop (macOS/Windows/Linux).
    */
   async getStatus(): Promise<BroadcastStatus> {
-    if (!isMobile()) {
-      throw new Error('Mobile screen capture only available on iOS/Android');
+    if (!isTauri()) {
+      // Return safe defaults when not in Tauri
+      return {
+        isActive: false,
+        isStale: false,
+        frame: null,
+        timestamp: null,
+        frameCount: 0,
+      };
     }
 
     try {
-      const result = await invoke<BroadcastStatus>('get_broadcast_status');
+      const result = await invoke<BroadcastStatus>('plugin:screen-capture|get_broadcast_status');
       return result;
     } catch (error) {
-      console.error('[ScreenCapture] ❌ Error getting status:', error);
+      console.error('[ScreenCapture] Error getting status:', error);
       // Return safe defaults on error
       return {
         isActive: false,
@@ -69,4 +81,7 @@ class MobileScreenCapture {
   }
 }
 
-export const mobileScreenCapture = new MobileScreenCapture();
+export const tauriScreenCapture = new TauriScreenCapture();
+
+// Re-export with old name for backward compatibility
+export const mobileScreenCapture = tauriScreenCapture;

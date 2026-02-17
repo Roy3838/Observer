@@ -49,3 +49,4 @@ base64 = "0.21.0"
 image = "0.24.6"
 tauri-plugin-screenshots = "2.2.0"
 tauri-plugin-opener = "2"
+tauri-plugin-screen-capture = { path = "../plugins/screen-capture" }

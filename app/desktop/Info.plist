@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSCameraUsageDescription</key>
+    <string>Observer needs camera access to capture video for AI assistance</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Observer needs microphone access for voice transcription and AI assistance</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Observer needs screen recording access to capture your screen for AI assistance</string>
+</dict>
+</plist>

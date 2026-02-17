@@ -307,6 +307,18 @@
           "markdownDescription": "Denies the android command without any pre-configured scope."
         },
         {
+          "description": "Enables the get_broadcast_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-broadcast-status",
+          "markdownDescription": "Enables the get_broadcast_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_broadcast_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-broadcast-status",
+          "markdownDescription": "Denies the get_broadcast_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the get_frame_cmd command without any pre-configured scope.",
           "type": "string",
           "const": "allow-get-frame-cmd",
@@ -355,10 +367,10 @@
           "markdownDescription": "Denies the stop_capture_cmd command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-get-frame-cmd`",
+          "description": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-get-frame-cmd`\n- `allow-get-broadcast-status`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-get-frame-cmd`"
+          "markdownDescription": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-get-frame-cmd`\n- `allow-get-broadcast-status`"
         }
       ]
     }

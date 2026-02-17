@@ -140,6 +140,174 @@
                   "identifier": {
                     "anyOf": [
                       {
+                        "description": "This permission set allows opening `mailto:`, `tel:`, `https://` and `http://` urls using their default application\nas well as reveal file in directories using default file explorer\n#### This default permission set includes:\n\n- `allow-open-url`\n- `allow-reveal-item-in-dir`\n- `allow-default-urls`",
+                        "type": "string",
+                        "const": "opener:default",
+                        "markdownDescription": "This permission set allows opening `mailto:`, `tel:`, `https://` and `http://` urls using their default application\nas well as reveal file in directories using default file explorer\n#### This default permission set includes:\n\n- `allow-open-url`\n- `allow-reveal-item-in-dir`\n- `allow-default-urls`"
+                      },
+                      {
+                        "description": "This enables opening `mailto:`, `tel:`, `https://` and `http://` urls using their default application.",
+                        "type": "string",
+                        "const": "opener:allow-default-urls",
+                        "markdownDescription": "This enables opening `mailto:`, `tel:`, `https://` and `http://` urls using their default application."
+                      },
+                      {
+                        "description": "Enables the open_path command without any pre-configured scope.",
+                        "type": "string",
+                        "const": "opener:allow-open-path",
+                        "markdownDescription": "Enables the open_path command without any pre-configured scope."
+                      },
+                      {
+                        "description": "Enables the open_url command without any pre-configured scope.",
+                        "type": "string",
+                        "const": "opener:allow-open-url",
+                        "markdownDescription": "Enables the open_url command without any pre-configured scope."
+                      },
+                      {
+                        "description": "Enables the reveal_item_in_dir command without any pre-configured scope.",
+                        "type": "string",
+                        "const": "opener:allow-reveal-item-in-dir",
+                        "markdownDescription": "Enables the reveal_item_in_dir command without any pre-configured scope."
+                      },
+                      {
+                        "description": "Denies the open_path command without any pre-configured scope.",
+                        "type": "string",
+                        "const": "opener:deny-open-path",
+                        "markdownDescription": "Denies the open_path command without any pre-configured scope."
+                      },
+                      {
+                        "description": "Denies the open_url command without any pre-configured scope.",
+                        "type": "string",
+                        "const": "opener:deny-open-url",
+                        "markdownDescription": "Denies the open_url command without any pre-configured scope."
+                      },
+                      {
+                        "description": "Denies the reveal_item_in_dir command without any pre-configured scope.",
+                        "type": "string",
+                        "const": "opener:deny-reveal-item-in-dir",
+                        "markdownDescription": "Denies the reveal_item_in_dir command without any pre-configured scope."
+                      }
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "allow": {
+                    "items": {
+                      "title": "OpenerScopeEntry",
+                      "description": "Opener scope entry.",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "url"
+                          ],
+                          "properties": {
+                            "app": {
+                              "description": "An application to open this url with, for example: firefox.",
+                              "allOf": [
+                                {
+                                  "$ref": "#/definitions/Application"
+                                }
+                              ]
+                            },
+                            "url": {
+                              "description": "A URL that can be opened by the webview when using the Opener APIs.\n\nWildcards can be used following the UNIX glob pattern.\n\nExamples:\n\n- \"https://*\" : allows all HTTPS origin\n\n- \"https://*.github.com/tauri-apps/tauri\": allows any subdomain of \"github.com\" with the \"tauri-apps/api\" path\n\n- \"https://myapi.service.com/users/*\": allows access to any URLs that begins with \"https://myapi.service.com/users/\"",
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "path"
+                          ],
+                          "properties": {
+                            "app": {
+                              "description": "An application to open this path with, for example: xdg-open.",
+                              "allOf": [
+                                {
+                                  "$ref": "#/definitions/Application"
+                                }
+                              ]
+                            },
+                            "path": {
+                              "description": "A path that can be opened by the webview when using the Opener APIs.\n\nThe pattern can start with a variable that resolves to a system base directory. The variables are: `$AUDIO`, `$CACHE`, `$CONFIG`, `$DATA`, `$LOCALDATA`, `$DESKTOP`, `$DOCUMENT`, `$DOWNLOAD`, `$EXE`, `$FONT`, `$HOME`, `$PICTURE`, `$PUBLIC`, `$RUNTIME`, `$TEMPLATE`, `$VIDEO`, `$RESOURCE`, `$APP`, `$LOG`, `$TEMP`, `$APPCONFIG`, `$APPDATA`, `$APPLOCALDATA`, `$APPCACHE`, `$APPLOG`.",
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "deny": {
+                    "items": {
+                      "title": "OpenerScopeEntry",
+                      "description": "Opener scope entry.",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "url"
+                          ],
+                          "properties": {
+                            "app": {
+                              "description": "An application to open this url with, for example: firefox.",
+                              "allOf": [
+                                {
+                                  "$ref": "#/definitions/Application"
+                                }
+                              ]
+                            },
+                            "url": {
+                              "description": "A URL that can be opened by the webview when using the Opener APIs.\n\nWildcards can be used following the UNIX glob pattern.\n\nExamples:\n\n- \"https://*\" : allows all HTTPS origin\n\n- \"https://*.github.com/tauri-apps/tauri\": allows any subdomain of \"github.com\" with the \"tauri-apps/api\" path\n\n- \"https://myapi.service.com/users/*\": allows access to any URLs that begins with \"https://myapi.service.com/users/\"",
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "path"
+                          ],
+                          "properties": {
+                            "app": {
+                              "description": "An application to open this path with, for example: xdg-open.",
+                              "allOf": [
+                                {
+                                  "$ref": "#/definitions/Application"
+                                }
+                              ]
+                            },
+                            "path": {
+                              "description": "A path that can be opened by the webview when using the Opener APIs.\n\nThe pattern can start with a variable that resolves to a system base directory. The variables are: `$AUDIO`, `$CACHE`, `$CONFIG`, `$DATA`, `$LOCALDATA`, `$DESKTOP`, `$DOCUMENT`, `$DOWNLOAD`, `$EXE`, `$FONT`, `$HOME`, `$PICTURE`, `$PUBLIC`, `$RUNTIME`, `$TEMPLATE`, `$VIDEO`, `$RESOURCE`, `$APP`, `$LOG`, `$TEMP`, `$APPCONFIG`, `$APPDATA`, `$APPLOCALDATA`, `$APPCACHE`, `$APPLOG`.",
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "properties": {
+                "identifier": {
+                  "description": "Identifier of the permission or permission set.",
+                  "allOf": [
+                    {
+                      "$ref": "#/definitions/Identifier"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "identifier": {
+                    "anyOf": [
+                      {
                         "description": "This permission set configures which\nshell functionality is exposed by default.\n\n#### Granted Permissions\n\nIt allows to use the `open` functionality with a reasonable\nscope pre-configured. It will allow opening `http(s)://`,\n`tel:` and `mailto:` links.\n\n#### This default permission set includes:\n\n- `allow-open`",
                         "type": "string",
                         "const": "shell:default",
@@ -386,6 +554,24 @@
     "Identifier": {
       "description": "Permission identifier",
       "oneOf": [
+        {
+          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-authenticate`",
+          "type": "string",
+          "const": "auth:default",
+          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-authenticate`"
+        },
+        {
+          "description": "Enables the authenticate command without any pre-configured scope.",
+          "type": "string",
+          "const": "auth:allow-authenticate",
+          "markdownDescription": "Enables the authenticate command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the authenticate command without any pre-configured scope.",
+          "type": "string",
+          "const": "auth:deny-authenticate",
+          "markdownDescription": "Denies the authenticate command without any pre-configured scope."
+        },
         {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
@@ -2355,6 +2541,60 @@
           "markdownDescription": "Denies the unminimize command without any pre-configured scope."
         },
         {
+          "description": "Allows reading the opened deep link via the get_current command\n#### This default permission set includes:\n\n- `allow-get-current`",
+          "type": "string",
+          "const": "deep-link:default",
+          "markdownDescription": "Allows reading the opened deep link via the get_current command\n#### This default permission set includes:\n\n- `allow-get-current`"
+        },
+        {
+          "description": "Enables the get_current command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:allow-get-current",
+          "markdownDescription": "Enables the get_current command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the is_registered command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:allow-is-registered",
+          "markdownDescription": "Enables the is_registered command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the register command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:allow-register",
+          "markdownDescription": "Enables the register command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the unregister command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:allow-unregister",
+          "markdownDescription": "Enables the unregister command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_current command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:deny-get-current",
+          "markdownDescription": "Denies the get_current command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the is_registered command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:deny-is-registered",
+          "markdownDescription": "Denies the is_registered command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the register command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:deny-register",
+          "markdownDescription": "Denies the register command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the unregister command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:deny-unregister",
+          "markdownDescription": "Denies the unregister command without any pre-configured scope."
+        },
+        {
           "description": "This permission set configures the types of dialogs\navailable from the dialog plugin.\n\n#### Granted Permissions\n\nAll dialog types are enabled.\n\n\n\n#### This default permission set includes:\n\n- `allow-ask`\n- `allow-confirm`\n- `allow-message`\n- `allow-save`\n- `allow-open`",
           "type": "string",
           "const": "dialog:default",
@@ -2421,88 +2661,214 @@
           "markdownDescription": "Denies the save command without any pre-configured scope."
         },
         {
-          "description": "No features are enabled by default, as we believe\nthe shortcuts can be inherently dangerous and it is\napplication specific if specific shortcuts should be\nregistered or unregistered.\n",
+          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-ping`",
           "type": "string",
-          "const": "global-shortcut:default",
-          "markdownDescription": "No features are enabled by default, as we believe\nthe shortcuts can be inherently dangerous and it is\napplication specific if specific shortcuts should be\nregistered or unregistered.\n"
+          "const": "edge-to-edge:default",
+          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-ping`"
         },
         {
-          "description": "Enables the is_registered command without any pre-configured scope.",
+          "description": "Enables the disable command without any pre-configured scope.",
           "type": "string",
-          "const": "global-shortcut:allow-is-registered",
-          "markdownDescription": "Enables the is_registered command without any pre-configured scope."
+          "const": "edge-to-edge:allow-disable",
+          "markdownDescription": "Enables the disable command without any pre-configured scope."
         },
         {
-          "description": "Enables the register command without any pre-configured scope.",
+          "description": "Enables the enable command without any pre-configured scope.",
           "type": "string",
-          "const": "global-shortcut:allow-register",
-          "markdownDescription": "Enables the register command without any pre-configured scope."
+          "const": "edge-to-edge:allow-enable",
+          "markdownDescription": "Enables the enable command without any pre-configured scope."
         },
         {
-          "description": "Enables the register_all command without any pre-configured scope.",
+          "description": "Enables the get_keyboard_info command without any pre-configured scope.",
           "type": "string",
-          "const": "global-shortcut:allow-register-all",
-          "markdownDescription": "Enables the register_all command without any pre-configured scope."
+          "const": "edge-to-edge:allow-get-keyboard-info",
+          "markdownDescription": "Enables the get_keyboard_info command without any pre-configured scope."
         },
         {
-          "description": "Enables the unregister command without any pre-configured scope.",
+          "description": "Enables the get_safe_area_insets command without any pre-configured scope.",
           "type": "string",
-          "const": "global-shortcut:allow-unregister",
-          "markdownDescription": "Enables the unregister command without any pre-configured scope."
+          "const": "edge-to-edge:allow-get-safe-area-insets",
+          "markdownDescription": "Enables the get_safe_area_insets command without any pre-configured scope."
         },
         {
-          "description": "Enables the unregister_all command without any pre-configured scope.",
+          "description": "Enables the hide_keyboard command without any pre-configured scope.",
           "type": "string",
-          "const": "global-shortcut:allow-unregister-all",
-          "markdownDescription": "Enables the unregister_all command without any pre-configured scope."
+          "const": "edge-to-edge:allow-hide-keyboard",
+          "markdownDescription": "Enables the hide_keyboard command without any pre-configured scope."
         },
         {
-          "description": "Denies the is_registered command without any pre-configured scope.",
+          "description": "Enables the show_keyboard command without any pre-configured scope.",
           "type": "string",
-          "const": "global-shortcut:deny-is-registered",
-          "markdownDescription": "Denies the is_registered command without any pre-configured scope."
+          "const": "edge-to-edge:allow-show-keyboard",
+          "markdownDescription": "Enables the show_keyboard command without any pre-configured scope."
         },
         {
-          "description": "Denies the register command without any pre-configured scope.",
+          "description": "Denies the disable command without any pre-configured scope.",
           "type": "string",
-          "const": "global-shortcut:deny-register",
-          "markdownDescription": "Denies the register command without any pre-configured scope."
+          "const": "edge-to-edge:deny-disable",
+          "markdownDescription": "Denies the disable command without any pre-configured scope."
         },
         {
-          "description": "Denies the register_all command without any pre-configured scope.",
+          "description": "Denies the enable command without any pre-configured scope.",
           "type": "string",
-          "const": "global-shortcut:deny-register-all",
-          "markdownDescription": "Denies the register_all command without any pre-configured scope."
+          "const": "edge-to-edge:deny-enable",
+          "markdownDescription": "Denies the enable command without any pre-configured scope."
         },
         {
-          "description": "Denies the unregister command without any pre-configured scope.",
+          "description": "Denies the get_keyboard_info command without any pre-configured scope.",
           "type": "string",
-          "const": "global-shortcut:deny-unregister",
-          "markdownDescription": "Denies the unregister command without any pre-configured scope."
+          "const": "edge-to-edge:deny-get-keyboard-info",
+          "markdownDescription": "Denies the get_keyboard_info command without any pre-configured scope."
         },
         {
-          "description": "Denies the unregister_all command without any pre-configured scope.",
+          "description": "Denies the get_safe_area_insets command without any pre-configured scope.",
           "type": "string",
-          "const": "global-shortcut:deny-unregister-all",
-          "markdownDescription": "Denies the unregister_all command without any pre-configured scope."
+          "const": "edge-to-edge:deny-get-safe-area-insets",
+          "markdownDescription": "Denies the get_safe_area_insets command without any pre-configured scope."
         },
         {
-          "description": "Allows the log command\n#### This default permission set includes:\n\n- `allow-log`",
+          "description": "Denies the hide_keyboard command without any pre-configured scope.",
           "type": "string",
-          "const": "log:default",
-          "markdownDescription": "Allows the log command\n#### This default permission set includes:\n\n- `allow-log`"
+          "const": "edge-to-edge:deny-hide-keyboard",
+          "markdownDescription": "Denies the hide_keyboard command without any pre-configured scope."
         },
         {
-          "description": "Enables the log command without any pre-configured scope.",
+          "description": "Denies the show_keyboard command without any pre-configured scope.",
           "type": "string",
-          "const": "log:allow-log",
-          "markdownDescription": "Enables the log command without any pre-configured scope."
+          "const": "edge-to-edge:deny-show-keyboard",
+          "markdownDescription": "Denies the show_keyboard command without any pre-configured scope."
         },
         {
-          "description": "Denies the log command without any pre-configured scope.",
+          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-register-listener`\n- `allow-remove-listener`\n- `allow-initialize`\n- `allow-get-products`\n- `allow-purchase`\n- `allow-restore-purchases`\n- `allow-get-purchase-history`\n- `allow-acknowledge-purchase`\n- `allow-get-product-status`",
           "type": "string",
-          "const": "log:deny-log",
-          "markdownDescription": "Denies the log command without any pre-configured scope."
+          "const": "iap:default",
+          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-register-listener`\n- `allow-remove-listener`\n- `allow-initialize`\n- `allow-get-products`\n- `allow-purchase`\n- `allow-restore-purchases`\n- `allow-get-purchase-history`\n- `allow-acknowledge-purchase`\n- `allow-get-product-status`"
+        },
+        {
+          "description": "Enables the acknowledge_purchase command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:allow-acknowledge-purchase",
+          "markdownDescription": "Enables the acknowledge_purchase command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_product_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:allow-get-product-status",
+          "markdownDescription": "Enables the get_product_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_products command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:allow-get-products",
+          "markdownDescription": "Enables the get_products command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_purchase_history command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:allow-get-purchase-history",
+          "markdownDescription": "Enables the get_purchase_history command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the initialize command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:allow-initialize",
+          "markdownDescription": "Enables the initialize command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the purchase command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:allow-purchase",
+          "markdownDescription": "Enables the purchase command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the register_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:allow-register-listener",
+          "markdownDescription": "Enables the register_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the remove_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:allow-remove-listener",
+          "markdownDescription": "Enables the remove_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the restore_purchases command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:allow-restore-purchases",
+          "markdownDescription": "Enables the restore_purchases command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the acknowledge_purchase command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:deny-acknowledge-purchase",
+          "markdownDescription": "Denies the acknowledge_purchase command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_product_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:deny-get-product-status",
+          "markdownDescription": "Denies the get_product_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_products command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:deny-get-products",
+          "markdownDescription": "Denies the get_products command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_purchase_history command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:deny-get-purchase-history",
+          "markdownDescription": "Denies the get_purchase_history command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the initialize command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:deny-initialize",
+          "markdownDescription": "Denies the initialize command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the purchase command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:deny-purchase",
+          "markdownDescription": "Denies the purchase command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the register_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:deny-register-listener",
+          "markdownDescription": "Denies the register_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the remove_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:deny-remove-listener",
+          "markdownDescription": "Denies the remove_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the restore_purchases command without any pre-configured scope.",
+          "type": "string",
+          "const": "iap:deny-restore-purchases",
+          "markdownDescription": "Denies the restore_purchases command without any pre-configured scope."
+        },
+        {
+          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-ping`",
+          "type": "string",
+          "const": "ios-keyboard:default",
+          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-ping`"
+        },
+        {
+          "description": "Enables the ping command without any pre-configured scope.",
+          "type": "string",
+          "const": "ios-keyboard:allow-ping",
+          "markdownDescription": "Enables the ping command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the ping command without any pre-configured scope.",
+          "type": "string",
+          "const": "ios-keyboard:deny-ping",
+          "markdownDescription": "Denies the ping command without any pre-configured scope."
         },
         {
           "description": "This permission set configures which\nnotification features are by default exposed.\n\n#### Granted Permissions\n\nIt allows all notification related features.\n\n\n#### This default permission set includes:\n\n- `allow-is-permission-granted`\n- `allow-request-permission`\n- `allow-notify`\n- `allow-register-action-types`\n- `allow-register-listener`\n- `allow-cancel`\n- `allow-get-pending`\n- `allow-remove-active`\n- `allow-get-active`\n- `allow-check-permissions`\n- `allow-show`\n- `allow-batch`\n- `allow-list-channels`\n- `allow-delete-channel`\n- `allow-create-channel`\n- `allow-permission-state`",
@@ -2703,6 +3069,54 @@
           "markdownDescription": "Denies the show command without any pre-configured scope."
         },
         {
+          "description": "This permission set allows opening `mailto:`, `tel:`, `https://` and `http://` urls using their default application\nas well as reveal file in directories using default file explorer\n#### This default permission set includes:\n\n- `allow-open-url`\n- `allow-reveal-item-in-dir`\n- `allow-default-urls`",
+          "type": "string",
+          "const": "opener:default",
+          "markdownDescription": "This permission set allows opening `mailto:`, `tel:`, `https://` and `http://` urls using their default application\nas well as reveal file in directories using default file explorer\n#### This default permission set includes:\n\n- `allow-open-url`\n- `allow-reveal-item-in-dir`\n- `allow-default-urls`"
+        },
+        {
+          "description": "This enables opening `mailto:`, `tel:`, `https://` and `http://` urls using their default application.",
+          "type": "string",
+          "const": "opener:allow-default-urls",
+          "markdownDescription": "This enables opening `mailto:`, `tel:`, `https://` and `http://` urls using their default application."
+        },
+        {
+          "description": "Enables the open_path command without any pre-configured scope.",
+          "type": "string",
+          "const": "opener:allow-open-path",
+          "markdownDescription": "Enables the open_path command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the open_url command without any pre-configured scope.",
+          "type": "string",
+          "const": "opener:allow-open-url",
+          "markdownDescription": "Enables the open_url command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the reveal_item_in_dir command without any pre-configured scope.",
+          "type": "string",
+          "const": "opener:allow-reveal-item-in-dir",
+          "markdownDescription": "Enables the reveal_item_in_dir command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_path command without any pre-configured scope.",
+          "type": "string",
+          "const": "opener:deny-open-path",
+          "markdownDescription": "Denies the open_path command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_url command without any pre-configured scope.",
+          "type": "string",
+          "const": "opener:deny-open-url",
+          "markdownDescription": "Denies the open_url command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the reveal_item_in_dir command without any pre-configured scope.",
+          "type": "string",
+          "const": "opener:deny-reveal-item-in-dir",
+          "markdownDescription": "Denies the reveal_item_in_dir command without any pre-configured scope."
+        },
+        {
           "description": "This permission set configures which\noperating system information are available\nto gather from the frontend.\n\n#### Granted Permissions\n\nAll information except the host name are available.\n\n\n#### This default permission set includes:\n\n- `allow-arch`\n- `allow-exe-extension`\n- `allow-family`\n- `allow-locale`\n- `allow-os-type`\n- `allow-platform`\n- `allow-version`",
           "type": "string",
           "const": "os:default",
@@ -2805,16 +3219,76 @@
           "markdownDescription": "Denies the version command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-get-frame-cmd`",
+          "description": "Default permissions for pip plugin\n#### This default permission set includes:\n\n- `allow-start-pip-cmd`\n- `allow-stop-pip-cmd`",
+          "type": "string",
+          "const": "pip:default",
+          "markdownDescription": "Default permissions for pip plugin\n#### This default permission set includes:\n\n- `allow-start-pip-cmd`\n- `allow-stop-pip-cmd`"
+        },
+        {
+          "description": "Enables the start_pip command without any pre-configured scope.",
+          "type": "string",
+          "const": "pip:allow-start-pip",
+          "markdownDescription": "Enables the start_pip command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the start_pip_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "pip:allow-start-pip-cmd",
+          "markdownDescription": "Enables the start_pip_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the stop_pip command without any pre-configured scope.",
+          "type": "string",
+          "const": "pip:allow-stop-pip",
+          "markdownDescription": "Enables the stop_pip command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the stop_pip_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "pip:allow-stop-pip-cmd",
+          "markdownDescription": "Enables the stop_pip_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the start_pip command without any pre-configured scope.",
+          "type": "string",
+          "const": "pip:deny-start-pip",
+          "markdownDescription": "Denies the start_pip command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the start_pip_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "pip:deny-start-pip-cmd",
+          "markdownDescription": "Denies the start_pip_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the stop_pip command without any pre-configured scope.",
+          "type": "string",
+          "const": "pip:deny-stop-pip",
+          "markdownDescription": "Denies the stop_pip command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the stop_pip_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "pip:deny-stop-pip-cmd",
+          "markdownDescription": "Denies the stop_pip_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-get-frame-cmd`\n- `allow-get-broadcast-status`",
           "type": "string",
           "const": "screen-capture:default",
-          "markdownDescription": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-get-frame-cmd`"
+          "markdownDescription": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-get-frame-cmd`\n- `allow-get-broadcast-status`"
         },
         {
           "description": "Enables the android command without any pre-configured scope.",
           "type": "string",
           "const": "screen-capture:allow-android",
           "markdownDescription": "Enables the android command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_broadcast_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:allow-get-broadcast-status",
+          "markdownDescription": "Enables the get_broadcast_status command without any pre-configured scope."
         },
         {
           "description": "Enables the get_frame_cmd command without any pre-configured scope.",
@@ -2847,6 +3321,12 @@
           "markdownDescription": "Denies the android command without any pre-configured scope."
         },
         {
+          "description": "Denies the get_broadcast_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:deny-get-broadcast-status",
+          "markdownDescription": "Denies the get_broadcast_status command without any pre-configured scope."
+        },
+        {
           "description": "Denies the get_frame_cmd command without any pre-configured scope.",
           "type": "string",
           "const": "screen-capture:deny-get-frame-cmd",
@@ -2869,96 +3349,6 @@
           "type": "string",
           "const": "screen-capture:deny-stop-capture-cmd",
           "markdownDescription": "Denies the stop_capture_cmd command without any pre-configured scope."
-        },
-        {
-          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-get-screenshotable-windows`\n- `allow-get-screenshotable-monitors`\n- `allow-get-window-screenshot`\n- `allow-get-monitor-screenshot`\n- `allow-remove-window-screenshot`\n- `allow-remove-monitor-screenshot`\n- `allow-clear-screenshots`",
-          "type": "string",
-          "const": "screenshots:default",
-          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-get-screenshotable-windows`\n- `allow-get-screenshotable-monitors`\n- `allow-get-window-screenshot`\n- `allow-get-monitor-screenshot`\n- `allow-remove-window-screenshot`\n- `allow-remove-monitor-screenshot`\n- `allow-clear-screenshots`"
-        },
-        {
-          "description": "Enables the clear_screenshots command without any pre-configured scope.",
-          "type": "string",
-          "const": "screenshots:allow-clear-screenshots",
-          "markdownDescription": "Enables the clear_screenshots command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the get_monitor_screenshot command without any pre-configured scope.",
-          "type": "string",
-          "const": "screenshots:allow-get-monitor-screenshot",
-          "markdownDescription": "Enables the get_monitor_screenshot command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the get_screenshotable_monitors command without any pre-configured scope.",
-          "type": "string",
-          "const": "screenshots:allow-get-screenshotable-monitors",
-          "markdownDescription": "Enables the get_screenshotable_monitors command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the get_screenshotable_windows command without any pre-configured scope.",
-          "type": "string",
-          "const": "screenshots:allow-get-screenshotable-windows",
-          "markdownDescription": "Enables the get_screenshotable_windows command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the get_window_screenshot command without any pre-configured scope.",
-          "type": "string",
-          "const": "screenshots:allow-get-window-screenshot",
-          "markdownDescription": "Enables the get_window_screenshot command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the remove_monitor_screenshot command without any pre-configured scope.",
-          "type": "string",
-          "const": "screenshots:allow-remove-monitor-screenshot",
-          "markdownDescription": "Enables the remove_monitor_screenshot command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the remove_window_screenshot command without any pre-configured scope.",
-          "type": "string",
-          "const": "screenshots:allow-remove-window-screenshot",
-          "markdownDescription": "Enables the remove_window_screenshot command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the clear_screenshots command without any pre-configured scope.",
-          "type": "string",
-          "const": "screenshots:deny-clear-screenshots",
-          "markdownDescription": "Denies the clear_screenshots command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the get_monitor_screenshot command without any pre-configured scope.",
-          "type": "string",
-          "const": "screenshots:deny-get-monitor-screenshot",
-          "markdownDescription": "Denies the get_monitor_screenshot command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the get_screenshotable_monitors command without any pre-configured scope.",
-          "type": "string",
-          "const": "screenshots:deny-get-screenshotable-monitors",
-          "markdownDescription": "Denies the get_screenshotable_monitors command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the get_screenshotable_windows command without any pre-configured scope.",
-          "type": "string",
-          "const": "screenshots:deny-get-screenshotable-windows",
-          "markdownDescription": "Denies the get_screenshotable_windows command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the get_window_screenshot command without any pre-configured scope.",
-          "type": "string",
-          "const": "screenshots:deny-get-window-screenshot",
-          "markdownDescription": "Denies the get_window_screenshot command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the remove_monitor_screenshot command without any pre-configured scope.",
-          "type": "string",
-          "const": "screenshots:deny-remove-monitor-screenshot",
-          "markdownDescription": "Denies the remove_monitor_screenshot command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the remove_window_screenshot command without any pre-configured scope.",
-          "type": "string",
-          "const": "screenshots:deny-remove-window-screenshot",
-          "markdownDescription": "Denies the remove_window_screenshot command without any pre-configured scope."
         },
         {
           "description": "This permission set configures which\nshell functionality is exposed by default.\n\n#### Granted Permissions\n\nIt allows to use the `open` functionality with a reasonable\nscope pre-configured. It will allow opening `http(s)://`,\n`tel:` and `mailto:` links.\n\n#### This default permission set includes:\n\n- `allow-open`",
@@ -3025,60 +3415,6 @@
           "type": "string",
           "const": "shell:deny-stdin-write",
           "markdownDescription": "Denies the stdin_write command without any pre-configured scope."
-        },
-        {
-          "description": "This permission set configures which kind of\nupdater functions are exposed to the frontend.\n\n#### Granted Permissions\n\nThe full workflow from checking for updates to installing them\nis enabled.\n\n\n#### This default permission set includes:\n\n- `allow-check`\n- `allow-download`\n- `allow-install`\n- `allow-download-and-install`",
-          "type": "string",
-          "const": "updater:default",
-          "markdownDescription": "This permission set configures which kind of\nupdater functions are exposed to the frontend.\n\n#### Granted Permissions\n\nThe full workflow from checking for updates to installing them\nis enabled.\n\n\n#### This default permission set includes:\n\n- `allow-check`\n- `allow-download`\n- `allow-install`\n- `allow-download-and-install`"
-        },
-        {
-          "description": "Enables the check command without any pre-configured scope.",
-          "type": "string",
-          "const": "updater:allow-check",
-          "markdownDescription": "Enables the check command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the download command without any pre-configured scope.",
-          "type": "string",
-          "const": "updater:allow-download",
-          "markdownDescription": "Enables the download command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the download_and_install command without any pre-configured scope.",
-          "type": "string",
-          "const": "updater:allow-download-and-install",
-          "markdownDescription": "Enables the download_and_install command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the install command without any pre-configured scope.",
-          "type": "string",
-          "const": "updater:allow-install",
-          "markdownDescription": "Enables the install command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the check command without any pre-configured scope.",
-          "type": "string",
-          "const": "updater:deny-check",
-          "markdownDescription": "Denies the check command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the download command without any pre-configured scope.",
-          "type": "string",
-          "const": "updater:deny-download",
-          "markdownDescription": "Denies the download command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the download_and_install command without any pre-configured scope.",
-          "type": "string",
-          "const": "updater:deny-download-and-install",
-          "markdownDescription": "Denies the download_and_install command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the install command without any pre-configured scope.",
-          "type": "string",
-          "const": "updater:deny-install",
-          "markdownDescription": "Denies the install command without any pre-configured scope."
         }
       ]
     },
@@ -3173,6 +3509,23 @@
           "enum": [
             "iOS"
           ]
+        }
+      ]
+    },
+    "Application": {
+      "description": "Opener scope application.",
+      "anyOf": [
+        {
+          "description": "Open in default application.",
+          "type": "null"
+        },
+        {
+          "description": "If true, allow open with any application.",
+          "type": "boolean"
+        },
+        {
+          "description": "Allow specific application to open with.",
+          "type": "string"
         }
       ]
     },

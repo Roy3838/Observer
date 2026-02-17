@@ -18,8 +18,11 @@ app/mobile/AppStore.md
 app/node_modules
 app/dist
 app/.env
-app/mobile/plugins/screen-capture/ios/.build/
-app/mobile/plugins/pip/ios/.build/
+app/plugins/screen-capture/ios/.build/
+app/plugins/pip/ios/.build/
+app/plugins/**/android/.tauri/
+app/mobile/plugins/**/ios/.build/
+app/plugins/**/.tauri/
 
 # Tauri Android generated API files
 app/mobile/plugins/**/android/.tauri/

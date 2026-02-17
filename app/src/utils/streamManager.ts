@@ -1,7 +1,7 @@
 import { Logger } from './logging';
 import { WhisperTranscriptionService } from './whisper/WhisperTranscriptionService';
-import { isMobile } from './platform';
-import { mobileScreenCapture } from './mobileScreenCapture';
+import { hasNativeScreenCapture } from './platform';
+import { tauriScreenCapture } from './tauriScreenCapture';
 
 // --- Core Type Definitions ---
 export type AudioStreamType = 'screenAudio' | 'microphone' | 'allAudio';
@@ -213,12 +213,12 @@ class Manager {
         case 'display':
           if (this.masterDisplayStream) return;
           
-          // Check if we're on mobile and use the native plugin
-          if (isMobile()) {
-            Logger.info("StreamManager", "Mobile detected - using native screen capture plugin");
+          // Check if we're on tauri to use native plugin
+          if (hasNativeScreenCapture()) {
+            Logger.info("StreamManager", "Tauri detected - using native screen capture plugin");
 
             // Start the native iOS screen capture (no config needed!)
-            const started = await mobileScreenCapture.startCapture();
+            const started = await tauriScreenCapture.startCapture();
 
             if (!started) {
               throw new Error("Failed to start mobile screen capture");
@@ -256,18 +256,24 @@ class Manager {
             let frameLoopActive = true;
             let frameCount = 0;
             let lastFrameTime = Date.now();
+            let broadcastEndLogged = false; // Track if we've logged the broadcast end
 
             const updateFrame = async () => {
               if (!frameLoopActive) return;
 
               try {
                 // Use unified status API - single source of truth for broadcast state
-                const status = await mobileScreenCapture.getStatus();
+                const status = await tauriScreenCapture.getStatus();
 
-                // Handle broadcast ending
-                if (!status.isActive && frameCount > 0) {
+                // Handle broadcast ending (only log once)
+                if (!status.isActive && frameCount > 0 && !broadcastEndLogged) {
                   Logger.warn("StreamManager", `Broadcast ended after ${frameCount} frames`);
-                  // Don't stop the loop - let the user restart if needed
+                  broadcastEndLogged = true;
+                }
+
+                // Reset the flag when broadcast becomes active again
+                if (status.isActive && broadcastEndLogged) {
+                  broadcastEndLogged = false;
                 }
 
                 // Process frame if available
@@ -336,7 +342,7 @@ class Manager {
             // Store cleanup function
             const stopCapture = () => {
               frameLoopActive = false;
-              mobileScreenCapture.stopCapture().catch(err =>
+              tauriScreenCapture.stopCapture().catch(err =>
                 Logger.error("StreamManager", "Error stopping mobile capture", err)
               );
             };

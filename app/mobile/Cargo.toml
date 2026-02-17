@@ -19,7 +19,7 @@ tauri = { version = "2.3", features = ["devtools"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
-tauri-plugin-screen-capture = { path = "./plugins/screen-capture" }
+tauri-plugin-screen-capture = { path = "../plugins/screen-capture" }
 tauri-plugin-pip = { path = "./plugins/pip" }
 tauri-plugin-notification = "2.3"
 tauri-plugin-dialog = "2.6"

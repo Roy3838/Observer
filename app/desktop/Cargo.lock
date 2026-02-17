@@ -113,6 +113,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-opener",
  "tauri-plugin-os",
+ "tauri-plugin-screen-capture",
  "tauri-plugin-screenshots",
  "tauri-plugin-shell",
  "tauri-plugin-updater",
@@ -5230,6 +5231,23 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "thiserror 2.0.11",
+]
+
+[[package]]
+name = "tauri-plugin-screen-capture"
+version = "0.1.0"
+dependencies = [
+ "base64 0.21.7",
+ "image 0.24.9",
+ "log",
+ "parking_lot",
+ "screenshots",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.11",
+ "tokio",
 ]
 
 [[package]]

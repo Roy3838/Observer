@@ -85,10 +85,11 @@ export const hasSystemTray = (): boolean => {
 };
 
 /**
- * Check if native mobile screen capture is available
+ * Check if native Tauri screen capture is available
+ * Now available on all Tauri platforms (mobile AND desktop)
  */
 export const hasNativeScreenCapture = (): boolean => {
-  return isMobile();
+  return isTauri();
 };
 
 /**

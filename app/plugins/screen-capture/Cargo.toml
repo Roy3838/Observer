@@ -15,5 +15,13 @@ tauri = "2.3.0"
 log = "0.4"
 thiserror = "2.0"
 
+# Desktop-only dependencies
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+screenshots = "0.8.5"
+image = { version = "0.24.6", default-features = false, features = ["jpeg"] }
+base64 = "0.21.0"
+tokio = { version = "1", features = ["sync", "time"] }
+parking_lot = "0.12"
+
 [build-dependencies]
 tauri-plugin = { version = "2.0", features = ["build"] }
