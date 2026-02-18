@@ -153,6 +153,13 @@ async fn check_ollama_servers(urls: Vec<String>) -> Result<Vec<String>, String> 
     Ok(successful_urls)
 }
 
+/// Get broadcast status (matches mobile API)
+#[tauri::command]
+async fn get_broadcast_status() -> Result<serde_json::Value, String> {
+    tauri_plugin_screen_capture::desktop::get_broadcast_status()
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 async fn get_overlay_messages(
     overlay_state: State<'_, OverlayState>,
@@ -583,6 +590,7 @@ pub fn run() {
             check_ollama_servers,
             get_overlay_messages,
             clear_overlay_messages,
+            get_broadcast_status,
             shortcuts::get_shortcut_config,
             shortcuts::get_registered_shortcuts,
             shortcuts::set_shortcut_config

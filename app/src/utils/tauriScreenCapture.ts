@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { isTauri } from './platform';
+import { Logger } from '@utils/logging';
 
 export interface BroadcastStatus {
   isActive: boolean;
@@ -22,8 +23,11 @@ class TauriScreenCapture {
     }
 
     try {
+      Logger.info("TAURI_SCREEN", `Started Capturing tauri screen`);
+
       const result = await invoke<boolean>('plugin:screen-capture|start_capture_cmd');
       this.capturing = result;
+      Logger.info("TAURI_SCREEN", `start_capture_cmd called`);
       return result;
     } catch (error) {
       throw error;
@@ -61,10 +65,10 @@ class TauriScreenCapture {
     }
 
     try {
-      const result = await invoke<BroadcastStatus>('plugin:screen-capture|get_broadcast_status');
+      const result = await invoke<BroadcastStatus>('get_broadcast_status');
       return result;
     } catch (error) {
-      console.error('[ScreenCapture] Error getting status:', error);
+      console.error("[ScreenCapture]", error);
       // Return safe defaults on error
       return {
         isActive: false,

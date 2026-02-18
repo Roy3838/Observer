@@ -1,4 +1,4 @@
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize};
 use tauri::{plugin::{PluginApi, PluginHandle}, AppHandle, Runtime};
 use crate::error::Result;
 
@@ -10,17 +10,6 @@ tauri::ios_plugin_binding!(init_plugin_screen_capture);
 #[allow(dead_code)]
 struct AndroidBoolResponse {
     value: Option<bool>,
-}
-
-/// Broadcast status response from native plugins
-#[derive(Deserialize, Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct BroadcastStatusResponse {
-    pub is_active: bool,
-    pub is_stale: bool,
-    pub frame: Option<String>,
-    pub timestamp: Option<f64>,
-    pub frame_count: u64,
 }
 
 // Initialize the mobile plugin and return a handle
@@ -76,34 +65,5 @@ impl<R: Runtime> ScreenCapture<R> {
         self.0
             .run_mobile_plugin("getFrame", ())
             .map_err(Into::into)
-    }
-
-    /// Get broadcast status including active state and latest frame
-    pub fn get_broadcast_status(&self) -> Result<serde_json::Value> {
-        log::debug!("[ScreenCapture] Calling native getBroadcastStatus");
-
-        // Try to get status from native plugin
-        match self.0.run_mobile_plugin::<_, BroadcastStatusResponse>("getBroadcastStatus", ()) {
-            Ok(status) => {
-                Ok(serde_json::json!({
-                    "isActive": status.is_active,
-                    "isStale": status.is_stale,
-                    "frame": status.frame,
-                    "timestamp": status.timestamp,
-                    "frameCount": status.frame_count
-                }))
-            }
-            Err(e) => {
-                log::warn!("[ScreenCapture] Native getBroadcastStatus not available: {:?}", e);
-                // Return default status - capture might be managed by app's ServerState
-                Ok(serde_json::json!({
-                    "isActive": false,
-                    "isStale": false,
-                    "frame": null,
-                    "timestamp": null,
-                    "frameCount": 0
-                }))
-            }
-        }
     }
 }

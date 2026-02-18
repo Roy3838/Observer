@@ -7,7 +7,7 @@ mod commands;
 mod error;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-mod desktop;
+pub mod desktop;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 mod mobile;
 
@@ -19,8 +19,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .invoke_handler(tauri::generate_handler![
             start_capture_cmd,
             stop_capture_cmd,
-            get_frame_cmd,
-            get_broadcast_status
+            get_frame_cmd
         ])
         .setup(|app, api| {
             #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -79,18 +78,4 @@ async fn get_frame_cmd<R: Runtime>(
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     return desktop::get_frame().await;
-}
-
-#[tauri::command]
-async fn get_broadcast_status<R: Runtime>(
-    app: tauri::AppHandle<R>,
-) -> Result<serde_json::Value> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    {
-        let screen_capture = app.state::<mobile::ScreenCapture<R>>();
-        return screen_capture.get_broadcast_status();
-    }
-
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    return desktop::get_broadcast_status();
 }
