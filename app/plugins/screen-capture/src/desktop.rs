@@ -1,6 +1,8 @@
 use crate::error::Result;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use image::codecs::jpeg::JpegEncoder;
+use image::imageops::FilterType;
+use image::RgbaImage;
 use parking_lot::RwLock;
 use screenshots::Screen;
 use std::io::Cursor;
@@ -9,6 +11,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{plugin::PluginApi, AppHandle, Runtime};
 use tokio::sync::watch;
+
+// Capture settings - optimized for performance
+const TARGET_FPS: u64 = 10; // 10fps is plenty for screen capture
+const JPEG_QUALITY: u8 = 50; // Lower quality for smaller files
+const MAX_WIDTH: u32 = 1280; // Max width for captured frames
 
 /// Shared capture state accessible across async contexts
 struct CaptureState {
@@ -99,12 +106,15 @@ pub async fn start_capture() -> Result<bool> {
         };
 
         log::info!(
-            "[ScreenCapture] Capturing screen: {}x{}",
+            "[ScreenCapture] Capturing screen: {}x{} (downscaling to max {}px wide, {}fps, {}% quality)",
             screen.display_info.width,
-            screen.display_info.height
+            screen.display_info.height,
+            MAX_WIDTH,
+            TARGET_FPS,
+            JPEG_QUALITY
         );
 
-        let target_frame_time = Duration::from_millis(33); // ~30fps
+        let target_frame_time = Duration::from_millis(1000 / TARGET_FPS);
 
         loop {
             let frame_start = Instant::now();
@@ -121,11 +131,26 @@ pub async fn start_capture() -> Result<bool> {
                     let width = image.width();
                     let height = image.height();
 
-                    // Convert to JPEG at 75% quality
-                    let mut jpeg_buffer = Cursor::new(Vec::new());
-                    let mut encoder = JpegEncoder::new_with_quality(&mut jpeg_buffer, 75);
+                    // Downscale if image is too large
+                    let (final_width, final_height, raw_bytes) = if width > MAX_WIDTH {
+                        let scale = MAX_WIDTH as f32 / width as f32;
+                        let new_height = (height as f32 * scale) as u32;
 
-                    if let Err(e) = encoder.encode(image.as_raw(), width, height, image::ColorType::Rgba8) {
+                        // Create RgbaImage from raw bytes and resize
+                        let rgba_image = RgbaImage::from_raw(width, height, image.into_raw())
+                            .expect("Failed to create image");
+                        let resized = image::imageops::resize(&rgba_image, MAX_WIDTH, new_height, FilterType::Triangle);
+
+                        (MAX_WIDTH, new_height, resized.into_raw())
+                    } else {
+                        (width, height, image.into_raw())
+                    };
+
+                    // Convert to JPEG
+                    let mut jpeg_buffer = Cursor::new(Vec::new());
+                    let mut encoder = JpegEncoder::new_with_quality(&mut jpeg_buffer, JPEG_QUALITY);
+
+                    if let Err(e) = encoder.encode(&raw_bytes, final_width, final_height, image::ColorType::Rgba8) {
                         log::error!("[ScreenCapture] Failed to encode JPEG: {:?}", e);
                         continue;
                     }
@@ -144,8 +169,10 @@ pub async fn start_capture() -> Result<bool> {
 
                     let count = capture_state.frame_count.fetch_add(1, Ordering::SeqCst) + 1;
                     if count == 1 {
-                        log::info!("[ScreenCapture] First frame captured");
-                    } else if count % 30 == 0 {
+                        log::info!("[ScreenCapture] First frame captured ({}x{}, {} bytes)",
+                            final_width, final_height,
+                            capture_state.latest_frame.read().as_ref().map(|(b, _)| b.len()).unwrap_or(0));
+                    } else if count % (TARGET_FPS * 10) as u64 == 0 {
                         log::debug!("[ScreenCapture] Captured {} frames", count);
                     }
                 }
@@ -154,7 +181,7 @@ pub async fn start_capture() -> Result<bool> {
                 }
             }
 
-            // Maintain ~30fps
+            // Maintain target fps
             let elapsed = frame_start.elapsed();
             if elapsed < target_frame_time {
                 std::thread::sleep(target_frame_time - elapsed);
