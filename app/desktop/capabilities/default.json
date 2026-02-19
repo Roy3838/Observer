@@ -5,7 +5,8 @@
   "platforms": ["macOS", "windows", "linux"],
   "windows": [
     "main",
-    "overlay"
+    "overlay",
+    "screen-selector"
   ],
   "permissions": [
     "core:default",
@@ -19,6 +20,7 @@
     "core:window:allow-set-ignore-cursor-events",
     "core:window:allow-show",
     "core:window:allow-hide",
+    "core:window:allow-set-focus",
     "shell:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",

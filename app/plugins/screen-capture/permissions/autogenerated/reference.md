@@ -8,6 +8,8 @@ Default permissions for screen capture plugin
 - `allow-stop-capture-cmd`
 - `allow-get-frame-cmd`
 - `allow-get-broadcast-status`
+- `allow-get-capture-targets-cmd`
+- `allow-start-capture-stream-cmd`
 
 ## Permission Table
 
@@ -66,6 +68,32 @@ Enables the get_broadcast_status command without any pre-configured scope.
 <td>
 
 Denies the get_broadcast_status command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`screen-capture:allow-get-capture-targets-cmd`
+
+</td>
+<td>
+
+Enables the get_capture_targets_cmd command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`screen-capture:deny-get-capture-targets-cmd`
+
+</td>
+<td>
+
+Denies the get_capture_targets_cmd command without any pre-configured scope.
 
 </td>
 </tr>
@@ -144,6 +172,32 @@ Enables the start_capture_cmd command without any pre-configured scope.
 <td>
 
 Denies the start_capture_cmd command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`screen-capture:allow-start-capture-stream-cmd`
+
+</td>
+<td>
+
+Enables the start_capture_stream_cmd command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`screen-capture:deny-start-capture-stream-cmd`
+
+</td>
+<td>
+
+Denies the start_capture_stream_cmd command without any pre-configured scope.
 
 </td>
 </tr>

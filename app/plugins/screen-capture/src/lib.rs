@@ -3,23 +3,34 @@ use tauri::{
     Manager, Runtime,
 };
 
-mod commands;
 mod error;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod desktop;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub mod targets;
+
 #[cfg(any(target_os = "android", target_os = "ios"))]
 mod mobile;
 
 pub use error::{Error, Result};
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub use targets::CaptureTarget;
+
 /// Initializes the screen capture plugin
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     PluginBuilder::new("screen-capture")
         .invoke_handler(tauri::generate_handler![
+            #[cfg(any(target_os = "android", target_os = "ios"))]
             start_capture_cmd,
             stop_capture_cmd,
-            get_frame_cmd
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            get_frame_cmd,
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            get_capture_targets_cmd,
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            start_capture_stream_cmd
         ])
         .setup(|app, api| {
             #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -36,25 +47,31 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .build()
 }
 
-// Simple command handlers - no config needed!
+// ==================== Mobile-only commands ====================
 
+#[cfg(any(target_os = "android", target_os = "ios"))]
 #[tauri::command]
 async fn start_capture_cmd<R: Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<bool> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    {
-        let screen_capture = app.state::<mobile::ScreenCapture<R>>();
-        return screen_capture.start_capture();
-    }
-
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    return desktop::start_capture().await;
+    let screen_capture = app.state::<mobile::ScreenCapture<R>>();
+    screen_capture.start_capture()
 }
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[tauri::command]
+async fn get_frame_cmd<R: Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<String> {
+    let screen_capture = app.state::<mobile::ScreenCapture<R>>();
+    screen_capture.get_frame()
+}
+
+// ==================== Cross-platform commands ====================
 
 #[tauri::command]
 async fn stop_capture_cmd<R: Runtime>(
-    app: tauri::AppHandle<R>,
+    #[allow(unused_variables)] app: tauri::AppHandle<R>,
 ) -> Result<()> {
     #[cfg(any(target_os = "android", target_os = "ios"))]
     {
@@ -66,16 +83,27 @@ async fn stop_capture_cmd<R: Runtime>(
     return desktop::stop_capture().await;
 }
 
-#[tauri::command]
-async fn get_frame_cmd<R: Runtime>(
-    app: tauri::AppHandle<R>,
-) -> Result<String> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    {
-        let screen_capture = app.state::<mobile::ScreenCapture<R>>();
-        return screen_capture.get_frame();
-    }
+// ==================== Desktop-only commands ====================
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    return desktop::get_frame().await;
+/// Get all available capture targets (monitors and windows)
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+async fn get_capture_targets_cmd<R: Runtime>(
+    _app: tauri::AppHandle<R>,
+    include_thumbnails: Option<bool>,
+) -> Result<Vec<targets::CaptureTarget>> {
+    let include_thumbnails = include_thumbnails.unwrap_or(true);
+    desktop::get_capture_targets(include_thumbnails)
+}
+
+/// Start capture with channel-based streaming (desktop only)
+/// Frames are pushed to frontend via channel instead of polling
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn start_capture_stream_cmd<R: Runtime>(
+    _app: tauri::AppHandle<R>,
+    target_id: Option<String>,
+    on_frame: tauri::ipc::Channel<desktop::FrameData>,
+) -> Result<()> {
+    desktop::start_capture_stream(target_id, on_frame)
 }

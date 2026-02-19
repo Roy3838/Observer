@@ -8,6 +8,7 @@ import '@/index.css';
 import App from './web/App'; // Your existing App.tsx, now the "WebApp"
 //import LauncherShell from './desktop/LauncherShell'; // The new "DesktopApp"
 import OverlayWindow from './desktop/OverlayWindow'; // The overlay window
+import ScreenSelectorWindow from './desktop/ScreenSelectorWindow'; // Screen/window selector
 
 // Import platform detection utilities
 import { isDesktop } from './utils/platform';
@@ -17,6 +18,11 @@ function getRootComponent() {
   // Desktop only: overlay route
   if (isDesktop() && window.location.pathname === '/overlay') {
     return OverlayWindow;
+  }
+
+  // Desktop only: screen selector route
+  if (isDesktop() && window.location.pathname === '/screen-selector') {
+    return ScreenSelectorWindow;
   }
 
   // Desktop Tauri: use LauncherShell with desktop-specific features

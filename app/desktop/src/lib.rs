@@ -559,6 +559,28 @@ pub fn run() {
                 }
             }
 
+            // Create the screen selector window (hidden by default)
+            match WebviewWindowBuilder::new(
+                app,
+                "screen-selector",
+                WebviewUrl::App("/screen-selector".into()),
+            )
+            .title("Select Screen or Window")
+            .inner_size(900.0, 650.0)
+            .center()
+            .decorations(true)
+            .transparent(false)
+            .resizable(true)
+            .visible(false)
+            .build() {
+                Ok(_window) => {
+                    log::info!("Screen selector window created successfully");
+                }
+                Err(e) => {
+                    log::error!("Failed to create screen selector window: {}", e);
+                }
+            }
+
             // Register shortcuts (config already loaded at app initialization)
             #[cfg(desktop)]
             {

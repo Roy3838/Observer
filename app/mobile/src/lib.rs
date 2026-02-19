@@ -1,10 +1,10 @@
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager, State};
+use tauri::{ipc::Channel, AppHandle, Manager, State};
 use base64::Engine;
 
 mod server;
-use server::{ServerState, start_server};
+use server::{FrameData, ServerState, start_server};
 
 pub struct AppSettings {
     pub ollama_url: Mutex<Option<String>>,
@@ -94,6 +94,34 @@ async fn get_broadcast_status(
     }))
 }
 
+/// Start capture stream with channel-based frame delivery
+/// Frames from the broadcast extension will be pushed through the channel
+#[tauri::command]
+async fn start_capture_stream_cmd(
+    state: State<'_, ServerState>,
+    on_frame: Channel<FrameData>,
+) -> Result<(), String> {
+    eprintln!("🎬 Starting capture stream with channel");
+
+    // Store the channel so HTTP handler can push frames to it
+    state.set_frame_channel(Some(on_frame)).await;
+
+    Ok(())
+}
+
+/// Stop the capture stream channel
+#[tauri::command]
+async fn stop_capture_stream_cmd(
+    state: State<'_, ServerState>,
+) -> Result<(), String> {
+    eprintln!("🛑 Stopping capture stream channel");
+
+    // Clear the channel
+    state.set_frame_channel(None).await;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // EARLY LOG - Check if app is starting
@@ -162,7 +190,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_ollama_url,
             get_ollama_url,
-            get_broadcast_status
+            get_broadcast_status,
+            start_capture_stream_cmd,
+            stop_capture_stream_cmd
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

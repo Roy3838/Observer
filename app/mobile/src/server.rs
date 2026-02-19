@@ -10,15 +10,31 @@ use axum::{
     body::Bytes,
     Json,
 };
+use base64::Engine;
 use http_body_util::BodyExt;
 use reqwest::Client;
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager};
+use tauri::{ipc::Channel, AppHandle, Manager};
 use tokio::sync::RwLock;
 
 use crate::AppSettings;
+
+/// Frame data sent through the channel to the frontend
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameData {
+    /// Base64-encoded JPEG frame
+    pub frame: String,
+    /// Unix timestamp in seconds
+    pub timestamp: f64,
+    /// Frame dimensions (0 for iOS since we don't know without decoding)
+    pub width: u32,
+    pub height: u32,
+    /// Frame sequence number
+    pub frame_count: u64,
+}
 
 /// Broadcast lifecycle state
 #[derive(Clone, Default)]
@@ -34,6 +50,8 @@ pub struct BroadcastState {
 pub struct ServerState {
     pub latest_frame: Arc<RwLock<Option<(Vec<u8>, f64)>>>,
     pub broadcast: Arc<RwLock<BroadcastState>>,
+    /// Channel for pushing frames to frontend (when streaming is active)
+    pub frame_channel: Arc<RwLock<Option<Channel<FrameData>>>>,
 }
 
 impl ServerState {
@@ -41,7 +59,14 @@ impl ServerState {
         Self {
             latest_frame: Arc::new(RwLock::new(None)),
             broadcast: Arc::new(RwLock::new(BroadcastState::default())),
+            frame_channel: Arc::new(RwLock::new(None)),
         }
+    }
+
+    /// Set the frame channel for streaming
+    pub async fn set_frame_channel(&self, channel: Option<Channel<FrameData>>) {
+        let mut ch = self.frame_channel.write().await;
+        *ch = channel;
     }
 }
 
@@ -75,19 +100,38 @@ async fn handle_frame(
     State(state): State<AppState>,
     body: Bytes,
 ) -> &'static str {
-    let frame_data = body.to_vec();
+    let frame_bytes = body.to_vec();
     let timestamp = now();
 
-    // Update broadcast state
-    {
+    // Update broadcast state and get frame count
+    let frame_count = {
         let mut broadcast = state.server_state.broadcast.write().await;
         broadcast.last_frame_at = Some(timestamp);
         broadcast.frame_count += 1;
+        broadcast.frame_count
+    };
+
+    // Try to push frame through channel if one is registered
+    {
+        let channel_guard = state.server_state.frame_channel.read().await;
+        if let Some(channel) = channel_guard.as_ref() {
+            let frame_data = FrameData {
+                frame: base64::prelude::BASE64_STANDARD.encode(&frame_bytes),
+                timestamp,
+                width: 0,  // Unknown without decoding JPEG
+                height: 0,
+                frame_count,
+            };
+
+            if let Err(e) = channel.send(frame_data) {
+                eprintln!("Failed to send frame through channel: {:?}", e);
+            }
+        }
     }
 
-    // Store latest frame with timestamp (overwrite old one to save memory)
+    // Also store latest frame for polling fallback
     let mut frame = state.server_state.latest_frame.write().await;
-    *frame = Some((frame_data, timestamp));
+    *frame = Some((frame_bytes, timestamp));
 
     "OK"
 }

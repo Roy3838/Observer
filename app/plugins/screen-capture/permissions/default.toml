@@ -4,4 +4,11 @@
 
 [default]
 description = "Default permissions for screen capture plugin"
-permissions = ["allow-start-capture-cmd", "allow-stop-capture-cmd", "allow-get-frame-cmd", "allow-get-broadcast-status"]
+permissions = [
+    "allow-start-capture-cmd",
+    "allow-stop-capture-cmd",
+    "allow-get-frame-cmd",
+    "allow-get-broadcast-status",
+    "allow-get-capture-targets-cmd",
+    "allow-start-capture-stream-cmd"
+]

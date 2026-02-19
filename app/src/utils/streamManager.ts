@@ -215,142 +215,27 @@ class Manager {
           
           // Check if we're on tauri to use native plugin
           if (hasNativeScreenCapture()) {
-            Logger.info("StreamManager", "Tauri detected - using native screen capture plugin");
+            Logger.info("StreamManager", "Tauri detected - using channel-based native screen capture");
 
-            // Start the native iOS screen capture (no config needed!)
-            const started = await tauriScreenCapture.startCapture();
-
-            if (!started) {
-              throw new Error("Failed to start mobile screen capture");
-            }
-
-            // Create TWO canvases:
-            // 1. Clean canvas for main_loop (no overlay)
-            // 2. PiP canvas with status overlay for SensorPreviewPanel
-            // Note: Initial size is placeholder - will be resized to match actual frame dimensions
-            const canvasClean = document.createElement('canvas');
-            canvasClean.width = 1920;  // Placeholder, will adapt to actual frame
-            canvasClean.height = 1080;
-            const ctxClean = canvasClean.getContext('2d');
-
-            const canvasPip = document.createElement('canvas');
-            canvasPip.width = 1920;   // Placeholder, will adapt to actual frame
-            canvasPip.height = 1080;
-            const ctxPip = canvasPip.getContext('2d');
-
-            let canvasSizeInitialized = false;
-
-            if (!ctxClean || !ctxPip) {
-              throw new Error("Failed to create canvas contexts");
-            }
-
-            // Create MediaStreams from both canvases
-            const cleanStream = canvasClean.captureStream(30);
-            const pipStream = canvasPip.captureStream(30);
-
-            this.masterDisplayStream = cleanStream;
-            this.screenVideoStream = cleanStream;        // Clean stream for main_loop
-            this.screenVideoStreamWithPip = pipStream;   // Overlay stream for PiP display
-
-            // Poll for frames from the native plugin and draw to both canvases
-            let frameLoopActive = true;
-            let frameCount = 0;
-            let lastFrameTime = Date.now();
-            let broadcastEndLogged = false; // Track if we've logged the broadcast end
-
-            const updateFrame = async () => {
-              if (!frameLoopActive) return;
-
-              try {
-                // Use unified status API - single source of truth for broadcast state
-                const status = await tauriScreenCapture.getStatus();
-
-                // Handle broadcast ending (only log once)
-                if (!status.isActive && frameCount > 0 && !broadcastEndLogged) {
-                  Logger.warn("StreamManager", `Broadcast ended after ${frameCount} frames`);
-                  broadcastEndLogged = true;
-                }
-
-                // Reset the flag when broadcast becomes active again
-                if (status.isActive && broadcastEndLogged) {
-                  broadcastEndLogged = false;
-                }
-
-                // Process frame if available
-                if (status.frame && status.frame.length > 0) {
-                  frameCount++;
-                  const now = Date.now();
-                  const elapsed = now - lastFrameTime;
-
-                  if (frameCount === 1) {
-                    Logger.info("StreamManager", `GOT FIRST FRAME! Size: ${status.frame.length} bytes`);
-                  }
-                  if (frameCount % 30 === 0) {
-                    Logger.info("StreamManager", `Mobile capture: ${frameCount} frames, ~${Math.round(1000/elapsed)}fps, frame size: ${status.frame.length} bytes`);
-                  }
-                  lastFrameTime = now;
-
-                  const img = new Image();
-                  img.onload = () => {
-                    if (frameLoopActive) {
-                      // Adapt canvas size to actual frame dimensions on first frame
-                      if (!canvasSizeInitialized && img.naturalWidth > 0 && img.naturalHeight > 0) {
-                        canvasClean.width = img.naturalWidth;
-                        canvasClean.height = img.naturalHeight;
-                        canvasPip.width = img.naturalWidth;
-                        canvasPip.height = img.naturalHeight;
-                        canvasSizeInitialized = true;
-                        Logger.info("StreamManager", `Canvas adapted to frame dimensions: ${img.naturalWidth}x${img.naturalHeight}`);
-                      }
-
-                      // Draw to clean canvas (for main_loop - no overlay)
-                      if (ctxClean) {
-                        ctxClean.drawImage(img, 0, 0);
-                      }
-
-                      // Draw to PiP canvas (with overlay for user display)
-                      if (ctxPip) {
-                        ctxPip.drawImage(img, 0, 0);
-
-                        // Draw PiP status overlay if set
-                        if (this.pipOverlayStatus) {
-                          this.drawPipOverlay(ctxPip, canvasPip.width, canvasPip.height);
-                        }
-                      }
-                    }
-                  };
-                  img.onerror = (e) => {
-                    Logger.error("StreamManager", "Failed to load frame image", e);
-                  };
-                  img.src = 'data:image/jpeg;base64,' + status.frame;
-                } else if (frameCount === 0 && status.isActive) {
-                  // Waiting for first frame while broadcast is active
-                  Logger.debug("StreamManager", "Waiting for first frame from broadcast...");
-                }
-              } catch (err: any) {
-                Logger.error("StreamManager", `Error getting broadcast status:`, err);
+            // Set up PiP overlay drawer before starting stream
+            tauriScreenCapture.setPipOverlayDrawer((ctx, width, height) => {
+              if (this.pipOverlayStatus) {
+                this.drawPipOverlay(ctx, width, height);
               }
+            });
 
-              // Continue polling (~30fps)
-              setTimeout(updateFrame, 33);
-            };
+            // Start the channel-based capture stream
+            // Frames are pushed from Rust as they're captured - no polling!
+            const captureResult = await tauriScreenCapture.startCaptureStream();
 
-            // Start the frame loop
-            Logger.info("StreamManager", "Starting mobile frame polling loop...");
-            updateFrame();
+            this.masterDisplayStream = captureResult.cleanStream;
+            this.screenVideoStream = captureResult.cleanStream;
+            this.screenVideoStreamWithPip = captureResult.pipStream;
 
             // Store cleanup function
-            const stopCapture = () => {
-              frameLoopActive = false;
-              tauriScreenCapture.stopCapture().catch(err =>
-                Logger.error("StreamManager", "Error stopping mobile capture", err)
-              );
-            };
+            (this.masterDisplayStream as any)._mobileCleanup = captureResult.stop;
 
-            // Attach cleanup to the stream
-            (this.masterDisplayStream as any)._mobileCleanup = stopCapture;
-
-            Logger.info("StreamManager", "Mobile screen capture initialized with dual canvas");
+            Logger.info("StreamManager", "Channel-based screen capture initialized");
 
           } else {
             // Desktop: use getDisplayMedia

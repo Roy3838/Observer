@@ -3273,10 +3273,10 @@
           "markdownDescription": "Denies the stop_pip_cmd command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-get-frame-cmd`\n- `allow-get-broadcast-status`",
+          "description": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-get-frame-cmd`\n- `allow-get-broadcast-status`\n- `allow-get-capture-targets-cmd`\n- `allow-start-capture-stream-cmd`",
           "type": "string",
           "const": "screen-capture:default",
-          "markdownDescription": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-get-frame-cmd`\n- `allow-get-broadcast-status`"
+          "markdownDescription": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-get-frame-cmd`\n- `allow-get-broadcast-status`\n- `allow-get-capture-targets-cmd`\n- `allow-start-capture-stream-cmd`"
         },
         {
           "description": "Enables the android command without any pre-configured scope.",
@@ -3289,6 +3289,12 @@
           "type": "string",
           "const": "screen-capture:allow-get-broadcast-status",
           "markdownDescription": "Enables the get_broadcast_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_capture_targets_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:allow-get-capture-targets-cmd",
+          "markdownDescription": "Enables the get_capture_targets_cmd command without any pre-configured scope."
         },
         {
           "description": "Enables the get_frame_cmd command without any pre-configured scope.",
@@ -3309,6 +3315,12 @@
           "markdownDescription": "Enables the start_capture_cmd command without any pre-configured scope."
         },
         {
+          "description": "Enables the start_capture_stream_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:allow-start-capture-stream-cmd",
+          "markdownDescription": "Enables the start_capture_stream_cmd command without any pre-configured scope."
+        },
+        {
           "description": "Enables the stop_capture_cmd command without any pre-configured scope.",
           "type": "string",
           "const": "screen-capture:allow-stop-capture-cmd",
@@ -3327,6 +3339,12 @@
           "markdownDescription": "Denies the get_broadcast_status command without any pre-configured scope."
         },
         {
+          "description": "Denies the get_capture_targets_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:deny-get-capture-targets-cmd",
+          "markdownDescription": "Denies the get_capture_targets_cmd command without any pre-configured scope."
+        },
+        {
           "description": "Denies the get_frame_cmd command without any pre-configured scope.",
           "type": "string",
           "const": "screen-capture:deny-get-frame-cmd",
@@ -3343,6 +3361,12 @@
           "type": "string",
           "const": "screen-capture:deny-start-capture-cmd",
           "markdownDescription": "Denies the start_capture_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the start_capture_stream_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:deny-start-capture-stream-cmd",
+          "markdownDescription": "Denies the start_capture_stream_cmd command without any pre-configured scope."
         },
         {
           "description": "Denies the stop_capture_cmd command without any pre-configured scope.",

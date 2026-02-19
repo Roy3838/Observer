@@ -1,4 +1,11 @@
-const COMMANDS: &[&str] = &["start_capture_cmd", "stop_capture_cmd", "get_frame_cmd", "get_broadcast_status"];
+const COMMANDS: &[&str] = &[
+    "start_capture_cmd",
+    "stop_capture_cmd",
+    "get_frame_cmd",
+    "get_broadcast_status",
+    "get_capture_targets_cmd",
+    "start_capture_stream_cmd",
+];
 
 fn main() {
     tauri_plugin::Builder::new(COMMANDS)
