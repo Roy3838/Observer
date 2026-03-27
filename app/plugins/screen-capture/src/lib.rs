@@ -99,6 +99,18 @@ async fn start_capture_cmd<R: Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<bool> {
     let screen_capture = app.state::<mobile::ScreenCapture<R>>();
+
+    // On Android, check if a JNI channel was set up (via start_capture_stream_cmd)
+    // If so, use video stream mode which enables JNI callbacks
+    #[cfg(target_os = "android")]
+    {
+        if android::is_video_streaming() {
+            log::info!("[ScreenCapture] Android: JNI channel detected, using video stream mode");
+            return screen_capture.start_video_stream().map(|_| true);
+        }
+    }
+
+    // Default behavior: show permission dialog and start capture
     screen_capture.start_capture()
 }
 

@@ -102,7 +102,7 @@ async fn get_broadcast_status(
 
 /// Start capture stream with channel-based frame delivery
 /// On iOS: Uses shared memory buffer (written by broadcast extension)
-/// On other platforms: Uses HTTP endpoint
+/// On Android: Sets up JNI channel for frame callbacks
 #[tauri::command]
 async fn start_capture_stream_cmd(
     state: State<'_, ServerState>,
@@ -111,7 +111,7 @@ async fn start_capture_stream_cmd(
 ) -> Result<(), String> {
     eprintln!("Starting capture stream with channel");
 
-    // Store the channel
+    // Store the channel in ServerState (used by iOS)
     state.set_frame_channel(Some(on_frame.clone())).await;
 
     // On iOS, start the video frame reader
@@ -130,6 +130,20 @@ async fn start_capture_stream_cmd(
         video_frame::start_video_frame_reader(reader_state);
     }
 
+    // On Android, set up the JNI channel for frame callbacks
+    #[cfg(target_os = "android")]
+    {
+        eprintln!("Setting up Android JNI frame channel");
+        // SAFETY: Both FrameData types (server::FrameData and android::FrameData) have
+        // identical structure and serde serialization. Channel<T> serializes T to JSON,
+        // so as long as the JSON format matches (which it does), this transmute is safe.
+        // Both types have: frame (Vec<u8> with serde_bytes), timestamp (f64), width (u32),
+        // height (u32), frame_count (u64) - all with camelCase rename.
+        let android_channel: tauri::ipc::Channel<tauri_plugin_screen_capture::android::FrameData> =
+            unsafe { std::mem::transmute(on_frame) };
+        tauri_plugin_screen_capture::android::set_frame_channel(android_channel);
+    }
+
     Ok(())
 }
 
@@ -146,7 +160,13 @@ async fn stop_capture_stream_cmd(
         video_frame::stop_video_frame_reader();
     }
 
-    // Clear the channel
+    // On Android, clear the JNI frame channel
+    #[cfg(target_os = "android")]
+    {
+        tauri_plugin_screen_capture::android::clear_frame_channel();
+    }
+
+    // Clear the channel in ServerState
     state.set_frame_channel(None).await;
 
     Ok(())
@@ -202,7 +222,7 @@ async fn set_app_group_path_cmd(path: String) -> Result<(), String> {
 
 /// Start audio stream with channel-based audio delivery
 /// On iOS: Uses shared memory ring buffer (written by broadcast extension)
-/// On other platforms: Uses HTTP endpoint
+/// On Android: Sets up JNI channel for audio callbacks
 #[tauri::command]
 async fn start_audio_stream_cmd(
     state: State<'_, ServerState>,
@@ -211,7 +231,7 @@ async fn start_audio_stream_cmd(
 ) -> Result<(), String> {
     eprintln!("🎵 Starting audio stream with channel");
 
-    // Store the channel
+    // Store the channel in ServerState (used by iOS)
     state.set_audio_channel(Some(on_audio.clone())).await;
 
     // On iOS, start the ring buffer reader
@@ -230,6 +250,20 @@ async fn start_audio_stream_cmd(
         audio_ring::start_audio_ring_reader(reader_state);
     }
 
+    // On Android, set up the JNI channel for audio callbacks
+    #[cfg(target_os = "android")]
+    {
+        eprintln!("🎵 Setting up Android JNI audio channel");
+        // SAFETY: Both AudioData types (server::AudioData and android::AudioData) serialize
+        // to compatible JSON. The main difference is field names but both use camelCase.
+        // server::AudioData has: samples, timestamp, sample_rate, channels, chunk_count
+        // android::AudioData has: samples, timestamp, sample_rate, sample_count
+        // The frontend handles both formats, so this transmute is safe for the channel.
+        let android_channel: tauri::ipc::Channel<tauri_plugin_screen_capture::android::AudioData> =
+            unsafe { std::mem::transmute(on_audio) };
+        tauri_plugin_screen_capture::android::set_audio_channel(android_channel);
+    }
+
     Ok(())
 }
 
@@ -246,7 +280,13 @@ async fn stop_audio_stream_cmd(
         audio_ring::stop_audio_ring_reader();
     }
 
-    // Clear the channel
+    // On Android, clear the JNI audio channel
+    #[cfg(target_os = "android")]
+    {
+        tauri_plugin_screen_capture::android::clear_audio_channel();
+    }
+
+    // Clear the channel in ServerState
     state.set_audio_channel(None).await;
 
     Ok(())
