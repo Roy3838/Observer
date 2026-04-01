@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Observer",
-  "version": "2.1.3",
+  "version": "2.1.4",
   "identifier": "com.observer.ai",
   "build": {
     "frontendDist": "/Users/jay/repos/Observer/app/dist",
