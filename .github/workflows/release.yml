@@ -148,6 +148,7 @@ jobs:
           organization-id: '${{ secrets.SIGNPATH_ORGANIZATION_ID }}'
           project-slug: 'observer'
           signing-policy-slug: 'test-signing'
+          artifact-configuration-slug: 'windows-nsis-installer'
           github-artifact-id: '${{ steps.upload-unsigned.outputs.artifact-id }}'
           wait-for-completion: true
           output-artifact-directory: 'signed-windows'

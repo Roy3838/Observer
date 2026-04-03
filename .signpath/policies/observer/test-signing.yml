@@ -2,4 +2,4 @@
 # This policy file is required by the SignPath GitHub Actions connector
 # See: https://docs.signpath.io/integrations/github-actions
 
-artifact-configuration: /.signpath/artifact-configuration.xml
+artifact-configuration: .signpath/artifact-configuration.xml
