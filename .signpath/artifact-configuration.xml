@@ -1,0 +1,9 @@
+<!-- SignPath Artifact Configuration for Observer Windows builds -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <!-- NSIS installer executable -->
+    <pe-file path="*.exe">
+      <authenticode-sign/>
+    </pe-file>
+  </zip-file>
+</artifact-configuration>
