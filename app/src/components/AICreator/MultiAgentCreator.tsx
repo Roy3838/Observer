@@ -1,7 +1,7 @@
 // src/components/AICreator/MultiAgentCreator.tsx
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Save, Users, Cpu, Plus } from 'lucide-react';
+import { Send, Loader2, Save, Users, Cpu, Plus, Target } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { fetchResponse } from '@utils/sendApi';
 import { CompleteAgent, updateAgentImageMemory, saveAgent } from '@utils/agent_database';
@@ -9,6 +9,7 @@ import {
   extractMultipleAgentConfigs,
   parseAgentResponse,
   extractImageRequest,
+  extractDetectionModeTemplate,
   extractAgentReferencesWithPositions,
   extractAgentReferences,
   fetchAgentReferenceData,
@@ -21,6 +22,7 @@ import type { TokenProvider } from '@utils/main_loop';
 import AgentReferenceModal from './AgentReferenceModal';
 import { AgentAutocompleteInput } from './AgentAutocompleteInput';
 import LocalWarning from './LocalWarning';
+import { DetectionModePanel, type DetectionCategory, type DetectionModeInitialData, type ClassifiedImage } from './DetectionMode';
 
 // ===================================================================================
 //  MULTI-AGENT PREVIEW COMPONENT
@@ -233,9 +235,10 @@ function renderTextWithAgentBadges(
 interface Message {
   id: number;
   text: string;
-  sender: 'user' | 'ai' | 'system' | 'image-request' | 'multi-agent-system';
+  sender: 'user' | 'ai' | 'system' | 'image-request' | 'multi-agent-system' | 'detection-mode';
   imageDatas?: string[];
   isStreaming?: boolean;
+  detectionModeData?: DetectionModeInitialData;
 }
 
 interface MultiAgentCreatorProps {
@@ -520,6 +523,96 @@ What kind of agent team would you like me to create today?`
             text: imageRequest,
             sender: 'image-request',
           }]);
+        } else {
+          // Check for detection mode template
+          const detectionTemplate = extractDetectionModeTemplate(responseText);
+          if (detectionTemplate) {
+            const textOutsideBlocks = responseText.replace(/&&&\s*\n?[\s\S]*?\n?&&&/g, '').trim();
+
+            if (textOutsideBlocks) {
+              setMessages(prev => prev.map(msg =>
+                msg.id === streamingMessageId
+                  ? { ...msg, text: textOutsideBlocks }
+                  : msg
+              ));
+            } else {
+              setMessages(prev => prev.filter(msg => msg.id !== streamingMessageId));
+            }
+
+            // Find the most recent user message with @reference to get the agent ID
+            const recentUserMessages = allMessages.filter(m => m.sender === 'user').reverse();
+            let sourceAgentId = '';
+            let messageImages: string[] = [];
+
+            for (const userMsg of recentUserMessages) {
+              const references = extractAgentReferences(userMsg.text);
+              if (references.length > 0) {
+                sourceAgentId = references[0].agentId;
+
+                // Fetch images from the referenced agent
+                try {
+                  const referenceData = await fetchAgentReferenceData(references);
+                  referenceData.forEach(data => {
+                    data.recentRuns.forEach(run => {
+                      // Add model images
+                      if (run.modelImages) {
+                        messageImages.push(...run.modelImages);
+                      }
+                      // Add screenshot and camera sensor images
+                      run.sensors.forEach(sensor => {
+                        if ((sensor.type === 'screenshot' || sensor.type === 'camera') && sensor.content) {
+                          if (typeof sensor.content === 'string') {
+                            messageImages.push(sensor.content);
+                          } else if (sensor.content.data) {
+                            messageImages.push(sensor.content.data);
+                          }
+                        }
+                      });
+                    });
+                  });
+                } catch (error) {
+                  console.error('Failed to fetch agent reference images:', error);
+                }
+                break;
+              }
+            }
+
+            // Build DetectionCategory[] from the template and collected images
+            const categoryColors = ['cat1', 'cat2', 'cat3', 'cat4'];
+            const categories: DetectionCategory[] = detectionTemplate.categories.map((label, idx) => {
+              const categoryId = categoryColors[idx] || `cat${idx + 1}`;
+              const imageIndices = detectionTemplate.categorization[label] || [];
+
+              // Map 1-based indices to images
+              const categoryImages: ClassifiedImage[] = imageIndices
+                .filter(index => index >= 1 && index <= messageImages.length)
+                .map((index, imgIdx) => ({
+                  id: `${categoryId}-img-${imgIdx}-${Date.now()}`,
+                  data: messageImages[index - 1], // Convert 1-based to 0-based
+                  source: 'history' as const,
+                  sourceAgentId: sourceAgentId,
+                  timestamp: new Date().toISOString()
+                }));
+
+              return {
+                id: categoryId,
+                label: label.toUpperCase(),
+                images: categoryImages
+              };
+            });
+
+            const detectionModeData: DetectionModeInitialData = {
+              categories,
+              sourceAgentId
+            };
+
+            setMessages(prev => [...prev, {
+              id: Date.now() + Math.random() * 1000,
+              text: '',
+              sender: 'detection-mode',
+              detectionModeData
+            }]);
+          }
         }
       }
 
@@ -566,6 +659,31 @@ What kind of agent team would you like me to create today?`
       sender: 'image-request',
     };
     setMessages(prev => [...prev, imageRequestMessage]);
+  };
+
+  const handleOpenDetectionMode = () => {
+    const detectionMessage: Message = {
+      id: Date.now() + Math.random() * 1000,
+      text: '',
+      sender: 'detection-mode',
+    };
+    setMessages(prev => [...prev, detectionMessage]);
+  };
+
+  const handleDetectionModeClose = (messageId: number) => {
+    setMessages(prev => prev.filter(msg => msg.id !== messageId));
+  };
+
+  const handleDetectionModeComplete = (messageId: number, agentBlock: string) => {
+    // Remove the detection mode panel
+    setMessages(prev => prev.filter(msg => msg.id !== messageId));
+
+    // Show in multi-agent-system message (reuses existing preview/save flow)
+    setMessages(prev => [...prev, {
+      id: Date.now() + Math.random() * 1000,
+      text: JSON.stringify([agentBlock]),  // Wrap in array like extractMultipleAgentConfigs returns
+      sender: 'multi-agent-system',
+    }]);
   };
 
   const handleSaveAllAgents = async (configsJson: string) => {
@@ -722,6 +840,17 @@ What kind of agent team would you like me to create today?`
                     onResponse={(result) => handleMediaResponse(msg.id, result)}
                   />
                 </div>
+              ) : msg.sender === 'detection-mode' ? (
+                <div className="w-full">
+                  <DetectionModePanel
+                    onClose={() => handleDetectionModeClose(msg.id)}
+                    onComplete={(agentBlock) => handleDetectionModeComplete(msg.id, agentBlock)}
+                    initialData={msg.detectionModeData}
+                    getToken={getToken}
+                    isUsingObServer={isUsingObServer}
+                    selectedLocalModel={selectedLocalModel}
+                  />
+                </div>
               ) : (
                 <div className={`max-w-xs md:max-w-md p-2 md:p-3 rounded-lg text-sm md:text-base ${
                   msg.sender === 'user'
@@ -781,6 +910,16 @@ What kind of agent team would you like me to create today?`
               title="Upload Image"
             >
               <Plus className="h-5 w-5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenDetectionMode}
+              disabled={isLoading}
+              className="p-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 transition-colors flex items-center"
+              title="Detection Mode"
+            >
+              <Target className="h-5 w-5" />
             </button>
 
             {!isUsingObServer && (

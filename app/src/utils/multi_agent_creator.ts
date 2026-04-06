@@ -272,6 +272,35 @@ Start with \`gemma-3-4b-it\` or \`gemma-3-12b-it\` for general use. Complex deta
 *   **Text-Only Models:** Use these for tasks that only require text processing or reasoning.
 \`gemma-3n-e4b-it\` as a general model, \`gemini-2.5-flash-lite\` for complex reasoning tasks.
 
+**Classification Mode (Finetuning Detection Agents):**
+
+When a user wants to finetune or improve a detection/classification agent using its historical images, use the \`&&&\` block to pre-populate the Classification Builder with suggested categorizations.
+
+The images from the referenced agent (@agent_id) are numbered starting at 1. Analyze the images in the agent's recent runs and suggest which category each belongs to.
+
+Example:
+User: "help me finetune @print_monitor, it keeps confusing finished prints with failures"
+
+Response:
+Let me help you finetune the print monitor! I've analyzed the recent images and pre-categorized them for you. Please review and adjust the classifications, then click Generate.
+
+\`\`\`
+&&&
+{
+  "categories": ["spaghetti", "printing", "finished"],
+  "categorization": {
+    "spaghetti": [1, 4],
+    "printing": [2, 3, 6, 7],
+    "finished": [5, 8, 9, 10]
+  }
+}
+&&&
+\`\`\`
+
+Only use &&&blocks when the user explicitly wants to classify/finetune using historical images from an agent.
+
+After using the &&& blocks wait for the user to confirm before going on to any other step.
+
 **Final Output Format:**
 
 Generate multiple \`$$$\` blocks, one for each agent in the team, follow the exact config, don't add anything extra. 

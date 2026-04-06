@@ -20,6 +20,15 @@ export interface AgentReferenceData {
 }
 
 // ===================================================================================
+//  DETECTION MODE TEMPLATE TYPES
+// ===================================================================================
+
+export interface DetectionModeTemplate {
+  categories: string[];                           // ["spaghetti", "printing", "finished"]
+  categorization: Record<string, number[]>;       // {"spaghetti": [1,4,5], "printing": [2,3,...]}
+}
+
+// ===================================================================================
 //  EXISTING PARSER FUNCTIONS
 // ===================================================================================
 
@@ -54,6 +63,57 @@ export function extractImageRequest(text: string): string | null {
   const imageRequestRegex = /%%%\s*\n?([\s\S]*?)\n?%%%/;
   const match = text.match(imageRequestRegex);
   return match && match[1] ? match[1].trim() : null;
+}
+
+/**
+ * Extracts the detection mode template from a string.
+ * @param text The text possibly containing a detection mode template.
+ * @returns The parsed DetectionModeTemplate, or null if not found or invalid.
+ */
+export function extractDetectionModeTemplate(text: string): DetectionModeTemplate | null {
+  const detectionModeRegex = /&&&\s*\n?([\s\S]*?)\n?&&&/;
+  const match = text.match(detectionModeRegex);
+
+  if (!match || !match[1]) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(match[1].trim());
+
+    // Validate the structure
+    if (!parsed.categories || !Array.isArray(parsed.categories) || parsed.categories.length < 2) {
+      console.error('Detection mode template must have at least 2 categories');
+      return null;
+    }
+
+    if (!parsed.categorization || typeof parsed.categorization !== 'object') {
+      console.error('Detection mode template must have a categorization object');
+      return null;
+    }
+
+    // Validate all categories are strings
+    if (!parsed.categories.every((cat: unknown) => typeof cat === 'string')) {
+      console.error('All categories must be strings');
+      return null;
+    }
+
+    // Validate all categorization values are arrays of numbers
+    for (const [key, value] of Object.entries(parsed.categorization)) {
+      if (!Array.isArray(value) || !value.every((v: unknown) => typeof v === 'number')) {
+        console.error(`Categorization for "${key}" must be an array of numbers`);
+        return null;
+      }
+    }
+
+    return {
+      categories: parsed.categories,
+      categorization: parsed.categorization
+    };
+  } catch (error) {
+    console.error('Failed to parse detection mode template JSON:', error);
+    return null;
+  }
 }
 
 /**
@@ -115,7 +175,7 @@ export function extractAgentReferences(text: string): AgentReference[] {
   while ((match = regex.exec(text)) !== null) {
     references.push({
       agentId: match[1],
-      runCount: match[2] ? parseInt(match[2]) : 3 // default to 3 runs
+      runCount: match[2] ? parseInt(match[2]) : 10 // default to 10 runs
     });
   }
 
