@@ -337,7 +337,7 @@ function AppContent() {
   };
 
   const handleAIEditClick = (agentId: string) => {
-    setAiEditMessage(`Help me edit this agent @${agentId}`);
+    setAiEditMessage(`Help me edit this agent @${agentId} `);
     setIsConversationalModalOpen(true);
     Logger.info('APP', `Opening AI Edit modal for agent ${agentId}`);
   };
