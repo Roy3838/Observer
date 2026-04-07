@@ -71,7 +71,8 @@ export function extractImageRequest(text: string): string | null {
  * @returns The parsed DetectionModeTemplate, or null if not found or invalid.
  */
 export function extractDetectionModeTemplate(text: string): DetectionModeTemplate | null {
-  const detectionModeRegex = /&&&\s*\n?([\s\S]*?)\n?&&&/;
+  // Use \s* to handle any whitespace (spaces, newlines, tabs) around the content
+  const detectionModeRegex = /&&&\s*([\s\S]*?)\s*&&&/;
   const match = text.match(detectionModeRegex);
 
   if (!match || !match[1]) {

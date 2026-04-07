@@ -1,7 +1,7 @@
 // src/components/AICreator/DetectionMode/DetectionModePanel.tsx
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Clock, Sparkles, ChevronDown, AlertTriangle, Check, Loader2, XCircle, FileText, ChevronRight } from 'lucide-react';
+import { X, Upload, Clock, Sparkles, AlertTriangle, Check, Loader2, XCircle, FileText, ChevronRight } from 'lucide-react';
 import ClassificationColumns from './ClassificationColumns';
 import { listAgents, getAgent, type CompleteAgent } from '@utils/agent_database';
 import { IterationStore } from '@utils/IterationStore';
@@ -50,7 +50,6 @@ const DetectionModePanel: React.FC<DetectionModePanelProps> = ({
     initialData?.sourceAgentId ?? null
   );
   const [historyImages, setHistoryImages] = useState<ClassifiedImage[]>([]);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // Finetuning state
@@ -211,7 +210,7 @@ const DetectionModePanel: React.FC<DetectionModePanelProps> = ({
       fromCategoryId: 'history',
       imageData: image.data
     }));
-    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.effectAllowed = 'all';
   };
 
   const handleMoveImage = (imageId: string, fromCategoryId: string, toCategoryId: string) => {
@@ -295,10 +294,10 @@ const DetectionModePanel: React.FC<DetectionModePanelProps> = ({
       }
     }
 
-    // Determine finetuner model
+    // Determine finetuner model - use same model as MultiAgentCreator for consistency
     const finetunerModel = isUsingObServer
       ? DEFAULT_FINETUNER_MODEL
-      : selectedLocalModel || sourceAgent.model_name;
+      : selectedLocalModel;
 
     const config: FinetuneConfig = {
       testModel: sourceAgent.model_name,
@@ -759,6 +758,48 @@ $$$`;
           </div>
         )}
 
+        {/* Agent History Section - shown when agent is selected */}
+        {selectedAgentId && (
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Clock className="h-4 w-4 text-purple-600" />
+              <span className="text-sm font-medium text-gray-700">Agent History</span>
+              {isLoadingHistory && (
+                <Loader2 className="h-3 w-3 text-purple-500 animate-spin" />
+              )}
+              {!isLoadingHistory && historyImages.length > 0 && (
+                <span className="text-xs text-gray-500">({historyImages.length} images)</span>
+              )}
+            </div>
+            <div className="bg-white border border-gray-200 rounded-lg p-3 max-h-32 overflow-x-auto">
+              {isLoadingHistory ? (
+                <p className="text-sm text-gray-500 text-center py-2">Loading history...</p>
+              ) : historyImages.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-2">No images in agent history</p>
+              ) : (
+                <div className="flex gap-2">
+                  {historyImages.map(image => (
+                    <div
+                      key={image.id}
+                      draggable
+                      onDragStart={(e) => handleHistoryDragStart(e, image)}
+                      onClick={() => handleAddHistoryImage(image)}
+                      className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 border-transparent hover:border-purple-400 transition-colors cursor-grab active:cursor-grabbing"
+                      title="Click to add to first category, or drag to a specific category"
+                    >
+                      <img
+                        src={`data:image/png;base64,${image.data}`}
+                        alt="History"
+                        className="w-full h-full object-cover pointer-events-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Classification Columns */}
         <div className="mb-4">
           <p className="text-sm text-gray-600 mb-2">
@@ -781,70 +822,8 @@ $$$`;
             className="flex items-center px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md"
           >
             <Upload className="h-4 w-4 mr-2" />
-            Upload
+            Upload Images
           </button>
-
-          {/* History Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-              className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <Clock className="h-4 w-4 mr-2" />
-              History
-              <ChevronDown className={`h-4 w-4 ml-2 transition-transform ${isHistoryOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {isHistoryOpen && (
-              <div className="absolute top-full left-0 mt-1 w-72 bg-white rounded-lg shadow-xl border border-gray-200 z-10 max-h-80 overflow-hidden">
-                {/* Agent Selector */}
-                <div className="p-2 border-b border-gray-100">
-                  <select
-                    value={selectedAgentId || ''}
-                    onChange={(e) => setSelectedAgentId(e.target.value || null)}
-                    className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  >
-                    <option value="">Select an agent...</option>
-                    {agents.map(agent => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* History Images Grid */}
-                <div className="p-2 max-h-52 overflow-y-auto">
-                  {isLoadingHistory ? (
-                    <p className="text-sm text-gray-500 text-center py-4">Loading...</p>
-                  ) : !selectedAgentId ? (
-                    <p className="text-sm text-gray-500 text-center py-4">Select an agent to view history</p>
-                  ) : historyImages.length === 0 ? (
-                    <p className="text-sm text-gray-500 text-center py-4">No images in history</p>
-                  ) : (
-                    <div className="grid grid-cols-4 gap-2">
-                      {historyImages.map(image => (
-                        <div
-                          key={image.id}
-                          draggable
-                          onDragStart={(e) => handleHistoryDragStart(e, image)}
-                          onClick={() => handleAddHistoryImage(image)}
-                          className="w-14 h-14 rounded overflow-hidden border-2 border-transparent hover:border-purple-400 transition-colors cursor-grab active:cursor-grabbing"
-                          title="Click to add or drag to a category"
-                        >
-                          <img
-                            src={`data:image/png;base64,${image.data}`}
-                            alt="History"
-                            className="w-full h-full object-cover pointer-events-none"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
 
           {/* Spacer */}
           <div className="flex-1" />

@@ -1,7 +1,7 @@
 // src/components/AICreator/MultiAgentCreator.tsx
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Save, Users, Cpu, Plus, Target } from 'lucide-react';
+import { Send, Loader2, Save, Users, Cpu, Plus, FlaskConical} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { fetchResponse } from '@utils/sendApi';
 import { CompleteAgent, updateAgentImageMemory, saveAgent } from '@utils/agent_database';
@@ -433,7 +433,7 @@ What kind of agent team would you like me to create today?`
         responseText = await fetchResponse(
           'https://api.observer-ai.com:443',
           openaiMessages,
-          'gemini-2.5-flash-lite-free',
+          'gemini-2.5-flash-lite',
           token,
           true,
           (chunk: string) => {
@@ -916,10 +916,10 @@ What kind of agent team would you like me to create today?`
               type="button"
               onClick={handleOpenDetectionMode}
               disabled={isLoading}
-              className="p-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 transition-colors flex items-center"
+              className="p-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-300 transition-colors flex items-center"
               title="Detection Mode"
             >
-              <Target className="h-5 w-5" />
+              <FlaskConical className="h-5 w-5" />
             </button>
 
             {!isUsingObServer && (
