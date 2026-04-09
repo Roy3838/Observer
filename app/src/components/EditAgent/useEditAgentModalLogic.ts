@@ -211,7 +211,9 @@ export const useEditAgentModalLogic = ({
   const setAgentInferenceParams = useCallback((params: Partial<InferenceParams>) => {
     setAgentInferenceParamsState(params);
     if (agentId) {
-      inferenceConfigStore.setAgentOverrides(agentId, params);
+      // Use replace=true because the editor passes the complete params state,
+      // not partial updates. This ensures cleared params are actually removed.
+      inferenceConfigStore.setAgentOverrides(agentId, params, true);
     }
   }, [agentId]);
 

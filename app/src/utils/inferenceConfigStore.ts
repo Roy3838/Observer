@@ -76,10 +76,11 @@ class InferenceConfigStore {
   /**
    * Set inference overrides for a specific agent.
    * Pass partial params to update only specific values.
+   * Use replace=true to replace all overrides instead of merging.
    */
-  setAgentOverrides(agentId: string, params: Partial<InferenceParams>): void {
+  setAgentOverrides(agentId: string, params: Partial<InferenceParams>, replace: boolean = false): void {
     const key = `${AGENT_OVERRIDES_PREFIX}${agentId}`;
-    const current = this.getAgentOverrides(agentId);
+    const current = replace ? {} : this.getAgentOverrides(agentId);
     const merged = { ...current, ...params };
     const cleaned = this.cleanParams(merged);
 
