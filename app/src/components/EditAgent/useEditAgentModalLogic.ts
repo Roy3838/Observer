@@ -9,6 +9,8 @@ import {
   getAllImageMemories
 } from '@utils/agent_database';
 import { listModels, Model } from '@utils/inferenceServer';
+import { inferenceConfigStore } from '@utils/inferenceConfigStore';
+import { InferenceParams } from '../../config/inference-params';
 import { executeTestIteration } from '@utils/main_loop';
 import { Logger, LogEntry, LogLevel } from '@utils/logging';
 import {
@@ -119,6 +121,11 @@ export const useEditAgentModalLogic = ({
   const [testOutput, setTestOutput] = useState('');
   const testResponseRef = useRef<HTMLTextAreaElement>(null);
 
+  // Inference params state
+  const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
+  const [agentInferenceParams, setAgentInferenceParamsState] = useState<Partial<InferenceParams>>({});
+  const [globalInferenceParams, setGlobalInferenceParams] = useState<InferenceParams>({});
+
   /* helpers */
   const fetchModels = useCallback(async () => {
     try {
@@ -200,6 +207,28 @@ export const useEditAgentModalLogic = ({
     }
   }, []);
 
+  // Inference params handlers
+  const setAgentInferenceParams = useCallback((params: Partial<InferenceParams>) => {
+    setAgentInferenceParamsState(params);
+    if (agentId) {
+      inferenceConfigStore.setAgentOverrides(agentId, params);
+    }
+  }, [agentId]);
+
+  const clearAgentInferenceParams = useCallback(() => {
+    setAgentInferenceParamsState({});
+    if (agentId) {
+      inferenceConfigStore.clearAgentOverrides(agentId);
+    }
+  }, [agentId]);
+
+  // Check if current model is local (not from Observer API)
+  const isLocalModel = useCallback(() => {
+    const selectedModel = availableModels.find(m => m.name === currentModel);
+    if (!selectedModel) return false;
+    return !selectedModel.server?.includes('api.observer-ai.com');
+  }, [availableModels, currentModel]);
+
   /* initialise on open */
   useEffect(() => {
     if (!isOpen) return;
@@ -230,6 +259,15 @@ export const useEditAgentModalLogic = ({
     setTestOutput('');
     setIsModelDropdownOpen(false);
     setShowAgentBlockDropdown(false);
+    setShowAdvancedConfig(false);
+
+    // Load inference params
+    setGlobalInferenceParams(inferenceConfigStore.getGlobalDefaults());
+    if (agent?.id) {
+      setAgentInferenceParamsState(inferenceConfigStore.getAgentOverrides(agent.id));
+    } else {
+      setAgentInferenceParamsState({});
+    }
 
     fetchModels();
     loadAgents();
@@ -415,5 +453,11 @@ export const useEditAgentModalLogic = ({
     handleSave,
     handleExport,
     visionValidationError,
+    // Inference params
+    showAdvancedConfig, setShowAdvancedConfig,
+    agentInferenceParams, setAgentInferenceParams,
+    globalInferenceParams,
+    clearAgentInferenceParams,
+    isLocalModel,
   };
 };

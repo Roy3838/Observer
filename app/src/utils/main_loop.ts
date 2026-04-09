@@ -10,6 +10,7 @@ import { recordingManager } from './recordingManager';
 import { IterationStore } from './IterationStore';
 import { detectSignificantChange, clearAgentChangeData } from './change_detector';
 import { checkPhoneWhitelist } from './pre-flight';
+import { inferenceConfigStore } from './inferenceConfigStore';
 
 export type TokenProvider = () => Promise<string | undefined>;
 
@@ -309,6 +310,9 @@ export async function executeAgentIteration(agentId: string): Promise<void> {
           }
       }
 
+      // Fetch inference params for this agent (global defaults + agent overrides)
+      const inferenceParams = inferenceConfigStore.getEffectiveParams(agentId);
+
       Logger.debug(agentId, `Sending prompt to inference server (model: ${agent.model_name})`, { iterationId });
 
       // Streaming callback that logs chunks - Logger dispatches events automatically
@@ -332,7 +336,7 @@ export async function executeAgentIteration(agentId: string): Promise<void> {
         }
       };
 
-      response = await sendPrompt(agent.model_name, preprocessResult, token, true, onStreamChunk);
+      response = await sendPrompt(agent.model_name, preprocessResult, token, true, onStreamChunk, inferenceParams);
 
       // Cache new response for potential reuse on next iteration
       if (activeLoops[agentId]) {

@@ -26,8 +26,13 @@ import {
   Volume2,
   Blend,
   Images,
-  Info
+  Info,
+  Settings,
+  SlidersVertical,
+  ArrowLeft
 } from 'lucide-react';
+import InferenceParamsEditor from '../InferenceParamsEditor';
+import { InferenceParams } from '../../config/inference-params';
 import { Logger } from '@utils/logging';
 import { useEditAgentModalLogic } from './useEditAgentModalLogic';
 
@@ -172,7 +177,6 @@ interface ConfigContentProps {
   setIsModelDropdownOpen: (isOpen: boolean) => void;
   loadingModels: boolean;
   modelsError: string | null;
-  // FIX: Changed `multimodal: boolean | undefined` to `multimodal?: boolean` to make it optional
   availableModels: { name: string; multimodal?: boolean; pro?: boolean; server: string; }[];
   loopInterval: number;
   setLoopInterval: (interval: number) => void;
@@ -181,27 +185,40 @@ interface ConfigContentProps {
   description: string;
   setDescription: (desc: string) => void;
   isProUser?: boolean;
+  // Advanced config button
+  onAdvancedClick?: () => void;
+  isLocalModel: boolean;
+  hasOverrides: boolean;
 }
 const ConfigContent: React.FC<ConfigContentProps> = ({
   name, setName, agentId, setAgentId, createMode, currentModel, setCurrentModel,
   isModelDropdownOpen, setIsModelDropdownOpen, loadingModels, modelsError,
   availableModels, loopInterval, setLoopInterval, onlyOnSignificantChange, setOnlyOnSignificantChange,
   description, setDescription, isProUser = false,
-}) => (
-  <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-    <h3 className="text-lg font-semibold text-blue-700 mb-4 md:hidden">Agent Configuration</h3>
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-      <div>
-        <label className="block text-gray-600 mb-1 flex items-center"><Edit3 size={14} className="mr-1.5 text-gray-500" />Name <span className="text-red-500">*</span></label>
-        <input value={name} onChange={(e) => setName(e.target.value)} className="w-full p-2 bg-gray-100 border-gray-300 rounded-md" placeholder="Agent name" />
-      </div>
-      <div>
-        <label className="block text-gray-600 mb-1 flex items-center"><Tag size={14} className="mr-1.5 text-gray-500" />ID {createMode && <span className="text-red-500">*</span>}</label>
-        <input value={agentId} onChange={(e) => { if (createMode) { setAgentId(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')); } }} readOnly={!createMode} className={`w-full p-2 bg-gray-100 border-gray-300 rounded-md ${createMode ? 'focus:ring-blue-500' : 'opacity-70 cursor-not-allowed bg-gray-200'}`} placeholder="my_agent_id" />
-      </div>
-      <div className="col-span-1 sm:col-span-2">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
+  onAdvancedClick, isLocalModel, hasOverrides,
+}) => {
+  return (
+    <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+      {/* Mobile-only header */}
+      <h3 className="text-lg font-semibold text-blue-700 md:hidden mb-4">
+        Agent Configuration
+      </h3>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+        {/* Row 1: Name, ID */}
+        <div>
+          <label className="block text-gray-600 mb-1 flex items-center"><Edit3 size={14} className="mr-1.5 text-gray-500" />Name <span className="text-red-500">*</span></label>
+          <input value={name} onChange={(e) => setName(e.target.value)} className="w-full p-2 bg-gray-100 border-gray-300 rounded-md" placeholder="Agent name" />
+        </div>
+        <div>
+          <label className="block text-gray-600 mb-1 flex items-center"><Tag size={14} className="mr-1.5 text-gray-500" />ID {createMode && <span className="text-red-500">*</span>}</label>
+          <input value={agentId} onChange={(e) => { if (createMode) { setAgentId(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')); } }} readOnly={!createMode} className={`w-full p-2 bg-gray-100 border-gray-300 rounded-md ${createMode ? 'focus:ring-blue-500' : 'opacity-70 cursor-not-allowed bg-gray-200'}`} placeholder="my_agent_id" />
+        </div>
+
+        {/* Row 2: Model + Params (left, aligned with Name) | Loop + Only on Change (right, aligned with ID) */}
+        {/* Left column: Model + Params */}
+        <div className="flex gap-2">
+          <div className="flex-grow">
             <label className="block text-gray-600 mb-1 flex items-center"><Brain size={14} className="mr-1.5 text-gray-500" />Model <span className="text-red-500">*</span></label>
             <div className="relative">
               <button onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)} disabled={loadingModels} className="w-full p-2 bg-gray-100 border-gray-300 rounded-md flex justify-between items-center text-left">
@@ -217,7 +234,7 @@ const ConfigContent: React.FC<ConfigContentProps> = ({
                       <button
                         key={m.name}
                         onClick={() => {
-                          if (m.pro && !isProUser) return; // Prevent selection of pro models for non-pro users
+                          if (m.pro && !isProUser) return;
                           setCurrentModel(m.name);
                           setIsModelDropdownOpen(false);
                         }}
@@ -261,27 +278,48 @@ const ConfigContent: React.FC<ConfigContentProps> = ({
               )}
             </div>
           </div>
-          <div>
+          {/* Params button - only show for local models */}
+          {isLocalModel && onAdvancedClick && (
+            <div className="flex-shrink-0 w-16">
+              <label className="block text-gray-600 mb-1 flex items-center"><SlidersVertical size={14} className="mr-1.5 text-gray-500" />Params</label>
+              <button
+                onClick={onAdvancedClick}
+                title="Inference Parameters"
+                className={`w-full p-2 rounded-md transition-colors flex items-center justify-center ${
+                  hasOverrides
+                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <Settings size={16} />
+                {hasOverrides && <span className="ml-1 w-2 h-2 bg-blue-500 rounded-full" />}
+              </button>
+            </div>
+          )}
+        </div>
+        {/* Right column: Loop + Only on Change */}
+        <div className="flex gap-4">
+          <div className="flex-1">
             <label className="block text-gray-600 mb-1 flex items-center"><Activity size={14} className="mr-1.5 text-gray-500" />Loop (s)</label>
             <input type="number" min="1" step="1" value={loopInterval} onChange={(e) => setLoopInterval(Math.max(1, parseFloat(e.target.value) || 30))} className="w-full p-2 bg-gray-100 border-gray-300 rounded-md" />
           </div>
-          <div>
+          <div className="flex-1">
             <label className="block text-gray-600 mb-1 flex items-center"><Zap size={14} className="mr-1.5 text-gray-500" />Only on Change</label>
-            <label className="relative inline-flex items-center cursor-pointer">
+            <label className="relative inline-flex items-center cursor-pointer mt-1">
               <input type="checkbox" checked={onlyOnSignificantChange} onChange={(e) => setOnlyOnSignificantChange(e.target.checked)} className="sr-only peer" />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
               <span className="ml-3 text-sm font-medium text-gray-700">{onlyOnSignificantChange ? 'On' : 'Off'}</span>
             </label>
           </div>
         </div>
-      </div>
-      <div className="col-span-1 sm:col-span-2">
-        <label className="block text-gray-600 mb-1 flex items-center"><Edit3 size={14} className="mr-1.5 text-gray-500" />Description</label>
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="w-full p-2 bg-gray-100 border-gray-300 rounded-md" placeholder="Optional description" />
-      </div>
+          <div className="col-span-1 sm:col-span-2">
+            <label className="block text-gray-600 mb-1 flex items-center"><Edit3 size={14} className="mr-1.5 text-gray-500" />Description</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="w-full p-2 bg-gray-100 border-gray-300 rounded-md" placeholder="Optional description" />
+          </div>
+        </div>
     </div>
-  </div>
-);
+  );
+};
 
 // --- Prompt Content Component (UPDATED) ---
 interface PromptContentProps {
@@ -638,82 +676,117 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({
         <MobileTabNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
         <div className="flex-grow min-h-0 bg-gray-50 overflow-y-auto">
-          {/* --- DESKTOP LAYOUT --- */}
-          <div className="hidden md:flex flex-row flex-grow h-full">
-            {/* Left Half: System Prompt (Full Height) */}
-            <div className="w-1/2 p-5 flex flex-col overflow-y-auto border-r border-gray-200">
-              <PromptContent
-                systemPromptRef={logic.systemPromptRef}
-                systemPrompt={logic.systemPrompt} setSystemPrompt={logic.setSystemPrompt}
-                insertSystemPromptText={logic.insertSystemPromptText}
-                availableAgentsForBlocks={logic.availableAgentsForBlocks}
-                visionValidationError={logic.visionValidationError}
-              />
-            </div>
-
-            {/* Right Half: Config (Top) + Code (Bottom) */}
-            <div className="w-1/2 p-5 flex flex-col overflow-y-auto space-y-5">
-              <div className="flex-shrink-0">
-                <ConfigContent
-                  name={logic.name} setName={logic.setName}
-                  agentId={logic.agentId} setAgentId={logic.setAgentId}
-                  createMode={createMode}
-                  currentModel={logic.currentModel} setCurrentModel={logic.setCurrentModel}
-                  isModelDropdownOpen={logic.isModelDropdownOpen} setIsModelDropdownOpen={logic.setIsModelDropdownOpen}
-                  loadingModels={logic.loadingModels} modelsError={logic.modelsError}
-                  availableModels={logic.availableModels}
-                  loopInterval={logic.loopInterval} setLoopInterval={logic.setLoopInterval}
-                  onlyOnSignificantChange={logic.onlyOnSignificantChange} setOnlyOnSignificantChange={logic.setOnlyOnSignificantChange}
-                  description={logic.description} setDescription={logic.setDescription}
-                  isProUser={isProUser}
-                />
-              </div>
-              <div className="flex-grow min-h-0">
-                <CodeEditorContent
-                  isPythonMode={logic.isPythonMode} setIsPythonMode={logic.setIsPythonMode}
-                  editorIsLoaded={editorIsLoaded}
-                  agentCode={logic.agentCode} setAgentCode={logic.setAgentCode}
-                />
+          {/* --- ADVANCED/INFERENCE PARAMS VIEW (Full modal takeover) --- */}
+          {logic.showAdvancedConfig ? (
+            <div className="p-5 h-full overflow-y-auto">
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 h-full flex flex-col">
+                <div className="flex items-center justify-between mb-4 pb-3 border-b">
+                  <h3 className="text-lg font-semibold text-blue-700">Inference Parameters</h3>
+                  <button
+                    onClick={() => logic.setShowAdvancedConfig(false)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  >
+                    <ArrowLeft size={14} />
+                    Back to Agent
+                  </button>
+                </div>
+                <div className="flex-grow overflow-y-auto">
+                  <InferenceParamsEditor
+                    params={logic.agentInferenceParams}
+                    onChange={logic.setAgentInferenceParams}
+                    isAgentOverride={true}
+                    onClearAll={logic.clearAgentInferenceParams}
+                    globalDefaults={logic.globalInferenceParams}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* --- DESKTOP LAYOUT --- */}
+              <div className="hidden md:flex flex-row flex-grow h-full">
+                {/* Left Half: System Prompt (Full Height) */}
+                <div className="w-1/2 p-5 flex flex-col overflow-y-auto border-r border-gray-200">
+                  <PromptContent
+                    systemPromptRef={logic.systemPromptRef}
+                    systemPrompt={logic.systemPrompt} setSystemPrompt={logic.setSystemPrompt}
+                    insertSystemPromptText={logic.insertSystemPromptText}
+                    availableAgentsForBlocks={logic.availableAgentsForBlocks}
+                    visionValidationError={logic.visionValidationError}
+                  />
+                </div>
 
-          {/* --- MOBILE LAYOUT (Tab Content) --- */}
-          <div className="md:hidden p-4 space-y-4">
-            {activeTab === 'config' &&
-              <ConfigContent
-                name={logic.name} setName={logic.setName}
-                agentId={logic.agentId} setAgentId={logic.setAgentId}
-                createMode={createMode}
-                currentModel={logic.currentModel} setCurrentModel={logic.setCurrentModel}
-                isModelDropdownOpen={logic.isModelDropdownOpen} setIsModelDropdownOpen={logic.setIsModelDropdownOpen}
-                loadingModels={logic.loadingModels} modelsError={logic.modelsError}
-                availableModels={logic.availableModels}
-                loopInterval={logic.loopInterval} setLoopInterval={logic.setLoopInterval}
-                onlyOnSignificantChange={logic.onlyOnSignificantChange} setOnlyOnSignificantChange={logic.setOnlyOnSignificantChange}
-                description={logic.description} setDescription={logic.setDescription}
-                isProUser={isProUser}
-              />
-            }
+                {/* Right Half: Config (Top) + Code (Bottom) */}
+                <div className="w-1/2 p-5 flex flex-col overflow-y-auto space-y-5">
+                  <div className="flex-shrink-0">
+                    <ConfigContent
+                      name={logic.name} setName={logic.setName}
+                      agentId={logic.agentId} setAgentId={logic.setAgentId}
+                      createMode={createMode}
+                      currentModel={logic.currentModel} setCurrentModel={logic.setCurrentModel}
+                      isModelDropdownOpen={logic.isModelDropdownOpen} setIsModelDropdownOpen={logic.setIsModelDropdownOpen}
+                      loadingModels={logic.loadingModels} modelsError={logic.modelsError}
+                      availableModels={logic.availableModels}
+                      loopInterval={logic.loopInterval} setLoopInterval={logic.setLoopInterval}
+                      onlyOnSignificantChange={logic.onlyOnSignificantChange} setOnlyOnSignificantChange={logic.setOnlyOnSignificantChange}
+                      description={logic.description} setDescription={logic.setDescription}
+                      isProUser={isProUser}
+                      onAdvancedClick={() => logic.setShowAdvancedConfig(true)}
+                      isLocalModel={logic.isLocalModel()}
+                      hasOverrides={Object.keys(logic.agentInferenceParams).length > 0}
+                    />
+                  </div>
+                  <div className="flex-grow min-h-0">
+                    <CodeEditorContent
+                      isPythonMode={logic.isPythonMode} setIsPythonMode={logic.setIsPythonMode}
+                      editorIsLoaded={editorIsLoaded}
+                      agentCode={logic.agentCode} setAgentCode={logic.setAgentCode}
+                    />
+                  </div>
+                </div>
+              </div>
 
-            {activeTab === 'prompt' && <div className="h-full flex flex-col">
-              <PromptContent
-                systemPromptRef={logic.systemPromptRef}
-                systemPrompt={logic.systemPrompt} setSystemPrompt={logic.setSystemPrompt}
-                insertSystemPromptText={logic.insertSystemPromptText}
-                availableAgentsForBlocks={logic.availableAgentsForBlocks}
-                visionValidationError={logic.visionValidationError}
-              />
-            </div>}
+              {/* --- MOBILE LAYOUT (Tab Content) --- */}
+              <div className="md:hidden p-4 space-y-4">
+                {activeTab === 'config' &&
+                  <ConfigContent
+                    name={logic.name} setName={logic.setName}
+                    agentId={logic.agentId} setAgentId={logic.setAgentId}
+                    createMode={createMode}
+                    currentModel={logic.currentModel} setCurrentModel={logic.setCurrentModel}
+                    isModelDropdownOpen={logic.isModelDropdownOpen} setIsModelDropdownOpen={logic.setIsModelDropdownOpen}
+                    loadingModels={logic.loadingModels} modelsError={logic.modelsError}
+                    availableModels={logic.availableModels}
+                    loopInterval={logic.loopInterval} setLoopInterval={logic.setLoopInterval}
+                    onlyOnSignificantChange={logic.onlyOnSignificantChange} setOnlyOnSignificantChange={logic.setOnlyOnSignificantChange}
+                    description={logic.description} setDescription={logic.setDescription}
+                    isProUser={isProUser}
+                    onAdvancedClick={() => logic.setShowAdvancedConfig(true)}
+                    isLocalModel={logic.isLocalModel()}
+                    hasOverrides={Object.keys(logic.agentInferenceParams).length > 0}
+                  />
+                }
 
-            {activeTab === 'code' && (
-                <CodeEditorContent
-                  isPythonMode={logic.isPythonMode} setIsPythonMode={logic.setIsPythonMode}
-                  editorIsLoaded={editorIsLoaded}
-                  agentCode={logic.agentCode} setAgentCode={logic.setAgentCode}
-                />
-            )}
-          </div>
+                {activeTab === 'prompt' && <div className="h-full flex flex-col">
+                  <PromptContent
+                    systemPromptRef={logic.systemPromptRef}
+                    systemPrompt={logic.systemPrompt} setSystemPrompt={logic.setSystemPrompt}
+                    insertSystemPromptText={logic.insertSystemPromptText}
+                    availableAgentsForBlocks={logic.availableAgentsForBlocks}
+                    visionValidationError={logic.visionValidationError}
+                  />
+                </div>}
+
+                {activeTab === 'code' && (
+                    <CodeEditorContent
+                      isPythonMode={logic.isPythonMode} setIsPythonMode={logic.setIsPythonMode}
+                      editorIsLoaded={editorIsLoaded}
+                      agentCode={logic.agentCode} setAgentCode={logic.setAgentCode}
+                    />
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* --- FOOTER --- */}

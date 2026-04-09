@@ -2,6 +2,7 @@
 import { PreProcessorResult } from './pre-processor';
 import { listModels } from './inferenceServer';
 import { platformFetch } from './platform';
+import { InferenceParams } from '../config/inference-params';
 
 /**
  * Decrements the quota counter stored in localStorage and dispatches an event.
@@ -99,9 +100,12 @@ export class UnauthorizedError extends Error {
  * @param serverAddress Full server address (e.g., 'https://api.observer-ai.com:443')
  * @param messages Array of OpenAI-format messages with role and content
  * @param modelName Name of the model to use
- * @param token Optional authorization token
+ * @param token Optional authorization token (used for Observer API only)
  * @param enableStreaming Whether to enable streaming response (default: false)
  * @param onStreamChunk Optional callback for streaming chunks
+ * @param inferenceParams Optional inference parameters (temperature, top_p, etc.)
+ *        - For Observer API: token param is used for auth
+ *        - For custom servers: inferenceParams.customApiKey is used as Bearer token
  * @returns The model's response text
  */
 export async function fetchResponse(
@@ -110,7 +114,8 @@ export async function fetchResponse(
   modelName: string,
   token?: string,
   enableStreaming: boolean = false,
-  onStreamChunk?: (chunk: string) => void
+  onStreamChunk?: (chunk: string) => void,
+  inferenceParams?: InferenceParams
 ): Promise<string> {
   try {
     const url = `${serverAddress}/v1/chat/completions`;
@@ -119,18 +124,48 @@ export async function fetchResponse(
       'Content-Type': 'application/json',
     };
 
-    if (serverAddress.includes('api.observer-ai.com')) {
+    const isObserverApi = serverAddress.includes('api.observer-ai.com');
+
+    if (isObserverApi) {
+      // Observer hosted API: use JWT token for auth
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      // Trigger the optimistic UI update
+    } else if (inferenceParams?.customApiKey) {
+      // Custom inference server: use user's own API key (BYOK)
+      headers['Authorization'] = `Bearer ${inferenceParams.customApiKey}`;
     }
 
-    const requestBody = JSON.stringify({
+    // Build request body with optional inference parameters
+    const requestBodyObj: Record<string, any> = {
       model: modelName,
       messages: messages,
       stream: enableStreaming
-    });
+    };
+
+    // Apply inference parameters if provided
+    if (inferenceParams) {
+      // Tier 1 - Universal OpenAI-compatible parameters
+      if (inferenceParams.temperature !== undefined) requestBodyObj.temperature = inferenceParams.temperature;
+      if (inferenceParams.top_p !== undefined) requestBodyObj.top_p = inferenceParams.top_p;
+      if (inferenceParams.max_tokens !== undefined) requestBodyObj.max_tokens = inferenceParams.max_tokens;
+      if (inferenceParams.seed !== undefined) requestBodyObj.seed = inferenceParams.seed;
+      if (inferenceParams.stop !== undefined) requestBodyObj.stop = inferenceParams.stop;
+
+      // Tier 2 - Common extensions
+      if (inferenceParams.frequency_penalty !== undefined) requestBodyObj.frequency_penalty = inferenceParams.frequency_penalty;
+      if (inferenceParams.presence_penalty !== undefined) requestBodyObj.presence_penalty = inferenceParams.presence_penalty;
+      if (inferenceParams.top_k !== undefined) requestBodyObj.top_k = inferenceParams.top_k;
+
+      // Tier 3 - Thinking/Reasoning control
+      if (inferenceParams.reasoning_effort !== undefined) requestBodyObj.reasoning_effort = inferenceParams.reasoning_effort;
+      if (inferenceParams.enable_thinking !== undefined) {
+        // For Qwen3 via vLLM - passed as chat_template_kwargs
+        requestBodyObj.chat_template_kwargs = { enable_thinking: inferenceParams.enable_thinking };
+      }
+    }
+
+    const requestBody = JSON.stringify(requestBodyObj);
 
     const response = await platformFetch(url, {
       method: 'POST',
@@ -182,13 +217,12 @@ export async function fetchResponse(
 
 /**
  * Send a prompt to the API server using OpenAI-compatible v1 chat completions endpoint
- * @param host API server host
- * @param port API server port
  * @param modelName Name of the model to use
  * @param preprocessResult The preprocessed result containing prompt and optional images
  * @param token Optional authorization token
  * @param enableStreaming Whether to enable streaming response (default: true)
  * @param onStreamChunk Optional callback for streaming chunks (only used when streaming is enabled)
+ * @param inferenceParams Optional inference parameters (temperature, top_p, etc.)
  * @returns The model's response text
  */
 export async function sendPrompt(
@@ -196,7 +230,8 @@ export async function sendPrompt(
   preprocessResult: PreProcessorResult,
   token?: string,
   enableStreaming: boolean = false,
-  onStreamChunk?: (chunk: string) => void
+  onStreamChunk?: (chunk: string) => void,
+  inferenceParams?: InferenceParams
 ): Promise<string> {
   try {
     // Find the server for this model
@@ -239,7 +274,7 @@ export async function sendPrompt(
     }
 
     // Use the new fetchResponse function with messages array
-    return await fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk);
+    return await fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, inferenceParams);
 
   } catch (error) {
     console.error('Error calling API:', error);
