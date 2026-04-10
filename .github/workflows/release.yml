@@ -155,6 +155,45 @@ jobs:
           wait-for-completion: true
           output-artifact-directory: 'signed-windows'
 
+      # 10. Re-generate Tauri updater signatures for the code-signed binaries
+      # SignPath modifies the binary (embeds certificate), which changes the hash.
+      # We must re-sign with Tauri's updater key so the updater can verify the signed binaries.
+      - name: Re-generate Tauri updater signatures for signed binaries
+        if: matrix.platform.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          # Install Tauri CLI
+          cargo install tauri-cli --version "^2.0"
+
+          # Find and sign all .exe files
+          Get-ChildItem -Path "signed-windows" -Recurse -Filter "*.exe" | ForEach-Object {
+            Write-Host "Generating Tauri updater signature for: $($_.FullName)"
+            $sigFile = "$($_.FullName).sig"
+
+            # Generate signature using Tauri signer
+            cargo tauri signer sign --private-key "$env:TAURI_SIGNING_PRIVATE_KEY" --password "$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$($_.FullName)"
+
+            Write-Host "Created signature: $sigFile"
+          }
+
+          # Find and sign all .msi files
+          Get-ChildItem -Path "signed-windows" -Recurse -Filter "*.msi" | ForEach-Object {
+            Write-Host "Generating Tauri updater signature for: $($_.FullName)"
+            $sigFile = "$($_.FullName).sig"
+
+            # Generate signature using Tauri signer
+            cargo tauri signer sign --private-key "$env:TAURI_SIGNING_PRIVATE_KEY" --password "$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$($_.FullName)"
+
+            Write-Host "Created signature: $sigFile"
+          }
+
+          # List all files in signed-windows to verify
+          Write-Host "Files in signed-windows after re-signing:"
+          Get-ChildItem -Path "signed-windows" -Recurse | ForEach-Object { Write-Host $_.FullName }
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+
       - name: Upload signed Windows installer to release
         if: matrix.platform.os == 'windows-latest'
         uses: softprops/action-gh-release@v1
@@ -163,6 +202,8 @@ jobs:
           draft: true
           files: |
             signed-windows/**/*.exe
+            signed-windows/**/*.exe.sig
             signed-windows/**/*.msi
+            signed-windows/**/*.msi.sig
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
