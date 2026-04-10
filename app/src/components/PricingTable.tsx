@@ -153,7 +153,7 @@ export const PricingTable: React.FC<PricingTableProps> = ({
           <p className={isTriggeredByQuotaError ? "text-base sm:text-lg text-gray-600 mb-3" : "text-sm sm:text-base text-gray-600 mb-2"}>{subheadline}</p>
           {isTriggeredByQuotaError && (
             <div className="flex items-center space-x-3 text-xs text-gray-500">
-              <span>🚀 1k+ users</span>
+              <span>🚀 2k+ users</span>
               <span>•</span>
               <span>⭐ 1k+ GitHub stars</span>
               <span>•</span>
@@ -185,19 +185,19 @@ export const PricingTable: React.FC<PricingTableProps> = ({
             <li className="flex items-start">
               <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
               <span>
-                <strong>Unlimited Notifications: </strong>Discord and Telegram
+                <strong>Unlimited Notifications: </strong>Discord, Email, Telegram and Pushover
               </span>
             </li>
             <li className="flex items-start">
               <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
               <span>
-                <strong>Notifications: </strong> SMS, Phone Calling, Email, WhatsApp, Pushover <strong>5/Day</strong>
+                <strong>Notifications: </strong> SMS, Phone Calls and WhatsApp <strong>5/Day</strong>
               </span>
             </li>
             <li className="flex items-start">
               <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
               <span>
-                <strong>Cloud Monitoring:</strong> 30 min/day
+                <strong>Cloud Monitoring:</strong> 1 hour/day
                 {isHalfwayWarning && <span className="block text-yellow-600 text-xs mt-1">(Halfway there!)</span>}
               </span>
             </li>
@@ -235,7 +235,7 @@ export const PricingTable: React.FC<PricingTableProps> = ({
           <ul className="space-y-2.5 mb-6 text-sm">
             <li className="flex items-start">
               <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-              <span><strong>Unlimited notifications:</strong> SMS, Phone Calling, Email, WhatsApp, Telegram, Pushover
+              <span><strong>Unlimited notifications:</strong> SMS, Phone Calls and WhatsApp!
 </span>
             </li>
             <li className="flex items-start">
@@ -305,7 +305,7 @@ export const PricingTable: React.FC<PricingTableProps> = ({
             </li>
             <li className="flex items-start">
               <Sparkles className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
-              <span><strong>Unlock AI Studio: Multi-Agent configurations</strong></span>
+              <span><strong>Unlock AI Studio: Multi-Agent configurations!</strong></span>
             </li>
             <li className="flex items-start">
               <Heart className="h-5 w-5 text-pink-500 mr-2 flex-shrink-0 mt-0.5" />
