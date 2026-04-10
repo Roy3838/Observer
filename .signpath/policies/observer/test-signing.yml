@@ -1,8 +1,6 @@
 # SignPath GitHub Policy for Observer test-signing
 # This policy file is required by the SignPath GitHub Actions connector
-# See: https://docs.signpath.io/integrations/github-actions
-
-artifact-configuration: .signpath/artifact-configuration.xml
+# See: https://docs.signpath.io/trusted-build-systems/github
 
 github-policies:
   # Allow signing from the dedicated Windows signing workflow

@@ -2,8 +2,6 @@
 # This policy file is required by the SignPath GitHub Actions connector
 # See: https://docs.signpath.io/integrations/github-actions
 
-artifact-configuration: .signpath/artifact-configuration.xml
-
 github-policies:
   # Allow signing from the dedicated Windows signing workflow
   - branches:
