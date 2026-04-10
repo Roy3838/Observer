@@ -1,4 +1,4 @@
-# SignPath GitHub Policy for Observer test-signing
+# SignPath GitHub Policy for Observer release-signing (production OV certificate)
 # This policy file is required by the SignPath GitHub Actions connector
 # See: https://docs.signpath.io/integrations/github-actions
 
@@ -8,5 +8,4 @@ github-policies:
   # Allow signing from the dedicated Windows signing workflow
   - branches:
       - main
-      - dev
     workflow-file: .github/workflows/sign-windows.yml
