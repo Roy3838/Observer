@@ -1,0 +1,203 @@
+# .github/workflows/sign-windows.yml
+#
+# Windows Code Signing Workflow
+#
+# This workflow runs AFTER the main release.yml completes.
+# It signs Windows binaries with SignPath (requires manual approval in SignPath UI),
+# then re-signs with Tauri's updater key and updates latest.json.
+#
+# Flow:
+# 1. release.yml builds all platforms → uploads to draft release (Windows unsigned)
+# 2. You trigger this workflow manually
+# 3. This workflow downloads Windows installers from the release
+# 4. Submits to SignPath → You approve in SignPath UI
+# 5. Re-signs with Tauri key for updater compatibility
+# 6. Updates latest.json with new Windows signatures
+# 7. Uploads signed binaries + updated latest.json to the release
+
+name: 'Sign Windows Installers'
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to sign (e.g., v2.1.5)'
+        required: true
+        type: string
+      signing_policy:
+        description: 'SignPath signing policy'
+        required: true
+        type: choice
+        options:
+          - test-signing
+          - release-signing
+        default: release-signing
+
+jobs:
+  sign-windows:
+    name: Sign Windows Installers
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Download unsigned Windows installers from the release
+      - name: Download Windows installers from release
+        shell: pwsh
+        run: |
+          $tag = "${{ inputs.tag }}"
+          Write-Host "Downloading Windows installers from release $tag..."
+
+          New-Item -ItemType Directory -Force -Path "unsigned-windows"
+
+          # Download .exe and .msi files
+          gh release download $tag --pattern "*.exe" --dir "unsigned-windows" --clobber
+          gh release download $tag --pattern "*.msi" --dir "unsigned-windows" --clobber
+
+          Write-Host "Downloaded files:"
+          Get-ChildItem -Path "unsigned-windows" -Recurse | ForEach-Object { Write-Host $_.FullName }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Upload as artifact for SignPath
+      - name: Upload unsigned Windows artifact for SignPath
+        id: upload-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-windows-installers
+          path: |
+            unsigned-windows/*.exe
+            unsigned-windows/*.msi
+
+      # Sign with SignPath (requires manual approval in SignPath UI for production certs)
+      - name: Sign Windows installers with SignPath
+        id: signpath
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+          organization-id: '${{ secrets.SIGNPATH_ORGANIZATION_ID }}'
+          project-slug: 'observer'
+          signing-policy-slug: '${{ inputs.signing_policy }}'
+          artifact-configuration-slug: 'windows-nsis-installer'
+          github-artifact-id: '${{ steps.upload-unsigned.outputs.artifact-id }}'
+          wait-for-completion: true
+          output-artifact-directory: 'signed-windows'
+
+      # Install Rust and Tauri CLI for re-signing
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2.0"
+
+      # Re-generate Tauri updater signatures for the code-signed binaries
+      - name: Re-generate Tauri updater signatures
+        shell: pwsh
+        run: |
+          Write-Host "Generating Tauri updater signatures for signed binaries..."
+
+          # Find and sign all .exe files
+          Get-ChildItem -Path "signed-windows" -Recurse -Filter "*.exe" | ForEach-Object {
+            Write-Host "Generating Tauri updater signature for: $($_.FullName)"
+            cargo tauri signer sign --private-key "$env:TAURI_SIGNING_PRIVATE_KEY" --password "$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$($_.FullName)"
+            Write-Host "Created signature: $($_.FullName).sig"
+          }
+
+          # Find and sign all .msi files
+          Get-ChildItem -Path "signed-windows" -Recurse -Filter "*.msi" | ForEach-Object {
+            Write-Host "Generating Tauri updater signature for: $($_.FullName)"
+            cargo tauri signer sign --private-key "$env:TAURI_SIGNING_PRIVATE_KEY" --password "$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$($_.FullName)"
+            Write-Host "Created signature: $($_.FullName).sig"
+          }
+
+          Write-Host "Files after re-signing:"
+          Get-ChildItem -Path "signed-windows" -Recurse | ForEach-Object { Write-Host $_.FullName }
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+
+      # Update latest.json with new Windows signatures
+      - name: Update latest.json with new Windows signatures
+        shell: pwsh
+        run: |
+          $tag = "${{ inputs.tag }}"
+
+          # Download current latest.json from the release
+          Write-Host "Downloading latest.json from release $tag..."
+          gh release download $tag --pattern "latest.json" --dir "." --clobber
+
+          # Read current latest.json
+          $latestJson = Get-Content -Path "latest.json" -Raw | ConvertFrom-Json
+
+          # Read new signatures from .sig files
+          $nsisExe = Get-ChildItem -Path "signed-windows" -Recurse -Filter "*-setup.exe" | Select-Object -First 1
+          $msiFile = Get-ChildItem -Path "signed-windows" -Recurse -Filter "*.msi" | Select-Object -First 1
+
+          if ($nsisExe) {
+            $nsisSignature = Get-Content -Path "$($nsisExe.FullName).sig" -Raw
+            Write-Host "New NSIS signature (first 50 chars): $($nsisSignature.Substring(0, [Math]::Min(50, $nsisSignature.Length)))..."
+
+            # Update windows-x86_64-nsis signature
+            if ($latestJson.platforms.'windows-x86_64-nsis') {
+              $latestJson.platforms.'windows-x86_64-nsis'.signature = $nsisSignature.Trim()
+              Write-Host "Updated windows-x86_64-nsis signature"
+            }
+          }
+
+          if ($msiFile) {
+            $msiSignature = Get-Content -Path "$($msiFile.FullName).sig" -Raw
+            Write-Host "New MSI signature (first 50 chars): $($msiSignature.Substring(0, [Math]::Min(50, $msiSignature.Length)))..."
+
+            # Update windows-x86_64 and windows-x86_64-msi signatures
+            if ($latestJson.platforms.'windows-x86_64') {
+              $latestJson.platforms.'windows-x86_64'.signature = $msiSignature.Trim()
+              Write-Host "Updated windows-x86_64 signature"
+            }
+            if ($latestJson.platforms.'windows-x86_64-msi') {
+              $latestJson.platforms.'windows-x86_64-msi'.signature = $msiSignature.Trim()
+              Write-Host "Updated windows-x86_64-msi signature"
+            }
+          }
+
+          # Write updated latest.json
+          $latestJson | ConvertTo-Json -Depth 10 | Set-Content -Path "latest.json" -Encoding UTF8
+
+          Write-Host "Updated latest.json contents:"
+          Get-Content -Path "latest.json"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Upload signed binaries and updated latest.json to the release
+      - name: Upload signed installers and updated latest.json to release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ inputs.tag }}
+          draft: true
+          files: |
+            signed-windows/**/*.exe
+            signed-windows/**/*.exe.sig
+            signed-windows/**/*.msi
+            signed-windows/**/*.msi.sig
+            latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        shell: pwsh
+        run: |
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "Windows signing complete!"
+          Write-Host "=========================================="
+          Write-Host ""
+          Write-Host "Signed files uploaded to release: ${{ inputs.tag }}"
+          Write-Host ""
+          Write-Host "Next steps:"
+          Write-Host "1. Review the draft release on GitHub"
+          Write-Host "2. Verify the Windows installers are code-signed"
+          Write-Host "3. Test the updater on a Windows machine"
+          Write-Host "4. Publish the release when ready"
+          Write-Host ""
