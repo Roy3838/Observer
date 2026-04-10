@@ -194,7 +194,57 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
 
-      - name: Upload signed Windows installer to release
+      # 11. Update latest.json with new Windows signatures
+      # The updater reads signatures from latest.json, not from .sig files
+      - name: Update latest.json with new Windows signatures
+        if: matrix.platform.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $tag = "${{ inputs.tag || github.ref_name }}"
+
+          # Download current latest.json from the release
+          Write-Host "Downloading latest.json from release..."
+          gh release download $tag --pattern "latest.json" --dir "." --clobber
+
+          # Read current latest.json
+          $latestJson = Get-Content -Path "latest.json" -Raw | ConvertFrom-Json
+
+          # Read new signatures from .sig files
+          $nsisExe = Get-ChildItem -Path "signed-windows" -Recurse -Filter "*-setup.exe" | Select-Object -First 1
+          $msiFile = Get-ChildItem -Path "signed-windows" -Recurse -Filter "*.msi" | Select-Object -First 1
+
+          if ($nsisExe) {
+            $nsisSignature = Get-Content -Path "$($nsisExe.FullName).sig" -Raw
+            Write-Host "New NSIS signature: $($nsisSignature.Substring(0, 50))..."
+
+            # Update windows-x86_64-nsis signature
+            if ($latestJson.platforms.'windows-x86_64-nsis') {
+              $latestJson.platforms.'windows-x86_64-nsis'.signature = $nsisSignature.Trim()
+            }
+          }
+
+          if ($msiFile) {
+            $msiSignature = Get-Content -Path "$($msiFile.FullName).sig" -Raw
+            Write-Host "New MSI signature: $($msiSignature.Substring(0, 50))..."
+
+            # Update windows-x86_64 and windows-x86_64-msi signatures
+            if ($latestJson.platforms.'windows-x86_64') {
+              $latestJson.platforms.'windows-x86_64'.signature = $msiSignature.Trim()
+            }
+            if ($latestJson.platforms.'windows-x86_64-msi') {
+              $latestJson.platforms.'windows-x86_64-msi'.signature = $msiSignature.Trim()
+            }
+          }
+
+          # Write updated latest.json
+          $latestJson | ConvertTo-Json -Depth 10 | Set-Content -Path "latest.json" -Encoding UTF8
+
+          Write-Host "Updated latest.json:"
+          Get-Content -Path "latest.json"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload signed Windows installer and updated latest.json to release
         if: matrix.platform.os == 'windows-latest'
         uses: softprops/action-gh-release@v1
         with:
@@ -205,5 +255,6 @@ jobs:
             signed-windows/**/*.exe.sig
             signed-windows/**/*.msi
             signed-windows/**/*.msi.sig
+            latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
