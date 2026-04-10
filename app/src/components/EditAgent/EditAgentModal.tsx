@@ -32,7 +32,6 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import InferenceParamsEditor from '../InferenceParamsEditor';
-import { InferenceParams } from '../../config/inference-params';
 import { Logger } from '@utils/logging';
 import { useEditAgentModalLogic } from './useEditAgentModalLogic';
 
