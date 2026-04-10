@@ -1,10 +1,8 @@
 # SignPath GitHub Policy for Observer test-signing
-# This policy file is required by the SignPath GitHub Actions connector
 # See: https://docs.signpath.io/trusted-build-systems/github
 
 github-policies:
-  # Allow signing from the dedicated Windows signing workflow
-  - branches:
-      - main
-      - dev
-    workflow-file: .github/workflows/sign-windows.yml
+  runners:
+    require_github_hosted: true
+  build:
+    disallow_reruns: true
