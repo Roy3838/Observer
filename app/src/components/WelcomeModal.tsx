@@ -6,6 +6,7 @@ import { useApplePayments } from '@hooks/useApplePayments';
 import { X as CloseIcon, X, Loader2, Sparkles, Zap, Heart, Star, Shield, Check, Monitor, Camera, Mic, Clipboard, Server } from 'lucide-react';
 import { Logger } from '@utils/logging';
 import { isIOS } from '../utils/platform';
+import { CreditInfoButton } from './CreditVisualization';
 
 interface WelcomeModalProps {
   isOpen: boolean;
@@ -407,7 +408,10 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
                   </div>
                   <div className="flex items-start">
                     <Zap className="h-3.5 w-3.5 md:h-4 md:w-4 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span><strong>8 hours/day</strong> cloud monitoring</span>
+                    <span>
+                      <strong>8 hours/day</strong> cloud monitoring
+                      <CreditInfoButton dailyCredits={480} tierName="Pro tier" className="ml-1 align-middle" />
+                    </span>
                   </div>
                   <div className="flex items-start">
                     <Sparkles className="h-3.5 w-3.5 md:h-4 md:w-4 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />

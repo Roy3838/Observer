@@ -9,6 +9,7 @@ import { isIOS } from '../utils/platform';
 import { Logger } from '@utils/logging';
 import type { UseApplePaymentsReturn } from '@hooks/useApplePayments';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { CreditInfoButton } from './CreditVisualization';
 
 // Define the props this component will accept
 interface PricingTableProps {
@@ -197,7 +198,8 @@ export const PricingTable: React.FC<PricingTableProps> = ({
             <li className="flex items-start">
               <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
               <span>
-                <strong>Cloud Monitoring:</strong> 1 hour/day
+                <strong>Cloud Monitoring:</strong> 1 hr/day
+                <CreditInfoButton dailyCredits={60} tierName="Free tier" className="ml-1 align-middle" />
                 {isHalfwayWarning && <span className="block text-yellow-600 text-xs mt-1">(Halfway there!)</span>}
               </span>
             </li>
@@ -297,7 +299,10 @@ export const PricingTable: React.FC<PricingTableProps> = ({
             </li>
             <li className="flex items-start">
               <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-              <span><strong>Cloud Monitoring:</strong> 8 hours/day!<br/></span>
+              <span>
+                <strong>Cloud Monitoring:</strong> 8 hr/day!
+                <CreditInfoButton dailyCredits={480} tierName="Pro tier" className="ml-1 align-middle" />
+              </span>
             </li>
             <li className="flex items-start">
               <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
@@ -356,7 +361,10 @@ export const PricingTable: React.FC<PricingTableProps> = ({
           <ul className="space-y-2.5 mb-6 text-sm">
             <li className="flex items-start">
               <Zap className="h-5 w-5 text-amber-500 mr-2 flex-shrink-0 mt-0.5" />
-              <span><strong>24/7 Unlimited Cloud Monitoring</strong></span>
+              <span>
+                <strong>24/7 Unlimited Cloud Monitoring</strong>
+                <CreditInfoButton dailyCredits={2880} tierName="Max tier" className="ml-1 align-middle" />
+              </span>
             </li>
             <li className="flex items-start">
               <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
