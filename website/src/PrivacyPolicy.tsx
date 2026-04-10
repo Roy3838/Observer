@@ -17,8 +17,8 @@ const PrivacyPolicy = () => {
       {/* Content */}
       <main className="py-16">
         <div className="container mx-auto px-6 max-w-4xl">
-          <h1 className="text-4xl font-bold mb-4">Privacy Policy</h1>
-          <p className="text-gray-500 mb-8">Last updated: January 2026</p>
+          <h1 className="text-4xl font-bold mb-4 text-black">Privacy Policy</h1>
+          <p className="text-black mb-8">Last updated: January 2026</p>
 
           <div className="space-y-6 text-gray-700">
             {/* Privacy-First Option */}
