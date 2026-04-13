@@ -705,6 +705,7 @@ function AppContent() {
         onClose={() => setIsWelcomeModalOpen(false)}
         onViewAllTiers={() => setActiveTab('obServer')}
         intent={welcomeModalIntent}
+        tier={quotaInfo?.tier ?? null}
       />
 
       <AppHeader

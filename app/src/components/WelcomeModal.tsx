@@ -13,16 +13,23 @@ interface WelcomeModalProps {
   onClose: () => void;
   onViewAllTiers: () => void;
   intent: 'local' | 'login' | null;
+  tier?: string | null;
 }
 
-export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onViewAllTiers, intent }) => {
-  const [status, setStatus] = useState<'loading' | 'plus' | 'pro' | 'max' | 'free' | 'error'>('loading');
+export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onViewAllTiers, intent, tier }) => {
+  // Derive status from tier prop - no need for separate API call
+  const status: 'loading' | 'plus' | 'pro' | 'max' | 'free' =
+    tier === 'pro' ? 'pro' :
+    tier === 'plus' ? 'plus' :
+    tier === 'max' ? 'max' :
+    tier === 'free' ? 'free' :
+    tier === null ? 'loading' : 'free';
   const [error, setError] = useState<string | null>(null);
   const [isButtonLoading, setIsButtonLoading] = useState(false);
   const [dontShowAgain, setDontShowAgain] = useState(false);
   const [hasAcceptedPrivacy, setHasAcceptedPrivacy] = useState(false);
 
-  const { getAccessToken, isAuthenticated, user, login } = useAuth();
+  const { isAuthenticated, user, login, getAccessToken } = useAuth();
   const {
     isLoading: isAppleLoading,
     error: appleError,
@@ -40,32 +47,13 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
     }
   }, [isOpen]);
 
-  // Fetch subscription status for authenticated users
+  // Auto-close modal for paid users (pro, plus, max) after they accept privacy - they don't need to see upsells
   useEffect(() => {
-    if (!isOpen || !isAuthenticated) {
-      if (!isAuthenticated) setStatus('free');
-      return;
+    if (isOpen && hasAcceptedPrivacy && (status === 'pro' || status === 'plus' || status === 'max')) {
+      Logger.info('WELCOME', `User is on ${status} tier and accepted privacy, closing welcome modal`);
+      onClose();
     }
-
-    const checkSubscriptionStatus = async () => {
-      setStatus('loading');
-      try {
-        const token = await getAccessToken();
-        const response = await fetch('https://api.observer-ai.com/quota', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error(`API request failed: ${response.statusText}`);
-        const data = await response.json();
-        setStatus(data.tier || 'free');
-      } catch (err) {
-        Logger.error('WELCOME', 'Failed to check subscription status:', err);
-        setError('Could not retrieve your subscription status.');
-        setStatus('error');
-      }
-    };
-
-    checkSubscriptionStatus();
-  }, [isOpen, isAuthenticated, getAccessToken]);
+  }, [isOpen, hasAcceptedPrivacy, status, onClose]);
 
   const handleApiAction = async (endpoint: 'create-checkout-session' | 'create-checkout-session-plus' | 'create-checkout-session-max' | 'create-customer-portal-session') => {
     setIsButtonLoading(true);
@@ -332,6 +320,19 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
                   Privacy Policy
                 </a>.
               </p>
+
+              {/* Don't show again checkbox */}
+              <div className="flex items-center justify-center">
+                <label className="flex items-center cursor-pointer text-xs md:text-sm text-gray-600 hover:text-gray-800 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={dontShowAgain}
+                    onChange={(e) => setDontShowAgain(e.target.checked)}
+                    className="mr-2 h-3.5 w-3.5 md:h-4 md:w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Don't show this again
+                </label>
+              </div>
 
               {/* Accept Button */}
               <button
