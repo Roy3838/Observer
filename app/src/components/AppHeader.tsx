@@ -378,12 +378,6 @@ const AppHeader: React.FC<AppHeaderProps> = ({
     }
   }, [isUsingObServer, isAuthenticated]);
 
-  useEffect(() => {
-    if (isUsingObServer && isAuthenticated && serverStatus === 'online') {
-      fetchQuotaInfo();
-    }
-  }, [isUsingObServer, isAuthenticated, serverStatus]);
-
   // Removed: No longer need to save server address to localStorage
 
   // Custom server handlers
