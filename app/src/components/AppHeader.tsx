@@ -44,9 +44,6 @@ interface AuthState {
 }
 
 interface AppHeaderProps {
-  serverStatus: 'unchecked' | 'online' | 'offline';
-  setServerStatus: React.Dispatch<React.SetStateAction<'unchecked' | 'online' | 'offline'>>;
-  setError: React.Dispatch<React.SetStateAction<string | null>>;
   authState?: AuthState;
   shouldHighlightMenu?: boolean;
   isUsingObServer?: boolean;
@@ -65,7 +62,6 @@ interface AppHeaderProps {
 
 
 const AppHeader: React.FC<AppHeaderProps> = ({
-  serverStatus,
   authState,
   isUsingObServer: externalIsUsingObServer,
   setIsUsingObServer: externalSetIsUsingObServer,

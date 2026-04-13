@@ -61,7 +61,6 @@ function AppContent() {
   const [agents, setAgents] = useState<CompleteAgent[]>([]);
   const [agentCodes, setAgentCodes] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
-  const [serverStatus, setServerStatus] = useState<'unchecked' | 'online' | 'offline'>('unchecked');
   const [startingAgents, setStartingAgents] = useState<Set<string>>(new Set());
   const [runningAgents, setRunningAgents] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -80,7 +79,6 @@ function AppContent() {
   const [stagedAgentConfig, setStagedAgentConfig] = useState<{ agent: CompleteAgent, code: string } | null>(null);
   const [isConversationalModalOpen, setIsConversationalModalOpen] = useState(false);
   const [aiEditMessage, setAiEditMessage] = useState<string | undefined>();
-  const [hasCompletedStartupCheck, setHasCompletedStartupCheck] = useState(false);
 
   // Quota error state
   const [agentsWithQuotaError, setAgentsWithQuotaError] = useState<Set<string>>(new Set());
@@ -384,7 +382,6 @@ function AppContent() {
 
   const handleDismissStartupDialog = () => {
     setShowStartupDialog(false);
-    setHasCompletedStartupCheck(true);
   };
 
   const toggleAgent = async (id: string, isCurrentlyRunning: boolean): Promise<void> => {
@@ -640,11 +637,6 @@ function AppContent() {
     }
   }, [isLoading, isAuthenticated, user, getAccessToken]);
 
-  useEffect(() => {
-    if (serverStatus === 'offline' && !hasCompletedStartupCheck && !isLoading && !isAuthenticated) {
-      setShowStartupDialog(true);
-    }
-  }, [serverStatus, hasCompletedStartupCheck, isLoading, isAuthenticated]);
 
   // Reload agents when switching to My Agents tab
   useEffect(() => {
@@ -709,9 +701,6 @@ function AppContent() {
       />
 
       <AppHeader
-        serverStatus={serverStatus}
-        setServerStatus={setServerStatus}
-        setError={setError}
         isUsingObServer={isUsingObServer}
         setIsUsingObServer={setIsUsingObServer}
         hostingContext={hostingContext}
