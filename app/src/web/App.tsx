@@ -826,9 +826,11 @@ function AppContent() {
         </div>
 
         {/* Community Tab */}
-        <div className={`px-4 ${activeTab !== 'community' ? 'hidden' : ''}`}>
-          <CommunityTab />
-        </div>
+        {activeTab === 'community' && (
+          <div className="px-4">
+            <CommunityTab />
+          </div>
+        )}
 
         {/* Models Tab */}
         {activeTab === 'models' && (
@@ -838,24 +840,32 @@ function AppContent() {
         )}
 
         {/* Memory Store Tab */}
-        <div className={`px-4 ${activeTab !== 'memoryStore' ? 'hidden' : ''}`}>
-          <MemoryStoreTab />
-        </div>
+        {activeTab === 'memoryStore' && (
+          <div className="px-4">
+            <MemoryStoreTab />
+          </div>
+        )}
 
         {/* Recordings Tab */}
-        <div className={`px-4 ${activeTab !== 'recordings' ? 'hidden' : ''}`}>
-          <RecordingsViewer />
-        </div>
+        {activeTab === 'recordings' && (
+          <div className="px-4">
+            <RecordingsViewer />
+          </div>
+        )}
 
         {/* Settings Tab */}
-        <div className={`px-4 ${activeTab !== 'settings' ? 'hidden' : ''}`}>
-          <SettingsTab />
-        </div>
+        {activeTab === 'settings' && (
+          <div className="px-4">
+            <SettingsTab />
+          </div>
+        )}
 
         {/* ObServer Tab */}
-        <div className={`px-4 ${activeTab !== 'obServer' ? 'hidden' : ''}`}>
-          <ObServerTab />
-        </div>
+        {activeTab === 'obServer' && (
+          <div className="px-4">
+            <ObServerTab />
+          </div>
+        )}
 
         {/* Fallback for unknown tabs */}
         {!['myAgents', 'community', 'models', 'recordings', 'memoryStore', 'settings', 'obServer'].includes(activeTab) && (
