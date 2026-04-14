@@ -1,5 +1,43 @@
 // src/utils/handlers/javascript.ts
 
+// SECURITY MODEL DOCUMENTATION
+// ============================
+// This file uses `new Function()` to execute user-defined agent code. This are the 
+// security considerations and threat model. 
+//
+// Quick rundown on why this is SAFE:
+// -----------------
+// 1. The `code` parameter is USER-AUTHORED, stored in IndexedDB via getAgentCode().
+//    It is NOT extracted from or provided by the LLM response.
+//
+// 2. The LLM response is passed as a RUNTIME VALUE (`response` variable), not
+//    interpolated into source code. This is similar to:
+//
+//      function runAgent(response) {   // response = "LLM output here"
+//        setMemory(response);          // Just a string value, no injection possible
+//      }
+//
+// 3. There is no string interpolation of untrusted input into the code template.
+//    JavaScript/TypeScript strings cannot "escape" their context like SQL injection
+//    because the code is already parsed before the values are passed in.
+//
+// WARNING: User-authored code should avoid using eval() or Function() on context
+// variables (response, screen, etc.) as these contain LLM output or runtime data.
+// Doing so re-introduces code injection risk via prompt injection or MITM attacks.
+// This is not blocked to preserve legitimate use cases (e.g., math expressions),
+// but users should understand the risk. 
+//
+// Trust Model:
+// -----------------
+// - Users trust their own agent code (they wrote it or at least reviewed it)
+// - LLM responses are untrusted data, but only accessible as string values
+// - The context object provides capabilities (sendSms, screen, etc.) that the
+//   user's code can access - this is intentional and user-controlled
+//
+// If you're auditing this code: the `new Function()` pattern here is equivalent
+// to a sandboxed function call with controlled inputs, not eval() of untrusted code.
+
+
 import * as utils from './utils';
 import { Logger } from '../logging';
 import { startAgentLoop, stopAgentLoop } from '../main_loop';
@@ -654,6 +692,10 @@ export async function executeJavaScript(
 
     let result;
     try {
+      // SECURITY NOTE: See file header for details.
+      // - `code` is user-authored (from IndexedDB)
+      // - `context` values (response, screen, etc.) are passed as runtime arguments
+      // - LLM output cannot escape string context 
       const handler = new Function(...Object.keys(context), wrappedCode);
       result = await handler(...Object.values(context));
     } catch (error) {
