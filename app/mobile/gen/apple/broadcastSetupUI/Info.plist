@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleShortVersionString</key>
-	<string>2.1.5</string>
+	<string>2.1.6</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>
