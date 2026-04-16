@@ -84,8 +84,8 @@ const processors: Record<string, { regex: RegExp, handler: ProcessorFunction }> 
         const { screenVideoStream } = StreamManager.getCurrentState();
         if (!screenVideoStream) throw new Error('Screen stream not available for image capture.');
 
-        // Pass the existing stream to the utility (now synchronous)
-        const base64Image = captureScreenImage(screenVideoStream, agentId, 'screen');
+        // Pass the existing stream to the utility
+        const base64Image = await captureScreenImage(screenVideoStream, agentId, 'screen');
 
         if (base64Image) {
           // Basic check for data URI prefix, then the base64 part
@@ -172,8 +172,8 @@ const processors: Record<string, { regex: RegExp, handler: ProcessorFunction }> 
         const { cameraStream } = StreamManager.getCurrentState();
         if (!cameraStream) throw new Error('Camera stream not available for image capture.');
         
-        // Pass the existing stream to the utility (now synchronous)
-        const base64Image = captureCameraImage(cameraStream, agentId);
+        // Pass the existing stream to the utility
+        const base64Image = await captureCameraImage(cameraStream, agentId);
 
         if (base64Image) {
           // You can add the same base64 validation as SCREEN_64 if you like

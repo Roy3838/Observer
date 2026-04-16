@@ -99,6 +99,7 @@ export type MasterStreamType = 'display' | 'camera' | 'microphone' | 'screenAudi
 
 export interface TauriCaptureStreams {
   screenVideoStream: MediaStream | null;
+  screenVideoStreamWithPip: MediaStream | null; // Screen stream with PiP overlay
   screenAudioStream: MediaStream | null;
   cameraStream: MediaStream | null;
   microphoneStream: MediaStream | null;
@@ -114,6 +115,7 @@ class TauriStreamCapture {
   // Stream state for new interface
   private streams: TauriCaptureStreams = {
     screenVideoStream: null,
+    screenVideoStreamWithPip: null,
     screenAudioStream: null,
     cameraStream: null,
     microphoneStream: null,
@@ -154,6 +156,7 @@ class TauriStreamCapture {
         Logger.info("TauriCapture", "Starting video capture");
         const videoResult = await this.startVideoStream();
         this.streams.screenVideoStream = videoResult.cleanStream;
+        this.streams.screenVideoStreamWithPip = videoResult.pipStream;
         this.videoStreamResult = videoResult;
         break;
 
@@ -219,6 +222,7 @@ class TauriStreamCapture {
           this.videoStreamResult.stop();
           this.videoStreamResult = null;
           this.streams.screenVideoStream = null;
+          this.streams.screenVideoStreamWithPip = null;
         }
         break;
 

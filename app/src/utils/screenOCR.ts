@@ -20,7 +20,7 @@ export interface OCRResult {
  */
 export async function captureFrameAndOCR(_stream: MediaStream, agentId?: string, streamType?: 'camera' | 'screen'): Promise<OCRResult> {
   const type = streamType || 'screen';
-  const imageData = StreamManager.captureFrame(type, agentId);
+  const imageData = await StreamManager.captureFrame(type, agentId);
 
   if (!imageData) {
     return { error: 'Failed to capture frame: video not ready' };

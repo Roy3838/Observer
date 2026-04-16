@@ -11,7 +11,6 @@ import { agentHasScreenSensor, agentHasCameraSensor, agentHasSensor } from './ag
 import TranscriptionModal from '@components/AgentCard/TranscriptionModal';
 import AudioTranscriptionVisualizer from '@components/shared/AudioTranscriptionVisualizer';
 import { useTranscriptionState } from '@hooks/useTranscriptionState';
-import { Logger } from '@utils/logging';
 
 // --- Crop Overlay Component ---
 
@@ -445,8 +444,6 @@ const VideoStream: React.FC<{
   const [isPipActive, setIsPipActive] = useState(false);
   const showPipButton = isMobile() && isPipSupported();
 
-  Logger.debug("PiP", `is Pip supported? ${isPipSupported}`); // This is running every frame smh
-
   // Load existing crop config
   useEffect(() => {
     const existingCrop = getAgentCrop(agentId, streamType);
@@ -474,7 +471,7 @@ const VideoStream: React.FC<{
     if (videoRef.current && stream) videoRef.current.srcObject = stream;
   }, [stream]);
 
-  // PiP event listeners
+  // Web PiP event listeners to track PiP state
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !showPipButton) return;
@@ -492,6 +489,7 @@ const VideoStream: React.FC<{
   }, [showPipButton]);
 
   // Handle "Run in Background" button click
+  // Uses web PiP API to show the actual video in PiP and keep app alive
   const handleRunInBackground = async () => {
     const video = videoRef.current;
     if (!video) return;
@@ -499,9 +497,25 @@ const VideoStream: React.FC<{
     try {
       if (video.readyState >= 2) {
         await video.requestPictureInPicture();
+      } else {
+        // Wait for video to be ready
+        video.addEventListener('loadeddata', async () => {
+          await video.requestPictureInPicture();
+        }, { once: true });
       }
     } catch (err) {
       console.error('Failed to enter PiP:', err);
+    }
+  };
+
+  // Handle stopping background mode
+  const handleStopBackground = async () => {
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      }
+    } catch (err) {
+      console.error('Failed to stop PiP:', err);
     }
   };
 
@@ -555,7 +569,6 @@ const VideoStream: React.FC<{
           muted
           autoPlay
           playsInline
-          disablePictureInPicture
           className="w-full h-full object-contain [&::-webkit-media-controls-panel]:!hidden [&::-webkit-media-controls-panel-container]:!hidden [&::-webkit-media-controls-start-playback-button]:!hidden [&::-webkit-media-controls]:!hidden [&::-webkit-media-controls]:opacity-0"
         ></video>
 
@@ -660,14 +673,17 @@ const VideoStream: React.FC<{
             <span>Run in Background</span>
           </button>
         ) : (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-2.5">
-            <div className="flex items-center gap-2">
+          <button
+            onClick={handleStopBackground}
+            className="w-full bg-green-50 border border-green-200 rounded-lg p-2.5 hover:bg-green-100 transition-colors"
+          >
+            <div className="flex items-center justify-center gap-2">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
               <span className="text-sm text-green-800 font-medium">
-                Running in background
+                Running in background (tap to stop)
               </span>
             </div>
-          </div>
+          </button>
         )
       )}
     </div>

@@ -51,6 +51,10 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Observer needs local network access to connect to your inference server</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

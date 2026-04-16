@@ -44,15 +44,15 @@ export function removeAgentCrops(agentId: string): void {
 
 /**
  * Captures a frame from the screen stream.
- * Uses StreamManager's persistent video element for instant capture.
- * This eliminates the race condition where onloadedmetadata fires before the first frame is rendered.
+ * Uses raw frame bytes from Tauri channel (reliable even when backgrounded on iOS)
+ * or persistent video element for browser/camera.
  *
  * @param stream The active screen MediaStream (kept for API compatibility, not used internally)
  * @param agentId Optional agent ID for crop configuration
  * @param streamType The type of stream ('camera' or 'screen'), defaults to 'screen'
  * @returns The raw Base64 string (without the data URI prefix) or null on failure.
  */
-export function captureScreenImage(_stream: MediaStream, agentId?: string, streamType?: 'camera' | 'screen'): string | null {
+export async function captureScreenImage(_stream: MediaStream, agentId?: string, streamType?: 'camera' | 'screen'): Promise<string | null> {
   const type = streamType || 'screen';
   return StreamManager.captureFrame(type, agentId);
 }

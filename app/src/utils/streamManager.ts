@@ -357,12 +357,64 @@ class Manager {
 
   /**
    * Capture a frame from a video stream. Returns base64 PNG or null.
-   * Uses persistent video elements - instant and deterministic.
+   *
+   * For Tauri screen capture: uses raw frame bytes from the channel directly.
+   * This bypasses the canvas-backed video element which can freeze when iOS
+   * backgrounds the app. The broadcast extension continues sending frames
+   * via the channel, ensuring main_loop receives fresh frames in PiP mode.
+   *
+   * For camera/browser: uses persistent video elements for instant capture.
    */
-  public captureFrame(
+  public async captureFrame(
     streamType: 'camera' | 'screen',
     agentId?: string
-  ): string | null {
+  ): Promise<string | null> {
+    // For Tauri screen capture, use raw frame bytes from channel
+    // This is more reliable than canvas-backed video element (especially on iOS)
+    if (!isWeb() && streamType === 'screen') {
+      const rawFrame = tauriStreamCapture.getLatestBase64Frame();
+      if (!rawFrame) {
+        Logger.warn("StreamManager", "Cannot capture screen: no raw frame available from channel");
+        return null;
+      }
+
+      const crop = agentId ? getAgentCrop(agentId, streamType) : null;
+
+      // If no crop, return raw frame directly (more efficient - no re-encoding)
+      if (!crop) {
+        return rawFrame;
+      }
+
+      // Apply crop by decoding, cropping, and re-encoding
+      try {
+        const blob = await fetch(`data:image/jpeg;base64,${rawFrame}`).then(r => r.blob());
+        const bitmap = await createImageBitmap(blob);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = crop.width;
+        canvas.height = crop.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          bitmap.close();
+          return rawFrame; // Fallback to uncropped
+        }
+
+        const safeX = Math.min(crop.x, bitmap.width - 1);
+        const safeY = Math.min(crop.y, bitmap.height - 1);
+        const safeWidth = Math.min(crop.width, bitmap.width - safeX);
+        const safeHeight = Math.min(crop.height, bitmap.height - safeY);
+
+        ctx.drawImage(bitmap, safeX, safeY, safeWidth, safeHeight, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+
+        return canvas.toDataURL('image/png').split(',')[1];
+      } catch (e) {
+        Logger.warn("StreamManager", `Failed to apply crop to raw frame: ${e}`);
+        return rawFrame; // Fallback to uncropped
+      }
+    }
+
+    // For camera or browser, use persistent video element
     const video = streamType === 'camera'
       ? this.cameraVideoElement
       : this.screenVideoElement;
