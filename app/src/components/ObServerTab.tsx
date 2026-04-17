@@ -55,6 +55,7 @@ export const ObServerTab: React.FC = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
+        body: JSON.stringify({ return_base_url: window.location.origin }),
       });
       if (!response.ok) throw new Error(`Failed to access ${endpoint}`);
       const { url } = await response.json();
