@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.observer.ai",
+      "sha256_cert_fingerprints": [
+        "E1:2D:87:7B:1F:C5:1C:E8:FB:00:F3:7B:F9:6F:64:52:1F:0D:0F:F4:34:03:F6:3B:C8:53:20:BA:08:26:6A:9B"
+      ]
+    }
+  }
+]
