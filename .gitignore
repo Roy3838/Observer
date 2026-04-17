@@ -32,6 +32,9 @@ app/mobile/plugins/**/android/.tauri/
 **/app-signed.apk
 **/app-signed.apk.idsig
 **/debug.keystore
+**/keystore.properties
+*.keystore
+*.jks
 
 # Generated certs
 observer-ollama/certs/
