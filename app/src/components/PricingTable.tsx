@@ -291,14 +291,6 @@ export const PricingTable: React.FC<PricingTableProps> = ({
           <ul className="space-y-2.5 mb-6 text-sm">
             <li className="flex items-start">
               <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-              <span><strong>Unlimited notifications</strong></span>
-            </li>
-            <li className="flex items-start">
-              <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-              <span><strong>Unlimited Alert Builder</strong></span>
-            </li>
-            <li className="flex items-start">
-              <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
               <span>
                 <strong>Cloud Monitoring:</strong> 8 hr/day!
                 <CreditInfoButton dailyCredits={480} tierName="Pro tier" className="ml-1 align-middle" />
@@ -311,6 +303,14 @@ export const PricingTable: React.FC<PricingTableProps> = ({
             <li className="flex items-start">
               <Sparkles className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
               <span><strong>Unlock AI Studio: Multi-Agent configurations!</strong></span>
+            </li>
+            <li className="flex items-start">
+              <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+              <span><strong>Unlimited notifications</strong></span>
+            </li>
+            <li className="flex items-start">
+              <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+              <span><strong>Unlimited Alert Builder</strong></span>
             </li>
             <li className="flex items-start">
               <Heart className="h-5 w-5 text-pink-500 mr-2 flex-shrink-0 mt-0.5" />
