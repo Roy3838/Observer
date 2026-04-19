@@ -16,6 +16,23 @@ function useOverlaySetup() {
   const [activeShortcuts, setActiveShortcuts] = useState<string[]>([]);
   const [pulsingShortcut, setPulsingShortcut] = useState<string | null>(null);
 
+  // Set transparent background on html/body/root for this window
+  useEffect(() => {
+    document.documentElement.style.backgroundColor = 'transparent';
+    document.body.style.backgroundColor = 'transparent';
+    const root = document.getElementById('root');
+    if (root) {
+      root.style.backgroundColor = 'transparent';
+    }
+    return () => {
+      document.documentElement.style.backgroundColor = '';
+      document.body.style.backgroundColor = '';
+      if (root) {
+        root.style.backgroundColor = '';
+      }
+    };
+  }, []);
+
   useEffect(() => {
     // Initial data fetch
     Promise.all([

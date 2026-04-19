@@ -538,6 +538,7 @@ pub fn run() {
             .position(50.0, 50.0)
             .decorations(false)
             .transparent(true)
+            .shadow(false)
             .always_on_top(true)
             .skip_taskbar(true)
             .visible(false)
