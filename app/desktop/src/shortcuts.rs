@@ -490,10 +490,16 @@ pub fn register_shortcuts_on_startup(
                                             window.show()
                                         };
                                         match result {
-                                            Ok(_) => log::info!(
-                                                "Overlay {} via toggle shortcut",
-                                                if visible { "hidden" } else { "shown" }
-                                            ),
+                                            Ok(_) => {
+                                                log::info!(
+                                                    "Overlay {} via toggle shortcut",
+                                                    if visible { "hidden" } else { "shown" }
+                                                );
+                                                // Re-enable click-through after showing
+                                                if !visible {
+                                                    ensure_overlay_click_through(&window);
+                                                }
+                                            }
                                             Err(e) => log::error!(
                                                 "Failed to {} overlay: {}",
                                                 if visible { "hide" } else { "show" },

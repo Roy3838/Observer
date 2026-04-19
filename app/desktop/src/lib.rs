@@ -192,6 +192,31 @@ async fn clear_overlay_messages(
     Ok(())
 }
 
+#[tauri::command]
+async fn show_overlay(app_handle: tauri::AppHandle) -> Result<(), String> {
+    log::info!("Showing overlay window");
+    if let Some(window) = app_handle.get_webview_window("overlay") {
+        window.show().map_err(|e| e.to_string())?;
+        // Re-enable click-through after showing
+        if let Err(e) = window.set_ignore_cursor_events(true) {
+            log::warn!("Failed to enable click-through on overlay: {}", e);
+        }
+        Ok(())
+    } else {
+        Err("Overlay window not found".to_string())
+    }
+}
+
+#[tauri::command]
+async fn hide_overlay(app_handle: tauri::AppHandle) -> Result<(), String> {
+    log::info!("Hiding overlay window");
+    if let Some(window) = app_handle.get_webview_window("overlay") {
+        window.hide().map_err(|e| e.to_string())
+    } else {
+        Err("Overlay window not found".to_string())
+    }
+}
+
 // Shortcut commands moved to shortcuts module
 
 // Shortcut helper functions moved to shortcuts module
@@ -555,9 +580,11 @@ pub fn run() {
                         log::info!("Content protection explicitly enabled on overlay window");
                     }
 
-                    // Make the window draggable by setting it as focusable
-                    if let Err(e) = window.set_focus() {
-                        log::warn!("Could not focus overlay window: {}", e);
+                    // Enable click-through so the overlay doesn't block mouse events
+                    if let Err(e) = window.set_ignore_cursor_events(true) {
+                        log::warn!("Could not enable click-through on overlay window: {}", e);
+                    } else {
+                        log::info!("Click-through enabled on overlay window");
                     }
                 }
                 Err(e) => {
@@ -624,6 +651,8 @@ pub fn run() {
             check_ollama_servers,
             get_overlay_messages,
             clear_overlay_messages,
+            show_overlay,
+            hide_overlay,
             get_broadcast_status,
             shortcuts::get_shortcut_config,
             shortcuts::get_registered_shortcuts,
