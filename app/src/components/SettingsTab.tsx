@@ -1138,7 +1138,7 @@ const SettingsTab = () => {
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Test Audio Source
             </label>
-            <div className="flex items-center space-x-3 mb-4">
+            <div className="flex flex-wrap gap-2 mb-4">
               <button
                 onClick={() => setAudioTestSource('microphone')}
                 disabled={isTestRunning}
