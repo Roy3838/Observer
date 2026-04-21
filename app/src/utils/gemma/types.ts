@@ -9,7 +9,7 @@ export type GemmaImageContent = { type: 'image'; image?: string | Blob }; // URL
 export type GemmaContentPart = GemmaTextContent | GemmaImageContent;
 
 export interface GemmaMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: string;
   content: string | GemmaContentPart[];
 }
 
