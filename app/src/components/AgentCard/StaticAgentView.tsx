@@ -1,11 +1,14 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
-    Brain, Clock, Eye, ChevronDown, AlertTriangle, Server, Wrench, ChevronRight, Zap, Settings, Cloud
+    Brain, Clock, Eye, ChevronDown, AlertTriangle, Server, Wrench, ChevronRight, Zap, Settings, Cloud, Download, Cpu, CheckCircle, FileDown, StopCircle
 } from 'lucide-react';
 import { CompleteAgent } from '@utils/agent_database';
-import { listModels, fetchModels } from '@utils/inferenceServer';
-import { getInferenceAddresses } from '@utils/inferenceServer';
+import { listModels, fetchModels, getInferenceAddresses } from '@utils/inferenceServer';
+import { GemmaModelManager } from '@utils/localLlm/GemmaModelManager';
+import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
+import { isIOS } from '@utils/platform';
+import { GemmaModelId, GemmaModelState, NativeModelState } from '@utils/localLlm/types';
 import { detectAgentCapabilities } from './agentCapabilities';
 import SensorModal from './SensorModal';
 import ToolsModal from './ToolsModal';
@@ -76,18 +79,60 @@ const isCloudModel = (server?: string): boolean => {
     return !server.includes('localhost') && !server.includes('127.0.0.1') && !server.includes('browser_local');
 };
 
-// Model Location Indicator - Shows cloud or local status with popover
+// Helper to format bytes
+//const formatBytes = (bytes: number, decimals = 2) => {
+//    if (!+bytes) return '0 Bytes';
+//    const k = 1024;
+//    const dm = decimals < 0 ? 0 : decimals;
+//    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+//    const i = Math.floor(Math.log(bytes) / Math.log(k));
+//    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+//};
+
+// Model Location Indicator - Shows cloud or local status with popover (uses portal)
 const ModelLocationIndicator: React.FC<{
     isCloud: boolean;
     providerName?: string;
     sensors: { key: string; label: string; icon: React.ElementType }[];
-}> = ({ isCloud, providerName, sensors }) => {
+    isLoading?: boolean;
+    isUnloaded?: boolean;
+    localModelId?: string;
+}> = ({ isCloud, providerName, sensors, isLoading = false, isUnloaded = false, localModelId }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const containerRef = useRef<HTMLDivElement>(null);
+    const [popoverPosition, setPopoverPosition] = useState<{ top: number; left: number } | null>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    const popoverRef = useRef<HTMLDivElement>(null);
+    const isIOSPlatform = isIOS();
+
+    // Subscribe to model manager state for progress
+    const [gemmaState, setGemmaState] = useState<GemmaModelState>(GemmaModelManager.getInstance().getState());
+    const [nativeState, setNativeState] = useState<NativeModelState>(NativeLlmManager.getInstance().getState());
+
+    const updatePopoverPosition = () => {
+        if (buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect();
+            setPopoverPosition({
+                top: rect.bottom + 8,
+                left: rect.left + rect.width / 2 - 128, // 128 = half of w-64 (256px)
+            });
+        }
+    };
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (isIOSPlatform) {
+            const unsubscribe = NativeLlmManager.getInstance().onStateChange(setNativeState);
+            return unsubscribe;
+        } else {
+            const unsubscribe = GemmaModelManager.getInstance().onStateChange(setGemmaState);
+            return unsubscribe;
+        }
+    }, [isOpen, isIOSPlatform]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+            if (popoverRef.current && !popoverRef.current.contains(event.target as Node) &&
+                buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
                 setIsOpen(false);
             }
         };
@@ -97,21 +142,78 @@ const ModelLocationIndicator: React.FC<{
         }
     }, [isOpen]);
 
+    useEffect(() => {
+        if (isOpen) {
+            updatePopoverPosition();
+            window.addEventListener('scroll', updatePopoverPosition, true);
+            window.addEventListener('resize', updatePopoverPosition);
+            return () => {
+                window.removeEventListener('scroll', updatePopoverPosition, true);
+                window.removeEventListener('resize', updatePopoverPosition);
+            };
+        }
+    }, [isOpen]);
+
+    const handleLoadModel = () => {
+        if (!localModelId) return;
+        if (isIOSPlatform) {
+            NativeLlmManager.getInstance().loadModel(localModelId);
+        } else {
+            GemmaModelManager.getInstance().loadModel(localModelId as GemmaModelId);
+        }
+    };
+
+    const handleCancelLoad = () => {
+        if (isIOSPlatform) {
+            NativeLlmManager.getInstance().unloadModel();
+        } else {
+            GemmaModelManager.getInstance().unloadModel();
+        }
+    };
+
+    const handleToggle = () => {
+        if (!isOpen) {
+            updatePopoverPosition();
+        }
+        setIsOpen(!isOpen);
+    };
+
+    // Determine icon and colors
+    let iconColor = 'text-green-500 hover:text-green-600 hover:bg-green-50';
+    let IconComponent = Server;
+    let title = 'Local model';
+
+    if (isCloud) {
+        iconColor = 'text-blue-500 hover:text-blue-600 hover:bg-blue-50';
+        IconComponent = Cloud;
+        title = 'Cloud model';
+    } else if (isUnloaded) {
+        iconColor = 'text-red-500 hover:text-red-600 hover:bg-red-50';
+        IconComponent = Download;
+        title = 'Model not loaded - click to load';
+    } else if (isLoading) {
+        iconColor = 'text-amber-500 hover:text-amber-600 hover:bg-amber-50';
+        title = 'Loading local model...';
+    }
+
     return (
-        <div ref={containerRef} className="relative">
+        <div className="relative inline-block">
             <button
-                onClick={() => setIsOpen(!isOpen)}
-                className={`p-1 rounded transition-colors ${
-                    isCloud
-                        ? 'text-blue-500 hover:text-blue-600 hover:bg-blue-50'
-                        : 'text-gray-400 hover:text-gray-500 hover:bg-gray-100'
-                }`}
-                title={isCloud ? "Cloud model" : "Local model"}
+                ref={buttonRef}
+                onClick={handleToggle}
+                className={`p-1 rounded transition-colors ${iconColor}`}
+                title={title}
             >
-                {isCloud ? <Cloud className="w-4 h-4" /> : <Server className="w-4 h-4" />}
+                <div className={isLoading ? 'animate-pulse' : isUnloaded ? 'animate-bounce' : ''}>
+                    <IconComponent className="w-4 h-4" />
+                </div>
             </button>
-            {isOpen && (
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 p-3 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+            {isOpen && popoverPosition && createPortal(
+                <div
+                    ref={popoverRef}
+                    className="fixed w-64 p-3 bg-white border border-gray-200 rounded-lg shadow-lg z-[100]"
+                    style={{ top: popoverPosition.top, left: popoverPosition.left }}
+                >
                     {isCloud ? (
                         <>
                             <div className="text-xs font-semibold text-gray-800 mb-2">
@@ -144,15 +246,102 @@ const ModelLocationIndicator: React.FC<{
                                 </p>
                             </div>
                         </>
-                    ) : (
-                        <div className="flex items-center gap-2">
-                            <Server className="w-4 h-4 text-green-500" />
-                            <p className="text-xs text-gray-700">
-                                <span className="font-semibold text-green-600">Local model</span> — all data stays on your device!
+                    ) : isUnloaded ? (
+                        // Unloaded state - show load button
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                                <Download className="w-4 h-4 text-red-500" />
+                                <p className="text-xs text-gray-700">
+                                    <span className="font-semibold text-red-600">Model not loaded</span>
+                                </p>
+                            </div>
+                            <button
+                                onClick={handleLoadModel}
+                                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors"
+                            >
+                                <Cpu size={14} />
+                                <span>Load Model</span>
+                            </button>
+                            <p className="text-xs text-gray-400 text-center">
+                                All data stays on your device
                             </p>
                         </div>
+                    ) : isLoading ? (
+                        // Loading state - show progress
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Cpu className="w-4 h-4 text-amber-500 animate-pulse" />
+                                    <span className="text-xs font-semibold text-amber-600">Loading model...</span>
+                                </div>
+                                <button
+                                    onClick={handleCancelLoad}
+                                    className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+                                    title="Cancel"
+                                >
+                                    <StopCircle size={14} />
+                                </button>
+                            </div>
+
+                            {/* Gemma progress bars */}
+                            {!isIOSPlatform && gemmaState.progress.length > 0 && (
+                                <div className="space-y-2 max-h-32 overflow-y-auto">
+                                    {gemmaState.progress.map((item) => (
+                                        <div key={item.file}>
+                                            <div className="flex justify-between items-center text-xs mb-0.5">
+                                                <span className="text-gray-600 flex items-center gap-1 truncate max-w-[70%]">
+                                                    {item.status === 'done'
+                                                        ? <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                                        : <FileDown className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                                                    }
+                                                    <span className="truncate">{item.file.split('/').pop()}</span>
+                                                </span>
+                                                <span className="font-medium text-gray-500 flex-shrink-0 text-xs">
+                                                    {item.status === 'done' ? '✓' : `${Math.round(item.progress)}%`}
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-gray-200 rounded-full h-1">
+                                                <div
+                                                    className={`h-1 rounded-full transition-all duration-300 ${item.status === 'done' ? 'bg-green-500' : 'bg-blue-600'}`}
+                                                    style={{ width: `${item.progress}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* iOS native progress */}
+                            {isIOSPlatform && nativeState.status === 'loading' && (
+                                <div className="text-xs text-gray-500 text-center">
+                                    Initializing model...
+                                </div>
+                            )}
+
+                            <p className="text-xs text-gray-400 text-center">
+                                All data stays on your device
+                            </p>
+                        </div>
+                    ) : (
+                        // Loaded state
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                                <Server className="w-4 h-4 text-green-500" />
+                                <p className="text-xs text-gray-700">
+                                    <span className="font-semibold text-green-600">Local In-Browser</span> all data stays on your device!
+                                </p>
+                            </div>
+                            <button
+                                onClick={handleCancelLoad}
+                                className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-red-100 hover:text-red-600 font-medium transition-colors"
+                            >
+                                <StopCircle size={14} />
+                                <span>Unload Model</span>
+                            </button>
+                        </div>
                     )}
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );
@@ -310,7 +499,7 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
     const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
     const [isToolsModalOpen, setIsToolsModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-    const [currentModelInfo, setCurrentModelInfo] = useState<{ server?: string; ownedBy?: string } | null>(null);
+    const [currentModelInfo, setCurrentModelInfo] = useState<{ server?: string; ownedBy?: string; status?: 'loaded' | 'loading' | 'unloaded'; localModelId?: string } | null>(null);
 
     // Look up current model info for location indicator
     useEffect(() => {
@@ -321,7 +510,7 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
             const models = listModels().models;
             const modelInfo = models.find(m => m.name === currentModel);
             setCurrentModelInfo(modelInfo
-                ? { server: modelInfo.server, ownedBy: modelInfo.ownedBy }
+                ? { server: modelInfo.server, ownedBy: modelInfo.ownedBy, status: modelInfo.status, localModelId: modelInfo.localModelId }
                 : null
             );
         };
@@ -335,7 +524,16 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
             fetchModels().then(lookupModel);
         }
 
-        return () => { cancelled = true; };
+        // Subscribe to local model state changes to update loading indicator
+        const gemmaManager = GemmaModelManager.getInstance();
+        const unsubscribe = gemmaManager.onStateChange(() => {
+            lookupModel();
+        });
+
+        return () => {
+            cancelled = true;
+            unsubscribe();
+        };
     }, [currentModel]);
 
     // Derive model location info
@@ -343,6 +541,8 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
         ? getProviderName(currentModelInfo.ownedBy, currentModelInfo.server)
         : null;
     const isCloud = isCloudModel(currentModelInfo?.server);
+    const isModelLoading = currentModelInfo?.status === 'loading';
+    const isModelUnloaded = currentModelInfo?.status === 'unloaded';
     const showModelIndicator = currentModelInfo?.server;
 
     useEffect(() => {
@@ -422,6 +622,9 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
                                         isCloud={isCloud}
                                         providerName={cloudProviderName || undefined}
                                         sensors={detectedSensors}
+                                        isLoading={isModelLoading}
+                                        isUnloaded={isModelUnloaded}
+                                        localModelId={currentModelInfo?.localModelId}
                                     />
                                 )}
                             </div>
@@ -481,6 +684,9 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
                                     isCloud={isCloud}
                                     providerName={cloudProviderName || undefined}
                                     sensors={detectedSensors}
+                                    isLoading={isModelLoading}
+                                    isUnloaded={isModelUnloaded}
+                                    localModelId={currentModelInfo?.localModelId}
                                 />
                             )}
                         </div>

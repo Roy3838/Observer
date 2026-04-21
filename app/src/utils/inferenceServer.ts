@@ -17,6 +17,8 @@ export interface Model {
   pro?: boolean;
   server: string;
   ownedBy?: string;
+  status?: 'loaded' | 'loading' | 'unloaded';  // For local models
+  localModelId?: string;  // For loading unloaded models (e.g., GemmaModelId or filename)
 }
 
 export interface CustomServer {
@@ -218,31 +220,63 @@ export function listModels(): ModelsResponse {
   if (usesNativeLlm()) {
     // iOS: Use NativeLlmManager
     const nativeManager = NativeLlmManager.getInstance();
-    nativeManager.tryAutoLoad();
+    // Don't auto-load - let user trigger load from UI
 
     const nativeState = nativeManager.getState();
-    if (nativeState.status === 'loaded' && nativeState.modelId) {
+    if ((nativeState.status === 'loaded' || nativeState.status === 'loading') && nativeState.modelId) {
       // Use the loaded model name (derived from filename)
       const modelName = nativeManager.getLoadedModelName() || nativeState.modelId;
+      const filename = nativeManager.getLoadedFilename();
       localModels.push({
         name: modelName,
         server: BROWSER_LOCAL_SENTINEL,
         multimodal: false, // GGUF models are text-only for now
+        status: nativeState.status === 'loaded' ? 'loaded' : 'loading',
+        localModelId: filename || undefined,
       });
+    } else {
+      // Check persisted settings - model is downloaded but not loaded
+      const persistedSettings = nativeManager.getPersistedSettings();
+      if (persistedSettings?.filename) {
+        const modelName = persistedSettings.filename.replace('.gguf', '').replace('.GGUF', '');
+        localModels.push({
+          name: modelName,
+          server: BROWSER_LOCAL_SENTINEL,
+          multimodal: false,
+          status: 'unloaded',
+          localModelId: persistedSettings.filename,
+        });
+      }
     }
   } else {
     // Web/Desktop: Use GemmaModelManager
     const gemmaManager = GemmaModelManager.getInstance();
-    gemmaManager.tryAutoLoad();
+    // Don't auto-load - let user trigger load from UI
 
     const gemmaState = gemmaManager.getState();
-    if (gemmaState.status === 'loaded' && gemmaState.modelId) {
+    // Include models that are loaded OR loading
+    if ((gemmaState.status === 'loaded' || gemmaState.status === 'loading') && gemmaState.modelId) {
       localModels.push({
         name: GEMMA_DISPLAY_NAMES[gemmaState.modelId as GemmaModelId],
         server: BROWSER_LOCAL_SENTINEL,
         multimodal: true,
         parameterSize: gemmaState.modelId.includes('E2B') ? '2B' : '4B',
+        status: gemmaState.status === 'loaded' ? 'loaded' : 'loading',
+        localModelId: gemmaState.modelId,
       });
+    } else {
+      // Check persisted settings - model is downloaded but not loaded
+      const persistedSettings = gemmaManager.getPersistedSettings();
+      if (persistedSettings?.modelId) {
+        localModels.push({
+          name: GEMMA_DISPLAY_NAMES[persistedSettings.modelId as GemmaModelId],
+          server: BROWSER_LOCAL_SENTINEL,
+          multimodal: true,
+          parameterSize: persistedSettings.modelId.includes('E2B') ? '2B' : '4B',
+          status: 'unloaded',
+          localModelId: persistedSettings.modelId,
+        });
+      }
     }
   }
 
