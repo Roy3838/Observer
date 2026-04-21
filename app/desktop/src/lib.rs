@@ -580,12 +580,8 @@ pub fn run() {
                         log::info!("Content protection explicitly enabled on overlay window");
                     }
 
-                    // Enable click-through so the overlay doesn't block mouse events
-                    if let Err(e) = window.set_ignore_cursor_events(true) {
-                        log::warn!("Could not enable click-through on overlay window: {}", e);
-                    } else {
-                        log::info!("Click-through enabled on overlay window");
-                    }
+                    // Note: set_ignore_cursor_events is deferred to show_overlay/toggle — calling
+                    // it here on Linux panics because the GDK window isn't realized until shown.
                 }
                 Err(e) => {
                     log::error!("Failed to create overlay window: {}", e);
