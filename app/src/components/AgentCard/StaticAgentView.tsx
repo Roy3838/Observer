@@ -63,7 +63,7 @@ const getProviderName = (ownedBy?: string, server?: string): string | null => {
         return PROVIDER_DISPLAY_NAMES[key] || ownedBy;
     }
     // Check if it's a cloud server (not localhost)
-    if (server && !server.includes('localhost') && !server.includes('127.0.0.1')) {
+    if (server && !server.includes('localhost') && !server.includes('127.0.0.1') && !server.includes('browser_local')) {
         if (server.includes('api.observer-ai.com')) return 'Observer Cloud';
         return 'Cloud Provider';
     }
@@ -73,7 +73,7 @@ const getProviderName = (ownedBy?: string, server?: string): string | null => {
 // Helper to check if model is cloud-based
 const isCloudModel = (server?: string): boolean => {
     if (!server) return false;
-    return !server.includes('localhost') && !server.includes('127.0.0.1');
+    return !server.includes('localhost') && !server.includes('127.0.0.1') && !server.includes('browser_local');
 };
 
 // Model Location Indicator - Shows cloud or local status with popover
@@ -261,7 +261,7 @@ const ModelDropdown: React.FC<{ currentModel: string; onModelChange: (modelName:
                                   </div>
                                   <div className="flex items-center space-x-1">
                                     {model.multimodal && <Eye className="h-4 w-4 text-purple-600" />}
-                                    {(model.server.includes('localhost') || model.server.includes('http://')) && <Server className="h-4 w-4 text-gray-600" />}
+                                    {(model.server.includes('localhost') || model.server.includes('http://')) || model.server.includes('browser_local') && <Server className="h-4 w-4 text-gray-600" />}
                                   </div>
                                 </div>
                             </button>

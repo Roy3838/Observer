@@ -12,6 +12,9 @@ mod audio_ring;
 #[cfg(target_os = "ios")]
 mod video_frame;
 
+#[cfg(target_os = "ios")]
+mod llm_engine;
+
 pub struct AppSettings {
     pub ollama_url: Mutex<Option<String>>,
 }
@@ -292,6 +295,312 @@ async fn stop_audio_stream_cmd(
     Ok(())
 }
 
+// ============================================================================
+// LLM Engine Commands (iOS only)
+// ============================================================================
+
+/// List downloaded GGUF models from the models directory
+#[tauri::command]
+async fn llm_list_models(
+    app_handle: AppHandle,
+) -> Result<Vec<serde_json::Value>, String> {
+    #[cfg(target_os = "ios")]
+    {
+        use llm_engine::{NativeModelInfo, model_id_from_filename};
+
+        let models_dir = app_handle.path().app_data_dir()
+            .map_err(|e| e.to_string())?
+            .join("models");
+
+        let mut models: Vec<serde_json::Value> = Vec::new();
+
+        if models_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(&models_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if let Some(ext) = path.extension() {
+                        if ext == "gguf" || ext == "GGUF" {
+                            if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                                let size_bytes = std::fs::metadata(&path)
+                                    .map(|m| m.len())
+                                    .unwrap_or(0);
+
+                                let model_id = model_id_from_filename(filename);
+                                let info = NativeModelInfo {
+                                    id: model_id.clone(),
+                                    name: model_id,
+                                    filename: filename.to_string(),
+                                    size_bytes,
+                                    hf_url: None,
+                                };
+
+                                if let Ok(json) = serde_json::to_value(info) {
+                                    models.push(json);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(models)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = app_handle;
+        Ok(vec![])
+    }
+}
+
+/// Download a GGUF model from a HuggingFace URL with progress reporting
+#[tauri::command]
+async fn llm_download_model(
+    app_handle: AppHandle,
+    url: String,
+    on_progress: Channel<serde_json::Value>,
+) -> Result<String, String> {
+    #[cfg(target_os = "ios")]
+    {
+        use llm_engine::filename_from_hf_url;
+
+        // Extract filename from URL
+        let filename = filename_from_hf_url(&url)
+            .ok_or_else(|| "Could not extract filename from URL".to_string())?;
+
+        if !filename.ends_with(".gguf") && !filename.ends_with(".GGUF") {
+            return Err("URL must point to a .gguf file".to_string());
+        }
+
+        let models_dir = app_handle.path().app_data_dir()
+            .map_err(|e| e.to_string())?
+            .join("models");
+
+        std::fs::create_dir_all(&models_dir)
+            .map_err(|e| format!("Failed to create models dir: {}", e))?;
+
+        let output_path = models_dir.join(&filename);
+        eprintln!("[LLM] Downloading {} to {:?}", url, output_path);
+
+        // Send initial progress
+        let _ = on_progress.send(serde_json::json!({
+            "status": "downloading",
+            "progress": 0,
+            "downloadedBytes": 0,
+            "totalBytes": 0,
+            "filename": filename
+        }));
+
+        // Download with progress
+        let client = reqwest::Client::new();
+        let response = client.get(&url)
+            .send()
+            .await
+            .map_err(|e| format!("Download failed: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!("Download failed with status: {}", response.status()));
+        }
+
+        let total_size = response.content_length().unwrap_or(0);
+        let mut downloaded: u64 = 0;
+
+        let mut file = std::fs::File::create(&output_path)
+            .map_err(|e| format!("Failed to create file: {}", e))?;
+
+        use std::io::Write;
+        let mut stream = response.bytes_stream();
+        use futures_util::StreamExt;
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
+            file.write_all(&chunk)
+                .map_err(|e| format!("Write error: {}", e))?;
+
+            downloaded += chunk.len() as u64;
+            let progress = if total_size > 0 {
+                (downloaded as f64 / total_size as f64 * 100.0) as u32
+            } else {
+                0
+            };
+
+            let _ = on_progress.send(serde_json::json!({
+                "status": "downloading",
+                "progress": progress,
+                "downloadedBytes": downloaded,
+                "totalBytes": total_size,
+                "filename": filename
+            }));
+        }
+
+        eprintln!("[LLM] Download complete: {:?}", output_path);
+
+        let _ = on_progress.send(serde_json::json!({
+            "status": "complete",
+            "progress": 100,
+            "downloadedBytes": downloaded,
+            "totalBytes": downloaded,
+            "filename": filename
+        }));
+
+        Ok(filename)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (app_handle, url, on_progress);
+        Err("LLM download only available on iOS".to_string())
+    }
+}
+
+/// Delete a downloaded model by filename
+#[tauri::command]
+async fn llm_delete_model(
+    app_handle: AppHandle,
+    filename: String,
+) -> Result<(), String> {
+    #[cfg(target_os = "ios")]
+    {
+        let models_dir = app_handle.path().app_data_dir()
+            .map_err(|e| e.to_string())?
+            .join("models");
+
+        let model_path = models_dir.join(&filename);
+
+        if model_path.exists() {
+            std::fs::remove_file(&model_path)
+                .map_err(|e| format!("Failed to delete model: {}", e))?;
+            eprintln!("[LLM] Deleted model: {:?}", model_path);
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (app_handle, filename);
+        Err("LLM delete only available on iOS".to_string())
+    }
+}
+
+/// Load a model into memory for inference by filename
+#[tauri::command]
+async fn llm_load_model(
+    app_handle: AppHandle,
+    filename: String,
+) -> Result<(), String> {
+    #[cfg(target_os = "ios")]
+    {
+        use llm_engine::{with_engine, model_id_from_filename};
+
+        let models_dir = app_handle.path().app_data_dir()
+            .map_err(|e| e.to_string())?
+            .join("models");
+
+        let model_path = models_dir.join(&filename);
+
+        if !model_path.exists() {
+            return Err(format!("Model not found: {}", filename));
+        }
+
+        let model_id = model_id_from_filename(&filename);
+        eprintln!("[LLM] Loading model: {:?}", model_path);
+
+        with_engine(|engine| {
+            engine.load_model(model_path, model_id)
+        })?;
+
+        eprintln!("[LLM] Model loaded successfully");
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (app_handle, filename);
+        Err("LLM load only available on iOS".to_string())
+    }
+}
+
+/// Generate text from messages with streaming tokens
+#[tauri::command]
+async fn llm_generate(
+    messages: Vec<serde_json::Value>,
+    on_token: Channel<String>,
+) -> Result<String, String> {
+    #[cfg(target_os = "ios")]
+    {
+        use llm_engine::{with_engine, ChatMessage};
+
+        // Parse messages from JSON
+        let chat_messages: Vec<ChatMessage> = messages.into_iter()
+            .filter_map(|m| {
+                let role = m.get("role")?.as_str()?.to_string();
+                let content = m.get("content")?.as_str()?.to_string();
+                Some(ChatMessage { role, content })
+            })
+            .collect();
+
+        if chat_messages.is_empty() {
+            return Err("No valid messages provided".to_string());
+        }
+
+        eprintln!("[LLM] Generating response for {} messages", chat_messages.len());
+
+        let result = with_engine(|engine| {
+            engine.generate(chat_messages, 2048, |token| {
+                let _ = on_token.send(token.to_string());
+            })
+        })?;
+
+        Ok(result)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (messages, on_token);
+        Err("LLM generate only available on iOS".to_string())
+    }
+}
+
+/// Unload the current model to free memory
+#[tauri::command]
+async fn llm_unload_model() -> Result<(), String> {
+    #[cfg(target_os = "ios")]
+    {
+        use llm_engine::with_engine;
+
+        with_engine(|engine| {
+            engine.unload();
+            Ok(())
+        })?;
+
+        eprintln!("[LLM] Model unloaded");
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        Ok(())
+    }
+}
+
+/// Check if a model is currently loaded
+#[tauri::command]
+async fn llm_is_loaded() -> Result<bool, String> {
+    #[cfg(target_os = "ios")]
+    {
+        use llm_engine::with_engine;
+
+        with_engine(|engine| Ok(engine.is_loaded()))
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        Ok(false)
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // EARLY LOG - Check if app is starting
@@ -374,7 +683,15 @@ pub fn run() {
             start_audio_stream_cmd,
             stop_audio_stream_cmd,
             set_app_group_path_cmd,
-            read_broadcast_debug_log
+            read_broadcast_debug_log,
+            // LLM commands (iOS only, no-op on other platforms)
+            llm_list_models,
+            llm_download_model,
+            llm_delete_model,
+            llm_load_model,
+            llm_generate,
+            llm_unload_model,
+            llm_is_loaded
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

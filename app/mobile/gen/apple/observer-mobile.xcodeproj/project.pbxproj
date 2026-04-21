@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		173D634B745449B21D81F685 /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D1C3503EBE21848D7B1BBAE7 /* libapp.a */; };
+		ACCE1E7A7E8F12C059EA94B2 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ACCE1E7A7E8F12C059EA94B1 /* Accelerate.framework */; };
 		3076197E0C83DD294C245946 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 38A0DD97A1AFE4A9A1BFB4A6 /* LaunchScreen.storyboard */; };
 		44BDE93E169C3ACF4A2D05E8 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8EA609F761A7095FBB3645C /* UIKit.framework */; };
 		585EB46477D170C8C04B7141 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 51043A2EE84D2742D6FA8F55 /* CoreGraphics.framework */; };
@@ -63,6 +64,7 @@
 /* Begin PBXFileReference section */
 		0534995E466E80C4043306E8 /* lib.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = lib.rs; sourceTree = "<group>"; };
 		0A297DE6CDD08733F09B61CB /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
+		ACCE1E7A7E8F12C059EA94B1 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 		35B8ED5DC5E081EB234BFB24 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
 		38A0DD97A1AFE4A9A1BFB4A6 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		3C339F777C7FC7586E0791E5 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
@@ -113,6 +115,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				ACCE1E7A7E8F12C059EA94B2 /* Accelerate.framework in Frameworks */,
 				6913C03A2F33FD9500A59E46 /* StoreKit.framework in Frameworks */,
 				173D634B745449B21D81F685 /* libapp.a in Frameworks */,
 				585EB46477D170C8C04B7141 /* CoreGraphics.framework in Frameworks */,
@@ -201,6 +204,7 @@
 		56B99606F6CED5C0D0D6F550 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				ACCE1E7A7E8F12C059EA94B1 /* Accelerate.framework */,
 				6913C0392F33FD9500A59E46 /* StoreKit.framework */,
 				51043A2EE84D2742D6FA8F55 /* CoreGraphics.framework */,
 				D1C3503EBE21848D7B1BBAE7 /* libapp.a */,
@@ -544,7 +548,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2.1.6;
+				CURRENT_PROJECT_VERSION = 2.2.0;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -630,7 +634,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2.1.6;
+				CURRENT_PROJECT_VERSION = 2.2.0;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -708,7 +712,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2.1.6;
+				CURRENT_PROJECT_VERSION = 2.2.0;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -793,7 +797,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2.1.6;
+				CURRENT_PROJECT_VERSION = 2.2.0;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

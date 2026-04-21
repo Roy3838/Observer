@@ -1,7 +1,7 @@
 // src/utils/sendApi.ts
 import { PreProcessorResult } from './pre-processor';
 import { listModels, BROWSER_LOCAL_SENTINEL } from './inferenceServer';
-import { GemmaModelManager } from './gemma/GemmaModelManager';
+import { getLocalModelManager } from './localLlm/LocalModelManager';
 import { platformFetch } from './platform';
 import { InferenceParams } from '../config/inference-params';
 
@@ -120,8 +120,8 @@ export async function fetchResponse(
 ): Promise<string> {
   try {
     if (serverAddress === BROWSER_LOCAL_SENTINEL) {
-      const manager = GemmaModelManager.getInstance();
-      if (!manager.isReady()) throw new Error('Gemma model not loaded. Please load it from the Add Model panel.');
+      const manager = getLocalModelManager();
+      if (!manager.isReady()) throw new Error('Local model not loaded. Please load it from the Add Model panel.');
       return manager.generate(messages, onStreamChunk);
     }
 

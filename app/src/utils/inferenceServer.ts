@@ -1,7 +1,9 @@
 // src/utils/inferenceServer.ts
 import { platformFetch } from './platform';
-import { GemmaModelManager } from './gemma/GemmaModelManager';
-import { GEMMA_DISPLAY_NAMES, GemmaModelId } from './gemma/types';
+import { usesNativeLlm } from './localLlm/LocalModelManager';
+import { GEMMA_DISPLAY_NAMES, GemmaModelId } from './localLlm/types';
+import { GemmaModelManager } from './localLlm/GemmaModelManager';
+import { NativeLlmManager } from './localLlm/NativeLlmManager';
 
 interface ServerResponse {
   status: 'online' | 'offline';
@@ -211,17 +213,40 @@ async function listModelsFromAddress(address: string): Promise<Model[]> {
 
 // Local getter function - returns the current model list
 export function listModels(): ModelsResponse {
-  const gemmaManager = GemmaModelManager.getInstance();
+  const localModels: Model[] = [];
 
-  // Try to auto-load persisted Gemma model on first call
-  gemmaManager.tryAutoLoad();
+  if (usesNativeLlm()) {
+    // iOS: Use NativeLlmManager
+    const nativeManager = NativeLlmManager.getInstance();
+    nativeManager.tryAutoLoad();
 
-  // Dynamically append only loaded browser-local Gemma models
-  const gemmaState = gemmaManager.getState();
-  const loadedGemmaModels: Model[] = gemmaState.status === 'loaded' && gemmaState.modelId
-    ? [{ name: GEMMA_DISPLAY_NAMES[gemmaState.modelId as GemmaModelId], server: BROWSER_LOCAL_SENTINEL, multimodal: true, parameterSize: gemmaState.modelId.includes('E2B') ? '2B' : '4B' }]
-    : [];
-  return { models: [...availableModels, ...loadedGemmaModels] };
+    const nativeState = nativeManager.getState();
+    if (nativeState.status === 'loaded' && nativeState.modelId) {
+      // Use the loaded model name (derived from filename)
+      const modelName = nativeManager.getLoadedModelName() || nativeState.modelId;
+      localModels.push({
+        name: modelName,
+        server: BROWSER_LOCAL_SENTINEL,
+        multimodal: false, // GGUF models are text-only for now
+      });
+    }
+  } else {
+    // Web/Desktop: Use GemmaModelManager
+    const gemmaManager = GemmaModelManager.getInstance();
+    gemmaManager.tryAutoLoad();
+
+    const gemmaState = gemmaManager.getState();
+    if (gemmaState.status === 'loaded' && gemmaState.modelId) {
+      localModels.push({
+        name: GEMMA_DISPLAY_NAMES[gemmaState.modelId as GemmaModelId],
+        server: BROWSER_LOCAL_SENTINEL,
+        multimodal: true,
+        parameterSize: gemmaState.modelId.includes('E2B') ? '2B' : '4B',
+      });
+    }
+  }
+
+  return { models: [...availableModels, ...localModels] };
 }
 
 // Fetch function - called by AppHeader to update the model list
