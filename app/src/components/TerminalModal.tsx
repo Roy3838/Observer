@@ -54,7 +54,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
 
   const [gemmaState, setGemmaState] = useState<GemmaModelState>(GemmaModelManager.getInstance().getState());
   const [gemmaDevice, setGemmaDevice] = useState<GemmaDevice>('webgpu');
-  const [gemmaDtype, setGemmaDtype] = useState<GemmaDtype>('q4f16');
+  const [gemmaDtype, setGemmaDtype] = useState<GemmaDtype>('q4');
   const [gemmaTokenBudget, setGemmaTokenBudget] = useState<GemmaImageTokenBudget>(70);
 
   useEffect(() => {
@@ -144,7 +144,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
 
   return (
     <Modal open={isOpen} onClose={handleDone} className="w-full max-w-xl">
-      <div className="p-6">
+      <div className="p-6 max-h-[80vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold text-gray-800">Add Model</h2>
           <button onClick={handleDone} className="text-gray-400 hover:text-gray-600 rounded-full p-1">

@@ -1,4 +1,13 @@
+import { env } from '@huggingface/transformers';
 import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaImageTokenBudget } from './types';
+import { isIOS } from '../platform';
+
+// Enable browser Cache API for model persistence on non-iOS platforms
+// iOS WebKit loads entire cached files into memory at once, causing OOM crashes with large models
+if (!isIOS()){
+  env.useBrowserCache = true;
+  env.cacheKey = 'observer-transformers-cache';
+}
 
 let processor: any = null;
 let model: any = null;
@@ -68,6 +77,10 @@ self.onmessage = async (event: MessageEvent) => {
         const { AutoProcessor, Gemma4ForConditionalGeneration } = await loadTransformers();
 
         const progressCallback = (info: any) => {
+          // "done" status with no download = loaded from cache
+          if (info.status === 'done' && info.loaded === 0) {
+            console.log(`[Gemma Worker] Loaded from cache: ${info.file}`);
+          }
           self.postMessage({ type: 'progress', data: info });
         };
 

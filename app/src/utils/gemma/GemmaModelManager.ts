@@ -1,6 +1,15 @@
 import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaImageTokenBudget, GemmaModelState, GemmaProgressItem, GemmaMessage } from './types';
 import { Logger } from '../logging';
 
+const GEMMA_STORAGE_KEY = 'observer-gemma-model-settings';
+
+interface PersistedGemmaSettings {
+  modelId: GemmaModelId;
+  device: GemmaDevice;
+  dtype: GemmaDtype;
+  imageTokenBudget: GemmaImageTokenBudget;
+}
+
 export class GemmaModelManager {
   private static instance: GemmaModelManager | null = null;
   private worker: Worker | null = null;
@@ -13,6 +22,8 @@ export class GemmaModelManager {
   private stateChangeListeners: Array<(state: GemmaModelState) => void> = [];
   private pendingGenerations = new Map<number, { resolve: (text: string) => void; reject: (err: Error) => void; onToken?: (t: string) => void }>();
   private nextGenerationId = 0;
+  private autoLoadTriggered = false;
+  private currentLoadSettings: { device: GemmaDevice; dtype: GemmaDtype; imageTokenBudget: GemmaImageTokenBudget } | null = null;
 
   private constructor() {}
 
@@ -61,6 +72,7 @@ export class GemmaModelManager {
     }
 
     this.setState({ status: 'loading', modelId, progress: [], error: null });
+    this.currentLoadSettings = { device, dtype, imageTokenBudget };
     Logger.info('GemmaModelManager', `Loading model: ${modelId} (device: ${device}, dtype: ${dtype}, imageTokenBudget: ${imageTokenBudget})`);
 
     this.worker = new Worker(new URL('./gemma.worker.ts', import.meta.url), { type: 'module' });
@@ -81,6 +93,8 @@ export class GemmaModelManager {
       this.worker = null;
     }
 
+    this.clearPersistedSettings();
+    this.currentLoadSettings = null;
     this.setState({ status: 'unloaded', modelId: null, progress: [], error: null });
   }
 
@@ -111,6 +125,15 @@ export class GemmaModelManager {
       case 'ready':
         Logger.info('GemmaModelManager', 'Model loaded successfully');
         this.setState({ status: 'loaded', progress: [] });
+        // Persist settings for auto-load on next app start
+        if (this.state.modelId && this.currentLoadSettings) {
+          this.persistSettings(
+            this.state.modelId,
+            this.currentLoadSettings.device,
+            this.currentLoadSettings.dtype,
+            this.currentLoadSettings.imageTokenBudget
+          );
+        }
         break;
 
       case 'generation-token': {
@@ -181,4 +204,48 @@ export class GemmaModelManager {
   public isLoading(): boolean { return this.state.status === 'loading'; }
   public hasError(): boolean { return this.state.status === 'error'; }
   public getError(): string | null { return this.state.error; }
+
+  // Persistence methods for auto-load on app restart
+  private persistSettings(modelId: GemmaModelId, device: GemmaDevice, dtype: GemmaDtype, imageTokenBudget: GemmaImageTokenBudget): void {
+    try {
+      const settings: PersistedGemmaSettings = { modelId, device, dtype, imageTokenBudget };
+      localStorage.setItem(GEMMA_STORAGE_KEY, JSON.stringify(settings));
+      Logger.info('GemmaModelManager', 'Persisted model settings to localStorage');
+    } catch (error) {
+      Logger.warn('GemmaModelManager', 'Failed to persist settings to localStorage');
+    }
+  }
+
+  private clearPersistedSettings(): void {
+    try {
+      localStorage.removeItem(GEMMA_STORAGE_KEY);
+      Logger.info('GemmaModelManager', 'Cleared persisted model settings');
+    } catch (error) {
+      Logger.warn('GemmaModelManager', 'Failed to clear persisted settings');
+    }
+  }
+
+  public getPersistedSettings(): PersistedGemmaSettings | null {
+    try {
+      const stored = localStorage.getItem(GEMMA_STORAGE_KEY);
+      if (stored) {
+        return JSON.parse(stored) as PersistedGemmaSettings;
+      }
+    } catch (error) {
+      Logger.warn('GemmaModelManager', 'Failed to read persisted settings');
+    }
+    return null;
+  }
+
+  public tryAutoLoad(): void {
+    if (this.autoLoadTriggered) return;
+    if (this.state.status !== 'unloaded') return;
+
+    const settings = this.getPersistedSettings();
+    if (settings) {
+      this.autoLoadTriggered = true;
+      Logger.info('GemmaModelManager', `Auto-loading persisted model: ${settings.modelId}`);
+      this.loadModel(settings.modelId, settings.device, settings.dtype, settings.imageTokenBudget);
+    }
+  }
 }

@@ -181,7 +181,7 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({ isProUser = false }) 
                     {model.server === BROWSER_LOCAL_SENTINEL ? (
                       <span title="Runs in-browser via WebGPU" className="inline-block text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded">
                         <Cpu className="h-3.5 w-3.5 inline-block mr-1 -mt-px" />
-                        On-Device
+                        On-Browser
                       </span>
                     ) : !model.server.includes('api.observer-ai.com') && (
                       <span title="Running Locally" className="inline-block text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">

@@ -1,6 +1,7 @@
 // src/utils/inferenceServer.ts
 import { platformFetch } from './platform';
 import { GemmaModelManager } from './gemma/GemmaModelManager';
+import { GEMMA_DISPLAY_NAMES, GemmaModelId } from './gemma/types';
 
 interface ServerResponse {
   status: 'online' | 'offline';
@@ -210,10 +211,15 @@ async function listModelsFromAddress(address: string): Promise<Model[]> {
 
 // Local getter function - returns the current model list
 export function listModels(): ModelsResponse {
+  const gemmaManager = GemmaModelManager.getInstance();
+
+  // Try to auto-load persisted Gemma model on first call
+  gemmaManager.tryAutoLoad();
+
   // Dynamically append only loaded browser-local Gemma models
-  const gemmaState = GemmaModelManager.getInstance().getState();
+  const gemmaState = gemmaManager.getState();
   const loadedGemmaModels: Model[] = gemmaState.status === 'loaded' && gemmaState.modelId
-    ? [{ name: gemmaState.modelId, server: BROWSER_LOCAL_SENTINEL, multimodal: true, parameterSize: gemmaState.modelId.includes('E2B') ? '2B' : '4B' }]
+    ? [{ name: GEMMA_DISPLAY_NAMES[gemmaState.modelId as GemmaModelId], server: BROWSER_LOCAL_SENTINEL, multimodal: true, parameterSize: gemmaState.modelId.includes('E2B') ? '2B' : '4B' }]
     : [];
   return { models: [...availableModels, ...loadedGemmaModels] };
 }
