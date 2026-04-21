@@ -1,4 +1,4 @@
-import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaModelState, GemmaProgressItem, GemmaMessage } from './types';
+import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaImageTokenBudget, GemmaModelState, GemmaProgressItem, GemmaMessage } from './types';
 import { Logger } from '../logging';
 
 export class GemmaModelManager {
@@ -39,7 +39,12 @@ export class GemmaModelManager {
     this.stateChangeListeners.forEach(l => l(this.getState()));
   }
 
-  public async loadModel(modelId: GemmaModelId, device: GemmaDevice = 'webgpu', dtype: GemmaDtype = 'q4f16'): Promise<void> {
+  public async loadModel(
+    modelId: GemmaModelId,
+    device: GemmaDevice = 'webgpu',
+    dtype: GemmaDtype = 'q4f16',
+    imageTokenBudget: GemmaImageTokenBudget = 280
+  ): Promise<void> {
     if (this.state.status === 'loading') {
       Logger.warn('GemmaModelManager', 'Model already loading');
       return;
@@ -56,13 +61,13 @@ export class GemmaModelManager {
     }
 
     this.setState({ status: 'loading', modelId, progress: [], error: null });
-    Logger.info('GemmaModelManager', `Loading model: ${modelId}`);
+    Logger.info('GemmaModelManager', `Loading model: ${modelId} (device: ${device}, dtype: ${dtype}, imageTokenBudget: ${imageTokenBudget})`);
 
     this.worker = new Worker(new URL('./gemma.worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = this.handleWorkerMessage.bind(this);
     this.worker.onerror = this.handleWorkerError.bind(this);
 
-    this.worker.postMessage({ type: 'load', data: { modelId, device, dtype } });
+    this.worker.postMessage({ type: 'load', data: { modelId, device, dtype, imageTokenBudget } });
   }
 
   public unloadModel(): void {

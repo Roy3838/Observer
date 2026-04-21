@@ -1,10 +1,11 @@
-import { GemmaModelId, GemmaDevice, GemmaDtype } from './types';
+import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaImageTokenBudget } from './types';
 
 let processor: any = null;
 let model: any = null;
 let TextStreamer: any = null;
 let load_image: any = null;
 let transformersModule: any = null;
+let currentImageTokenBudget: GemmaImageTokenBudget = 280;
 
 async function loadTransformers() {
   if (!transformersModule) {
@@ -16,21 +17,36 @@ async function loadTransformers() {
 }
 
 // Extract images from multimodal message content
+// Supports both Gemma format ({ type: 'image', image: url })
+// and OpenAI format ({ type: 'image_url', image_url: { url: ... } })
 async function extractImages(messages: Array<{ role: string; content: any }>): Promise<any[]> {
   const images: any[] = [];
 
   for (const msg of messages) {
     if (Array.isArray(msg.content)) {
       for (const part of msg.content) {
+        let imageSource: string | Blob | null = null;
+
+        // Gemma format: { type: 'image', image: url }
         if (part.type === 'image' && part.image) {
-          // part.image can be a URL string or a Blob
-          const img = await load_image(part.image);
+          imageSource = part.image;
+        }
+        // OpenAI format: { type: 'image_url', image_url: { url: ... } }
+        else if (part.type === 'image_url' && part.image_url?.url) {
+          imageSource = part.image_url.url;
+        }
+
+        if (imageSource) {
+          console.log('[Gemma Worker] Loading image, source length:', typeof imageSource === 'string' ? imageSource.length : 'Blob');
+          const img = await load_image(imageSource);
+          console.log('[Gemma Worker] Image loaded successfully');
           images.push(img);
         }
       }
     }
   }
 
+  console.log('[Gemma Worker] Total images extracted:', images.length);
   return images;
 }
 
@@ -43,8 +59,11 @@ self.onmessage = async (event: MessageEvent) => {
         const modelId = data.modelId as GemmaModelId;
         const device = (data.device ?? 'webgpu') as GemmaDevice;
         const dtype = (data.dtype ?? 'q4f16') as GemmaDtype;
+        currentImageTokenBudget = (data.imageTokenBudget ?? 280) as GemmaImageTokenBudget;
         processor = null;
         model = null;
+
+        console.log('[Gemma Worker] Loading with imageTokenBudget:', currentImageTokenBudget);
 
         const { AutoProcessor, Gemma4ForConditionalGeneration } = await loadTransformers();
 
@@ -73,19 +92,54 @@ self.onmessage = async (event: MessageEvent) => {
           throw new Error('Model not loaded');
         }
 
+        console.log('[Gemma Worker] Received messages:', JSON.stringify(messages, null, 2).slice(0, 500));
+
         // Extract images from multimodal messages
         const images = await extractImages(messages);
 
-        const prompt = processor.apply_chat_template(messages, {
+        // Transform messages for chat template:
+        // Replace image_url/image content with simple { type: "image" } placeholders
+        const templateMessages = messages.map((msg: { role: string; content: any }) => {
+          if (Array.isArray(msg.content)) {
+            return {
+              ...msg,
+              content: msg.content.map((part: any) => {
+                // Convert image_url or image parts to simple placeholder
+                if (part.type === 'image_url' || part.type === 'image') {
+                  return { type: 'image' };
+                }
+                return part;
+              })
+            };
+          }
+          return msg;
+        });
+
+        console.log('[Gemma Worker] Template messages:', JSON.stringify(templateMessages, null, 2).slice(0, 500));
+        console.log('[Gemma Worker] Images extracted:', images.length);
+
+        const prompt = processor.apply_chat_template(templateMessages, {
           enable_thinking: false,
           add_generation_prompt: true,
         });
 
-        // Use processor directly for multimodal: processor(prompt, image, audio, options)
-        // Pass null for unused modalities
-        const inputs = images.length > 0
-          ? await processor(prompt, images, null, { add_special_tokens: false })
-          : await processor(prompt, null, null, { add_special_tokens: false });
+        console.log('[Gemma Worker] Generated prompt length:', prompt.length);
+
+        // For multimodal, pass first image (processor expects single RawImage)
+        // For text-only, use tokenizer directly
+        let inputs;
+        if (images.length > 0) {
+          console.log('[Gemma Worker] Processing with image, token budget:', currentImageTokenBudget);
+          inputs = await processor(prompt, images[0], null, {
+            add_special_tokens: false,
+            max_soft_tokens: currentImageTokenBudget,
+          });
+          console.log('[Gemma Worker] Inputs created with image');
+        } else {
+          console.log('[Gemma Worker] Processing text-only...');
+          inputs = processor.tokenizer(prompt, { add_special_tokens: false, return_tensors: 'pt' });
+          console.log('[Gemma Worker] Inputs created text-only');
+        }
 
         let fullText = '';
 

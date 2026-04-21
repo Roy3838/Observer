@@ -6,7 +6,7 @@ import { Download, CheckCircle, AlertTriangle, X, StopCircle, FileDown, Cpu } fr
 import pullModelManager, { PullState } from '@utils/pullModelManager';
 import { platformFetch } from '@utils/platform';
 import { GemmaModelManager } from '@utils/gemma/GemmaModelManager';
-import { GemmaModelId, GemmaModelState, GemmaDevice, GemmaDtype } from '@utils/gemma/types';
+import { GemmaModelId, GemmaModelState, GemmaDevice, GemmaDtype, GemmaImageTokenBudget } from '@utils/gemma/types';
 
 interface TerminalModalProps {
   isOpen: boolean;
@@ -55,6 +55,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
   const [gemmaState, setGemmaState] = useState<GemmaModelState>(GemmaModelManager.getInstance().getState());
   const [gemmaDevice, setGemmaDevice] = useState<GemmaDevice>('webgpu');
   const [gemmaDtype, setGemmaDtype] = useState<GemmaDtype>('q4f16');
+  const [gemmaTokenBudget, setGemmaTokenBudget] = useState<GemmaImageTokenBudget>(70);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -364,6 +365,21 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                   <option value="fp32">fp32 (full)</option>
                 </select>
               </div>
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Image Tokens</label>
+                <select
+                  value={gemmaTokenBudget}
+                  onChange={e => setGemmaTokenBudget(Number(e.target.value) as GemmaImageTokenBudget)}
+                  disabled={gemmaState.status === 'loading'}
+                  className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+                >
+                  <option value={70}>70 (fastest)</option>
+                  <option value={140}>140</option>
+                  <option value={280}>280 (default)</option>
+                  <option value={560}>560</option>
+                  <option value={1120}>1120 (OCR/detail)</option>
+                </select>
+              </div>
             </div>
 
             {GEMMA_CARDS.map(({ modelId, label, size }) => {
@@ -394,7 +410,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                     ) : (
                       <button
                         disabled={gemmaState.status === 'loading'}
-                        onClick={() => GemmaModelManager.getInstance().loadModel(modelId, gemmaDevice, gemmaDtype)}
+                        onClick={() => GemmaModelManager.getInstance().loadModel(modelId, gemmaDevice, gemmaDtype, gemmaTokenBudget)}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                       >
                         <Cpu size={14} /> Load
