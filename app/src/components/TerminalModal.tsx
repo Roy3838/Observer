@@ -623,7 +623,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                           {gemmaState.progress.map((item) => (
                             <div key={item.file}>
                               <div className="flex justify-between items-center text-xs mb-1">
-                                <span className="text-gray-600 flex items-center gap-1 truncate max-w-[70%]">
+                                <span className="text-gray-600 flex items-center gap-1 truncate max-w-[55%]">
                                   {item.status === 'done'
                                     ? <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
                                     : <FileDown className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
@@ -631,7 +631,12 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                                   {item.file}
                                 </span>
                                 <span className="font-medium text-gray-500 flex-shrink-0">
-                                  {item.status === 'done' ? 'Done' : `${Math.round(item.progress)}%`}
+                                  {item.status === 'done'
+                                    ? 'Done'
+                                    : item.total > 0
+                                      ? `${formatBytes(item.loaded)} / ${formatBytes(item.total)}`
+                                      : `${Math.round(item.progress)}%`
+                                  }
                                 </span>
                               </div>
                               <div className="w-full bg-gray-200 rounded-full h-1.5">

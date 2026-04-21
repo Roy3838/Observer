@@ -17,6 +17,16 @@ import ChangeDetectionSettings from '@components/ChangeDetectionSettings';
 
 
 
+// --- HELPER FUNCTIONS ---
+
+const formatBytes = (bytes: number, decimals = 1) => {
+    if (!+bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(decimals))} ${sizes[i]}`;
+};
+
 // --- GENERIC HELPER COMPONENTS ---
 
 const InfoTag: React.FC<{ icon: React.ElementType; label: string; warning?: string; isBlocking?: boolean }> = ({ icon: Icon, label, warning, isBlocking }) => (
@@ -289,7 +299,7 @@ const ModelLocationIndicator: React.FC<{
                                     {gemmaState.progress.map((item) => (
                                         <div key={item.file}>
                                             <div className="flex justify-between items-center text-xs mb-0.5">
-                                                <span className="text-gray-600 flex items-center gap-1 truncate max-w-[70%]">
+                                                <span className="text-gray-600 flex items-center gap-1 truncate max-w-[60%]">
                                                     {item.status === 'done'
                                                         ? <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
                                                         : <FileDown className="h-3 w-3 text-gray-400 flex-shrink-0" />
@@ -297,7 +307,12 @@ const ModelLocationIndicator: React.FC<{
                                                     <span className="truncate">{item.file.split('/').pop()}</span>
                                                 </span>
                                                 <span className="font-medium text-gray-500 flex-shrink-0 text-xs">
-                                                    {item.status === 'done' ? '✓' : `${Math.round(item.progress)}%`}
+                                                    {item.status === 'done'
+                                                        ? '✓'
+                                                        : item.total > 0
+                                                            ? `${formatBytes(item.loaded)}/${formatBytes(item.total)}`
+                                                            : `${Math.round(item.progress)}%`
+                                                    }
                                                 </span>
                                             </div>
                                             <div className="w-full bg-gray-200 rounded-full h-1">
