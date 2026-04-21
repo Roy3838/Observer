@@ -1,4 +1,4 @@
-import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaModelState, GemmaProgressItem } from './types';
+import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaModelState, GemmaProgressItem, GemmaMessage } from './types';
 import { Logger } from '../logging';
 
 export class GemmaModelManager {
@@ -80,7 +80,7 @@ export class GemmaModelManager {
   }
 
   public async generate(
-    messages: Array<{ role: string; content: any }>,
+    messages: GemmaMessage[],
     onToken?: (token: string) => void
   ): Promise<string> {
     if (this.state.status !== 'loaded' || !this.worker) {

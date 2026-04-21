@@ -3,14 +3,35 @@ import { GemmaModelId, GemmaDevice, GemmaDtype } from './types';
 let processor: any = null;
 let model: any = null;
 let TextStreamer: any = null;
+let load_image: any = null;
 let transformersModule: any = null;
 
 async function loadTransformers() {
   if (!transformersModule) {
     transformersModule = await import('@huggingface/transformers');
     TextStreamer = transformersModule.TextStreamer;
+    load_image = transformersModule.load_image;
   }
   return transformersModule;
+}
+
+// Extract images from multimodal message content
+async function extractImages(messages: Array<{ role: string; content: any }>): Promise<any[]> {
+  const images: any[] = [];
+
+  for (const msg of messages) {
+    if (Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (part.type === 'image' && part.image) {
+          // part.image can be a URL string or a Blob
+          const img = await load_image(part.image);
+          images.push(img);
+        }
+      }
+    }
+  }
+
+  return images;
 }
 
 self.onmessage = async (event: MessageEvent) => {
@@ -52,12 +73,19 @@ self.onmessage = async (event: MessageEvent) => {
           throw new Error('Model not loaded');
         }
 
+        // Extract images from multimodal messages
+        const images = await extractImages(messages);
+
         const prompt = processor.apply_chat_template(messages, {
           enable_thinking: false,
           add_generation_prompt: true,
-          tokenize: false,
         });
-        const inputs = processor.tokenizer(prompt, { add_special_tokens: false, return_tensors: 'pt' });
+
+        // Use processor directly for multimodal: processor(prompt, image, audio, options)
+        // Pass null for unused modalities
+        const inputs = images.length > 0
+          ? await processor(prompt, images, null, { add_special_tokens: false })
+          : await processor(prompt, null, null, { add_special_tokens: false });
 
         let fullText = '';
 

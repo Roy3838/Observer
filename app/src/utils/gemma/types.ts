@@ -3,6 +3,16 @@ export type GemmaDevice = 'webgpu' | 'wasm';
 export type GemmaDtype = 'q4f16' | 'q4' | 'fp16' | 'fp32' | 'q8';
 export type GemmaStatus = 'unloaded' | 'loading' | 'loaded' | 'error';
 
+// Multimodal content types
+export type GemmaTextContent = { type: 'text'; text: string };
+export type GemmaImageContent = { type: 'image'; image?: string | Blob }; // URL, data URL, or Blob
+export type GemmaContentPart = GemmaTextContent | GemmaImageContent;
+
+export interface GemmaMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string | GemmaContentPart[];
+}
+
 export interface GemmaProgressItem {
   file: string;
   progress: number;
