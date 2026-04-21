@@ -335,6 +335,9 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
             <p className="text-gray-600 text-sm">
               These models run in-browser. Weights are downloaded once and cached locally.
             </p>
+            <p className="text-amber-600 text-xs bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+              Desktop only. Mobile browsers have memory limits that prevent loading these models.
+            </p>
 
             <div className="flex gap-3 mt-3">
               <div className="flex-1">
