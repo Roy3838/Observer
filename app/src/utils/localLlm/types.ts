@@ -28,11 +28,18 @@ export interface GemmaProgressItem {
   status: 'progress' | 'done';
 }
 
+export interface GemmaLoadSettings {
+  device: GemmaDevice;
+  dtype: GemmaDtype;
+  imageTokenBudget: GemmaImageTokenBudget;
+}
+
 export interface GemmaModelState {
   status: GemmaStatus;
   modelId: GemmaModelId | null;
   progress: GemmaProgressItem[];
   error: string | null;
+  loadSettings: GemmaLoadSettings | null;
 }
 
 // ============================================================================

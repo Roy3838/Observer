@@ -1,14 +1,27 @@
-import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaImageTokenBudget, GemmaModelState, GemmaProgressItem, GemmaMessage } from './types';
+import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaImageTokenBudget, GemmaModelState, GemmaProgressItem, GemmaMessage, GemmaLoadSettings } from './types';
 import { Logger } from '../logging';
 
-const GEMMA_STORAGE_KEY = 'observer-gemma-model-settings';
+const GEMMA_STORAGE_KEY = 'observer-gemma-model-settings-v2';
 
-interface PersistedGemmaSettings {
+// Per-model settings map
+type PersistedGemmaSettingsMap = {
+  [modelId: string]: GemmaLoadSettings;
+};
+
+// Legacy format for migration
+interface LegacyPersistedSettings {
   modelId: GemmaModelId;
   device: GemmaDevice;
   dtype: GemmaDtype;
   imageTokenBudget: GemmaImageTokenBudget;
 }
+const LEGACY_STORAGE_KEY = 'observer-gemma-model-settings';
+
+const DEFAULT_SETTINGS: GemmaLoadSettings = {
+  device: 'webgpu',
+  dtype: 'q4',
+  imageTokenBudget: 70,
+};
 
 export class GemmaModelManager {
   private static instance: GemmaModelManager | null = null;
@@ -18,6 +31,7 @@ export class GemmaModelManager {
     modelId: null,
     progress: [],
     error: null,
+    loadSettings: null,
   };
   private stateChangeListeners: Array<(state: GemmaModelState) => void> = [];
   private pendingGenerations = new Map<number, { resolve: (text: string) => void; reject: (err: Error) => void; onToken?: (t: string) => void }>();
@@ -50,11 +64,24 @@ export class GemmaModelManager {
     this.stateChangeListeners.forEach(l => l(this.getState()));
   }
 
-  public async loadModel(
+  /**
+   * Load a model using saved settings (or defaults if none saved).
+   * This is the primary API - settings are automatically fetched from storage.
+   */
+  public async loadModel(modelId: GemmaModelId): Promise<void> {
+    const settings = this.getSettingsForModel(modelId);
+    return this.loadModelWithSettings(modelId, settings.device, settings.dtype, settings.imageTokenBudget);
+  }
+
+  /**
+   * Load a model with explicit settings. Saves settings for future loads.
+   * Use this when the user explicitly changes settings in the UI.
+   */
+  public async loadModelWithSettings(
     modelId: GemmaModelId,
-    device: GemmaDevice = 'webgpu',
-    dtype: GemmaDtype = 'q4f16',
-    imageTokenBudget: GemmaImageTokenBudget = 280
+    device: GemmaDevice,
+    dtype: GemmaDtype,
+    imageTokenBudget: GemmaImageTokenBudget
   ): Promise<void> {
     if (this.state.status === 'loading') {
       Logger.warn('GemmaModelManager', 'Model already loading');
@@ -71,8 +98,9 @@ export class GemmaModelManager {
       this.worker = null;
     }
 
-    this.setState({ status: 'loading', modelId, progress: [], error: null });
-    this.currentLoadSettings = { device, dtype, imageTokenBudget };
+    const loadSettings: GemmaLoadSettings = { device, dtype, imageTokenBudget };
+    this.setState({ status: 'loading', modelId, progress: [], error: null, loadSettings });
+    this.currentLoadSettings = loadSettings;
     Logger.info('GemmaModelManager', `Loading model: ${modelId} (device: ${device}, dtype: ${dtype}, imageTokenBudget: ${imageTokenBudget})`);
 
     this.worker = new Worker(new URL('./gemma.worker.ts', import.meta.url), { type: 'module' });
@@ -93,9 +121,9 @@ export class GemmaModelManager {
       this.worker = null;
     }
 
-    this.clearPersistedSettings();
+    // Note: We don't clear persisted settings on unload - they're per-model preferences
     this.currentLoadSettings = null;
-    this.setState({ status: 'unloaded', modelId: null, progress: [], error: null });
+    this.setState({ status: 'unloaded', modelId: null, progress: [], error: null, loadSettings: null });
   }
 
   public async generate(
@@ -125,14 +153,9 @@ export class GemmaModelManager {
       case 'ready':
         Logger.info('GemmaModelManager', 'Model loaded successfully');
         this.setState({ status: 'loaded', progress: [] });
-        // Persist settings for auto-load on next app start
+        // Persist settings for this model
         if (this.state.modelId && this.currentLoadSettings) {
-          this.persistSettings(
-            this.state.modelId,
-            this.currentLoadSettings.device,
-            this.currentLoadSettings.dtype,
-            this.currentLoadSettings.imageTokenBudget
-          );
+          this.persistSettingsForModel(this.state.modelId, this.currentLoadSettings);
         }
         break;
 
@@ -205,47 +228,96 @@ export class GemmaModelManager {
   public hasError(): boolean { return this.state.status === 'error'; }
   public getError(): string | null { return this.state.error; }
 
-  // Persistence methods for auto-load on app restart
-  private persistSettings(modelId: GemmaModelId, device: GemmaDevice, dtype: GemmaDtype, imageTokenBudget: GemmaImageTokenBudget): void {
+  // ============================================================================
+  // Per-model settings persistence
+  // ============================================================================
+
+  private getAllPersistedSettings(): PersistedGemmaSettingsMap {
     try {
-      const settings: PersistedGemmaSettings = { modelId, device, dtype, imageTokenBudget };
-      localStorage.setItem(GEMMA_STORAGE_KEY, JSON.stringify(settings));
-      Logger.info('GemmaModelManager', 'Persisted model settings to localStorage');
+      // Try new format first
+      const stored = localStorage.getItem(GEMMA_STORAGE_KEY);
+      if (stored) {
+        return JSON.parse(stored) as PersistedGemmaSettingsMap;
+      }
+
+      // Migrate from legacy format if exists
+      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacy) {
+        const legacySettings = JSON.parse(legacy) as LegacyPersistedSettings;
+        const migrated: PersistedGemmaSettingsMap = {
+          [legacySettings.modelId]: {
+            device: legacySettings.device,
+            dtype: legacySettings.dtype,
+            imageTokenBudget: legacySettings.imageTokenBudget,
+          },
+        };
+        // Save in new format and remove legacy
+        localStorage.setItem(GEMMA_STORAGE_KEY, JSON.stringify(migrated));
+        localStorage.removeItem(LEGACY_STORAGE_KEY);
+        Logger.info('GemmaModelManager', 'Migrated legacy settings to per-model format');
+        return migrated;
+      }
+    } catch (error) {
+      Logger.warn('GemmaModelManager', 'Failed to read persisted settings');
+    }
+    return {};
+  }
+
+  private persistSettingsForModel(modelId: GemmaModelId, settings: GemmaLoadSettings): void {
+    try {
+      const all = this.getAllPersistedSettings();
+      all[modelId] = settings;
+      localStorage.setItem(GEMMA_STORAGE_KEY, JSON.stringify(all));
+      Logger.info('GemmaModelManager', `Persisted settings for ${modelId}`);
     } catch (error) {
       Logger.warn('GemmaModelManager', 'Failed to persist settings to localStorage');
     }
   }
 
-  private clearPersistedSettings(): void {
-    try {
-      localStorage.removeItem(GEMMA_STORAGE_KEY);
-      Logger.info('GemmaModelManager', 'Cleared persisted model settings');
-    } catch (error) {
-      Logger.warn('GemmaModelManager', 'Failed to clear persisted settings');
-    }
+  /**
+   * Get saved settings for a model, or defaults if none saved.
+   * Useful for populating UI dropdowns.
+   */
+  public getSettingsForModel(modelId: GemmaModelId): GemmaLoadSettings {
+    const all = this.getAllPersistedSettings();
+    return all[modelId] ?? { ...DEFAULT_SETTINGS };
   }
 
-  public getPersistedSettings(): PersistedGemmaSettings | null {
-    try {
-      const stored = localStorage.getItem(GEMMA_STORAGE_KEY);
-      if (stored) {
-        return JSON.parse(stored) as PersistedGemmaSettings;
-      }
-    } catch (error) {
-      Logger.warn('GemmaModelManager', 'Failed to read persisted settings');
-    }
-    return null;
+  /**
+   * Get the last loaded model ID (for auto-load on app restart).
+   * Returns the model that was most recently persisted.
+   */
+  public getLastLoadedModelId(): GemmaModelId | null {
+    // For auto-load, we check which models have saved settings
+    // Since we persist on successful load, any model with settings was loaded before
+    const all = this.getAllPersistedSettings();
+    const modelIds = Object.keys(all) as GemmaModelId[];
+    // Return the first one (could enhance to track "last used" timestamp)
+    return modelIds.length > 0 ? modelIds[0] : null;
   }
 
   public tryAutoLoad(): void {
     if (this.autoLoadTriggered) return;
     if (this.state.status !== 'unloaded') return;
 
-    const settings = this.getPersistedSettings();
-    if (settings) {
+    const modelId = this.getLastLoadedModelId();
+    if (modelId) {
       this.autoLoadTriggered = true;
-      Logger.info('GemmaModelManager', `Auto-loading persisted model: ${settings.modelId}`);
-      this.loadModel(settings.modelId, settings.device, settings.dtype, settings.imageTokenBudget);
+      Logger.info('GemmaModelManager', `Auto-loading persisted model: ${modelId}`);
+      this.loadModel(modelId); // Will auto-fetch saved settings
+    }
+  }
+
+  /**
+   * Clear all persisted settings (for testing/reset).
+   */
+  public clearAllPersistedSettings(): void {
+    try {
+      localStorage.removeItem(GEMMA_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      Logger.info('GemmaModelManager', 'Cleared all persisted model settings');
+    } catch (error) {
+      Logger.warn('GemmaModelManager', 'Failed to clear persisted settings');
     }
   }
 }

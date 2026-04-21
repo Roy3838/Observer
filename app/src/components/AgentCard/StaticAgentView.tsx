@@ -318,6 +318,13 @@ const ModelLocationIndicator: React.FC<{
                                 </div>
                             )}
 
+                            {/* Show settings being loaded */}
+                            {!isIOSPlatform && gemmaState.loadSettings && (
+                                <div className="text-xs text-gray-500 text-center">
+                                    {gemmaState.loadSettings.device} · {gemmaState.loadSettings.dtype} · {gemmaState.loadSettings.imageTokenBudget}tok
+                                </div>
+                            )}
+
                             <p className="text-xs text-gray-400 text-center">
                                 All data stays on your device
                             </p>
@@ -331,6 +338,23 @@ const ModelLocationIndicator: React.FC<{
                                     <span className="font-semibold text-green-600">Local In-Browser</span> all data stays on your device!
                                 </p>
                             </div>
+                            {/* Show current load settings */}
+                            {!isIOSPlatform && gemmaState.loadSettings && (
+                                <div className="bg-gray-50 rounded-md p-2 space-y-1">
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-gray-500">Device:</span>
+                                        <span className="font-medium text-gray-700">{gemmaState.loadSettings.device === 'webgpu' ? 'WebGPU (GPU)' : 'WASM (CPU)'}</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-gray-500">Precision:</span>
+                                        <span className="font-medium text-gray-700">{gemmaState.loadSettings.dtype}</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-gray-500">Image Tokens:</span>
+                                        <span className="font-medium text-gray-700">{gemmaState.loadSettings.imageTokenBudget}</span>
+                                    </div>
+                                </div>
+                            )}
                             <button
                                 onClick={handleCancelLoad}
                                 className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-red-100 hover:text-red-600 font-medium transition-colors"

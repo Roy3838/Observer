@@ -62,6 +62,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
   const [activeTab, setActiveTab] = useState<'ollama' | 'ondevice'>(hasOllama ? 'ollama' : 'ondevice');
 
   const [gemmaState, setGemmaState] = useState<GemmaModelState>(GemmaModelManager.getInstance().getState());
+  // Default values match GemmaModelManager.DEFAULT_SETTINGS
   const [gemmaDevice, setGemmaDevice] = useState<GemmaDevice>('webgpu');
   const [gemmaDtype, setGemmaDtype] = useState<GemmaDtype>('q4');
   const [gemmaTokenBudget, setGemmaTokenBudget] = useState<GemmaImageTokenBudget>(70);
@@ -109,8 +110,25 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
 
   useEffect(() => {
     if (!isOpen) return;
-    const unsubscribe = GemmaModelManager.getInstance().onStateChange(setGemmaState);
-    setGemmaState(GemmaModelManager.getInstance().getState());
+    const manager = GemmaModelManager.getInstance();
+    const unsubscribe = manager.onStateChange(setGemmaState);
+    const currentState = manager.getState();
+    setGemmaState(currentState);
+
+    // Initialize dropdown values from loaded model's settings, or first model's saved settings
+    if (currentState.loadSettings) {
+      setGemmaDevice(currentState.loadSettings.device);
+      setGemmaDtype(currentState.loadSettings.dtype);
+      setGemmaTokenBudget(currentState.loadSettings.imageTokenBudget);
+    } else {
+      // Use saved settings from first available model
+      const defaultModelId = GEMMA_CARDS[0].modelId;
+      const savedSettings = manager.getSettingsForModel(defaultModelId);
+      setGemmaDevice(savedSettings.device);
+      setGemmaDtype(savedSettings.dtype);
+      setGemmaTokenBudget(savedSettings.imageTokenBudget);
+    }
+
     return unsubscribe;
   }, [isOpen]);
 
@@ -571,9 +589,16 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                           <span className="ml-2 text-xs text-gray-500">{size}</span>
                         </div>
                         {isLoaded ? (
-                          <span className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded-full">
-                            <CheckCircle size={12} /> Ready
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {gemmaState.loadSettings && (
+                              <span className="text-xs text-gray-500">
+                                {gemmaState.loadSettings.device} · {gemmaState.loadSettings.dtype} · {gemmaState.loadSettings.imageTokenBudget}tok
+                              </span>
+                            )}
+                            <span className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded-full">
+                              <CheckCircle size={12} /> Ready
+                            </span>
+                          </div>
                         ) : isLoading ? (
                           <button
                             onClick={() => GemmaModelManager.getInstance().unloadModel()}
@@ -585,7 +610,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                         ) : (
                           <button
                             disabled={gemmaState.status === 'loading'}
-                            onClick={() => GemmaModelManager.getInstance().loadModel(modelId, gemmaDevice, gemmaDtype, gemmaTokenBudget)}
+                            onClick={() => GemmaModelManager.getInstance().loadModelWithSettings(modelId, gemmaDevice, gemmaDtype, gemmaTokenBudget)}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                           >
                             <Cpu size={14} /> Load

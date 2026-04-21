@@ -265,16 +265,16 @@ export function listModels(): ModelsResponse {
         localModelId: gemmaState.modelId,
       });
     } else {
-      // Check persisted settings - model is downloaded but not loaded
-      const persistedSettings = gemmaManager.getPersistedSettings();
-      if (persistedSettings?.modelId) {
+      // Check for previously loaded model - show as unloaded
+      const lastModelId = gemmaManager.getLastLoadedModelId();
+      if (lastModelId) {
         localModels.push({
-          name: GEMMA_DISPLAY_NAMES[persistedSettings.modelId as GemmaModelId],
+          name: GEMMA_DISPLAY_NAMES[lastModelId as GemmaModelId],
           server: BROWSER_LOCAL_SENTINEL,
           multimodal: true,
-          parameterSize: persistedSettings.modelId.includes('E2B') ? '2B' : '4B',
+          parameterSize: lastModelId.includes('E2B') ? '2B' : '4B',
           status: 'unloaded',
-          localModelId: persistedSettings.modelId,
+          localModelId: lastModelId,
         });
       }
     }
