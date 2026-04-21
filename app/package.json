@@ -23,7 +23,7 @@
     "@codemirror/lang-javascript": "^6.2.3",
     "@codemirror/lang-python": "^6.1.7",
     "@codemirror/view": "^6.38.1",
-    "@huggingface/transformers": "^3.5.2",
+    "@huggingface/transformers": "^4.1.0",
     "@jupyterlab/services": "^7.3.6",
     "@lexical/history": "^0.25.0",
     "@lexical/list": "^0.25.0",

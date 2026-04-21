@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import Modal from '@components/EditAgent/Modal';
-import { Download, CheckCircle, AlertTriangle, X, StopCircle } from 'lucide-react';
+import { Download, CheckCircle, AlertTriangle, X, StopCircle, FileDown, Cpu } from 'lucide-react';
 import pullModelManager, { PullState } from '@utils/pullModelManager';
 import { platformFetch } from '@utils/platform';
+import { GemmaModelManager } from '@utils/gemma/GemmaModelManager';
+import { GemmaModelId, GemmaModelState, GemmaDevice, GemmaDtype } from '@utils/gemma/types';
 
 interface TerminalModalProps {
   isOpen: boolean;
@@ -25,6 +27,11 @@ const suggestedModels = [
   'llava:13b'
 ];
 
+const GEMMA_CARDS: { modelId: GemmaModelId; label: string; size: string }[] = [
+  { modelId: 'onnx-community/gemma-4-E2B-it-ONNX', label: 'Gemma 4 E2B', size: '~1.5 GB' },
+  { modelId: 'onnx-community/gemma-4-E4B-it-ONNX', label: 'Gemma 4 E4B', size: '~3 GB' },
+];
+
 const formatBytes = (bytes: number, decimals = 2) => {
   if (!+bytes) return '0 Bytes';
   const k = 1024;
@@ -35,23 +42,27 @@ const formatBytes = (bytes: number, decimals = 2) => {
 };
 
 const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullComplete, noModels = false, ollamaServers }) => {
-  // Local state is now only for the user's input
   const [modelToPull, setModelToPull] = useState('');
-  // All display state comes from the manager
   const [downloadState, setDownloadState] = useState<PullState>(pullModelManager.getInitialState());
-  // State to control showing welcome screen for no-models case
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(noModels);
-  // State for detected servers when not provided
   const [detectedServers, setDetectedServers] = useState<string[]>([]);
-  // Use provided servers or detected servers
   const availableServers = ollamaServers || detectedServers;
-  // State for selected Ollama server
   const [selectedServer, setSelectedServer] = useState<string>(availableServers[0] || '');
 
-  // Detect Ollama servers when modal opens (if not provided)
+  const hasOllama = availableServers.length > 0;
+  const [activeTab, setActiveTab] = useState<'ollama' | 'ondevice'>(hasOllama ? 'ollama' : 'ondevice');
+
+  const [gemmaState, setGemmaState] = useState<GemmaModelState>(GemmaModelManager.getInstance().getState());
+  const [gemmaDevice, setGemmaDevice] = useState<GemmaDevice>('webgpu');
+  const [gemmaDtype, setGemmaDtype] = useState<GemmaDtype>('q4f16');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setActiveTab(hasOllama ? 'ollama' : 'ondevice');
+  }, [isOpen, hasOllama]);
+
   useEffect(() => {
     if (isOpen && !ollamaServers && noModels) {
-      // First-time user path: check localhost:3838
       const checkLocalhost = async () => {
         try {
           const response = await platformFetch('http://localhost:3838/api/tags', {
@@ -61,8 +72,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
           if (response.ok) {
             setDetectedServers(['http://localhost:3838']);
           }
-        } catch (error) {
-          // Not Ollama or not reachable
+        } catch {
           setDetectedServers([]);
         }
       };
@@ -71,19 +81,23 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
   }, [isOpen, ollamaServers, noModels]);
 
   useEffect(() => {
-    if (isOpen) {
-      // When modal opens, subscribe to the manager's updates
-      const unsubscribe = pullModelManager.subscribe((newState) => {
-        setDownloadState(newState);
-        if (newState.status === 'success' && onPullComplete) {
-            onPullComplete();
-        }
-      });
-      // Return the unsubscribe function to be called on cleanup (modal close)
-      return unsubscribe;
-    }
+    if (!isOpen) return;
+    const unsubscribe = pullModelManager.subscribe((newState) => {
+      setDownloadState(newState);
+      if (newState.status === 'success' && onPullComplete) {
+        onPullComplete();
+      }
+    });
+    return unsubscribe;
   }, [isOpen, onPullComplete]);
-  
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const unsubscribe = GemmaModelManager.getInstance().onStateChange(setGemmaState);
+    setGemmaState(GemmaModelManager.getInstance().getState());
+    return unsubscribe;
+  }, [isOpen]);
+
   const handleStartPull = () => {
     if (modelToPull.trim() && selectedServer) {
       pullModelManager.pullModel(modelToPull.trim(), selectedServer);
@@ -91,15 +105,15 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
   };
 
   const handlePullModelClick = () => {
-    setModelToPull('gemma3:4b'); // Pre-fill with recommended model
-    setShowWelcomeScreen(false); // Switch to input screen
+    setModelToPull('gemma3:4b');
+    setShowWelcomeScreen(false);
     if (selectedServer) {
-      pullModelManager.pullModel('gemma3:4b', selectedServer); // Start pulling immediately
+      pullModelManager.pullModel('gemma3:4b', selectedServer);
     }
   };
 
   const handleSkipForNow = () => {
-    setShowWelcomeScreen(false); // Go to regular input screen
+    setShowWelcomeScreen(false);
   };
 
   const handleCancelPull = () => {
@@ -107,30 +121,25 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
   };
 
   const handleDone = () => {
-    // If the download was successful or had an error, reset the manager state before closing.
     if (downloadState.status === 'success' || downloadState.status === 'error') {
-        pullModelManager.resetState();
+      pullModelManager.resetState();
     }
     onClose();
   };
 
-  const { status, progress, statusText, errorText, completedBytes, totalBytes } = downloadState;
-  const isPulling = status === 'pulling';
-  const isFinished = status === 'success' || status === 'error';
-
-  // Reset welcome screen state when modal reopens
   useEffect(() => {
-    if (isOpen) {
-      setShowWelcomeScreen(noModels);
-    }
+    if (isOpen) setShowWelcomeScreen(noModels);
   }, [isOpen, noModels]);
 
-  // Update selected server when availableServers changes
   useEffect(() => {
     if (availableServers.length > 0 && !selectedServer) {
       setSelectedServer(availableServers[0]);
     }
   }, [availableServers, selectedServer]);
+
+  const { status, progress, statusText, errorText, completedBytes, totalBytes } = downloadState;
+  const isPulling = status === 'pulling';
+  const isFinished = status === 'success' || status === 'error';
 
   return (
     <Modal open={isOpen} onClose={handleDone} className="w-full max-w-xl">
@@ -142,17 +151,163 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
           </button>
         </div>
 
-        {showWelcomeScreen ? (
+        {/* Tab bar — only show when both options are relevant */}
+        {hasOllama && !showWelcomeScreen && (
+          <div className="flex border-b border-gray-200 mb-5">
+            <button
+              onClick={() => setActiveTab('ollama')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'ollama'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Ollama
+            </button>
+            <button
+              onClick={() => setActiveTab('ondevice')}
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'ondevice'
+                  ? 'border-green-600 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Cpu size={14} />
+              On-Device (WebGPU)
+            </button>
+          </div>
+        )}
+
+        {/* ── OLLAMA TAB ── */}
+        {(activeTab === 'ollama' || !hasOllama) && !showWelcomeScreen && activeTab !== 'ondevice' && (
+          <>
+            {showWelcomeScreen ? (
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <Download className="h-7 w-7 text-green-500 flex-shrink-0" />
+                  <h2 className="text-xl sm:text-2xl font-semibold">Let's Get Your First Model</h2>
+                </div>
+                <p className="text-gray-700 mb-6">
+                  Your local server is running, but it looks like you don't have any AI models installed yet.
+                </p>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+                  <h3 className="font-semibold text-green-800 mb-2 text-lg">Recommended Model: Gemma3 4B</h3>
+                  <button
+                    onClick={handlePullModelClick}
+                    className="w-full sm:w-auto px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-base"
+                  >
+                    Pull Your First Model!
+                  </button>
+                </div>
+                <div className="mt-8 flex flex-col-reverse sm:flex-row justify-between items-center gap-4">
+                  <button onClick={handleSkipForNow} className="text-sm text-gray-600 hover:underline">
+                    Choose a different model
+                  </button>
+                  <button onClick={handleDone} className="text-sm text-gray-600 hover:underline">
+                    I'll do this later
+                  </button>
+                </div>
+              </div>
+            ) : !isFinished && !isPulling ? (
+              <>
+                <p className="text-gray-600 mb-5">
+                  Enter a model name from the Ollama library (e.g., <code className="bg-gray-100 px-1 rounded text-sm">gemma3:4b</code>).
+                </p>
+                {availableServers.length > 1 && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Select Ollama Server:</label>
+                    <select
+                      value={selectedServer}
+                      onChange={(e) => setSelectedServer(e.target.value)}
+                      className="w-full p-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      {availableServers.map((server) => (
+                        <option key={server} value={server}>{server}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text" list="ollama-model-suggestions" value={modelToPull}
+                    onChange={(e) => setModelToPull(e.target.value)}
+                    placeholder="Enter model name..."
+                    className="flex-grow p-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  />
+                  <datalist id="ollama-model-suggestions">
+                    {suggestedModels.map(model => <option key={model} value={model} />)}
+                  </datalist>
+                  <button
+                    onClick={handleStartPull}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  >
+                    <Download size={18} />
+                    <span>Start Download</span>
+                  </button>
+                </div>
+              </>
+            ) : null}
+
+            {isPulling && (
+              <div className="mt-6 space-y-3">
+                <div className="flex justify-between items-baseline">
+                  <p className="text-sm font-medium text-gray-700">{statusText}</p>
+                  <p className="text-sm font-semibold text-blue-600">{progress}%</p>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div className="bg-blue-500 h-2.5 rounded-full transition-all duration-150" style={{ width: `${progress}%` }} />
+                </div>
+                <div className="flex justify-between items-center">
+                  {totalBytes > 0 ? (
+                    <p className="text-xs text-gray-500 font-mono">{formatBytes(completedBytes)} / {formatBytes(totalBytes)}</p>
+                  ) : <div />}
+                  <button onClick={handleCancelPull} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-600 bg-red-50 hover:bg-red-100 rounded-md font-semibold">
+                    <StopCircle size={14} /> Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {status === 'success' && (
+              <div className="mt-4 p-4 bg-green-50 border border-green-200 text-green-800 rounded-md flex flex-col items-center gap-3 text-center">
+                <CheckCircle size={32} className="text-green-500" />
+                <div>
+                  <h3 className="font-semibold">Download Complete!</h3>
+                  <p className="text-sm">{statusText}</p>
+                </div>
+              </div>
+            )}
+
+            {status === 'error' && (
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 text-red-800 rounded-md flex flex-col items-center gap-3 text-center">
+                <AlertTriangle size={32} className="text-red-500" />
+                <div>
+                  <h3 className="font-semibold">An Error Occurred</h3>
+                  <p className="text-sm">{errorText}</p>
+                </div>
+              </div>
+            )}
+
+            {isFinished && (
+              <div className="mt-6 flex justify-end">
+                <button onClick={handleDone} className="px-5 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 font-medium">
+                  Done
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Welcome screen (always shown regardless of tab when noModels) */}
+        {showWelcomeScreen && (
           <div>
             <div className="flex items-center gap-3 mb-4">
               <Download className="h-7 w-7 text-green-500 flex-shrink-0" />
               <h2 className="text-xl sm:text-2xl font-semibold">Let's Get Your First Model</h2>
             </div>
-
             <p className="text-gray-700 mb-6">
-              Your local server is running, but it looks like you don't have any AI models installed yet. Models are the "brains" that power your agents. Let's download the recommended one to get you started.
+              Your local server is running, but it looks like you don't have any AI models installed yet. Models are the "brains" that power your agents.
             </p>
-
             <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
               <h3 className="font-semibold text-green-800 mb-2 text-lg">Recommended Model: Gemma3 4B</h3>
               <button
@@ -162,7 +317,6 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                 Pull Your First Model!
               </button>
             </div>
-
             <div className="mt-8 flex flex-col-reverse sm:flex-row justify-between items-center gap-4">
               <button onClick={handleSkipForNow} className="text-sm text-gray-600 hover:underline">
                 Choose a different model
@@ -172,104 +326,116 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
               </button>
             </div>
           </div>
-        ) : !isFinished && !isPulling && (
-          <>
-            <p className="text-gray-600 mb-5">
-              Enter a model name from the Ollama library (e.g., <code className="bg-gray-100 px-1 rounded text-sm">gemma3:4b</code>).
+        )}
+
+        {/* ── ON-DEVICE TAB ── */}
+        {activeTab === 'ondevice' && !showWelcomeScreen && (
+          <div className="space-y-4">
+            <p className="text-gray-600 text-sm">
+              These models run in-browser. Weights are downloaded once and cached locally.
             </p>
-            {availableServers.length > 1 && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Ollama Server:
-                </label>
+
+            <div className="flex gap-3 mt-3">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Device</label>
                 <select
-                  value={selectedServer}
-                  onChange={(e) => setSelectedServer(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 bg-white"
+                  value={gemmaDevice}
+                  onChange={e => setGemmaDevice(e.target.value as GemmaDevice)}
+                  disabled={gemmaState.status === 'loading'}
+                  className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-green-500 disabled:opacity-50"
                 >
-                  {availableServers.map((server) => (
-                    <option key={server} value={server}>
-                      {server}
-                    </option>
-                  ))}
+                  <option value="webgpu">WebGPU (GPU)</option>
+                  <option value="wasm">WASM (CPU)</option>
                 </select>
               </div>
-            )}
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="text" list="ollama-model-suggestions" value={modelToPull}
-                onChange={(e) => setModelToPull(e.target.value)}
-                placeholder="Enter model name..."
-                className="flex-grow p-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              />
-              <datalist id="ollama-model-suggestions">
-                {suggestedModels.map(model => <option key={model} value={model} />)}
-              </datalist>
-              <button
-                onClick={handleStartPull}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-              >
-                <Download size={18} />
-                <span>Start Download</span>
-              </button>
-            </div>
-          </>
-        )}
-
-        {isPulling && (
-          <div className="mt-6 space-y-3">
-            <div className="flex justify-between items-baseline">
-              <p className="text-sm font-medium text-gray-700">{statusText}</p>
-              <p className="text-sm font-semibold text-blue-600">{progress}%</p>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
-              <div
-                className="bg-blue-500 h-2.5 rounded-full transition-all duration-150"
-                style={{ width: `${progress}%` }}
-              ></div>
-            </div>
-            <div className="flex justify-between items-center">
-                {totalBytes > 0 ? (
-                    <p className="text-xs text-gray-500 font-mono">
-                    {formatBytes(completedBytes)} / {formatBytes(totalBytes)}
-                    </p>
-                ) : <div/>}
-                <button 
-                    onClick={handleCancelPull} 
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-600 bg-red-50 hover:bg-red-100 rounded-md font-semibold"
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Precision</label>
+                <select
+                  value={gemmaDtype}
+                  onChange={e => setGemmaDtype(e.target.value as GemmaDtype)}
+                  disabled={gemmaState.status === 'loading'}
+                  className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-green-500 disabled:opacity-50"
                 >
-                    <StopCircle size={14}/> Cancel
-                </button>
-            </div>
-          </div>
-        )}
-
-        {status === 'success' && (
-           <div className="mt-4 p-4 bg-green-50 border border-green-200 text-green-800 rounded-md flex flex-col items-center gap-3 text-center">
-              <CheckCircle size={32} className="text-green-500" />
-              <div>
-                <h3 className="font-semibold">Download Complete!</h3>
-                <p className="text-sm">{statusText}</p>
+                  <option value="q4f16">q4f16 (4-bit + f16)</option>
+                  <option value="q4">q4 (4-bit)</option>
+                  <option value="q8">q8 (8-bit INT8)</option>
+                  <option value="quantized">quantized (INT8 alt)</option>
+                  <option value="fp16">fp16 (half)</option>
+                  <option value="fp32">fp32 (full)</option>
+                </select>
               </div>
-           </div>
-        )}
-        
-        {status === 'error' && (
-          <div className="mt-4 p-4 bg-red-50 border border-red-200 text-red-800 rounded-md flex flex-col items-center gap-3 text-center">
-            <AlertTriangle size={32} className="text-red-500" />
-            <div>
-                <h3 className="font-semibold">An Error Occurred</h3>
-                <p className="text-sm">{errorText}</p>
             </div>
-          </div>
-        )}
 
-        {isFinished && (
-            <div className="mt-6 flex justify-end">
-                <button onClick={handleDone} className="px-5 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 font-medium">
-                    Done
-                </button>
-            </div>
+            {GEMMA_CARDS.map(({ modelId, label, size }) => {
+              const isThisModel = gemmaState.modelId === modelId;
+              const isLoaded = isThisModel && gemmaState.status === 'loaded';
+              const isLoading = isThisModel && gemmaState.status === 'loading';
+              const hasError = isThisModel && gemmaState.status === 'error';
+
+              return (
+                <div key={modelId} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <span className="font-medium text-gray-900">{label}</span>
+                      <span className="ml-2 text-xs text-gray-500">{size}</span>
+                    </div>
+                    {isLoaded ? (
+                      <span className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded-full">
+                        <CheckCircle size={12} /> Ready
+                      </span>
+                    ) : isLoading ? (
+                      <button
+                        onClick={() => GemmaModelManager.getInstance().unloadModel()}
+                        className="group flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-600 rounded-lg font-medium transition-colors"
+                      >
+                        <span className="group-hover:hidden flex items-center gap-1.5"><Cpu size={14} /> Loading…</span>
+                        <span className="hidden group-hover:flex items-center gap-1.5"><StopCircle size={14} /> Cancel</span>
+                      </button>
+                    ) : (
+                      <button
+                        disabled={gemmaState.status === 'loading'}
+                        onClick={() => GemmaModelManager.getInstance().loadModel(modelId, gemmaDevice, gemmaDtype)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                      >
+                        <Cpu size={14} /> Load
+                      </button>
+                    )}
+                  </div>
+
+                  {isLoading && gemmaState.progress.length > 0 && (
+                    <div className="space-y-2 mt-3">
+                      {gemmaState.progress.map((item) => (
+                        <div key={item.file}>
+                          <div className="flex justify-between items-center text-xs mb-1">
+                            <span className="text-gray-600 flex items-center gap-1 truncate max-w-[70%]">
+                              {item.status === 'done'
+                                ? <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                                : <FileDown className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                              }
+                              {item.file}
+                            </span>
+                            <span className="font-medium text-gray-500 flex-shrink-0">
+                              {item.status === 'done' ? 'Done' : `${Math.round(item.progress)}%`}
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-1.5">
+                            <div
+                              className={`h-1.5 rounded-full transition-all duration-300 ${item.status === 'done' ? 'bg-green-500' : 'bg-blue-600'}`}
+                              style={{ width: `${item.progress}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {hasError && (
+                    <p className="mt-2 text-xs text-red-600">{gemmaState.error}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </Modal>

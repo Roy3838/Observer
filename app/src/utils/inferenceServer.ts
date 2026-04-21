@@ -1,5 +1,6 @@
 // src/utils/inferenceServer.ts
 import { platformFetch } from './platform';
+import { GemmaModelManager } from './gemma/GemmaModelManager';
 
 interface ServerResponse {
   status: 'online' | 'offline';
@@ -32,6 +33,8 @@ let customServers: CustomServer[] = [];
 
 // LocalStorage key
 const CUSTOM_SERVERS_KEY = 'observer-custom-servers';
+
+export const BROWSER_LOCAL_SENTINEL = 'browser_local';
 
 interface ModelsResponse {
   models: Model[];
@@ -207,7 +210,12 @@ async function listModelsFromAddress(address: string): Promise<Model[]> {
 
 // Local getter function - returns the current model list
 export function listModels(): ModelsResponse {
-  return { models: availableModels };
+  // Dynamically append only loaded browser-local Gemma models
+  const gemmaState = GemmaModelManager.getInstance().getState();
+  const loadedGemmaModels: Model[] = gemmaState.status === 'loaded' && gemmaState.modelId
+    ? [{ name: gemmaState.modelId, server: BROWSER_LOCAL_SENTINEL, multimodal: true, parameterSize: gemmaState.modelId.includes('E2B') ? '2B' : '4B' }]
+    : [];
+  return { models: [...availableModels, ...loadedGemmaModels] };
 }
 
 // Fetch function - called by AppHeader to update the model list

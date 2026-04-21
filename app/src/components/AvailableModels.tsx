@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { listModels, Model } from '@utils/inferenceServer'; // Import updated Model interface
-import { Cpu, RefreshCw, Eye, Server } from 'lucide-react'; // <-- Import Eye and Server icons
+import { Cpu, RefreshCw, Eye, Server } from 'lucide-react';
+import { BROWSER_LOCAL_SENTINEL } from '@utils/inferenceServer';
 import { Logger } from '@utils/logging';
 import { getInferenceAddresses } from '@utils/inferenceServer';
 import TerminalModal from '@components/TerminalModal';
@@ -106,14 +107,12 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({ isProUser = false }) 
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-semibold text-gray-800">Available Models</h2>
         <div className="flex items-center gap-2">
-          {ollamaServers.length > 0 && (
-            <button
-              onClick={() => setShowTerminal(true)}
-              className="px-3 py-2 rounded-md bg-green-50 text-green-600 hover:bg-green-100"
-            >
-              Add Model
-            </button>
-          )}
+          <button
+            onClick={() => setShowTerminal(true)}
+            className="px-3 py-2 rounded-md bg-green-50 text-green-600 hover:bg-green-100"
+          >
+            Add Model
+          </button>
           <button
             onClick={handleRefresh}
             disabled={refreshing}
@@ -179,8 +178,12 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({ isProUser = false }) 
                         Vision
                       </span>
                     )}
-                    {/* Conditionally render the Local tag if server is not the official API */}
-                    {!model.server.includes('api.observer-ai.com') && (
+                    {model.server === BROWSER_LOCAL_SENTINEL ? (
+                      <span title="Runs in-browser via WebGPU" className="inline-block text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded">
+                        <Cpu className="h-3.5 w-3.5 inline-block mr-1 -mt-px" />
+                        On-Device
+                      </span>
+                    ) : !model.server.includes('api.observer-ai.com') && (
                       <span title="Running Locally" className="inline-block text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">
                         <Server className="h-3.5 w-3.5 inline-block mr-1 -mt-px" />
                         Local

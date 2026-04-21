@@ -1,6 +1,7 @@
 // src/utils/sendApi.ts
 import { PreProcessorResult } from './pre-processor';
-import { listModels } from './inferenceServer';
+import { listModels, BROWSER_LOCAL_SENTINEL } from './inferenceServer';
+import { GemmaModelManager } from './gemma/GemmaModelManager';
 import { platformFetch } from './platform';
 import { InferenceParams } from '../config/inference-params';
 
@@ -118,6 +119,12 @@ export async function fetchResponse(
   inferenceParams?: InferenceParams
 ): Promise<string> {
   try {
+    if (serverAddress === BROWSER_LOCAL_SENTINEL) {
+      const manager = GemmaModelManager.getInstance();
+      if (!manager.isReady()) throw new Error('Gemma model not loaded. Please load it from the Add Model panel.');
+      return manager.generate(messages, onStreamChunk);
+    }
+
     const url = `${serverAddress}/v1/chat/completions`;
 
     const headers: Record<string, string> = {
