@@ -53,6 +53,8 @@ export interface NativeModelInfo {
   filename: string;     // Full filename on disk
   sizeBytes: number;    // File size in bytes
   hfUrl?: string;       // Original HuggingFace URL if known
+  mmprojFilename?: string;  // Associated mmproj file if multimodal
+  isMultimodal: boolean;    // Whether model supports vision/multimodal
 }
 
 export type NativeModelStatus = 'unloaded' | 'loading' | 'loaded' | 'downloading' | 'error';
@@ -75,8 +77,13 @@ export interface NativeProgressEvent {
   error?: string;
 }
 
+// Multimodal content types for native LLM (matches Gemma pattern)
+export type LocalLlmTextContent = { type: 'text'; text: string };
+export type LocalLlmImageContent = { type: 'image'; image: string }; // base64 data URL
+export type LocalLlmContentPart = LocalLlmTextContent | LocalLlmImageContent;
+
 // Generic message type for both managers
 export interface LocalLlmMessage {
   role: string;
-  content: string;
+  content: string | LocalLlmContentPart[];
 }

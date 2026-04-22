@@ -30,6 +30,7 @@ export class NativeLlmManager {
   private stateChangeListeners: Array<(state: NativeModelState) => void> = [];
   private autoLoadTriggered = false;
   private loadedFilename: string | null = null;
+  private multimodalAvailable = false; // Whether loaded model supports vision
 
   private constructor() {}
 
@@ -177,6 +178,14 @@ export class NativeLlmManager {
       this.loadedFilename = filename;
       this.setState({ status: 'loaded' });
       this.persistSettings(filename);
+
+      // Check if multimodal is available after loading
+      try {
+        this.multimodalAvailable = await invoke<boolean>('llm_is_multimodal');
+        Logger.info('NativeLlmManager', `Multimodal available: ${this.multimodalAvailable}`);
+      } catch {
+        this.multimodalAvailable = false;
+      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       Logger.error('NativeLlmManager', `Failed to load model: ${msg}`);
@@ -195,6 +204,7 @@ export class NativeLlmManager {
       await invoke('llm_unload_model');
       Logger.info('NativeLlmManager', 'Model unloaded');
       this.loadedFilename = null;
+      this.multimodalAvailable = false;
       this.clearPersistedSettings();
       this.setState({ status: 'unloaded', modelId: null, error: null });
     } catch (error) {
@@ -204,6 +214,12 @@ export class NativeLlmManager {
 
   /**
    * Generate a response from chat messages with optional streaming
+   * Supports multimodal messages if the loaded model has an mmproj file.
+   *
+   * Message content can be:
+   * - A simple string for text-only messages
+   * - An array of content parts for multimodal messages:
+   *   [{ type: 'text', text: '...' }, { type: 'image', image: 'base64...' }]
    */
   public async generate(
     messages: LocalLlmMessage[],
@@ -241,6 +257,12 @@ export class NativeLlmManager {
   public isDownloading(): boolean { return this.state.status === 'downloading'; }
   public hasError(): boolean { return this.state.status === 'error'; }
   public getError(): string | null { return this.state.error; }
+
+  /**
+   * Check if the loaded model supports multimodal (vision) input
+   * Returns true if model has an associated mmproj file loaded
+   */
+  public isMultimodal(): boolean { return this.multimodalAvailable; }
 
   /**
    * Get the filename of the loaded model
@@ -313,6 +335,32 @@ export class NativeLlmManager {
       } catch (error) {
         Logger.error('NativeLlmManager', `Auto-load failed: ${error}`);
       }
+    }
+  }
+
+  /**
+   * Get detailed debug state from the native LLM engine
+   * Useful for debugging when logs aren't accessible
+   */
+  public async getDebugState(): Promise<{
+    modelsDir: string;
+    modelsDirExists: boolean;
+    modelFiles: string[];
+    engine: {
+      initialized: boolean;
+      isLoaded: boolean;
+      loadedModelId: string | null;
+      isMultimodal: boolean;
+      error?: string;
+    };
+  }> {
+    try {
+      const state = await invoke<any>('llm_debug_state');
+      Logger.info('NativeLlmManager', `Debug state: ${JSON.stringify(state)}`);
+      return state;
+    } catch (error) {
+      Logger.error('NativeLlmManager', `Failed to get debug state: ${error}`);
+      throw error;
     }
   }
 }

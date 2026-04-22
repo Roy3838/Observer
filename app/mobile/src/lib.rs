@@ -300,13 +300,14 @@ async fn stop_audio_stream_cmd(
 // ============================================================================
 
 /// List downloaded GGUF models from the models directory
+/// Now includes multimodal detection (checks for associated mmproj files)
 #[tauri::command]
 async fn llm_list_models(
     app_handle: AppHandle,
 ) -> Result<Vec<serde_json::Value>, String> {
     #[cfg(target_os = "ios")]
     {
-        use llm_engine::{NativeModelInfo, model_id_from_filename};
+        use llm_engine::{NativeModelInfo, model_id_from_filename, find_mmproj_for_model};
 
         let models_dir = app_handle.path().app_data_dir()
             .map_err(|e| e.to_string())?
@@ -321,9 +322,22 @@ async fn llm_list_models(
                     if let Some(ext) = path.extension() {
                         if ext == "gguf" || ext == "GGUF" {
                             if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                                // Skip mmproj files - they're not standalone models
+                                if filename.to_lowercase().contains("mmproj") {
+                                    continue;
+                                }
+
                                 let size_bytes = std::fs::metadata(&path)
                                     .map(|m| m.len())
                                     .unwrap_or(0);
+
+                                // Check if this model has an associated mmproj file
+                                let mmproj_path = find_mmproj_for_model(&path);
+                                let mmproj_filename = mmproj_path.as_ref()
+                                    .and_then(|p| p.file_name())
+                                    .and_then(|n| n.to_str())
+                                    .map(String::from);
+                                let is_multimodal = mmproj_path.is_some();
 
                                 let model_id = model_id_from_filename(filename);
                                 let info = NativeModelInfo {
@@ -332,6 +346,8 @@ async fn llm_list_models(
                                     filename: filename.to_string(),
                                     size_bytes,
                                     hf_url: None,
+                                    mmproj_filename,
+                                    is_multimodal,
                                 };
 
                                 if let Ok(json) = serde_json::to_value(info) {
@@ -500,19 +516,62 @@ async fn llm_load_model(
 
         let model_path = models_dir.join(&filename);
 
+        eprintln!("[LLM] ========== LOAD MODEL START ==========");
+        eprintln!("[LLM] Filename: {}", filename);
+        eprintln!("[LLM] Full path: {:?}", model_path);
+        eprintln!("[LLM] Path exists: {}", model_path.exists());
+
         if !model_path.exists() {
+            eprintln!("[LLM] ERROR: Model file not found!");
             return Err(format!("Model not found: {}", filename));
         }
 
+        // Check file size
+        let file_size = std::fs::metadata(&model_path)
+            .map(|m| m.len())
+            .unwrap_or(0);
+        eprintln!("[LLM] File size: {} bytes ({:.2} GB)", file_size, file_size as f64 / 1_073_741_824.0);
+
+        if file_size == 0 {
+            eprintln!("[LLM] ERROR: Model file is empty!");
+            return Err("Model file is empty (0 bytes)".to_string());
+        }
+
         let model_id = model_id_from_filename(&filename);
-        eprintln!("[LLM] Loading model: {:?}", model_path);
+        eprintln!("[LLM] Model ID: {}", model_id);
+        eprintln!("[LLM] Calling engine.load_model()...");
 
-        with_engine(|engine| {
-            engine.load_model(model_path, model_id)
-        })?;
+        // Use catch_unwind to catch any panics from llama.cpp
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_engine(|engine| {
+                engine.load_model(model_path.clone(), model_id.clone())
+            })
+        }));
 
-        eprintln!("[LLM] Model loaded successfully");
-        Ok(())
+        match result {
+            Ok(Ok(())) => {
+                eprintln!("[LLM] ✅ Model loaded successfully!");
+                eprintln!("[LLM] ========== LOAD MODEL END ==========");
+                Ok(())
+            }
+            Ok(Err(e)) => {
+                eprintln!("[LLM] ❌ Load error: {}", e);
+                eprintln!("[LLM] ========== LOAD MODEL END ==========");
+                Err(e)
+            }
+            Err(panic_info) => {
+                let panic_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "Unknown panic".to_string()
+                };
+                eprintln!("[LLM] 💥 PANIC during load: {}", panic_msg);
+                eprintln!("[LLM] ========== LOAD MODEL END ==========");
+                Err(format!("Panic during model load: {}", panic_msg))
+            }
+        }
     }
 
     #[cfg(not(target_os = "ios"))]
@@ -530,30 +589,109 @@ async fn llm_generate(
 ) -> Result<String, String> {
     #[cfg(target_os = "ios")]
     {
-        use llm_engine::{with_engine, ChatMessage};
+        use llm_engine::{with_engine, ChatMessage, ChatContent, ChatContentPart, LLM_ENGINE};
 
-        // Parse messages from JSON
+        eprintln!("[LLM] ========== GENERATE START ==========");
+        eprintln!("[LLM] Received {} raw messages", messages.len());
+
+        // Check engine state first
+        {
+            let guard = LLM_ENGINE.lock().map_err(|e| format!("Lock error: {}", e))?;
+            match guard.as_ref() {
+                Some(engine) => {
+                    eprintln!("[LLM] Engine exists, is_loaded: {}", engine.is_loaded());
+                    if !engine.is_loaded() {
+                        eprintln!("[LLM] ❌ ERROR: Engine exists but no model loaded!");
+                        return Err("No model loaded - please load a model first".to_string());
+                    }
+                }
+                None => {
+                    eprintln!("[LLM] ❌ ERROR: Engine not initialized!");
+                    return Err("LLM engine not initialized".to_string());
+                }
+            }
+        }
+
+        // Parse messages from JSON - supports both text-only and multimodal content
         let chat_messages: Vec<ChatMessage> = messages.into_iter()
             .filter_map(|m| {
                 let role = m.get("role")?.as_str()?.to_string();
-                let content = m.get("content")?.as_str()?.to_string();
+                let content_value = m.get("content")?;
+
+                // Content can be either a string or an array of content parts
+                let content = if let Some(text) = content_value.as_str() {
+                    // Simple text content
+                    eprintln!("[LLM] Message: role={}, content_len={}", role, text.len());
+                    ChatContent::Text(text.to_string())
+                } else if let Some(parts_array) = content_value.as_array() {
+                    // Multimodal content parts
+                    let parts: Vec<ChatContentPart> = parts_array.iter()
+                        .filter_map(|part| {
+                            let part_type = part.get("type")?.as_str()?;
+                            match part_type {
+                                "text" => {
+                                    let text = part.get("text")?.as_str()?.to_string();
+                                    Some(ChatContentPart::Text { text })
+                                }
+                                "image" => {
+                                    let image = part.get("image")?.as_str()?.to_string();
+                                    Some(ChatContentPart::Image { image })
+                                }
+                                _ => None
+                            }
+                        })
+                        .collect();
+                    eprintln!("[LLM] Message: role={}, multimodal parts={}", role, parts.len());
+                    ChatContent::Parts(parts)
+                } else {
+                    return None;
+                };
+
                 Some(ChatMessage { role, content })
             })
             .collect();
 
         if chat_messages.is_empty() {
+            eprintln!("[LLM] ❌ ERROR: No valid messages after parsing!");
             return Err("No valid messages provided".to_string());
         }
 
-        eprintln!("[LLM] Generating response for {} messages", chat_messages.len());
+        eprintln!("[LLM] Parsed {} chat messages, starting generation...", chat_messages.len());
 
-        let result = with_engine(|engine| {
-            engine.generate(chat_messages, 2048, |token| {
-                let _ = on_token.send(token.to_string());
+        // Use catch_unwind to catch any panics from llama.cpp
+        let on_token_clone = on_token.clone();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_engine(|engine| {
+                engine.generate(chat_messages, 2048, |token| {
+                    let _ = on_token_clone.send(token.to_string());
+                })
             })
-        })?;
+        }));
 
-        Ok(result)
+        match result {
+            Ok(Ok(response)) => {
+                eprintln!("[LLM] ✅ Generation complete, response_len={}", response.len());
+                eprintln!("[LLM] ========== GENERATE END ==========");
+                Ok(response)
+            }
+            Ok(Err(e)) => {
+                eprintln!("[LLM] ❌ Generation error: {}", e);
+                eprintln!("[LLM] ========== GENERATE END ==========");
+                Err(e)
+            }
+            Err(panic_info) => {
+                let panic_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "Unknown panic".to_string()
+                };
+                eprintln!("[LLM] 💥 PANIC during generation: {}", panic_msg);
+                eprintln!("[LLM] ========== GENERATE END ==========");
+                Err(format!("Panic during generation: {}", panic_msg))
+            }
+        }
     }
 
     #[cfg(not(target_os = "ios"))]
@@ -598,6 +736,132 @@ async fn llm_is_loaded() -> Result<bool, String> {
     #[cfg(not(target_os = "ios"))]
     {
         Ok(false)
+    }
+}
+
+/// Check if the loaded model supports multimodal (vision)
+#[tauri::command]
+async fn llm_is_multimodal() -> Result<bool, String> {
+    #[cfg(target_os = "ios")]
+    {
+        use llm_engine::with_engine;
+
+        with_engine(|engine| Ok(engine.is_multimodal()))
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        Ok(false)
+    }
+}
+
+/// Test LLM backend initialization - call this to check if llama.cpp works
+#[tauri::command]
+async fn llm_test_init() -> Result<String, String> {
+    #[cfg(target_os = "ios")]
+    {
+        eprintln!("[LLM TEST] ========== TESTING BACKEND INIT ==========");
+
+        // Try to catch any panic during initialization
+        let result = std::panic::catch_unwind(|| {
+            use llama_cpp_2::llama_backend::LlamaBackend;
+            eprintln!("[LLM TEST] Calling LlamaBackend::init()...");
+            LlamaBackend::init()
+        });
+
+        match result {
+            Ok(Ok(_backend)) => {
+                eprintln!("[LLM TEST] ✅ Backend initialized successfully!");
+                Ok("Backend initialized successfully".to_string())
+            }
+            Ok(Err(e)) => {
+                let err_msg = format!("Backend init error: {:?}", e);
+                eprintln!("[LLM TEST] ❌ {}", err_msg);
+                Err(err_msg)
+            }
+            Err(panic) => {
+                let panic_msg = if let Some(s) = panic.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "Unknown panic".to_string()
+                };
+                eprintln!("[LLM TEST] 💥 PANIC: {}", panic_msg);
+                Err(format!("Panic during init: {}", panic_msg))
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        Ok("LLM not available on this platform".to_string())
+    }
+}
+
+/// Debug command to get detailed LLM engine state for frontend debugging
+#[tauri::command]
+async fn llm_debug_state(app_handle: AppHandle) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "ios")]
+    {
+        use llm_engine::{with_engine, LLM_ENGINE};
+
+        // Check models directory
+        let models_dir = app_handle.path().app_data_dir()
+            .map_err(|e| e.to_string())?
+            .join("models");
+
+        let models_exist = models_dir.exists();
+        let model_files: Vec<String> = if models_exist {
+            std::fs::read_dir(&models_dir)
+                .map(|entries| {
+                    entries.flatten()
+                        .filter_map(|e| e.file_name().to_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default()
+        } else {
+            vec![]
+        };
+
+        // Check engine state
+        let engine_state = match LLM_ENGINE.lock() {
+            Ok(guard) => {
+                match guard.as_ref() {
+                    Some(engine) => serde_json::json!({
+                        "initialized": true,
+                        "isLoaded": engine.is_loaded(),
+                        "loadedModelId": engine.loaded_model_id(),
+                        "isMultimodal": engine.is_multimodal(),
+                    }),
+                    None => serde_json::json!({
+                        "initialized": false,
+                        "isLoaded": false,
+                        "loadedModelId": null,
+                        "isMultimodal": false,
+                    }),
+                }
+            },
+            Err(e) => serde_json::json!({
+                "error": format!("Lock poisoned: {}", e),
+            }),
+        };
+
+        Ok(serde_json::json!({
+            "modelsDir": models_dir.to_string_lossy(),
+            "modelsDirExists": models_exist,
+            "modelFiles": model_files,
+            "engine": engine_state,
+        }))
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = app_handle;
+        Ok(serde_json::json!({
+            "platform": "not-ios",
+            "llmAvailable": false,
+        }))
     }
 }
 
@@ -691,7 +955,10 @@ pub fn run() {
             llm_load_model,
             llm_generate,
             llm_unload_model,
-            llm_is_loaded
+            llm_is_loaded,
+            llm_is_multimodal,
+            llm_debug_state,
+            llm_test_init
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
