@@ -1,10 +1,59 @@
+use dialoguer::{theme::ColorfulTheme, Input, Select};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::{self, BufRead, Write};
+use std::io;
 use std::path::PathBuf;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NotifyChannel {
+    Discord,
+    Telegram,
+    Sms,
+    WhatsApp,
+    Call,
+    Email,
+}
+
+impl NotifyChannel {
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            NotifyChannel::Discord => "Discord (webhook)",
+            NotifyChannel::Telegram => "Telegram",
+            NotifyChannel::Sms => "SMS",
+            NotifyChannel::WhatsApp => "WhatsApp",
+            NotifyChannel::Call => "Voice Call",
+            NotifyChannel::Email => "Email",
+        }
+    }
+
+    pub fn requires_login(&self) -> bool {
+        !matches!(self, NotifyChannel::Discord)
+    }
+
+    pub fn all() -> &'static [NotifyChannel] {
+        &[
+            NotifyChannel::Discord,
+            NotifyChannel::Telegram,
+            NotifyChannel::Sms,
+            NotifyChannel::WhatsApp,
+            NotifyChannel::Call,
+            NotifyChannel::Email,
+        ]
+    }
+
+    pub fn is_phone_based(&self) -> bool {
+        matches!(
+            self,
+            NotifyChannel::Sms | NotifyChannel::WhatsApp | NotifyChannel::Call
+        )
+    }
+}
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Config {
+    #[serde(default)]
+    pub default_channel: Option<NotifyChannel>,
     #[serde(default)]
     pub discord: DiscordConfig,
     #[serde(default)]
@@ -76,138 +125,124 @@ impl Config {
         fs::write(path, contents)
     }
 
-    /// Get Discord webhook URL, prompting if not configured
-    pub fn get_or_prompt_webhook(&mut self) -> io::Result<String> {
-        if let Some(ref url) = self.discord.webhook_url {
-            return Ok(url.clone());
-        }
+    /// Check if this is a first run (no default channel configured)
+    pub fn is_first_run(&self) -> bool {
+        self.default_channel.is_none()
+    }
 
-        // Prompt on stderr so it doesn't interfere with command output
-        eprintln!("No Discord webhook configured.");
-        eprintln!("Create one in Discord: Server Settings > Integrations > Webhooks");
-        eprint!("Enter Discord webhook URL: ");
-        io::stderr().flush()?;
+    /// Show interactive TUI to select notification channel
+    pub fn select_channel_interactive(&mut self) -> io::Result<NotifyChannel> {
+        eprintln!();
+        eprintln!("  Welcome to Observer CLI!");
+        eprintln!("  Select your notification method:");
+        eprintln!();
 
-        // Read from stdin
-        let stdin = io::stdin();
-        let mut line = String::new();
-        stdin.lock().read_line(&mut line)?;
+        let channels = NotifyChannel::all();
+        let items: Vec<&str> = channels.iter().map(|c| c.display_name()).collect();
 
-        let url = line.trim().to_string();
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .items(&items)
+            .default(0)
+            .interact()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-        if url.is_empty() {
+        let channel = channels[selection];
+        Ok(channel)
+    }
+
+    /// Prompt for the secret/config value for a given channel using TUI
+    pub fn prompt_channel_secret_interactive(&mut self, channel: NotifyChannel) -> io::Result<String> {
+        let (prompt, hint) = match channel {
+            NotifyChannel::Discord => (
+                "Discord webhook URL",
+                "Create one in Discord: Server Settings > Integrations > Webhooks",
+            ),
+            NotifyChannel::Telegram => (
+                "Telegram chat ID",
+                "Message @observer_ai_bot on Telegram to get your chat ID",
+            ),
+            NotifyChannel::Sms | NotifyChannel::WhatsApp | NotifyChannel::Call => (
+                "Phone number (E.164 format)",
+                "Example: +15551234567 - Must be whitelisted via Observer bot first",
+            ),
+            NotifyChannel::Email => (
+                "Email address",
+                "Enter the email address to receive notifications",
+            ),
+        };
+
+        eprintln!();
+        eprintln!("  {}", hint);
+        eprintln!();
+
+        let value: String = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(prompt)
+            .interact_text()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        if value.trim().is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "Webhook URL cannot be empty",
+                "Value cannot be empty",
             ));
         }
 
-        // Validate it looks like a Discord webhook URL
-        if !url.starts_with("https://discord.com/api/webhooks/")
-            && !url.starts_with("https://discordapp.com/api/webhooks/")
+        let value = value.trim().to_string();
+
+        // Validate Discord webhook URL
+        if channel == NotifyChannel::Discord
+            && !value.starts_with("https://discord.com/api/webhooks/")
+            && !value.starts_with("https://discordapp.com/api/webhooks/")
         {
-            eprintln!("Warning: URL doesn't look like a Discord webhook, but proceeding anyway.");
+            eprintln!("  Warning: URL doesn't look like a Discord webhook, but proceeding anyway.");
         }
 
-        // Save it
-        self.discord.webhook_url = Some(url.clone());
+        // Save the value to the appropriate config field
+        match channel {
+            NotifyChannel::Discord => self.discord.webhook_url = Some(value.clone()),
+            NotifyChannel::Telegram => self.telegram.chat_id = Some(value.clone()),
+            NotifyChannel::Sms | NotifyChannel::WhatsApp | NotifyChannel::Call => {
+                self.phone.number = Some(value.clone())
+            }
+            NotifyChannel::Email => self.email.address = Some(value.clone()),
+        }
+
+        // Set as default channel and save
+        self.default_channel = Some(channel);
         self.save()?;
 
-        eprintln!("Webhook saved to ~/.config/observe/config.toml");
-        Ok(url)
+        eprintln!();
+        eprintln!("  Saved to ~/.config/observe/config.toml");
+        eprintln!();
+
+        Ok(value)
     }
 
-    /// Get Telegram chat ID, prompting if not configured
-    pub fn get_or_prompt_telegram(&mut self) -> io::Result<String> {
-        if let Some(ref chat_id) = self.telegram.chat_id {
-            return Ok(chat_id.clone());
-        }
-
-        // Prompt on stderr
-        eprintln!("No Telegram chat ID configured.");
-        eprintln!("Message @observer_ai_bot on Telegram to get your chat ID.");
-        eprint!("Enter Telegram chat ID: ");
-        io::stderr().flush()?;
-
-        let stdin = io::stdin();
-        let mut line = String::new();
-        stdin.lock().read_line(&mut line)?;
-
-        let chat_id = line.trim().to_string();
-
-        if chat_id.is_empty() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Chat ID cannot be empty",
-            ));
-        }
-
-        // Save it
-        self.telegram.chat_id = Some(chat_id.clone());
-        self.save()?;
-
-        eprintln!("Telegram chat ID saved to ~/.config/observe/config.toml");
-        Ok(chat_id)
+    /// Run the full first-run setup flow: select channel + enter secret
+    pub fn run_first_time_setup(&mut self) -> io::Result<NotifyChannel> {
+        let channel = self.select_channel_interactive()?;
+        self.prompt_channel_secret_interactive(channel)?;
+        Ok(channel)
     }
 
-    /// Get phone number, prompting if not configured
-    pub fn get_or_prompt_phone(&mut self) -> io::Result<String> {
-        if let Some(ref number) = self.phone.number {
-            return Ok(number.clone());
+    /// Get the secret for a channel, or None if not configured
+    pub fn get_channel_secret(&self, channel: NotifyChannel) -> Option<String> {
+        match channel {
+            NotifyChannel::Discord => self.discord.webhook_url.clone(),
+            NotifyChannel::Telegram => self.telegram.chat_id.clone(),
+            NotifyChannel::Sms | NotifyChannel::WhatsApp | NotifyChannel::Call => {
+                self.phone.number.clone()
+            }
+            NotifyChannel::Email => self.email.address.clone(),
         }
-
-        eprintln!("No phone number configured.");
-        eprintln!("Note: You must whitelist your number first by messaging the Observer bot.");
-        eprint!("Enter phone number (E.164 format, e.g. +15551234567): ");
-        io::stderr().flush()?;
-
-        let stdin = io::stdin();
-        let mut line = String::new();
-        stdin.lock().read_line(&mut line)?;
-
-        let number = line.trim().to_string();
-
-        if number.is_empty() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Phone number cannot be empty",
-            ));
-        }
-
-        self.phone.number = Some(number.clone());
-        self.save()?;
-
-        eprintln!("Phone number saved to ~/.config/observe/config.toml");
-        Ok(number)
     }
 
-    /// Get email address, prompting if not configured
-    pub fn get_or_prompt_email(&mut self) -> io::Result<String> {
-        if let Some(ref address) = self.email.address {
-            return Ok(address.clone());
+    /// Ensure we have the secret for a channel, prompting if needed
+    pub fn ensure_channel_secret(&mut self, channel: NotifyChannel) -> io::Result<String> {
+        if let Some(secret) = self.get_channel_secret(channel) {
+            return Ok(secret);
         }
-
-        eprintln!("No email address configured.");
-        eprint!("Enter email address: ");
-        io::stderr().flush()?;
-
-        let stdin = io::stdin();
-        let mut line = String::new();
-        stdin.lock().read_line(&mut line)?;
-
-        let address = line.trim().to_string();
-
-        if address.is_empty() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Email address cannot be empty",
-            ));
-        }
-
-        self.email.address = Some(address.clone());
-        self.save()?;
-
-        eprintln!("Email address saved to ~/.config/observe/config.toml");
-        Ok(address)
+        self.prompt_channel_secret_interactive(channel)
     }
+
 }

@@ -1,10 +1,11 @@
 mod auth;
 mod config;
 mod notify;
+mod preflight;
 mod runner;
 
 use clap::{Parser, Subcommand};
-use config::Config;
+use config::{Config, NotifyChannel};
 
 #[derive(Parser)]
 #[command(name = "observe")]
@@ -14,23 +15,27 @@ struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
 
-    /// Send notification via Telegram (requires login)
+    /// Configure Discord webhook and use it for this notification
+    #[arg(long)]
+    discord: bool,
+
+    /// Configure Telegram and use it for this notification (requires login)
     #[arg(long)]
     telegram: bool,
 
-    /// Send notification via SMS (requires login + whitelisted number)
+    /// Configure SMS and use it for this notification (requires login)
     #[arg(long)]
     sms: bool,
 
-    /// Send notification via WhatsApp (requires login + whitelisted number)
+    /// Configure WhatsApp and use it for this notification (requires login)
     #[arg(long)]
     whatsapp: bool,
 
-    /// Send notification via voice call (requires login + whitelisted number)
+    /// Configure voice call and use it for this notification (requires login)
     #[arg(long)]
     call: bool,
 
-    /// Send notification via email (requires login)
+    /// Configure email and use it for this notification (requires login)
     #[arg(long)]
     email: bool,
 
@@ -47,15 +52,6 @@ enum Commands {
     Logout,
     /// Show current auth status
     Whoami,
-}
-
-enum NotifyChannel {
-    Discord,
-    Telegram,
-    Sms,
-    WhatsApp,
-    Call,
-    Email,
 }
 
 #[tokio::main]
@@ -94,40 +90,100 @@ async fn main() {
         eprintln!("       observe whoami");
         eprintln!();
         eprintln!("Options:");
-        eprintln!("       --telegram    Send via Telegram (requires login)");
-        eprintln!("       --sms         Send via SMS (requires login)");
-        eprintln!("       --whatsapp    Send via WhatsApp (requires login)");
-        eprintln!("       --call        Send via voice call (requires login)");
-        eprintln!("       --email       Send via email (requires login)");
+        eprintln!("       --discord     Configure Discord webhook");
+        eprintln!("       --telegram    Configure Telegram (requires login)");
+        eprintln!("       --sms         Configure SMS (requires login)");
+        eprintln!("       --whatsapp    Configure WhatsApp (requires login)");
+        eprintln!("       --call        Configure voice call (requires login)");
+        eprintln!("       --email       Configure email (requires login)");
         eprintln!();
-        eprintln!("Default: Discord webhook (no login required)");
+        eprintln!("On first run, you'll be prompted to select a notification method.");
+        eprintln!("Use --<method> flags to reconfigure a specific method.");
         eprintln!();
         eprintln!("Run 'observe --help' for more information.");
         std::process::exit(1);
     }
 
-    // Determine notification channel
-    let channel = if cli.telegram {
-        NotifyChannel::Telegram
-    } else if cli.sms {
-        NotifyChannel::Sms
-    } else if cli.whatsapp {
-        NotifyChannel::WhatsApp
-    } else if cli.call {
-        NotifyChannel::Call
-    } else if cli.email {
-        NotifyChannel::Email
-    } else {
-        NotifyChannel::Discord
-    };
-
     // Load config
     let mut config = Config::load();
+
+    // Determine notification channel and whether to reconfigure
+    let (channel, reconfigure) = if cli.discord {
+        (NotifyChannel::Discord, true)
+    } else if cli.telegram {
+        (NotifyChannel::Telegram, true)
+    } else if cli.sms {
+        (NotifyChannel::Sms, true)
+    } else if cli.whatsapp {
+        (NotifyChannel::WhatsApp, true)
+    } else if cli.call {
+        (NotifyChannel::Call, true)
+    } else if cli.email {
+        (NotifyChannel::Email, true)
+    } else if config.is_first_run() {
+        // First run: show interactive TUI
+        match config.run_first_time_setup() {
+            Ok(ch) => (ch, false), // Already configured in setup
+            Err(e) => {
+                eprintln!("Setup error: {}", e);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        // Use saved default
+        (config.default_channel.unwrap(), false)
+    };
+
+    // If reconfiguring (flag was passed), prompt for the new secret
+    if reconfigure {
+        if let Err(e) = config.prompt_channel_secret_interactive(channel) {
+            eprintln!("Configuration error: {}", e);
+            std::process::exit(1);
+        }
+    }
+
+    // For channels that require login, verify auth BEFORE running the command
+    let access_token = if channel.requires_login() {
+        let mut tokens = match auth::AuthTokens::load() {
+            Some(t) => t,
+            None => {
+                eprintln!("Not logged in. Run 'observe login' first.");
+                std::process::exit(1);
+            }
+        };
+
+        match tokens.get_valid_token().await {
+            Ok(t) => Some(t),
+            Err(e) => {
+                eprintln!("Auth error: {}", e);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        None
+    };
+
+    // Get the channel secret BEFORE running the command
+    let secret = match config.ensure_channel_secret(channel) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Configuration error: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // For phone-based channels, verify the number is whitelisted
+    if channel.is_phone_based() {
+        if let Err(e) = preflight::wait_for_whitelist(&secret, channel).await {
+            eprintln!("Whitelist error: {}", e);
+            std::process::exit(1);
+        }
+    }
 
     // Format command for display
     let command_str = cli.args.join(" ");
 
-    // Run the command first
+    // Now run the command
     let result = match runner::run_command(&cli.args) {
         Ok(r) => r,
         Err(e) => {
@@ -137,106 +193,61 @@ async fn main() {
     };
 
     // Send notification based on channel
-    match channel {
+    let notify_result = match channel {
         NotifyChannel::Discord => {
-            let webhook_url = match config.get_or_prompt_webhook() {
-                Ok(url) => url,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    std::process::exit(1);
-                }
-            };
-
-            if let Err(e) = notify::send_discord_notification(&webhook_url, &command_str, &result).await {
-                eprintln!("Failed to send Discord notification: {}", e);
-            }
+            notify::send_discord_notification(&secret, &command_str, &result).await
         }
         NotifyChannel::Telegram => {
-            let (access_token, chat_id) = get_auth_and_config(
-                &mut config,
-                |c| c.get_or_prompt_telegram(),
-            ).await;
-
-            if let Err(e) = notify::send_telegram_notification(&chat_id, &command_str, &result, &access_token).await {
-                eprintln!("Failed to send Telegram notification: {}", e);
-            }
+            notify::send_telegram_notification(
+                &secret,
+                &command_str,
+                &result,
+                access_token.as_ref().unwrap(),
+            )
+            .await
         }
         NotifyChannel::Sms => {
-            let (access_token, phone) = get_auth_and_config(
-                &mut config,
-                |c| c.get_or_prompt_phone(),
-            ).await;
-
-            if let Err(e) = notify::send_sms_notification(&phone, &command_str, &result, &access_token).await {
-                eprintln!("Failed to send SMS notification: {}", e);
-            }
+            notify::send_sms_notification(
+                &secret,
+                &command_str,
+                &result,
+                access_token.as_ref().unwrap(),
+            )
+            .await
         }
         NotifyChannel::WhatsApp => {
-            let (access_token, phone) = get_auth_and_config(
-                &mut config,
-                |c| c.get_or_prompt_phone(),
-            ).await;
-
-            if let Err(e) = notify::send_whatsapp_notification(&phone, &command_str, &result, &access_token).await {
-                eprintln!("Failed to send WhatsApp notification: {}", e);
-            }
+            notify::send_whatsapp_notification(
+                &secret,
+                &command_str,
+                &result,
+                access_token.as_ref().unwrap(),
+            )
+            .await
         }
         NotifyChannel::Call => {
-            let (access_token, phone) = get_auth_and_config(
-                &mut config,
-                |c| c.get_or_prompt_phone(),
-            ).await;
-
-            if let Err(e) = notify::send_call_notification(&phone, &command_str, &result, &access_token).await {
-                eprintln!("Failed to send call notification: {}", e);
-            }
+            notify::send_call_notification(
+                &secret,
+                &command_str,
+                &result,
+                access_token.as_ref().unwrap(),
+            )
+            .await
         }
         NotifyChannel::Email => {
-            let (access_token, email) = get_auth_and_config(
-                &mut config,
-                |c| c.get_or_prompt_email(),
-            ).await;
-
-            if let Err(e) = notify::send_email_notification(&email, &command_str, &result, &access_token).await {
-                eprintln!("Failed to send email notification: {}", e);
-            }
+            notify::send_email_notification(
+                &secret,
+                &command_str,
+                &result,
+                access_token.as_ref().unwrap(),
+            )
+            .await
         }
+    };
+
+    if let Err(e) = notify_result {
+        eprintln!("Failed to send notification: {}", e);
     }
 
     // Exit with the same code as the wrapped command
     std::process::exit(result.exit_code.unwrap_or(1));
-}
-
-/// Helper to get auth token and a config value for API-backed channels
-async fn get_auth_and_config<F>(config: &mut Config, get_config: F) -> (String, String)
-where
-    F: FnOnce(&mut Config) -> std::io::Result<String>,
-{
-    // Get auth token
-    let mut tokens = match auth::AuthTokens::load() {
-        Some(t) => t,
-        None => {
-            eprintln!("Not logged in. Run 'observe login' first.");
-            std::process::exit(1);
-        }
-    };
-
-    let access_token = match tokens.get_valid_token().await {
-        Ok(t) => t,
-        Err(e) => {
-            eprintln!("Auth error: {}", e);
-            std::process::exit(1);
-        }
-    };
-
-    // Get config value
-    let config_value = match get_config(config) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            std::process::exit(1);
-        }
-    };
-
-    (access_token, config_value)
 }
