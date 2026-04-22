@@ -280,7 +280,18 @@ export function listModels(): ModelsResponse {
     }
   }
 
-  return { models: [...availableModels, ...localModels] };
+  // Sort: browser_local first, then localhost/127.0.0.1, then cloud
+  const sortedModels = [...availableModels, ...localModels].sort((a, b) => {
+    const aScore = a.server === BROWSER_LOCAL_SENTINEL ? 0
+      : (a.server.includes('localhost') || a.server.includes('127.0.0.1')) ? 1
+      : 2;
+    const bScore = b.server === BROWSER_LOCAL_SENTINEL ? 0
+      : (b.server.includes('localhost') || b.server.includes('127.0.0.1')) ? 1
+      : 2;
+    return aScore - bScore;
+  });
+
+  return { models: sortedModels };
 }
 
 // Fetch function - called by AppHeader to update the model list
