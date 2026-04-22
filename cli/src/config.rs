@@ -167,7 +167,7 @@ impl Config {
             ),
             NotifyChannel::Email => (
                 "Email address",
-                "Enter the email address to receive notifications",
+                "Enter the email address to receive notifications, (must be same as logged in email)",
             ),
         };
 
