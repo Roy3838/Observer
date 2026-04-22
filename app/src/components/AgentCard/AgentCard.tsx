@@ -3,8 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Zap } from 'lucide-react';
 import { CompleteAgent } from '@utils/agent_database';
 import { isJupyterConnected } from '@utils/handlers/JupyterConfig';
-import { listModels } from '@utils/inferenceServer';
-import { getInferenceAddresses } from '@utils/inferenceServer';
+import { listModels, getInferenceAddresses, BROWSER_LOCAL_SENTINEL } from '@utils/inferenceServer';
 import { Logger, LogEntry } from '@utils/logging';
 import { StreamManager, StreamState } from '@utils/streamManager';
 import { isIOS } from '@utils/platform';
@@ -316,8 +315,15 @@ const AgentCard: React.FC<AgentCardProps> = ({
       const addresses = getInferenceAddresses();
       if (addresses.length === 0) throw new Error("No inference servers configured.");
       const modelsResponse = listModels();
-      if (modelsResponse.error || !modelsResponse.models.some(m => m.name === currentModel)) {
+      const foundModel = modelsResponse.models.find(m => m.name === currentModel);
+      if (modelsResponse.error || !foundModel) {
         setStartWarning(`Model "${currentModel}" is not available. Check server or edit agent.`);
+        setIsCheckingModel(false);
+        return;
+      }
+      // Check if local model is loaded
+      if (foundModel.server === BROWSER_LOCAL_SENTINEL && foundModel.status !== 'loaded') {
+        setStartWarning(`Local model "${currentModel}" is not loaded. Load it first.`);
         setIsCheckingModel(false);
         return;
       }
