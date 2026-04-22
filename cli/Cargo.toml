@@ -1,6 +1,6 @@
 [package]
 name = "observe"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "CLI wrapper that sends notifications when commands complete"
 repository = "https://github.com/Roy3838/Observer"
