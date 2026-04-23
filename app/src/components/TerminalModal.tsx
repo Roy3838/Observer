@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import Modal from '@components/EditAgent/Modal';
-import { Download, CheckCircle, AlertTriangle, X, StopCircle, FileDown, Cpu, Trash2 } from 'lucide-react';
+import { Download, CheckCircle, AlertTriangle, X, StopCircle, FileDown, Cpu, Trash2, Zap } from 'lucide-react';
 import pullModelManager, { PullState } from '@utils/pullModelManager';
 import { platformFetch, isIOS } from '@utils/platform';
 import { GemmaModelManager } from '@utils/localLlm/GemmaModelManager';
 import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
+import LlmDebugPanel from '@components/LlmDebugPanel';
 import {
   GemmaModelId,
   GemmaModelState,
@@ -59,7 +60,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
   const [selectedServer, setSelectedServer] = useState<string>(availableServers[0] || '');
 
   const hasOllama = availableServers.length > 0;
-  const [activeTab, setActiveTab] = useState<'ollama' | 'ondevice'>(hasOllama ? 'ollama' : 'ondevice');
+  const [activeTab, setActiveTab] = useState<'ollama' | 'ondevice' | 'debug'>(hasOllama ? 'ollama' : 'ondevice');
 
   const [gemmaState, setGemmaState] = useState<GemmaModelState>(GemmaModelManager.getInstance().getState());
   // Default values match GemmaModelManager.DEFAULT_SETTINGS
@@ -252,11 +253,24 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
               <Cpu size={14} />
               {isIOSPlatform ? 'On-Device (Metal)' : 'On-Device (WebGPU)'}
             </button>
+            {isIOSPlatform && (
+              <button
+                onClick={() => setActiveTab('debug')}
+                className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'debug'
+                    ? 'border-orange-500 text-orange-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Zap size={14} />
+                Debug
+              </button>
+            )}
           </div>
         )}
 
         {/* ── OLLAMA TAB ── */}
-        {(activeTab === 'ollama' || !hasOllama) && !showWelcomeScreen && activeTab !== 'ondevice' && (
+        {activeTab === 'ollama' && !showWelcomeScreen && (
           <>
             {showWelcomeScreen ? (
               <div>
@@ -402,6 +416,34 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                 I'll do this later
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Tab bar for iOS when no Ollama (still need Debug tab) */}
+        {!hasOllama && isIOSPlatform && !showWelcomeScreen && (
+          <div className="flex border-b border-gray-200 mb-5">
+            <button
+              onClick={() => setActiveTab('ondevice')}
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'ondevice'
+                  ? 'border-green-600 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Cpu size={14} />
+              On-Device (Metal)
+            </button>
+            <button
+              onClick={() => setActiveTab('debug')}
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'debug'
+                  ? 'border-orange-500 text-orange-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Zap size={14} />
+              Debug
+            </button>
           </div>
         )}
 
@@ -710,6 +752,11 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
               </>
             )}
           </div>
+        )}
+
+        {/* ── DEBUG TAB ── (iOS only) */}
+        {activeTab === 'debug' && isIOSPlatform && !showWelcomeScreen && (
+          <LlmDebugPanel isVisible={activeTab === 'debug'} />
         )}
       </div>
     </Modal>

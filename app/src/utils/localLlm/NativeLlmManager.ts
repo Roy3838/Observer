@@ -9,6 +9,9 @@ import {
   NativeModelState,
   NativeProgressEvent,
   LocalLlmMessage,
+  LlmDebugInfo,
+  SamplerParams,
+  GenerationMetrics,
 } from './types';
 
 const NATIVE_LLM_STORAGE_KEY = 'observer-native-llm-settings';
@@ -361,6 +364,75 @@ export class NativeLlmManager {
       return state;
     } catch (error) {
       Logger.error('NativeLlmManager', `Failed to get debug state: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get comprehensive debug info including sampler params and metrics
+   */
+  public async getDebugInfo(): Promise<LlmDebugInfo> {
+    try {
+      const info = await invoke<LlmDebugInfo>('llm_get_debug_info');
+      Logger.info('NativeLlmManager', `Debug info retrieved`);
+      return info;
+    } catch (error) {
+      Logger.error('NativeLlmManager', `Failed to get debug info: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Set sampler parameters for text generation
+   */
+  public async setSamplerParams(params: Partial<SamplerParams>): Promise<void> {
+    try {
+      await invoke('llm_set_sampler_params', {
+        temperature: params.temperature,
+        topP: params.topP,
+        topK: params.topK,
+        seed: params.seed,
+        repeatPenalty: params.repeatPenalty,
+      });
+      Logger.info('NativeLlmManager', `Sampler params updated: ${JSON.stringify(params)}`);
+    } catch (error) {
+      Logger.error('NativeLlmManager', `Failed to set sampler params: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Test generation with a simple prompt, returns response and metrics
+   */
+  public async testGenerate(
+    prompt: string,
+    maxTokens?: number,
+    onToken?: (token: string) => void
+  ): Promise<{ response: string; metrics: GenerationMetrics | null }> {
+    if (this.state.status !== 'loaded') {
+      throw new Error('Native model not loaded');
+    }
+
+    Logger.info('NativeLlmManager', `Test generate: "${prompt.substring(0, 50)}..."`);
+
+    try {
+      const tokenChannel = new Channel<string>();
+
+      if (onToken) {
+        tokenChannel.onmessage = onToken;
+      }
+
+      const result = await invoke<{ response: string; metrics: GenerationMetrics | null }>('llm_test_generate', {
+        prompt,
+        maxTokens: maxTokens ?? 256,
+        onToken: tokenChannel,
+      });
+
+      Logger.info('NativeLlmManager', `Test generate complete: ${result.metrics?.tokensGenerated ?? 0} tokens`);
+      return result;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      Logger.error('NativeLlmManager', `Test generate failed: ${msg}`);
       throw error;
     }
   }

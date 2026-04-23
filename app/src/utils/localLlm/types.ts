@@ -87,3 +87,45 @@ export interface LocalLlmMessage {
   role: string;
   content: string | LocalLlmContentPart[];
 }
+
+// ============================================================================
+// Debug Panel Types (iOS llama.cpp)
+// ============================================================================
+
+export interface GenerationMetrics {
+  tokensGenerated: number;
+  promptTokens: number;
+  timeToFirstTokenMs: number;
+  totalGenerationTimeMs: number;
+  tokensPerSecond: number;
+}
+
+export interface SamplerParams {
+  temperature: number;
+  topP: number;
+  topK: number;
+  seed: number;
+  repeatPenalty: number;
+}
+
+export interface LlmDebugInfo {
+  modelsDir: string;
+  engine: {
+    initialized: boolean;
+    isLoaded: boolean;
+    loadedModelId: string | null;
+    isMultimodal: boolean;
+    modelPath: string | null;
+    mmprojPath: string | null;
+    samplerParams: SamplerParams | null;
+    lastMetrics: GenerationMetrics | null;
+  };
+}
+
+export const DEFAULT_SAMPLER_PARAMS: SamplerParams = {
+  temperature: 0.7,
+  topP: 0.9,
+  topK: 40,
+  seed: 42,
+  repeatPenalty: 1.1,
+};

@@ -813,7 +813,7 @@ async fn llm_test_init() -> Result<String, String> {
 async fn llm_debug_state(app_handle: AppHandle) -> Result<serde_json::Value, String> {
     #[cfg(target_os = "ios")]
     {
-        use llm_engine::{with_engine, LLM_ENGINE};
+        use llm_engine::LLM_ENGINE;
 
         // Check models directory
         let models_dir = app_handle.path().app_data_dir()
@@ -871,6 +871,181 @@ async fn llm_debug_state(app_handle: AppHandle) -> Result<serde_json::Value, Str
             "platform": "not-ios",
             "llmAvailable": false,
         }))
+    }
+}
+
+/// Get comprehensive debug info including sampler params and metrics
+#[tauri::command]
+async fn llm_get_debug_info(app_handle: AppHandle) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "ios")]
+    {
+        use llm_engine::LLM_ENGINE;
+
+        let models_dir = app_handle.path().app_data_dir()
+            .map_err(|e| e.to_string())?
+            .join("models");
+
+        let engine_state = match LLM_ENGINE.lock() {
+            Ok(guard) => {
+                match guard.as_ref() {
+                    Some(engine) => {
+                        let sampler_params = engine.get_sampler_params();
+                        let last_metrics = engine.get_last_metrics();
+                        let model_path = engine.get_model_path()
+                            .map(|p| p.to_string_lossy().to_string());
+                        let mmproj_path = engine.get_mmproj_path()
+                            .map(|p| p.to_string_lossy().to_string());
+
+                        serde_json::json!({
+                            "initialized": true,
+                            "isLoaded": engine.is_loaded(),
+                            "loadedModelId": engine.loaded_model_id(),
+                            "isMultimodal": engine.is_multimodal(),
+                            "modelPath": model_path,
+                            "mmprojPath": mmproj_path,
+                            "samplerParams": {
+                                "temperature": sampler_params.temperature,
+                                "topP": sampler_params.top_p,
+                                "topK": sampler_params.top_k,
+                                "seed": sampler_params.seed,
+                                "repeatPenalty": sampler_params.repeat_penalty,
+                            },
+                            "lastMetrics": last_metrics.map(|m| serde_json::json!({
+                                "tokensGenerated": m.tokens_generated,
+                                "promptTokens": m.prompt_tokens,
+                                "timeToFirstTokenMs": m.time_to_first_token_ms,
+                                "totalGenerationTimeMs": m.total_generation_time_ms,
+                                "tokensPerSecond": m.tokens_per_second,
+                            })),
+                        })
+                    },
+                    None => serde_json::json!({
+                        "initialized": false,
+                        "isLoaded": false,
+                        "loadedModelId": null,
+                        "isMultimodal": false,
+                        "modelPath": null,
+                        "mmprojPath": null,
+                        "samplerParams": null,
+                        "lastMetrics": null,
+                    }),
+                }
+            },
+            Err(e) => serde_json::json!({
+                "error": format!("Lock poisoned: {}", e),
+            }),
+        };
+
+        Ok(serde_json::json!({
+            "modelsDir": models_dir.to_string_lossy(),
+            "engine": engine_state,
+        }))
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = app_handle;
+        Ok(serde_json::json!({
+            "platform": "not-ios",
+            "llmAvailable": false,
+        }))
+    }
+}
+
+/// Set sampler parameters for text generation
+#[tauri::command]
+async fn llm_set_sampler_params(
+    temperature: Option<f32>,
+    top_p: Option<f32>,
+    top_k: Option<i32>,
+    seed: Option<u32>,
+    repeat_penalty: Option<f32>,
+) -> Result<(), String> {
+    #[cfg(target_os = "ios")]
+    {
+        use llm_engine::{with_engine, SamplerParams};
+
+        with_engine(|engine| {
+            let current = engine.get_sampler_params().clone();
+            let new_params = SamplerParams {
+                temperature: temperature.unwrap_or(current.temperature),
+                top_p: top_p.unwrap_or(current.top_p),
+                top_k: top_k.unwrap_or(current.top_k),
+                seed: seed.unwrap_or(current.seed),
+                repeat_penalty: repeat_penalty.unwrap_or(current.repeat_penalty),
+            };
+            engine.set_sampler_params(new_params);
+            Ok(())
+        })
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (temperature, top_p, top_k, seed, repeat_penalty);
+        Err("LLM only available on iOS".to_string())
+    }
+}
+
+/// Test generation with a simple prompt, returns response and metrics
+#[tauri::command]
+async fn llm_test_generate(
+    prompt: String,
+    max_tokens: Option<u32>,
+    on_token: Channel<String>,
+) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "ios")]
+    {
+        use llm_engine::{with_engine, ChatMessage, ChatContent};
+
+        let max_tokens = max_tokens.unwrap_or(256);
+
+        let messages = vec![ChatMessage {
+            role: "user".to_string(),
+            content: ChatContent::Text(prompt),
+        }];
+
+        let on_token_clone = on_token.clone();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_engine(|engine| {
+                let response = engine.generate(messages, max_tokens, |token| {
+                    let _ = on_token_clone.send(token.to_string());
+                })?;
+
+                let metrics = engine.get_last_metrics().map(|m| serde_json::json!({
+                    "tokensGenerated": m.tokens_generated,
+                    "promptTokens": m.prompt_tokens,
+                    "timeToFirstTokenMs": m.time_to_first_token_ms,
+                    "totalGenerationTimeMs": m.total_generation_time_ms,
+                    "tokensPerSecond": m.tokens_per_second,
+                }));
+
+                Ok(serde_json::json!({
+                    "response": response,
+                    "metrics": metrics,
+                }))
+            })
+        }));
+
+        match result {
+            Ok(Ok(response)) => Ok(response),
+            Ok(Err(e)) => Err(e),
+            Err(panic_info) => {
+                let panic_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "Unknown panic".to_string()
+                };
+                Err(format!("Panic during test generation: {}", panic_msg))
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (prompt, max_tokens, on_token);
+        Err("LLM only available on iOS".to_string())
     }
 }
 
@@ -967,7 +1142,11 @@ pub fn run() {
             llm_is_loaded,
             llm_is_multimodal,
             llm_debug_state,
-            llm_test_init
+            llm_test_init,
+            // LLM debug commands
+            llm_get_debug_info,
+            llm_set_sampler_params,
+            llm_test_generate
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

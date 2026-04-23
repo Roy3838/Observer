@@ -4,6 +4,7 @@
 
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::Instant;
 
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
@@ -12,6 +13,40 @@ use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::{AddBos, LlamaModel, Special};
 use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::mtmd::{MtmdContext, MtmdContextParams, MtmdBitmap, MtmdInputText, mtmd_default_marker};
+
+/// Generation metrics for debugging and performance monitoring
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerationMetrics {
+    pub tokens_generated: u32,
+    pub prompt_tokens: u32,
+    pub time_to_first_token_ms: f64,
+    pub total_generation_time_ms: f64,
+    pub tokens_per_second: f64,
+}
+
+/// Configurable sampler parameters for text generation
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SamplerParams {
+    pub temperature: f32,      // 0.0-2.0, default 0.7
+    pub top_p: f32,            // 0.0-1.0, default 0.9
+    pub top_k: i32,            // 0=disabled, default 40
+    pub seed: u32,             // default 42
+    pub repeat_penalty: f32,   // 1.0-2.0, default 1.1
+}
+
+impl Default for SamplerParams {
+    fn default() -> Self {
+        Self {
+            temperature: 0.7,
+            top_p: 0.9,
+            top_k: 40,
+            seed: 42,
+            repeat_penalty: 1.1,
+        }
+    }
+}
 
 /// Metadata for a downloaded GGUF model
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -59,6 +94,8 @@ pub struct LlmEngine {
     loaded_model_id: Option<String>,
     mtmd_ctx: Option<MtmdContext>, // Multimodal context (if mmproj loaded)
     mmproj_path: Option<PathBuf>,  // Path to loaded mmproj file
+    sampler_params: SamplerParams, // Configurable sampler parameters
+    last_metrics: Option<GenerationMetrics>, // Metrics from last generation
 }
 
 impl LlmEngine {
@@ -88,6 +125,8 @@ impl LlmEngine {
             loaded_model_id: None,
             mtmd_ctx: None,
             mmproj_path: None,
+            sampler_params: SamplerParams::default(),
+            last_metrics: None,
         })
     }
 
@@ -184,10 +223,37 @@ impl LlmEngine {
         self.loaded_model_id.as_ref()
     }
 
+    /// Get the current sampler parameters
+    pub fn get_sampler_params(&self) -> &SamplerParams {
+        &self.sampler_params
+    }
+
+    /// Set the sampler parameters
+    pub fn set_sampler_params(&mut self, params: SamplerParams) {
+        eprintln!("[LlmEngine] Setting sampler params: temp={}, top_p={}, top_k={}, seed={}, repeat_penalty={}",
+            params.temperature, params.top_p, params.top_k, params.seed, params.repeat_penalty);
+        self.sampler_params = params;
+    }
+
+    /// Get the last generation metrics
+    pub fn get_last_metrics(&self) -> Option<&GenerationMetrics> {
+        self.last_metrics.as_ref()
+    }
+
+    /// Get the path to the loaded model
+    pub fn get_model_path(&self) -> Option<&PathBuf> {
+        self.model_path.as_ref()
+    }
+
+    /// Get the path to the loaded mmproj
+    pub fn get_mmproj_path(&self) -> Option<&PathBuf> {
+        self.mmproj_path.as_ref()
+    }
+
     /// Generate a response from chat messages with streaming callback
     /// Supports both text-only and multimodal (image + text) messages
     pub fn generate<F>(
-        &self,
+        &mut self,
         messages: Vec<ChatMessage>,
         max_tokens: u32,
         mut on_token: F,
@@ -214,6 +280,10 @@ impl LlmEngine {
         let prompt = self.build_chat_prompt(&messages)?;
         eprintln!("[LlmEngine] Prompt length: {} chars", prompt.len());
 
+        // Start timing
+        let generation_start = Instant::now();
+        let mut first_token_time: Option<Instant> = None;
+
         // Create context for inference
         let ctx_params = LlamaContextParams::default()
             .with_n_ctx(std::num::NonZeroU32::new(4096))
@@ -228,7 +298,8 @@ impl LlmEngine {
             .str_to_token(&prompt, AddBos::Always)
             .map_err(|e| format!("Failed to tokenize: {}", e))?;
 
-        eprintln!("[LlmEngine] Tokenized to {} tokens", tokens.len());
+        let prompt_tokens = tokens.len() as u32;
+        eprintln!("[LlmEngine] Tokenized to {} tokens", prompt_tokens);
 
         // Create batch and add tokens
         let mut batch = LlamaBatch::new(512, 1);
@@ -243,16 +314,18 @@ impl LlmEngine {
         ctx.decode(&mut batch)
             .map_err(|e| format!("Failed to decode prompt: {}", e))?;
 
-        // Set up sampler for generation
+        // Set up sampler using configurable parameters
+        let params = &self.sampler_params;
         let mut sampler = LlamaSampler::chain_simple([
-            LlamaSampler::temp(0.7),
-            LlamaSampler::top_p(0.9, 1),
-            LlamaSampler::dist(42),
+            LlamaSampler::temp(params.temperature),
+            LlamaSampler::top_p(params.top_p, params.top_k.max(1) as usize),
+            LlamaSampler::dist(params.seed),
         ]);
 
         // Generate tokens
         let mut full_response = String::new();
         let mut n_cur = tokens.len();
+        let mut tokens_generated: u32 = 0;
 
         for _ in 0..max_tokens {
             // Sample next token
@@ -263,6 +336,12 @@ impl LlmEngine {
                 eprintln!("[LlmEngine] End of generation");
                 break;
             }
+
+            // Record first token time
+            if first_token_time.is_none() {
+                first_token_time = Some(Instant::now());
+            }
+            tokens_generated += 1;
 
             // Decode token to text
             let token_str = model
@@ -286,13 +365,33 @@ impl LlmEngine {
                 .map_err(|e| format!("Failed to decode: {}", e))?;
         }
 
-        eprintln!("[LlmEngine] Generated {} tokens", full_response.len());
+        // Calculate and store metrics
+        let total_generation_time_ms = generation_start.elapsed().as_secs_f64() * 1000.0;
+        let time_to_first_token_ms = first_token_time
+            .map(|t| (t - generation_start).as_secs_f64() * 1000.0)
+            .unwrap_or(0.0);
+        let tokens_per_second = if total_generation_time_ms > 0.0 {
+            (tokens_generated as f64) / (total_generation_time_ms / 1000.0)
+        } else {
+            0.0
+        };
+
+        self.last_metrics = Some(GenerationMetrics {
+            tokens_generated,
+            prompt_tokens,
+            time_to_first_token_ms,
+            total_generation_time_ms,
+            tokens_per_second,
+        });
+
+        eprintln!("[LlmEngine] Generated {} tokens in {:.1}ms ({:.1} tok/s)",
+            tokens_generated, total_generation_time_ms, tokens_per_second);
         Ok(full_response)
     }
 
     /// Generate response using multimodal (vision) pipeline
     fn generate_multimodal<F>(
-        &self,
+        &mut self,
         messages: Vec<ChatMessage>,
         images: Vec<Vec<u8>>,
         max_tokens: u32,
@@ -305,6 +404,10 @@ impl LlmEngine {
         let mtmd_ctx = self.mtmd_ctx.as_ref().ok_or("No multimodal context loaded")?;
 
         eprintln!("[LlmEngine] Starting multimodal generation with {} images", images.len());
+
+        // Start timing
+        let generation_start = Instant::now();
+        let mut first_token_time: Option<Instant> = None;
 
         // Build text prompt from messages
         let prompt = self.build_chat_prompt(&messages)?;
@@ -349,18 +452,21 @@ impl LlmEngine {
             .eval_chunks(mtmd_ctx, &ctx, 0, 0, 512, true)
             .map_err(|e| format!("Failed to evaluate multimodal input: {:?}", e))?;
 
+        let prompt_tokens = n_past as u32;
         eprintln!("[LlmEngine] Evaluated {} tokens/embeddings", n_past);
 
-        // Set up sampler for generation
+        // Set up sampler using configurable parameters
+        let params = &self.sampler_params;
         let mut sampler = LlamaSampler::chain_simple([
-            LlamaSampler::temp(0.7),
-            LlamaSampler::top_p(0.9, 1),
-            LlamaSampler::dist(42),
+            LlamaSampler::temp(params.temperature),
+            LlamaSampler::top_p(params.top_p, params.top_k.max(1) as usize),
+            LlamaSampler::dist(params.seed),
         ]);
 
         // Generate tokens
         let mut full_response = String::new();
         let mut n_cur = n_past as usize;
+        let mut tokens_generated: u32 = 0;
 
         // Create batch for generation
         let mut batch = LlamaBatch::new(512, 1);
@@ -391,6 +497,12 @@ impl LlmEngine {
                 break;
             }
 
+            // Record first token time
+            if first_token_time.is_none() {
+                first_token_time = Some(Instant::now());
+            }
+            tokens_generated += 1;
+
             // Decode token to text
             let token_str = model
                 .token_to_str(new_token, Special::Tokenize)
@@ -409,7 +521,27 @@ impl LlmEngine {
             n_cur += 1;
         }
 
-        eprintln!("[LlmEngine] Generated {} chars", full_response.len());
+        // Calculate and store metrics
+        let total_generation_time_ms = generation_start.elapsed().as_secs_f64() * 1000.0;
+        let time_to_first_token_ms = first_token_time
+            .map(|t| (t - generation_start).as_secs_f64() * 1000.0)
+            .unwrap_or(0.0);
+        let tokens_per_second = if total_generation_time_ms > 0.0 {
+            (tokens_generated as f64) / (total_generation_time_ms / 1000.0)
+        } else {
+            0.0
+        };
+
+        self.last_metrics = Some(GenerationMetrics {
+            tokens_generated,
+            prompt_tokens,
+            time_to_first_token_ms,
+            total_generation_time_ms,
+            tokens_per_second,
+        });
+
+        eprintln!("[LlmEngine] Generated {} tokens in {:.1}ms ({:.1} tok/s)",
+            tokens_generated, total_generation_time_ms, tokens_per_second);
         Ok(full_response)
     }
 

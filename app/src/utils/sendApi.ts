@@ -109,6 +109,29 @@ export class UnauthorizedError extends Error {
  *        - For custom servers: inferenceParams.customApiKey is used as Bearer token
  * @returns The model's response text
  */
+/**
+ * Convert native image format to OpenAI format for external APIs.
+ * Native: { type: 'image', image: 'data:...' }
+ * OpenAI: { type: 'image_url', image_url: { url: 'data:...' } }
+ */
+function convertToOpenAIFormat(messages: Array<{role: string, content: any}>): Array<{role: string, content: any}> {
+  return messages.map(msg => {
+    if (typeof msg.content === 'string' || !Array.isArray(msg.content)) {
+      return msg;
+    }
+
+    const convertedContent = msg.content.map((part: any) => {
+      // Convert native image format to OpenAI format
+      if (part.type === 'image' && part.image) {
+        return { type: 'image_url', image_url: { url: part.image } };
+      }
+      return part;
+    });
+
+    return { ...msg, content: convertedContent };
+  });
+}
+
 export async function fetchResponse(
   serverAddress: string,
   messages: Array<{role: string, content: any}>,
@@ -119,12 +142,15 @@ export async function fetchResponse(
   inferenceParams?: InferenceParams
 ): Promise<string> {
   try {
+    // Local model: use native format directly
     if (serverAddress === BROWSER_LOCAL_SENTINEL) {
       const manager = getLocalModelManager();
       if (!manager.isReady()) throw new Error('Local model not loaded. Please load it from the Add Model panel.');
       return manager.generate(messages, onStreamChunk);
     }
 
+    // External API: convert to OpenAI format
+    const apiMessages = convertToOpenAIFormat(messages);
     const url = `${serverAddress}/v1/chat/completions`;
 
     const headers: Record<string, string> = {
@@ -146,7 +172,7 @@ export async function fetchResponse(
     // Build request body with optional inference parameters
     const requestBodyObj: Record<string, any> = {
       model: modelName,
-      messages: messages,
+      messages: apiMessages,
       stream: enableStreaming
     };
 
@@ -252,18 +278,18 @@ export async function sendPrompt(
     const serverAddress = model.server;
 
     // Convert single-turn request to messages array format
+    // Use native format internally: { type: 'image', image: '...' }
+    // Conversion to OpenAI format happens in fetchResponse() at API boundary
     let content: any = preprocessResult.modifiedPrompt;
     const hasImages = preprocessResult.images && preprocessResult.images.length > 0;
 
     if (hasImages) {
-      // Multimodal content with images
+      // Multimodal content with images (native format)
       content = [
         { type: "text", text: preprocessResult.modifiedPrompt },
         ...preprocessResult.images!.map(imageBase64Data => ({
-          type: "image_url",
-          image_url: {
-            url: `data:image/png;base64,${imageBase64Data}`
-          }
+          type: "image",
+          image: `data:image/png;base64,${imageBase64Data}`
         }))
       ];
     }
