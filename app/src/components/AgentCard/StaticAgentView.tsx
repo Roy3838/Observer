@@ -75,18 +75,17 @@ const getProviderName = (ownedBy?: string, server?: string): string | null => {
         const key = ownedBy.toLowerCase();
         return PROVIDER_DISPLAY_NAMES[key] || ownedBy;
     }
-    // Check if it's a cloud server (not localhost)
-    if (server && !server.includes('localhost') && !server.includes('127.0.0.1') && !server.includes('browser_local')) {
-        if (server.includes('api.observer-ai.com')) return 'Observer Cloud';
-        return 'Cloud Provider';
+    // Only show provider name for Observer-managed servers
+    if (server?.includes('api.observer-ai.com')) {
+        return 'Observer Cloud';
     }
     return null;
 };
 
-// Helper to check if model is cloud-based
+// Helper to check if model is Observer-managed (for privacy indicator)
 const isCloudModel = (server?: string): boolean => {
     if (!server) return false;
-    return !server.includes('localhost') && !server.includes('127.0.0.1') && !server.includes('browser_local');
+    return server.includes('api.observer-ai.com');
 };
 
 // Helper to format bytes
@@ -489,7 +488,7 @@ const ModelDropdown: React.FC<{ currentModel: string; onModelChange: (modelName:
                                   </div>
                                   <div className="flex items-center space-x-1">
                                     {model.multimodal && <Eye className="h-4 w-4 text-purple-600" />}
-                                    {(model.server.includes('localhost') || model.server.includes('http://')) || model.server.includes('browser_local') && <Server className="h-4 w-4 text-gray-600" />}
+                                    {!model.server.includes('api.observer-ai.com') && <Server className="h-4 w-4 text-gray-600" />}
                                   </div>
                                 </div>
                             </button>

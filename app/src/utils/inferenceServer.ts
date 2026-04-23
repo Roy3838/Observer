@@ -280,14 +280,14 @@ export function listModels(): ModelsResponse {
     }
   }
 
-  // Sort: browser_local first, then localhost/127.0.0.1, then cloud
+  // Sort: browser_local first, then user-managed servers, then Observer cloud last
   const sortedModels = [...availableModels, ...localModels].sort((a, b) => {
     const aScore = a.server === BROWSER_LOCAL_SENTINEL ? 0
-      : (a.server.includes('localhost') || a.server.includes('127.0.0.1')) ? 1
-      : 2;
+      : a.server.includes('api.observer-ai.com') ? 2
+      : 1;
     const bScore = b.server === BROWSER_LOCAL_SENTINEL ? 0
-      : (b.server.includes('localhost') || b.server.includes('127.0.0.1')) ? 1
-      : 2;
+      : b.server.includes('api.observer-ai.com') ? 2
+      : 1;
     return aScore - bScore;
   });
 
