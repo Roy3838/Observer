@@ -155,9 +155,10 @@ export class NativeLlmManager {
   }
 
   /**
-   * Load a model into memory for inference by filename
+   * Load a model into memory for inference by filename.
+   * Pass mmprojFilename explicitly to avoid ambiguity when multiple mmproj files exist.
    */
-  public async loadModel(filename: string): Promise<void> {
+  public async loadModel(filename: string, mmprojFilename?: string): Promise<void> {
     if (this.state.status === 'loading') {
       Logger.warn('NativeLlmManager', 'Already loading a model');
       return;
@@ -170,10 +171,10 @@ export class NativeLlmManager {
 
     const modelId = filename.replace('.gguf', '').replace('.GGUF', '');
     this.setState({ status: 'loading', modelId: modelId as any, error: null });
-    Logger.info('NativeLlmManager', `Loading model: ${filename}`);
+    Logger.info('NativeLlmManager', `Loading model: ${filename}, mmproj: ${mmprojFilename ?? 'auto-detect'}`);
 
     try {
-      await invoke('llm_load_model', { filename });
+      await invoke('llm_load_model', { filename, mmprojFilename: mmprojFilename ?? null });
       Logger.info('NativeLlmManager', 'Model loaded successfully');
       this.loadedFilename = filename;
       this.setState({ status: 'loaded' });
@@ -327,7 +328,7 @@ export class NativeLlmManager {
         const models = await this.listModels();
         const model = models.find(m => m.filename === settings.filename);
         if (model) {
-          await this.loadModel(settings.filename);
+          await this.loadModel(settings.filename, model.mmprojFilename);
         } else {
           Logger.warn('NativeLlmManager', 'Persisted model not found, clearing settings');
           this.clearPersistedSettings();

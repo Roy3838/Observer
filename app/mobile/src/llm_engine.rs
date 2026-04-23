@@ -91,21 +91,21 @@ impl LlmEngine {
         })
     }
 
-    /// Load a GGUF model from the given path
-    /// Optionally loads mmproj file if present alongside the model
-    pub fn load_model(&mut self, model_path: PathBuf, model_id: String) -> Result<(), String> {
+    /// Load a GGUF model from the given path.
+    /// If mmproj_path is provided it is used directly; otherwise the models directory
+    /// is scanned for any file containing "mmproj" in its name (auto-detect fallback).
+    pub fn load_model(&mut self, model_path: PathBuf, model_id: String, mmproj_path: Option<PathBuf>) -> Result<(), String> {
         eprintln!("[LlmEngine] Loading model from: {:?}", model_path);
+        eprintln!("[LlmEngine] mmproj: {:?}", mmproj_path);
 
         if !model_path.exists() {
             return Err(format!("Model file not found: {:?}", model_path));
         }
 
-        // Unload any existing model
         self.unload();
 
-        // Configure model parameters for iOS Metal acceleration
         let model_params = LlamaModelParams::default()
-            .with_n_gpu_layers(99); // Use Metal for all layers
+            .with_n_gpu_layers(99);
 
         let model = LlamaModel::load_from_file(&self.backend, &model_path, &model_params)
             .map_err(|e| format!("Failed to load model: {}", e))?;
@@ -115,16 +115,15 @@ impl LlmEngine {
         self.model_path = Some(model_path.clone());
         self.loaded_model_id = Some(model_id.clone());
 
-        // Try to find and load associated mmproj file
-        let mmproj_path = find_mmproj_for_model(&model_path);
-        if let Some(mmproj) = mmproj_path {
-            eprintln!("[LlmEngine] Found mmproj file: {:?}", mmproj);
-            if let Err(e) = self.load_mmproj(mmproj.clone()) {
+        // Resolve mmproj: explicit > auto-detect
+        let resolved_mmproj = mmproj_path.or_else(|| find_mmproj_for_model(&model_path));
+        if let Some(mmproj) = resolved_mmproj {
+            eprintln!("[LlmEngine] Loading mmproj: {:?}", mmproj);
+            if let Err(e) = self.load_mmproj(mmproj) {
                 eprintln!("[LlmEngine] Warning: Failed to load mmproj: {}", e);
-                // Continue without multimodal - not a fatal error
             }
         } else {
-            eprintln!("[LlmEngine] No mmproj file found, model is text-only");
+            eprintln!("[LlmEngine] No mmproj — model is text-only");
         }
 
         Ok(())
@@ -374,12 +373,14 @@ impl LlmEngine {
                     .map_err(|e| format!("Failed to decode: {}", e))?;
             }
 
-            // Sample next token from last position
+            // Sample next token.
+            // After eval_chunks (first iteration, empty batch): use -1 which means
+            // "last position with logits" — eval_chunks sets logits only for the final token.
+            // After our own decode (subsequent iterations): use the last token in the batch.
             let logit_idx = if batch.n_tokens() > 0 {
                 batch.n_tokens() - 1
             } else {
-                // First token after multimodal eval
-                0
+                -1
             };
 
             let new_token = sampler.sample(&ctx, logit_idx);
@@ -627,4 +628,374 @@ fn decode_base64_image(image_str: &str) -> Option<Vec<u8>> {
 /// Check if a model file has an associated mmproj file
 pub fn model_has_mmproj(model_path: &PathBuf) -> bool {
     find_mmproj_for_model(model_path).is_some()
+}
+
+// ============================================================================
+// Tests - run with: cd app/mobile && cargo test -- --nocapture
+// For integration tests with real model files:
+//   GGUF_MODEL_PATH=/path/to/model.gguf MMPROJ_PATH=/path/to/mmproj.gguf cargo test -- --nocapture --include-ignored
+// ============================================================================
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Minimal valid 1x1 PNG — fine for unit tests (magic bytes / base64 round-trips).
+    // NOT suitable for mtmd which requires ≥2x2; use test_image_data_url() in integration tests.
+    fn tiny_png_bytes() -> Vec<u8> {
+        use base64::Engine;
+        base64::prelude::BASE64_STANDARD
+            .decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==")
+            .unwrap()
+    }
+
+    fn tiny_png_data_url() -> String {
+        use base64::Engine;
+        format!(
+            "data:image/png;base64,{}",
+            base64::prelude::BASE64_STANDARD.encode(tiny_png_bytes())
+        )
+    }
+
+    // ===== decode_base64_image =====
+
+    #[test]
+    fn test_decode_base64_raw() {
+        use base64::Engine;
+        let original = b"hello world";
+        let encoded = base64::prelude::BASE64_STANDARD.encode(original);
+        let decoded = decode_base64_image(&encoded).expect("raw base64 should decode");
+        assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn test_decode_base64_data_url() {
+        use base64::Engine;
+        let original = b"image bytes here";
+        let encoded = base64::prelude::BASE64_STANDARD.encode(original);
+        let data_url = format!("data:image/png;base64,{}", encoded);
+        let decoded = decode_base64_image(&data_url).expect("data URL should decode");
+        assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn test_decode_base64_jpeg_data_url() {
+        use base64::Engine;
+        let original = b"\xFF\xD8\xFF\xE0 fake jpeg";
+        let encoded = base64::prelude::BASE64_STANDARD.encode(original);
+        let data_url = format!("data:image/jpeg;base64,{}", encoded);
+        let decoded = decode_base64_image(&data_url).expect("jpeg data URL should decode");
+        assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn test_decode_base64_invalid_returns_none() {
+        let result = decode_base64_image("not!!!valid_base64");
+        assert!(result.is_none(), "Invalid base64 should return None");
+    }
+
+    #[test]
+    fn test_decode_base64_png_produces_png_magic() {
+        let decoded = decode_base64_image(&tiny_png_data_url()).expect("should decode");
+        assert_eq!(&decoded[0..4], &[0x89, 0x50, 0x4E, 0x47], "Should be PNG magic bytes");
+    }
+
+    // ===== extract_text_content_with_markers =====
+
+    #[test]
+    fn test_text_only_content_unchanged() {
+        let content = ChatContent::Text("hello world".to_string());
+        let result = LlmEngine::extract_text_content_with_markers(&content);
+        assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn test_parts_text_only() {
+        let content = ChatContent::Parts(vec![
+            ChatContentPart::Text { text: "first".to_string() },
+            ChatContentPart::Text { text: "second".to_string() },
+        ]);
+        let result = LlmEngine::extract_text_content_with_markers(&content);
+        eprintln!("[test] text-only parts result: {:?}", result);
+        assert!(result.contains("first"));
+        assert!(result.contains("second"));
+        // No image markers
+        let marker = mtmd_default_marker().to_string();
+        assert!(!result.contains(&marker), "Should not contain image marker for text-only content");
+    }
+
+    #[test]
+    fn test_parts_with_image_inserts_marker() {
+        let marker = mtmd_default_marker().to_string();
+        eprintln!("[test] mtmd marker string: {:?}", marker);
+
+        let content = ChatContent::Parts(vec![
+            ChatContentPart::Image { image: "fake_base64_data".to_string() },
+            ChatContentPart::Text { text: "what do you see?".to_string() },
+        ]);
+        let result = LlmEngine::extract_text_content_with_markers(&content);
+        eprintln!("[test] single-image result: {:?}", result);
+
+        assert!(result.contains(&marker), "Should contain image marker, got: {:?}", result);
+        assert!(result.contains("what do you see?"), "Should contain text");
+        let marker_pos = result.find(&marker).unwrap();
+        let text_pos = result.find("what do you see?").unwrap();
+        assert!(marker_pos < text_pos, "Image marker must come BEFORE text");
+    }
+
+    #[test]
+    fn test_parts_multiple_images_get_multiple_markers() {
+        let marker = mtmd_default_marker().to_string();
+        let content = ChatContent::Parts(vec![
+            ChatContentPart::Image { image: "img1".to_string() },
+            ChatContentPart::Image { image: "img2".to_string() },
+            ChatContentPart::Text { text: "compare them".to_string() },
+        ]);
+        let result = LlmEngine::extract_text_content_with_markers(&content);
+        eprintln!("[test] two-image result: {:?}", result);
+
+        let count = result.matches(&marker).count();
+        assert_eq!(count, 2, "Two images should produce exactly 2 markers, got {} in: {:?}", count, result);
+    }
+
+    // ===== extract_images and build_chat_prompt =====
+    // These methods need &self but don't use the backend/model.
+    // We use with_engine() so the backend is initialized exactly once across all tests.
+
+    #[test]
+    fn test_extract_images_from_text_message_is_empty() {
+        let messages = vec![ChatMessage {
+            role: "user".to_string(),
+            content: ChatContent::Text("no images here".to_string()),
+        }];
+        with_engine(|engine| {
+            let images = engine.extract_images(&messages);
+            eprintln!("[test] images from text-only: {}", images.len());
+            assert!(images.is_empty());
+            Ok(())
+        }).expect("Engine failed");
+    }
+
+    #[test]
+    fn test_extract_images_finds_base64_image() {
+        let messages = vec![ChatMessage {
+            role: "user".to_string(),
+            content: ChatContent::Parts(vec![
+                ChatContentPart::Image { image: tiny_png_data_url() },
+                ChatContentPart::Text { text: "what is this?".to_string() },
+            ]),
+        }];
+        with_engine(|engine| {
+            let images = engine.extract_images(&messages);
+            eprintln!("[test] extracted {} image(s), first is {} bytes", images.len(), images.first().map(|b| b.len()).unwrap_or(0));
+            assert_eq!(images.len(), 1, "Should extract exactly 1 image");
+            assert!(!images[0].is_empty());
+            assert_eq!(&images[0][0..4], &[0x89, 0x50, 0x4E, 0x47], "Should be PNG magic");
+            Ok(())
+        }).expect("Engine failed");
+    }
+
+    #[test]
+    fn test_extract_images_multiple_messages() {
+        let messages = vec![
+            ChatMessage {
+                role: "user".to_string(),
+                content: ChatContent::Parts(vec![
+                    ChatContentPart::Image { image: tiny_png_data_url() },
+                    ChatContentPart::Text { text: "first image".to_string() },
+                ]),
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: ChatContent::Parts(vec![
+                    ChatContentPart::Image { image: tiny_png_data_url() },
+                    ChatContentPart::Text { text: "second image".to_string() },
+                ]),
+            },
+        ];
+        with_engine(|engine| {
+            let images = engine.extract_images(&messages);
+            eprintln!("[test] extracted {} image(s) from 2 messages", images.len());
+            assert_eq!(images.len(), 2, "Should extract 2 images from 2 messages");
+            Ok(())
+        }).expect("Engine failed");
+    }
+
+    // ===== build_chat_prompt =====
+
+    #[test]
+    fn test_build_chat_prompt_text_only() {
+        let messages = vec![
+            ChatMessage { role: "system".to_string(), content: ChatContent::Text("You are helpful.".to_string()) },
+            ChatMessage { role: "user".to_string(), content: ChatContent::Text("What is 2+2?".to_string()) },
+        ];
+        with_engine(|engine| {
+            let prompt = engine.build_chat_prompt(&messages)?;
+            eprintln!("[test] built prompt:\n{}", prompt);
+            assert!(prompt.contains("<|system|>"));
+            assert!(prompt.contains("You are helpful."));
+            assert!(prompt.contains("<|user|>"));
+            assert!(prompt.contains("What is 2+2?"));
+            assert!(prompt.ends_with("<|assistant|>\n"));
+            Ok(())
+        }).expect("Engine failed");
+    }
+
+    #[test]
+    fn test_build_chat_prompt_with_image_contains_marker() {
+        let marker = mtmd_default_marker().to_string();
+        let messages = vec![ChatMessage {
+            role: "user".to_string(),
+            content: ChatContent::Parts(vec![
+                ChatContentPart::Image { image: tiny_png_data_url() },
+                ChatContentPart::Text { text: "Describe this image.".to_string() },
+            ]),
+        }];
+        with_engine(|engine| {
+            let prompt = engine.build_chat_prompt(&messages)?;
+            eprintln!("[test] multimodal prompt:\n{}", prompt);
+            assert!(prompt.contains(&marker), "Prompt must contain <__media__> marker, got: {:?}", prompt);
+            assert!(prompt.contains("Describe this image."));
+            Ok(())
+        }).expect("Engine failed");
+    }
+
+    // ===== find_mmproj_for_model =====
+
+    #[test]
+    fn test_find_mmproj_in_same_dir() {
+        use std::fs;
+        let tmp = std::env::temp_dir().join("observer_test_mmproj");
+        fs::create_dir_all(&tmp).unwrap();
+
+        // Create dummy model and mmproj files
+        let model_path = tmp.join("gemma-4-E2B-it.gguf");
+        let mmproj_path = tmp.join("gemma-4-E2B-it-mmproj.gguf");
+        fs::write(&model_path, b"fake model").unwrap();
+        fs::write(&mmproj_path, b"fake mmproj").unwrap();
+
+        let found = find_mmproj_for_model(&model_path);
+        eprintln!("[test] find_mmproj result: {:?}", found);
+        assert!(found.is_some(), "Should find mmproj in same directory");
+        assert_eq!(found.unwrap(), mmproj_path);
+
+        fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn test_find_mmproj_not_found() {
+        use std::fs;
+        let tmp = std::env::temp_dir().join("observer_test_no_mmproj");
+        fs::create_dir_all(&tmp).unwrap();
+
+        let model_path = tmp.join("text-only-model.gguf");
+        fs::write(&model_path, b"fake model").unwrap();
+
+        let found = find_mmproj_for_model(&model_path);
+        eprintln!("[test] find_mmproj (no mmproj) result: {:?}", found);
+        assert!(found.is_none(), "Should return None when no mmproj exists");
+
+        fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    // ===== Integration tests (require actual model files) =====
+    // Run with: GGUF_MODEL_PATH=... MMPROJ_PATH=... cargo test -- --nocapture --include-ignored
+
+    #[test]
+    #[ignore = "Requires GGUF_MODEL_PATH env var pointing to a real GGUF model file"]
+    fn test_integration_load_model() {
+        let model_path = PathBuf::from(
+            std::env::var("GGUF_MODEL_PATH").expect("Set GGUF_MODEL_PATH to a .gguf file")
+        );
+        eprintln!("[integration] Loading model: {:?}", model_path);
+        with_engine(|engine| {
+            engine.load_model(model_path.clone(), "test-model".to_string(), None)?;
+            eprintln!("[integration] is_loaded: {}", engine.is_loaded());
+            eprintln!("[integration] is_multimodal: {}", engine.is_multimodal());
+            assert!(engine.is_loaded());
+            Ok(())
+        }).expect("Engine failed");
+    }
+
+    #[test]
+    #[ignore = "Requires GGUF_MODEL_PATH + MMPROJ_PATH env vars"]
+    fn test_integration_multimodal_with_image() {
+        let model_path = PathBuf::from(std::env::var("GGUF_MODEL_PATH").expect("Set GGUF_MODEL_PATH"));
+        let mmproj_path = PathBuf::from(std::env::var("MMPROJ_PATH").expect("Set MMPROJ_PATH"));
+
+        with_engine(|engine| {
+            eprintln!("[integration] Loading model: {:?}", model_path);
+            engine.load_model(model_path.clone(), "test-model".to_string(), Some(mmproj_path.clone()))?;
+            eprintln!("[integration] is_multimodal: {}", engine.is_multimodal());
+            assert!(engine.is_multimodal(), "Should be multimodal after loading mmproj");
+
+            // Load a real image: TEST_IMAGE_PATH env var (any JPEG/PNG from your phone works)
+            let image_data_url = {
+                use base64::Engine;
+                let image_path = std::env::var("TEST_IMAGE_PATH")
+                    .expect("Set TEST_IMAGE_PATH to a real JPEG or PNG file (mtmd requires ≥2x2)");
+                let bytes = std::fs::read(&image_path)
+                    .unwrap_or_else(|e| panic!("Failed to read TEST_IMAGE_PATH {}: {}", image_path, e));
+                let ext = std::path::Path::new(&image_path)
+                    .extension().and_then(|e| e.to_str()).unwrap_or("jpeg");
+                let mime = if ext == "png" { "image/png" } else { "image/jpeg" };
+                eprintln!("[integration] Loaded test image: {} bytes ({})", bytes.len(), image_path);
+                format!("data:{};base64,{}", mime, base64::prelude::BASE64_STANDARD.encode(&bytes))
+            };
+
+            let messages = vec![ChatMessage {
+                role: "user".to_string(),
+                content: ChatContent::Parts(vec![
+                    ChatContentPart::Image { image: image_data_url },
+                    ChatContentPart::Text { text: "What do you see in this image? Describe briefly.".to_string() },
+                ]),
+            }];
+
+            let images = engine.extract_images(&messages);
+            eprintln!("[integration] Extracted {} image(s), sizes: {:?}", images.len(), images.iter().map(|i| i.len()).collect::<Vec<_>>());
+            assert_eq!(images.len(), 1);
+
+            let prompt = engine.build_chat_prompt(&messages)?;
+            eprintln!("[integration] Prompt:\n{}", prompt);
+
+            eprintln!("[integration] Starting multimodal generation...");
+            let mut token_count = 0usize;
+            let result = engine.generate(messages, 100, |token| {
+                eprint!("{}", token);
+                token_count += 1;
+            });
+            eprintln!("\n[integration] token_count={}", token_count);
+            match result {
+                Ok(r) => eprintln!("[integration] Response: {:?}", r),
+                Err(e) => return Err(format!("Generation failed: {}", e)),
+            }
+            Ok(())
+        }).expect("Engine failed");
+    }
+
+    #[test]
+    #[ignore = "Requires GGUF_MODEL_PATH env var; tests text-only generation path"]
+    fn test_integration_text_only_generation() {
+        let model_path = PathBuf::from(std::env::var("GGUF_MODEL_PATH").expect("Set GGUF_MODEL_PATH"));
+        with_engine(|engine| {
+            eprintln!("[integration] Loading model: {:?}", model_path);
+            engine.load_model(model_path.clone(), "test-model".to_string(), None)?;
+
+            let messages = vec![
+                ChatMessage { role: "user".to_string(), content: ChatContent::Text("Say hello.".to_string()) },
+            ];
+
+            eprintln!("[integration] Starting text generation...");
+            let mut token_count = 0usize;
+            let result = engine.generate(messages, 50, |token| {
+                eprint!("{}", token);
+                token_count += 1;
+            });
+            eprintln!("\n[integration] tokens={}", token_count);
+            match result {
+                Ok(r) => eprintln!("[integration] Response: {:?}", r),
+                Err(e) => return Err(format!("Text generation failed: {}", e)),
+            }
+            Ok(())
+        }).expect("Engine failed");
+    }
 }

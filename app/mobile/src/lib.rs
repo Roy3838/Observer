@@ -12,7 +12,7 @@ mod audio_ring;
 #[cfg(target_os = "ios")]
 mod video_frame;
 
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", test))]
 mod llm_engine;
 
 pub struct AppSettings {
@@ -500,11 +500,13 @@ async fn llm_delete_model(
     }
 }
 
-/// Load a model into memory for inference by filename
+/// Load a model into memory for inference by filename.
+/// Optionally specify mmproj_filename explicitly — if omitted, falls back to auto-detection.
 #[tauri::command]
 async fn llm_load_model(
     app_handle: AppHandle,
     filename: String,
+    mmproj_filename: Option<String>,
 ) -> Result<(), String> {
     #[cfg(target_os = "ios")]
     {
@@ -520,13 +522,13 @@ async fn llm_load_model(
         eprintln!("[LLM] Filename: {}", filename);
         eprintln!("[LLM] Full path: {:?}", model_path);
         eprintln!("[LLM] Path exists: {}", model_path.exists());
+        eprintln!("[LLM] mmproj: {:?}", mmproj_filename);
 
         if !model_path.exists() {
             eprintln!("[LLM] ERROR: Model file not found!");
             return Err(format!("Model not found: {}", filename));
         }
 
-        // Check file size
         let file_size = std::fs::metadata(&model_path)
             .map(|m| m.len())
             .unwrap_or(0);
@@ -539,12 +541,19 @@ async fn llm_load_model(
 
         let model_id = model_id_from_filename(&filename);
         eprintln!("[LLM] Model ID: {}", model_id);
-        eprintln!("[LLM] Calling engine.load_model()...");
 
-        // Use catch_unwind to catch any panics from llama.cpp
+        // Resolve explicit mmproj path if provided
+        let explicit_mmproj = mmproj_filename.as_ref().map(|f| models_dir.join(f));
+        if let Some(ref p) = explicit_mmproj {
+            if !p.exists() {
+                eprintln!("[LLM] ERROR: mmproj file not found: {:?}", p);
+                return Err(format!("mmproj not found: {}", mmproj_filename.unwrap()));
+            }
+        }
+
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             with_engine(|engine| {
-                engine.load_model(model_path.clone(), model_id.clone())
+                engine.load_model(model_path.clone(), model_id.clone(), explicit_mmproj.clone())
             })
         }));
 
@@ -576,7 +585,7 @@ async fn llm_load_model(
 
     #[cfg(not(target_os = "ios"))]
     {
-        let _ = (app_handle, filename);
+        let _ = (app_handle, filename, mmproj_filename);
         Err("LLM load only available on iOS".to_string())
     }
 }
