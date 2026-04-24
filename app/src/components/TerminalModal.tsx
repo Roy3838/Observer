@@ -630,7 +630,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                 {/* Simple/Advanced toggle */}
                 <div className="flex items-center justify-between">
                   <p className="text-gray-500 text-sm">
-                    Run models on your computer.
+                    Run models on your device.
                   </p>
                   <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-gray-100 p-0.5">
                     <button

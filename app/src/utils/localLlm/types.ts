@@ -1,8 +1,8 @@
 export type GemmaModelId = 'onnx-community/gemma-4-E2B-it-ONNX' | 'onnx-community/gemma-4-E4B-it-ONNX';
 
 export const GEMMA_DISPLAY_NAMES: Record<GemmaModelId, string> = {
-  'onnx-community/gemma-4-E2B-it-ONNX': 'gemma-4-E2B',
-  'onnx-community/gemma-4-E4B-it-ONNX': 'gemma-4-E4B',
+  'onnx-community/gemma-4-E2B-it-ONNX': 'gemma-4-E2B ONNX',
+  'onnx-community/gemma-4-E4B-it-ONNX': 'gemma-4-E4B ONNX',
 };
 
 export type GemmaDevice = 'webgpu' | 'wasm';
