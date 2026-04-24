@@ -12,8 +12,6 @@ mod audio_ring;
 #[cfg(target_os = "ios")]
 mod video_frame;
 
-#[cfg(any(target_os = "ios", test))]
-mod llm_engine;
 
 pub struct AppSettings {
     pub ollama_url: Mutex<Option<String>>,
@@ -307,7 +305,7 @@ async fn llm_list_models(
 ) -> Result<Vec<serde_json::Value>, String> {
     #[cfg(target_os = "ios")]
     {
-        use llm_engine::{NativeModelInfo, model_id_from_filename, find_mmproj_for_model};
+        use tauri_plugin_llm_engine::{NativeModelInfo, model_id_from_filename, find_mmproj_for_model};
 
         let models_dir = app_handle.path().app_data_dir()
             .map_err(|e| e.to_string())?
@@ -379,7 +377,7 @@ async fn llm_download_model(
 ) -> Result<String, String> {
     #[cfg(target_os = "ios")]
     {
-        use llm_engine::filename_from_hf_url;
+        use tauri_plugin_llm_engine::filename_from_hf_url;
 
         // Extract filename from URL
         let filename = filename_from_hf_url(&url)
@@ -510,7 +508,7 @@ async fn llm_load_model(
 ) -> Result<(), String> {
     #[cfg(target_os = "ios")]
     {
-        use llm_engine::{with_engine, model_id_from_filename};
+        use tauri_plugin_llm_engine::{with_engine, model_id_from_filename};
 
         let models_dir = app_handle.path().app_data_dir()
             .map_err(|e| e.to_string())?
@@ -598,7 +596,7 @@ async fn llm_generate(
 ) -> Result<String, String> {
     #[cfg(target_os = "ios")]
     {
-        use llm_engine::{with_engine, ChatMessage, ChatContent, ChatContentPart, LLM_ENGINE};
+        use tauri_plugin_llm_engine::{with_engine, ChatMessage, ChatContent, ChatContentPart, LLM_ENGINE};
 
         eprintln!("[LLM] ========== GENERATE START ==========");
         eprintln!("[LLM] Received {} raw messages", messages.len());
@@ -715,7 +713,7 @@ async fn llm_generate(
 async fn llm_unload_model() -> Result<(), String> {
     #[cfg(target_os = "ios")]
     {
-        use llm_engine::with_engine;
+        use tauri_plugin_llm_engine::with_engine;
 
         with_engine(|engine| {
             engine.unload();
@@ -737,7 +735,7 @@ async fn llm_unload_model() -> Result<(), String> {
 async fn llm_is_loaded() -> Result<bool, String> {
     #[cfg(target_os = "ios")]
     {
-        use llm_engine::with_engine;
+        use tauri_plugin_llm_engine::with_engine;
 
         with_engine(|engine| Ok(engine.is_loaded()))
     }
@@ -753,7 +751,7 @@ async fn llm_is_loaded() -> Result<bool, String> {
 async fn llm_is_multimodal() -> Result<bool, String> {
     #[cfg(target_os = "ios")]
     {
-        use llm_engine::with_engine;
+        use tauri_plugin_llm_engine::with_engine;
 
         with_engine(|engine| Ok(engine.is_multimodal()))
     }
@@ -773,18 +771,17 @@ async fn llm_test_init() -> Result<String, String> {
 
         // Try to catch any panic during initialization
         let result = std::panic::catch_unwind(|| {
-            use llama_cpp_2::llama_backend::LlamaBackend;
-            eprintln!("[LLM TEST] Calling LlamaBackend::init()...");
-            LlamaBackend::init()
+            eprintln!("[LLM TEST] Calling init_engine()...");
+            tauri_plugin_llm_engine::init_engine()
         });
 
         match result {
-            Ok(Ok(_backend)) => {
+            Ok(Ok(())) => {
                 eprintln!("[LLM TEST] ✅ Backend initialized successfully!");
                 Ok("Backend initialized successfully".to_string())
             }
             Ok(Err(e)) => {
-                let err_msg = format!("Backend init error: {:?}", e);
+                let err_msg = format!("Backend init error: {}", e);
                 eprintln!("[LLM TEST] ❌ {}", err_msg);
                 Err(err_msg)
             }
@@ -813,7 +810,7 @@ async fn llm_test_init() -> Result<String, String> {
 async fn llm_debug_state(app_handle: AppHandle) -> Result<serde_json::Value, String> {
     #[cfg(target_os = "ios")]
     {
-        use llm_engine::LLM_ENGINE;
+        use tauri_plugin_llm_engine::LLM_ENGINE;
 
         // Check models directory
         let models_dir = app_handle.path().app_data_dir()
@@ -879,7 +876,7 @@ async fn llm_debug_state(app_handle: AppHandle) -> Result<serde_json::Value, Str
 async fn llm_get_debug_info(app_handle: AppHandle) -> Result<serde_json::Value, String> {
     #[cfg(target_os = "ios")]
     {
-        use llm_engine::LLM_ENGINE;
+        use tauri_plugin_llm_engine::LLM_ENGINE;
 
         let models_dir = app_handle.path().app_data_dir()
             .map_err(|e| e.to_string())?
@@ -963,7 +960,7 @@ async fn llm_set_sampler_params(
 ) -> Result<(), String> {
     #[cfg(target_os = "ios")]
     {
-        use llm_engine::{with_engine, SamplerParams};
+        use tauri_plugin_llm_engine::{with_engine, SamplerParams};
 
         with_engine(|engine| {
             let current = engine.get_sampler_params().clone();
@@ -995,7 +992,7 @@ async fn llm_test_generate(
 ) -> Result<serde_json::Value, String> {
     #[cfg(target_os = "ios")]
     {
-        use llm_engine::{with_engine, ChatMessage, ChatContent};
+        use tauri_plugin_llm_engine::{with_engine, ChatMessage, ChatContent};
 
         let max_tokens = max_tokens.unwrap_or(256);
 

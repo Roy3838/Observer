@@ -53,8 +53,8 @@ once_cell = "1.19"
 [target.'cfg(target_os = "ios")'.dependencies]
 tauri-plugin-ios-keyboard = "0.1"
 rubato = "0.15"  # Audio resampling for PCM pipeline (44.1kHz -> 16kHz)
-llama-cpp-2 = { version = "0.1.144", features = ["metal", "mtmd"] }  # Native LLM inference with Metal acceleration + multimodal
+tauri-plugin-llm-engine = { path = "../plugins/llm_engine" }  # Shared LLM engine plugin
 
 # llama-cpp-2 for tests on non-iOS (Linux/macOS dev machines): CPU-only, no metal
 [target.'cfg(not(target_os = "ios"))'.dev-dependencies]
-llama-cpp-2 = { version = "0.1.144", features = ["mtmd"] }
+tauri-plugin-llm-engine = { path = "../plugins/llm_engine" }

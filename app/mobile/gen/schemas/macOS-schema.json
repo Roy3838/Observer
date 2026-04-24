@@ -555,24 +555,6 @@
       "description": "Permission identifier",
       "oneOf": [
         {
-          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-authenticate`",
-          "type": "string",
-          "const": "auth:default",
-          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-authenticate`"
-        },
-        {
-          "description": "Enables the authenticate command without any pre-configured scope.",
-          "type": "string",
-          "const": "auth:allow-authenticate",
-          "markdownDescription": "Enables the authenticate command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the authenticate command without any pre-configured scope.",
-          "type": "string",
-          "const": "auth:deny-authenticate",
-          "markdownDescription": "Denies the authenticate command without any pre-configured scope."
-        },
-        {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
           "const": "core:default",
@@ -2853,22 +2835,22 @@
           "markdownDescription": "Denies the restore_purchases command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-ping`",
+          "description": "Allows the log command\n#### This default permission set includes:\n\n- `allow-log`",
           "type": "string",
-          "const": "ios-keyboard:default",
-          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-ping`"
+          "const": "log:default",
+          "markdownDescription": "Allows the log command\n#### This default permission set includes:\n\n- `allow-log`"
         },
         {
-          "description": "Enables the ping command without any pre-configured scope.",
+          "description": "Enables the log command without any pre-configured scope.",
           "type": "string",
-          "const": "ios-keyboard:allow-ping",
-          "markdownDescription": "Enables the ping command without any pre-configured scope."
+          "const": "log:allow-log",
+          "markdownDescription": "Enables the log command without any pre-configured scope."
         },
         {
-          "description": "Denies the ping command without any pre-configured scope.",
+          "description": "Denies the log command without any pre-configured scope.",
           "type": "string",
-          "const": "ios-keyboard:deny-ping",
-          "markdownDescription": "Denies the ping command without any pre-configured scope."
+          "const": "log:deny-log",
+          "markdownDescription": "Denies the log command without any pre-configured scope."
         },
         {
           "description": "This permission set configures which\nnotification features are by default exposed.\n\n#### Granted Permissions\n\nIt allows all notification related features.\n\n\n#### This default permission set includes:\n\n- `allow-is-permission-granted`\n- `allow-request-permission`\n- `allow-notify`\n- `allow-register-action-types`\n- `allow-register-listener`\n- `allow-cancel`\n- `allow-get-pending`\n- `allow-remove-active`\n- `allow-get-active`\n- `allow-check-permissions`\n- `allow-show`\n- `allow-batch`\n- `allow-list-channels`\n- `allow-delete-channel`\n- `allow-create-channel`\n- `allow-permission-state`",
@@ -3273,10 +3255,10 @@
           "markdownDescription": "Denies the stop_pip_cmd command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-get-frame-cmd`\n- `allow-get-broadcast-status`",
+          "description": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-stop-video-cmd`\n- `allow-stop-audio-cmd`\n- `allow-get-frame-cmd`\n- `allow-get-broadcast-status`\n- `allow-get-capture-targets-cmd`\n- `allow-start-capture-stream-cmd`\n- `allow-start-video-stream-cmd`\n- `allow-start-audio-stream-cmd`\n- `allow-get-app-group-path-cmd`\n- `allow-read-broadcast-debug-log-cmd`\n- `allow-list-app-group-files-cmd`",
           "type": "string",
           "const": "screen-capture:default",
-          "markdownDescription": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-get-frame-cmd`\n- `allow-get-broadcast-status`"
+          "markdownDescription": "Default permissions for screen capture plugin\n#### This default permission set includes:\n\n- `allow-start-capture-cmd`\n- `allow-stop-capture-cmd`\n- `allow-stop-video-cmd`\n- `allow-stop-audio-cmd`\n- `allow-get-frame-cmd`\n- `allow-get-broadcast-status`\n- `allow-get-capture-targets-cmd`\n- `allow-start-capture-stream-cmd`\n- `allow-start-video-stream-cmd`\n- `allow-start-audio-stream-cmd`\n- `allow-get-app-group-path-cmd`\n- `allow-read-broadcast-debug-log-cmd`\n- `allow-list-app-group-files-cmd`"
         },
         {
           "description": "Enables the android command without any pre-configured scope.",
@@ -3285,10 +3267,22 @@
           "markdownDescription": "Enables the android command without any pre-configured scope."
         },
         {
+          "description": "Enables the get_app_group_path_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:allow-get-app-group-path-cmd",
+          "markdownDescription": "Enables the get_app_group_path_cmd command without any pre-configured scope."
+        },
+        {
           "description": "Enables the get_broadcast_status command without any pre-configured scope.",
           "type": "string",
           "const": "screen-capture:allow-get-broadcast-status",
           "markdownDescription": "Enables the get_broadcast_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_capture_targets_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:allow-get-capture-targets-cmd",
+          "markdownDescription": "Enables the get_capture_targets_cmd command without any pre-configured scope."
         },
         {
           "description": "Enables the get_frame_cmd command without any pre-configured scope.",
@@ -3303,10 +3297,52 @@
           "markdownDescription": "Enables the ios command without any pre-configured scope."
         },
         {
+          "description": "Enables the list_app_group_files_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:allow-list-app-group-files-cmd",
+          "markdownDescription": "Enables the list_app_group_files_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the read_broadcast_debug_log_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:allow-read-broadcast-debug-log-cmd",
+          "markdownDescription": "Enables the read_broadcast_debug_log_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the start_audio_stream_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:allow-start-audio-stream-cmd",
+          "markdownDescription": "Enables the start_audio_stream_cmd command without any pre-configured scope."
+        },
+        {
           "description": "Enables the start_capture_cmd command without any pre-configured scope.",
           "type": "string",
           "const": "screen-capture:allow-start-capture-cmd",
           "markdownDescription": "Enables the start_capture_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the start_capture_stream_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:allow-start-capture-stream-cmd",
+          "markdownDescription": "Enables the start_capture_stream_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the start_video_stream_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:allow-start-video-stream-cmd",
+          "markdownDescription": "Enables the start_video_stream_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the stop_audio_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:allow-stop-audio-cmd",
+          "markdownDescription": "Enables the stop_audio_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the stop_audio_stream_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:allow-stop-audio-stream-cmd",
+          "markdownDescription": "Enables the stop_audio_stream_cmd command without any pre-configured scope."
         },
         {
           "description": "Enables the stop_capture_cmd command without any pre-configured scope.",
@@ -3315,16 +3351,40 @@
           "markdownDescription": "Enables the stop_capture_cmd command without any pre-configured scope."
         },
         {
+          "description": "Enables the stop_video_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:allow-stop-video-cmd",
+          "markdownDescription": "Enables the stop_video_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the stop_video_stream_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:allow-stop-video-stream-cmd",
+          "markdownDescription": "Enables the stop_video_stream_cmd command without any pre-configured scope."
+        },
+        {
           "description": "Denies the android command without any pre-configured scope.",
           "type": "string",
           "const": "screen-capture:deny-android",
           "markdownDescription": "Denies the android command without any pre-configured scope."
         },
         {
+          "description": "Denies the get_app_group_path_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:deny-get-app-group-path-cmd",
+          "markdownDescription": "Denies the get_app_group_path_cmd command without any pre-configured scope."
+        },
+        {
           "description": "Denies the get_broadcast_status command without any pre-configured scope.",
           "type": "string",
           "const": "screen-capture:deny-get-broadcast-status",
           "markdownDescription": "Denies the get_broadcast_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_capture_targets_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:deny-get-capture-targets-cmd",
+          "markdownDescription": "Denies the get_capture_targets_cmd command without any pre-configured scope."
         },
         {
           "description": "Denies the get_frame_cmd command without any pre-configured scope.",
@@ -3339,16 +3399,70 @@
           "markdownDescription": "Denies the ios command without any pre-configured scope."
         },
         {
+          "description": "Denies the list_app_group_files_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:deny-list-app-group-files-cmd",
+          "markdownDescription": "Denies the list_app_group_files_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the read_broadcast_debug_log_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:deny-read-broadcast-debug-log-cmd",
+          "markdownDescription": "Denies the read_broadcast_debug_log_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the start_audio_stream_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:deny-start-audio-stream-cmd",
+          "markdownDescription": "Denies the start_audio_stream_cmd command without any pre-configured scope."
+        },
+        {
           "description": "Denies the start_capture_cmd command without any pre-configured scope.",
           "type": "string",
           "const": "screen-capture:deny-start-capture-cmd",
           "markdownDescription": "Denies the start_capture_cmd command without any pre-configured scope."
         },
         {
+          "description": "Denies the start_capture_stream_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:deny-start-capture-stream-cmd",
+          "markdownDescription": "Denies the start_capture_stream_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the start_video_stream_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:deny-start-video-stream-cmd",
+          "markdownDescription": "Denies the start_video_stream_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the stop_audio_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:deny-stop-audio-cmd",
+          "markdownDescription": "Denies the stop_audio_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the stop_audio_stream_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:deny-stop-audio-stream-cmd",
+          "markdownDescription": "Denies the stop_audio_stream_cmd command without any pre-configured scope."
+        },
+        {
           "description": "Denies the stop_capture_cmd command without any pre-configured scope.",
           "type": "string",
           "const": "screen-capture:deny-stop-capture-cmd",
           "markdownDescription": "Denies the stop_capture_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the stop_video_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:deny-stop-video-cmd",
+          "markdownDescription": "Denies the stop_video_cmd command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the stop_video_stream_cmd command without any pre-configured scope.",
+          "type": "string",
+          "const": "screen-capture:deny-stop-video-stream-cmd",
+          "markdownDescription": "Denies the stop_video_stream_cmd command without any pre-configured scope."
         },
         {
           "description": "This permission set configures which\nshell functionality is exposed by default.\n\n#### Granted Permissions\n\nIt allows to use the `open` functionality with a reasonable\nscope pre-configured. It will allow opening `http(s)://`,\n`tel:` and `mailto:` links.\n\n#### This default permission set includes:\n\n- `allow-open`",
@@ -3415,6 +3529,24 @@
           "type": "string",
           "const": "shell:deny-stdin-write",
           "markdownDescription": "Denies the stdin_write command without any pre-configured scope."
+        },
+        {
+          "description": "Default permissions for the plugin",
+          "type": "string",
+          "const": "web-auth:default",
+          "markdownDescription": "Default permissions for the plugin"
+        },
+        {
+          "description": "Enables the authenticate command without any pre-configured scope.",
+          "type": "string",
+          "const": "web-auth:allow-authenticate",
+          "markdownDescription": "Enables the authenticate command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the authenticate command without any pre-configured scope.",
+          "type": "string",
+          "const": "web-auth:deny-authenticate",
+          "markdownDescription": "Denies the authenticate command without any pre-configured scope."
         }
       ]
     },

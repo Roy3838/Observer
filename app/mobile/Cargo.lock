@@ -3197,7 +3197,6 @@ dependencies = [
  "bytemuck",
  "futures-util",
  "http-body-util",
- "llama-cpp-2",
  "log",
  "memmap2",
  "once_cell",
@@ -3213,6 +3212,7 @@ dependencies = [
  "tauri-plugin-edge-to-edge",
  "tauri-plugin-iap",
  "tauri-plugin-ios-keyboard",
+ "tauri-plugin-llm-engine",
  "tauri-plugin-log",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
@@ -5253,6 +5253,17 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "tauri-plugin-llm-engine"
+version = "0.1.0"
+dependencies = [
+ "base64 0.21.7",
+ "llama-cpp-2",
+ "log",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

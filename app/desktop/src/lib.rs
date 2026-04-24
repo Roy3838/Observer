@@ -221,6 +221,551 @@ async fn hide_overlay(app_handle: tauri::AppHandle) -> Result<(), String> {
 
 // Shortcut helper functions moved to shortcuts module
 
+// ============================================================================
+// LLM Engine Commands (using shared plugin)
+// ============================================================================
+
+use tauri::ipc::Channel;
+
+/// List downloaded GGUF models from the models directory
+#[tauri::command]
+async fn llm_list_models(app_handle: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    use tauri_plugin_llm_engine::{NativeModelInfo, model_id_from_filename, find_mmproj_for_model};
+
+    let models_dir = app_handle.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("models");
+
+    let mut models: Vec<serde_json::Value> = Vec::new();
+
+    if models_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&models_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(ext) = path.extension() {
+                    if ext == "gguf" || ext == "GGUF" {
+                        if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                            if filename.to_lowercase().contains("mmproj") {
+                                continue;
+                            }
+
+                            let size_bytes = std::fs::metadata(&path)
+                                .map(|m| m.len())
+                                .unwrap_or(0);
+
+                            let mmproj_path = find_mmproj_for_model(&path);
+                            let mmproj_filename = mmproj_path.as_ref()
+                                .and_then(|p| p.file_name())
+                                .and_then(|n| n.to_str())
+                                .map(String::from);
+                            let is_multimodal = mmproj_path.is_some();
+
+                            let model_id = model_id_from_filename(filename);
+                            let info = NativeModelInfo {
+                                id: model_id.clone(),
+                                name: model_id,
+                                filename: filename.to_string(),
+                                size_bytes,
+                                hf_url: None,
+                                mmproj_filename,
+                                is_multimodal,
+                            };
+
+                            if let Ok(json) = serde_json::to_value(info) {
+                                models.push(json);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(models)
+}
+
+/// Download a GGUF model from a HuggingFace URL with progress reporting
+#[tauri::command]
+async fn llm_download_model(
+    app_handle: AppHandle,
+    url: String,
+    on_progress: Channel<serde_json::Value>,
+) -> Result<String, String> {
+    use tauri_plugin_llm_engine::filename_from_hf_url;
+    use futures_util::StreamExt;
+
+    let filename = filename_from_hf_url(&url)
+        .ok_or_else(|| "Could not extract filename from URL".to_string())?;
+
+    if !filename.ends_with(".gguf") && !filename.ends_with(".GGUF") {
+        return Err("URL must point to a .gguf file".to_string());
+    }
+
+    let models_dir = app_handle.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("models");
+
+    std::fs::create_dir_all(&models_dir)
+        .map_err(|e| format!("Failed to create models dir: {}", e))?;
+
+    let output_path = models_dir.join(&filename);
+
+    let _ = on_progress.send(serde_json::json!({
+        "status": "downloading",
+        "progress": 0,
+        "downloadedBytes": 0,
+        "totalBytes": 0,
+        "filename": filename
+    }));
+
+    let client = reqwest::Client::new();
+    let response = client.get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Download failed: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Download failed with status: {}", response.status()));
+    }
+
+    let total_size = response.content_length().unwrap_or(0);
+    let mut downloaded: u64 = 0;
+
+    let mut file = std::fs::File::create(&output_path)
+        .map_err(|e| format!("Failed to create file: {}", e))?;
+
+    use std::io::Write;
+    let mut stream = response.bytes_stream();
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
+        file.write_all(&chunk)
+            .map_err(|e| format!("Write error: {}", e))?;
+
+        downloaded += chunk.len() as u64;
+        let progress = if total_size > 0 {
+            (downloaded as f64 / total_size as f64 * 100.0) as u32
+        } else {
+            0
+        };
+
+        let _ = on_progress.send(serde_json::json!({
+            "status": "downloading",
+            "progress": progress,
+            "downloadedBytes": downloaded,
+            "totalBytes": total_size,
+            "filename": filename
+        }));
+    }
+
+    let _ = on_progress.send(serde_json::json!({
+        "status": "complete",
+        "progress": 100,
+        "downloadedBytes": downloaded,
+        "totalBytes": downloaded,
+        "filename": filename
+    }));
+
+    Ok(filename)
+}
+
+/// Delete a downloaded model by filename
+#[tauri::command]
+async fn llm_delete_model(app_handle: AppHandle, filename: String) -> Result<(), String> {
+    let models_dir = app_handle.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("models");
+
+    let model_path = models_dir.join(&filename);
+
+    if model_path.exists() {
+        std::fs::remove_file(&model_path)
+            .map_err(|e| format!("Failed to delete model: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// Load a model into memory for inference
+#[tauri::command]
+async fn llm_load_model(
+    app_handle: AppHandle,
+    filename: String,
+    mmproj_filename: Option<String>,
+) -> Result<(), String> {
+    use tauri_plugin_llm_engine::{with_engine, model_id_from_filename};
+
+    let models_dir = app_handle.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("models");
+
+    let model_path = models_dir.join(&filename);
+
+    if !model_path.exists() {
+        return Err(format!("Model not found: {}", filename));
+    }
+
+    let model_id = model_id_from_filename(&filename);
+    let explicit_mmproj = mmproj_filename.as_ref().map(|f| models_dir.join(f));
+
+    if let Some(ref p) = explicit_mmproj {
+        if !p.exists() {
+            return Err(format!("mmproj not found: {}", mmproj_filename.unwrap()));
+        }
+    }
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        with_engine(|engine| {
+            engine.load_model(model_path.clone(), model_id.clone(), explicit_mmproj.clone())
+        })
+    }));
+
+    match result {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(panic_info) => {
+            let panic_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Unknown panic".to_string()
+            };
+            Err(format!("Panic during model load: {}", panic_msg))
+        }
+    }
+}
+
+/// Generate text from messages with streaming tokens
+#[tauri::command]
+async fn llm_generate(
+    messages: Vec<serde_json::Value>,
+    on_token: Channel<String>,
+) -> Result<String, String> {
+    use tauri_plugin_llm_engine::{with_engine, ChatMessage, ChatContent, ChatContentPart, LLM_ENGINE};
+
+    {
+        let guard = LLM_ENGINE.lock().map_err(|e| format!("Lock error: {}", e))?;
+        match guard.as_ref() {
+            Some(engine) => {
+                if !engine.is_loaded() {
+                    return Err("No model loaded - please load a model first".to_string());
+                }
+            }
+            None => {
+                return Err("LLM engine not initialized".to_string());
+            }
+        }
+    }
+
+    let chat_messages: Vec<ChatMessage> = messages.into_iter()
+        .filter_map(|m| {
+            let role = m.get("role")?.as_str()?.to_string();
+            let content_value = m.get("content")?;
+
+            let content = if let Some(text) = content_value.as_str() {
+                ChatContent::Text(text.to_string())
+            } else if let Some(parts_array) = content_value.as_array() {
+                let parts: Vec<ChatContentPart> = parts_array.iter()
+                    .filter_map(|part| {
+                        let part_type = part.get("type")?.as_str()?;
+                        match part_type {
+                            "text" => {
+                                let text = part.get("text")?.as_str()?.to_string();
+                                Some(ChatContentPart::Text { text })
+                            }
+                            "image" => {
+                                let image = part.get("image")?.as_str()?.to_string();
+                                Some(ChatContentPart::Image { image })
+                            }
+                            _ => None
+                        }
+                    })
+                    .collect();
+                ChatContent::Parts(parts)
+            } else {
+                return None;
+            };
+
+            Some(ChatMessage { role, content })
+        })
+        .collect();
+
+    if chat_messages.is_empty() {
+        return Err("No valid messages provided".to_string());
+    }
+
+    let on_token_clone = on_token.clone();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        with_engine(|engine| {
+            engine.generate(chat_messages, 2048, |token| {
+                let _ = on_token_clone.send(token.to_string());
+            })
+        })
+    }));
+
+    match result {
+        Ok(Ok(response)) => Ok(response),
+        Ok(Err(e)) => Err(e),
+        Err(panic_info) => {
+            let panic_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Unknown panic".to_string()
+            };
+            Err(format!("Panic during generation: {}", panic_msg))
+        }
+    }
+}
+
+/// Unload the current model
+#[tauri::command]
+async fn llm_unload_model() -> Result<(), String> {
+    use tauri_plugin_llm_engine::with_engine;
+    with_engine(|engine| {
+        engine.unload();
+        Ok(())
+    })
+}
+
+/// Check if a model is loaded
+#[tauri::command]
+async fn llm_is_loaded() -> Result<bool, String> {
+    use tauri_plugin_llm_engine::with_engine;
+    with_engine(|engine| Ok(engine.is_loaded()))
+}
+
+/// Check if the loaded model supports multimodal
+#[tauri::command]
+async fn llm_is_multimodal() -> Result<bool, String> {
+    use tauri_plugin_llm_engine::with_engine;
+    with_engine(|engine| Ok(engine.is_multimodal()))
+}
+
+/// Test LLM backend initialization
+#[tauri::command]
+async fn llm_test_init() -> Result<String, String> {
+    use tauri_plugin_llm_engine::init_engine;
+
+    let result = std::panic::catch_unwind(|| {
+        init_engine()
+    });
+
+    match result {
+        Ok(Ok(_)) => Ok("Backend initialized successfully".to_string()),
+        Ok(Err(e)) => Err(format!("Backend init error: {}", e)),
+        Err(panic) => {
+            let panic_msg = if let Some(s) = panic.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Unknown panic".to_string()
+            };
+            Err(format!("Panic during init: {}", panic_msg))
+        }
+    }
+}
+
+/// Get LLM engine debug state
+#[tauri::command]
+async fn llm_debug_state(app_handle: AppHandle) -> Result<serde_json::Value, String> {
+    use tauri_plugin_llm_engine::LLM_ENGINE;
+
+    let models_dir = app_handle.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("models");
+
+    let models_exist = models_dir.exists();
+    let model_files: Vec<String> = if models_exist {
+        std::fs::read_dir(&models_dir)
+            .map(|entries| {
+                entries.flatten()
+                    .filter_map(|e| e.file_name().to_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    let engine_state = match LLM_ENGINE.lock() {
+        Ok(guard) => {
+            match guard.as_ref() {
+                Some(engine) => serde_json::json!({
+                    "initialized": true,
+                    "isLoaded": engine.is_loaded(),
+                    "loadedModelId": engine.loaded_model_id(),
+                    "isMultimodal": engine.is_multimodal(),
+                }),
+                None => serde_json::json!({
+                    "initialized": false,
+                    "isLoaded": false,
+                    "loadedModelId": null,
+                    "isMultimodal": false,
+                }),
+            }
+        },
+        Err(e) => serde_json::json!({
+            "error": format!("Lock poisoned: {}", e),
+        }),
+    };
+
+    Ok(serde_json::json!({
+        "modelsDir": models_dir.to_string_lossy(),
+        "modelsDirExists": models_exist,
+        "modelFiles": model_files,
+        "engine": engine_state,
+    }))
+}
+
+/// Get detailed debug info with metrics
+#[tauri::command]
+async fn llm_get_debug_info(app_handle: AppHandle) -> Result<serde_json::Value, String> {
+    use tauri_plugin_llm_engine::LLM_ENGINE;
+
+    let models_dir = app_handle.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("models");
+
+    let engine_state = match LLM_ENGINE.lock() {
+        Ok(guard) => {
+            match guard.as_ref() {
+                Some(engine) => {
+                    let sampler_params = engine.get_sampler_params();
+                    let last_metrics = engine.get_last_metrics();
+                    let model_path = engine.get_model_path()
+                        .map(|p| p.to_string_lossy().to_string());
+                    let mmproj_path = engine.get_mmproj_path()
+                        .map(|p| p.to_string_lossy().to_string());
+
+                    serde_json::json!({
+                        "initialized": true,
+                        "isLoaded": engine.is_loaded(),
+                        "loadedModelId": engine.loaded_model_id(),
+                        "isMultimodal": engine.is_multimodal(),
+                        "modelPath": model_path,
+                        "mmprojPath": mmproj_path,
+                        "samplerParams": {
+                            "temperature": sampler_params.temperature,
+                            "topP": sampler_params.top_p,
+                            "topK": sampler_params.top_k,
+                            "seed": sampler_params.seed,
+                            "repeatPenalty": sampler_params.repeat_penalty,
+                        },
+                        "lastMetrics": last_metrics.map(|m| serde_json::json!({
+                            "tokensGenerated": m.tokens_generated,
+                            "promptTokens": m.prompt_tokens,
+                            "timeToFirstTokenMs": m.time_to_first_token_ms,
+                            "totalGenerationTimeMs": m.total_generation_time_ms,
+                            "tokensPerSecond": m.tokens_per_second,
+                        })),
+                    })
+                },
+                None => serde_json::json!({
+                    "initialized": false,
+                    "isLoaded": false,
+                    "loadedModelId": null,
+                    "isMultimodal": false,
+                    "modelPath": null,
+                    "mmprojPath": null,
+                    "samplerParams": null,
+                    "lastMetrics": null,
+                }),
+            }
+        },
+        Err(e) => serde_json::json!({
+            "error": format!("Lock poisoned: {}", e),
+        }),
+    };
+
+    Ok(serde_json::json!({
+        "modelsDir": models_dir.to_string_lossy(),
+        "engine": engine_state,
+    }))
+}
+
+/// Set sampler parameters
+#[tauri::command]
+async fn llm_set_sampler_params(
+    temperature: Option<f32>,
+    top_p: Option<f32>,
+    top_k: Option<i32>,
+    seed: Option<u32>,
+    repeat_penalty: Option<f32>,
+) -> Result<(), String> {
+    use tauri_plugin_llm_engine::{with_engine, SamplerParams};
+
+    with_engine(|engine| {
+        let current = engine.get_sampler_params().clone();
+        let new_params = SamplerParams {
+            temperature: temperature.unwrap_or(current.temperature),
+            top_p: top_p.unwrap_or(current.top_p),
+            top_k: top_k.unwrap_or(current.top_k),
+            seed: seed.unwrap_or(current.seed),
+            repeat_penalty: repeat_penalty.unwrap_or(current.repeat_penalty),
+        };
+        engine.set_sampler_params(new_params);
+        Ok(())
+    })
+}
+
+/// Test generation with a simple prompt
+#[tauri::command]
+async fn llm_test_generate(
+    prompt: String,
+    max_tokens: Option<u32>,
+    on_token: Channel<String>,
+) -> Result<serde_json::Value, String> {
+    use tauri_plugin_llm_engine::{with_engine, ChatMessage, ChatContent};
+
+    let max_tokens = max_tokens.unwrap_or(256);
+
+    let messages = vec![ChatMessage {
+        role: "user".to_string(),
+        content: ChatContent::Text(prompt),
+    }];
+
+    let on_token_clone = on_token.clone();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        with_engine(|engine| {
+            let response = engine.generate(messages, max_tokens, |token| {
+                let _ = on_token_clone.send(token.to_string());
+            })?;
+
+            let metrics = engine.get_last_metrics().map(|m| serde_json::json!({
+                "tokensGenerated": m.tokens_generated,
+                "promptTokens": m.prompt_tokens,
+                "timeToFirstTokenMs": m.time_to_first_token_ms,
+                "totalGenerationTimeMs": m.total_generation_time_ms,
+                "tokensPerSecond": m.tokens_per_second,
+            }));
+
+            Ok(serde_json::json!({
+                "response": response,
+                "metrics": metrics,
+            }))
+        })
+    }));
+
+    match result {
+        Ok(Ok(response)) => Ok(response),
+        Ok(Err(e)) => Err(e),
+        Err(panic_info) => {
+            let panic_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Unknown panic".to_string()
+            };
+            Err(format!("Panic during test generation: {}", panic_msg))
+        }
+    }
+}
+
 // Shared state for our application (desktop only)
 #[derive(Clone)]
 struct AppState {
@@ -652,7 +1197,21 @@ pub fn run() {
             get_broadcast_status,
             shortcuts::get_shortcut_config,
             shortcuts::get_registered_shortcuts,
-            shortcuts::set_shortcut_config
+            shortcuts::set_shortcut_config,
+            // LLM commands
+            llm_list_models,
+            llm_download_model,
+            llm_delete_model,
+            llm_load_model,
+            llm_generate,
+            llm_unload_model,
+            llm_is_loaded,
+            llm_is_multimodal,
+            llm_test_init,
+            llm_debug_state,
+            llm_get_debug_info,
+            llm_set_sampler_params,
+            llm_test_generate
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
