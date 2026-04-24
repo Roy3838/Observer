@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { listModels, Model } from '@utils/inferenceServer'; // Import updated Model interface
+import { fetchModels as fetchAllModels, Model } from '@utils/inferenceServer';
 import { Cpu, RefreshCw, Eye, Server } from 'lucide-react';
 import { BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL } from '@utils/inferenceServer';
 import { Logger } from '@utils/logging';
@@ -60,7 +60,8 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({ isProUser = false }) 
       const addresses = getInferenceAddresses();
       Logger.info('MODELS', `Using inference addresses: ${addresses.join(', ')}`);
 
-      const response = listModels(); // Uses updated listModels
+      // Fetch from remote servers AND refresh local model cache
+      const response = await fetchAllModels();
 
       if (response.error) {
         throw new Error(response.error);

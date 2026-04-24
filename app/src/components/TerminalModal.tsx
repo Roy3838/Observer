@@ -628,7 +628,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                 {/* Simple/Advanced toggle */}
                 <div className="flex items-center justify-between">
                   <p className="text-gray-500 text-sm">
-                    Run GGUF models with native GPU acceleration.
+                    Run models on your computer.
                   </p>
                   <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-gray-100 p-0.5">
                     <button
@@ -668,7 +668,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                         </div>
                         <p className="text-xs text-gray-500 mt-1">
                           {useGpu
-                            ? 'Hardware-accelerated for faster performance.'
+                            ? 'Hardware-accelerated for faster performance. May cause instability.'
                             : 'CPU mode for broader compatibility.'}
                         </p>
                       </div>
@@ -687,11 +687,6 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                         />
                       </button>
                     </div>
-                    {nativeState.status === 'loaded' && (
-                      <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                        Unload the current model to change GPU settings.
-                      </p>
-                    )}
 
                     {(Object.entries(LLAMA_PRESETS) as [LlamaPresetId, typeof LLAMA_PRESETS[LlamaPresetId]][]).map(([presetId, preset]) => {
                       const presetModel = getPresetModel(presetId);
@@ -1202,7 +1197,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                     <p className="text-xs text-gray-500 mt-1">
                       {gemmaDevice === 'webgpu'
                         ? 'GPU-accelerated for faster performance.'
-                        : 'CPU mode for broader compatibility.'}
+                        : 'CPU mode.'}
                     </p>
                   </div>
                   <button

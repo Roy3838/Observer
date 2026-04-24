@@ -129,3 +129,19 @@ export const DEFAULT_SAMPLER_PARAMS: SamplerParams = {
   seed: 42,
   repeatPenalty: 1.1,
 };
+
+// ============================================================================
+// Unified Local Model Entry (for ModelManager)
+// ============================================================================
+
+/**
+ * Represents a local model from either GemmaModelManager or NativeLlmManager.
+ * Used by ModelManager to provide a unified view of all local models.
+ */
+export interface LocalModelEntry {
+  id: string;                                       // Unique identifier (filename or GemmaModelId)
+  name: string;                                     // Display name
+  status: 'loaded' | 'loading' | 'unloaded' | 'error';
+  sizeBytes?: number;                               // For downloaded GGUF models
+  isMultimodal?: boolean;
+}

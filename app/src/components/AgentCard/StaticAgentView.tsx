@@ -4,11 +4,8 @@ import {
     Brain, Clock, Eye, ChevronDown, AlertTriangle, Server, Wrench, ChevronRight, Zap, Settings, Cloud, Download, Cpu, CheckCircle, FileDown, StopCircle
 } from 'lucide-react';
 import { CompleteAgent } from '@utils/agent_database';
-import { listModels, fetchModels, getInferenceAddresses } from '@utils/inferenceServer';
-import { GemmaModelManager } from '@utils/localLlm/GemmaModelManager';
-import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
-import { isIOS } from '@utils/platform';
-import { GemmaModelId, GemmaModelState, NativeModelState } from '@utils/localLlm/types';
+import { listModels, fetchModels, getInferenceAddresses, BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL } from '@utils/inferenceServer';
+import { ModelManager, LocalModelState } from '@utils/ModelManager';
 import { detectAgentCapabilities } from './agentCapabilities';
 import SensorModal from './SensorModal';
 import ToolsModal from './ToolsModal';
@@ -106,16 +103,18 @@ const ModelLocationIndicator: React.FC<{
     isLoading?: boolean;
     isUnloaded?: boolean;
     localModelId?: string;
-}> = ({ isCloud, providerName, sensors, isLoading = false, isUnloaded = false, localModelId }) => {
+    server?: string;
+}> = ({ isCloud, providerName, sensors, isLoading = false, isUnloaded = false, localModelId, server }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [popoverPosition, setPopoverPosition] = useState<{ top: number; left: number } | null>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const popoverRef = useRef<HTMLDivElement>(null);
-    const isIOSPlatform = isIOS();
 
-    // Subscribe to model manager state for progress
-    const [gemmaState, setGemmaState] = useState<GemmaModelState>(GemmaModelManager.getInstance().getState());
-    const [nativeState, setNativeState] = useState<NativeModelState>(NativeLlmManager.getInstance().getState());
+    // Get unified local model state from ModelManager
+    const isLocalModel = server === LLAMA_CPP_LOCAL_SENTINEL || server === BROWSER_LOCAL_SENTINEL;
+    const [localState, setLocalState] = useState<LocalModelState | null>(
+        isLocalModel && server ? ModelManager.getInstance().getLocalModelState(server) : null
+    );
 
     const updatePopoverPosition = () => {
         if (buttonRef.current) {
@@ -127,16 +126,14 @@ const ModelLocationIndicator: React.FC<{
         }
     };
 
+    // Subscribe to ModelManager for state updates
     useEffect(() => {
-        if (!isOpen) return;
-        if (isIOSPlatform) {
-            const unsubscribe = NativeLlmManager.getInstance().onStateChange(setNativeState);
-            return unsubscribe;
-        } else {
-            const unsubscribe = GemmaModelManager.getInstance().onStateChange(setGemmaState);
-            return unsubscribe;
-        }
-    }, [isOpen, isIOSPlatform]);
+        if (!isOpen || !isLocalModel || !server) return;
+        const unsubscribe = ModelManager.getInstance().onModelsChange(() => {
+            setLocalState(ModelManager.getInstance().getLocalModelState(server));
+        });
+        return unsubscribe;
+    }, [isOpen, isLocalModel, server]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -164,20 +161,13 @@ const ModelLocationIndicator: React.FC<{
     }, [isOpen]);
 
     const handleLoadModel = () => {
-        if (!localModelId) return;
-        if (isIOSPlatform) {
-            NativeLlmManager.getInstance().loadModel(localModelId);
-        } else {
-            GemmaModelManager.getInstance().loadModel(localModelId as GemmaModelId);
-        }
+        if (!localModelId || !server) return;
+        ModelManager.getInstance().loadLocalModel(localModelId, server);
     };
 
     const handleCancelLoad = () => {
-        if (isIOSPlatform) {
-            NativeLlmManager.getInstance().unloadModel();
-        } else {
-            GemmaModelManager.getInstance().unloadModel();
-        }
+        if (!server) return;
+        ModelManager.getInstance().unloadLocalModel(server);
     };
 
     const handleToggle = () => {
@@ -292,21 +282,21 @@ const ModelLocationIndicator: React.FC<{
                                 </button>
                             </div>
 
-                            {/* Gemma progress bars */}
-                            {!isIOSPlatform && gemmaState.progress.length > 0 && (
+                            {/* Progress bars (transformers.js only) */}
+                            {localState && localState.progress.length > 0 && (
                                 <div className="space-y-2 max-h-32 overflow-y-auto">
-                                    {gemmaState.progress.map((item) => (
+                                    {localState.progress.map((item) => (
                                         <div key={item.file}>
                                             <div className="flex justify-between items-center text-xs mb-0.5">
                                                 <span className="text-gray-600 flex items-center gap-1 truncate max-w-[60%]">
-                                                    {item.status === 'done'
+                                                    {item.done
                                                         ? <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
                                                         : <FileDown className="h-3 w-3 text-gray-400 flex-shrink-0" />
                                                     }
                                                     <span className="truncate">{item.file.split('/').pop()}</span>
                                                 </span>
                                                 <span className="font-medium text-gray-500 flex-shrink-0 text-xs">
-                                                    {item.status === 'done'
+                                                    {item.done
                                                         ? '✓'
                                                         : item.total > 0
                                                             ? `${formatBytes(item.loaded)}/${formatBytes(item.total)}`
@@ -316,7 +306,7 @@ const ModelLocationIndicator: React.FC<{
                                             </div>
                                             <div className="w-full bg-gray-200 rounded-full h-1">
                                                 <div
-                                                    className={`h-1 rounded-full transition-all duration-300 ${item.status === 'done' ? 'bg-green-500' : 'bg-blue-600'}`}
+                                                    className={`h-1 rounded-full transition-all duration-300 ${item.done ? 'bg-green-500' : 'bg-blue-600'}`}
                                                     style={{ width: `${item.progress}%` }}
                                                 />
                                             </div>
@@ -325,22 +315,22 @@ const ModelLocationIndicator: React.FC<{
                                 </div>
                             )}
 
-                            {/* iOS native progress */}
-                            {isIOSPlatform && nativeState.status === 'loading' && (
+                            {/* llama.cpp status (no detailed progress) */}
+                            {localState?.engineInfo?.type === 'llama.cpp' && localState?.status === 'loading' && (
                                 <div className="text-xs text-gray-500 text-center">
                                     Initializing model...
                                 </div>
                             )}
-                            {isIOSPlatform && nativeState.status === 'unloading' && (
+                            {localState?.engineInfo?.type === 'llama.cpp' && localState?.status === 'unloading' && (
                                 <div className="text-xs text-amber-600 text-center">
                                     Unloading model...
                                 </div>
                             )}
 
-                            {/* Show settings being loaded */}
-                            {!isIOSPlatform && gemmaState.loadSettings && (
+                            {/* Show engine settings (transformers.js) */}
+                            {localState?.engineInfo?.type === 'transformers.js' && localState?.engineInfo?.device && (
                                 <div className="text-xs text-gray-500 text-center">
-                                    {gemmaState.loadSettings.device} · {gemmaState.loadSettings.dtype} · {gemmaState.loadSettings.imageTokenBudget}tok
+                                    {localState.engineInfo.device} · {localState.engineInfo.dtype}
                                 </div>
                             )}
 
@@ -355,32 +345,30 @@ const ModelLocationIndicator: React.FC<{
                                 <Server className="w-4 h-4 text-green-500" />
                                 <p className="text-xs text-gray-700">
                                     <span className="font-semibold text-green-600">
-                                        {isIOSPlatform ? 'Local On-Device' : 'Local In-Browser'}
+                                        {localState?.engineInfo?.type === 'llama.cpp' ? 'Local On-Device' : 'Local In-Browser'}
                                     </span> all data stays on your device!
                                 </p>
                             </div>
                             {/* Show engine info */}
-                            {isIOSPlatform ? (
+                            {localState?.engineInfo?.type === 'llama.cpp' ? (
                                 <div className="bg-gray-50 rounded-md p-2">
                                     <div className="flex justify-between text-xs">
                                         <span className="text-gray-500">Engine:</span>
                                         <span className="font-medium text-gray-700">llama.cpp</span>
                                     </div>
                                 </div>
-                            ) : gemmaState.loadSettings && (
+                            ) : localState?.engineInfo && (
                                 <div className="bg-gray-50 rounded-md p-2 space-y-1">
                                     <div className="flex justify-between text-xs">
                                         <span className="text-gray-500">Device:</span>
-                                        <span className="font-medium text-gray-700">{gemmaState.loadSettings.device === 'webgpu' ? 'WebGPU (GPU)' : 'WASM (CPU)'}</span>
+                                        <span className="font-medium text-gray-700">{localState.engineInfo.device === 'webgpu' ? 'WebGPU (GPU)' : 'WASM (CPU)'}</span>
                                     </div>
-                                    <div className="flex justify-between text-xs">
-                                        <span className="text-gray-500">Precision:</span>
-                                        <span className="font-medium text-gray-700">{gemmaState.loadSettings.dtype}</span>
-                                    </div>
-                                    <div className="flex justify-between text-xs">
-                                        <span className="text-gray-500">Image Tokens:</span>
-                                        <span className="font-medium text-gray-700">{gemmaState.loadSettings.imageTokenBudget}</span>
-                                    </div>
+                                    {localState.engineInfo.dtype && (
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-gray-500">Precision:</span>
+                                            <span className="font-medium text-gray-700">{localState.engineInfo.dtype}</span>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             <button
@@ -551,12 +539,11 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
     const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
     const [isToolsModalOpen, setIsToolsModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-    const [currentModelInfo, setCurrentModelInfo] = useState<{ server?: string; ownedBy?: string; status?: 'loaded' | 'loading' | 'unloaded' | 'unloading'; localModelId?: string } | null>(null);
+    const [currentModelInfo, setCurrentModelInfo] = useState<{ server?: string; ownedBy?: string; status?: 'loaded' | 'loading' | 'unloaded' | 'unloading' | 'error'; localModelId?: string } | null>(null);
 
     // Look up current model info for location indicator
     useEffect(() => {
         let cancelled = false;
-        const isIOSPlatform = isIOS();
 
         const lookupModel = () => {
             if (cancelled) return;
@@ -577,24 +564,15 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
             fetchModels().then(lookupModel);
         }
 
-        // Subscribe to local model state changes to update loading indicator
-        // Use the appropriate manager based on platform
-        const unsubscribes: (() => void)[] = [];
-        if (isIOSPlatform) {
-            const nativeManager = NativeLlmManager.getInstance();
-            unsubscribes.push(nativeManager.onStateChange(() => {
-                lookupModel();
-            }));
-        } else {
-            const gemmaManager = GemmaModelManager.getInstance();
-            unsubscribes.push(gemmaManager.onStateChange(() => {
-                lookupModel();
-            }));
-        }
+        // Subscribe to ModelManager for all model state changes
+        // ModelManager handles forwarding from underlying managers (Gemma + Native)
+        const unsubscribe = ModelManager.getInstance().onModelsChange(() => {
+            lookupModel();
+        });
 
         return () => {
             cancelled = true;
-            unsubscribes.forEach(unsub => unsub());
+            unsubscribe();
         };
     }, [currentModel]);
 
@@ -687,6 +665,7 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
                                         isLoading={isModelLoading}
                                         isUnloaded={isModelUnloaded}
                                         localModelId={currentModelInfo?.localModelId}
+                                        server={currentModelInfo?.server}
                                     />
                                 )}
                             </div>
@@ -749,6 +728,7 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
                                     isLoading={isModelLoading}
                                     isUnloaded={isModelUnloaded}
                                     localModelId={currentModelInfo?.localModelId}
+                                    server={currentModelInfo?.server}
                                 />
                             )}
                         </div>

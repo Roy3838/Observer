@@ -1,12 +1,12 @@
 // LocalModelManager.ts - Platform-aware abstraction for local LLM inference
 // Returns the appropriate manager based on platform:
-// - iOS: NativeLlmManager (llama.cpp with Metal)
-// - Web/Desktop: GemmaModelManager (transformers.js in Web Worker)
+// - Tauri (iOS + desktop): NativeLlmManager (llama.cpp with Metal/CPU)
+// - Web browser: GemmaModelManager (transformers.js in Web Worker)
 
-import { isIOS } from '../platform';
+import { isTauri } from '../platform';
 import { GemmaModelManager } from './GemmaModelManager';
 import { NativeLlmManager } from './NativeLlmManager';
-import { LocalLlmMessage } from './types';
+import { LocalLlmMessage, LocalModelEntry } from './types';
 
 /**
  * Common interface for local model managers
@@ -21,6 +21,7 @@ export interface LocalModelManagerInterface {
   unloadModel(): void | Promise<void>;
   onStateChange(listener: (state: any) => void): () => void;
   getState(): any;
+  listLocalModels(): LocalModelEntry[];
 }
 
 /**
@@ -40,44 +41,44 @@ export type LocalModelManager = GemmaModelManager | NativeLlmManager;
  * ```
  */
 export function getLocalModelManager(): LocalModelManager {
-  if (isIOS()) {
+  if (isTauri()) {
     return NativeLlmManager.getInstance();
   }
   return GemmaModelManager.getInstance();
 }
 
 /**
- * Check if the current platform uses native LLM inference (iOS)
+ * Check if the current platform uses native LLM inference (Tauri: iOS + desktop)
  */
 export function usesNativeLlm(): boolean {
-  return isIOS();
+  return isTauri();
 }
 
 /**
  * Check if the current platform uses web-based LLM inference (transformers.js)
  */
 export function usesWebLlm(): boolean {
-  return !isIOS();
+  return !isTauri();
 }
 
 /**
- * Get the GemmaModelManager (for web/desktop platforms)
- * Throws if called on iOS
+ * Get the GemmaModelManager (for web browser only)
+ * Throws if called in Tauri
  */
 export function getGemmaManager(): GemmaModelManager {
-  if (isIOS()) {
-    throw new Error('GemmaModelManager not available on iOS. Use getLocalModelManager() instead.');
+  if (isTauri()) {
+    throw new Error('GemmaModelManager not available in Tauri. Use getLocalModelManager() instead.');
   }
   return GemmaModelManager.getInstance();
 }
 
 /**
- * Get the NativeLlmManager (for iOS platform)
- * Throws if called on non-iOS platforms
+ * Get the NativeLlmManager (for Tauri: iOS + desktop)
+ * Throws if called in web browser
  */
 export function getNativeManager(): NativeLlmManager {
-  if (!isIOS()) {
-    throw new Error('NativeLlmManager only available on iOS. Use getLocalModelManager() instead.');
+  if (!isTauri()) {
+    throw new Error('NativeLlmManager only available in Tauri. Use getLocalModelManager() instead.');
   }
   return NativeLlmManager.getInstance();
 }
@@ -90,7 +91,7 @@ export function tryAutoLoadLocalModel(): void {
   const manager = getLocalModelManager();
 
   if ('tryAutoLoad' in manager) {
-    if (isIOS()) {
+    if (isTauri()) {
       // NativeLlmManager.tryAutoLoad is async
       (manager as NativeLlmManager).tryAutoLoad();
     } else {

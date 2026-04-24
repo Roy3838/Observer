@@ -12,9 +12,11 @@ import {
   LlmDebugInfo,
   SamplerParams,
   GenerationMetrics,
+  LocalModelEntry,
 } from './types';
 
 const NATIVE_LLM_STORAGE_KEY = 'observer-native-llm-settings';
+const NATIVE_LLM_MODELS_CACHE_KEY = 'observer-native-llm-models-cache';
 
 interface PersistedNativeSettings {
   filename: string;  // Filename of the loaded model
@@ -35,8 +37,39 @@ export class NativeLlmManager {
   private loadedFilename: string | null = null;
   private multimodalAvailable = false; // Whether loaded model supports vision
   private currentDownloadFilename: string | null = null; // Track filename being downloaded
+  private cachedModels: NativeModelInfo[] = []; // Cached list of downloaded models
 
-  private constructor() {}
+  private constructor() {
+    // Load cached models from localStorage for instant UI on startup
+    this.loadCachedModelsFromStorage();
+  }
+
+  /**
+   * Load cached models from localStorage (for instant UI on startup)
+   */
+  private loadCachedModelsFromStorage(): void {
+    try {
+      const stored = localStorage.getItem(NATIVE_LLM_MODELS_CACHE_KEY);
+      if (stored) {
+        this.cachedModels = JSON.parse(stored) as NativeModelInfo[];
+        Logger.info('NativeLlmManager', `Loaded ${this.cachedModels.length} models from cache`);
+      }
+    } catch (error) {
+      Logger.warn('NativeLlmManager', 'Failed to load cached models from storage');
+      this.cachedModels = [];
+    }
+  }
+
+  /**
+   * Save cached models to localStorage
+   */
+  private saveCachedModelsToStorage(): void {
+    try {
+      localStorage.setItem(NATIVE_LLM_MODELS_CACHE_KEY, JSON.stringify(this.cachedModels));
+    } catch (error) {
+      Logger.warn('NativeLlmManager', 'Failed to save cached models to storage');
+    }
+  }
 
   public static getInstance(): NativeLlmManager {
     if (!NativeLlmManager.instance) {
@@ -62,16 +95,64 @@ export class NativeLlmManager {
   }
 
   /**
-   * List downloaded models from the models directory
+   * List downloaded models from the models directory (async, updates cache)
    */
   public async listModels(): Promise<NativeModelInfo[]> {
     try {
       const models = await invoke<NativeModelInfo[]>('llm_list_models');
+      this.cachedModels = models;
+      // Persist to localStorage for instant UI on next app startup
+      this.saveCachedModelsToStorage();
+      // Trigger state change so UI components re-render with updated models
+      this.stateChangeListeners.forEach(l => l(this.getState()));
       return models;
     } catch (error) {
       Logger.error('NativeLlmManager', `Failed to list models: ${error}`);
       return [];
     }
+  }
+
+  /**
+   * Get cached list of downloaded models (sync, for use in listModels())
+   */
+  public getCachedModels(): NativeModelInfo[] {
+    return [...this.cachedModels];
+  }
+
+  /**
+   * List all local models with unified status tracking.
+   * Returns cached models with their current status.
+   */
+  public listLocalModels(): LocalModelEntry[] {
+    return this.cachedModels.map(model => {
+      // Check if this model is currently loaded OR being loaded/unloaded
+      const isThisModelLoaded = this.loadedFilename === model.filename;
+      const modelIdFromFilename = model.filename.replace('.gguf', '').replace('.GGUF', '');
+      const isThisModelActive = isThisModelLoaded || this.state.modelId === modelIdFromFilename;
+
+      let status: LocalModelEntry['status'] = 'unloaded';
+      if (isThisModelActive) {
+        if (this.state.status === 'loaded') status = 'loaded';
+        else if (this.state.status === 'loading') status = 'loading';
+        else if (this.state.status === 'error') status = 'error';
+        // 'unloading' and 'downloading' map to 'unloaded' for the unified interface
+      }
+
+      return {
+        id: model.filename,
+        name: model.name,
+        status,
+        sizeBytes: model.sizeBytes,
+        isMultimodal: isThisModelLoaded ? this.multimodalAvailable : model.isMultimodal,
+      };
+    });
+  }
+
+  /**
+   * Refresh the cached models list (call on app start, after downloads, etc.)
+   */
+  public async refreshModelCache(): Promise<void> {
+    await this.listModels();
   }
 
   /**
@@ -116,6 +197,8 @@ export class NativeLlmManager {
             status: 'unloaded',
             downloadProgress: 100,
           });
+          // Refresh model cache so the new model shows up in listModels()
+          this.refreshModelCache();
         } else if (event.status === 'error') {
           Logger.error('NativeLlmManager', `Download error: ${event.error}`);
           this.currentDownloadFilename = null;
@@ -183,6 +266,9 @@ export class NativeLlmManager {
         this.loadedFilename = null;
         this.clearPersistedSettings();
       }
+
+      // Refresh model cache so the deleted model is removed from listModels()
+      this.refreshModelCache();
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       Logger.error('NativeLlmManager', `Failed to delete model: ${msg}`);
@@ -219,6 +305,9 @@ export class NativeLlmManager {
       this.setState({ status: 'loaded' });
       this.persistSettings(filename);
 
+      // Refresh model cache so listModels() returns updated state
+      this.refreshModelCache();
+
       // Check if multimodal is available after loading
       try {
         this.multimodalAvailable = await invoke<boolean>('llm_is_multimodal');
@@ -251,6 +340,9 @@ export class NativeLlmManager {
       this.multimodalAvailable = false;
       // Don't clear persisted settings - keep them so model shows as "unloaded" in listModels()
       this.setState({ status: 'unloaded', modelId: null, error: null });
+
+      // Refresh model cache so listModels() returns updated state
+      this.refreshModelCache();
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       Logger.error('NativeLlmManager', `Failed to unload model: ${msg}`);
@@ -289,6 +381,8 @@ export class NativeLlmManager {
         messages,
         onToken: tokenChannel,
       });
+
+      Logger.info('NativeModelInfo', `Generated response from llama.cpp ${result}`);
 
       return result;
     } catch (error) {
@@ -362,11 +456,16 @@ export class NativeLlmManager {
 
   public async tryAutoLoad(): Promise<void> {
     if (this.autoLoadTriggered) return;
+    this.autoLoadTriggered = true;
+
+    // Always refresh model cache on startup so downloaded models show up
+    const models = await this.listModels();
+    Logger.info('NativeLlmManager', `Found ${models.length} downloaded models`);
+
     if (this.state.status !== 'unloaded') return;
 
     const settings = this.getPersistedSettings();
     if (settings) {
-      this.autoLoadTriggered = true;
       Logger.info('NativeLlmManager', `Auto-loading persisted model: ${settings.filename}`);
 
       try {
@@ -374,7 +473,6 @@ export class NativeLlmManager {
         await this.applyPersistedGpuSetting();
 
         // Check if model file still exists
-        const models = await this.listModels();
         const model = models.find(m => m.filename === settings.filename);
         if (model) {
           await this.loadModel(settings.filename, model.mmprojFilename);

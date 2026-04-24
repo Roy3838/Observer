@@ -1,7 +1,7 @@
 // src/utils/sendApi.ts
 import { PreProcessorResult } from './pre-processor';
-import { listModels, BROWSER_LOCAL_SENTINEL } from './inferenceServer';
-import { getLocalModelManager } from './localLlm/LocalModelManager';
+import { listModels, BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL } from './inferenceServer';
+import { ModelManager } from './ModelManager';
 import { platformFetch } from './platform';
 import { InferenceParams } from '../config/inference-params';
 
@@ -142,11 +142,13 @@ export async function fetchResponse(
   inferenceParams?: InferenceParams
 ): Promise<string> {
   try {
-    // Local model: use native format directly
-    if (serverAddress === BROWSER_LOCAL_SENTINEL) {
-      const manager = getLocalModelManager();
-      if (!manager.isReady()) throw new Error('Local model not loaded. Please load it from the Add Model panel.');
-      return manager.generate(messages, onStreamChunk);
+    // Local model: use ModelManager unified interface
+    if (serverAddress === BROWSER_LOCAL_SENTINEL || serverAddress === LLAMA_CPP_LOCAL_SENTINEL) {
+      const manager = ModelManager.getInstance();
+      if (!manager.isLocalModelReady(serverAddress)) {
+        throw new Error('Local model not loaded. Please load it from the Add Model panel.');
+      }
+      return manager.generateWithLocalModel(serverAddress, messages, onStreamChunk);
     }
 
     // External API: convert to OpenAI format
@@ -268,8 +270,15 @@ export async function sendPrompt(
 ): Promise<string> {
   try {
     // Find the server for this model
-    const modelsResponse = listModels();
-    const model = modelsResponse.models.find(m => m.name === modelName);
+    let modelsResponse = listModels();
+    let model = modelsResponse.models.find(m => m.name === modelName);
+
+    // If model not found, try fetching fresh models list (handles race condition on startup)
+    if (!model) {
+      const manager = ModelManager.getInstance();
+      modelsResponse = await manager.fetchModels();
+      model = modelsResponse.models.find(m => m.name === modelName);
+    }
 
     if (!model) {
       throw new Error(`Model '${modelName}' not found in available models`);

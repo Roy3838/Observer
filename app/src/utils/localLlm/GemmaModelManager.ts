@@ -1,4 +1,4 @@
-import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaImageTokenBudget, GemmaModelState, GemmaProgressItem, GemmaMessage, GemmaLoadSettings } from './types';
+import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaImageTokenBudget, GemmaModelState, GemmaProgressItem, GemmaMessage, GemmaLoadSettings, LocalModelEntry, GEMMA_DISPLAY_NAMES } from './types';
 import { Logger } from '../logging';
 
 const GEMMA_STORAGE_KEY = 'observer-gemma-model-settings-v2';
@@ -227,6 +227,35 @@ export class GemmaModelManager {
   public isLoading(): boolean { return this.state.status === 'loading'; }
   public hasError(): boolean { return this.state.status === 'error'; }
   public getError(): string | null { return this.state.error; }
+
+  /**
+   * List all local models that have been cached/downloaded.
+   * Returns models with persisted settings (previously loaded) from localStorage.
+   */
+  public listLocalModels(): LocalModelEntry[] {
+    const entries: LocalModelEntry[] = [];
+    const persistedSettings = this.getAllPersistedSettings();
+
+    // Only list models that have been loaded before (cached in browser)
+    for (const modelId of Object.keys(persistedSettings)) {
+      const displayName = GEMMA_DISPLAY_NAMES[modelId as GemmaModelId] ?? modelId;
+      const isCurrentModel = this.state.modelId === modelId;
+
+      let status: LocalModelEntry['status'] = 'unloaded';
+      if (isCurrentModel) {
+        status = this.state.status === 'error' ? 'error' : this.state.status;
+      }
+
+      entries.push({
+        id: modelId,
+        name: displayName,
+        status,
+        isMultimodal: true,  // Gemma models support vision
+      });
+    }
+
+    return entries;
+  }
 
   // ============================================================================
   // Per-model settings persistence
