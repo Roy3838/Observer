@@ -212,7 +212,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
       }).catch(() => {
         // Ignore errors, use defaults
       });
-    } else if (nativeState.status === 'idle') {
+    } else if (nativeState.status === 'unloaded') {
       // Reset when unloaded
       setSamplerParams({ ...DEFAULT_SAMPLER_PARAMS });
     }

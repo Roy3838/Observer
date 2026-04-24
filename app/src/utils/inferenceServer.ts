@@ -17,7 +17,7 @@ export interface Model {
   pro?: boolean;
   server: string;
   ownedBy?: string;
-  status?: 'loaded' | 'loading' | 'unloaded';  // For local models
+  status?: 'loaded' | 'loading' | 'unloaded' | 'unloading';  // For local models
   localModelId?: string;  // For loading unloaded models (e.g., GemmaModelId or filename)
 }
 

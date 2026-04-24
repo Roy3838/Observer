@@ -35,7 +35,6 @@ export class NativeLlmManager {
   private loadedFilename: string | null = null;
   private multimodalAvailable = false; // Whether loaded model supports vision
   private currentDownloadFilename: string | null = null; // Track filename being downloaded
-  private downloadSessionId: number = 0; // Track download session to ignore cancelled downloads
 
   private constructor() {}
 

@@ -7,7 +7,6 @@ import {
   Camera,
   X,
   Image as ImageIcon,
-  BarChart3,
   AlertCircle,
   Cpu,
   StopCircle,
