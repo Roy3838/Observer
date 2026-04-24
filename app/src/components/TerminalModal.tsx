@@ -404,6 +404,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
               <BarChart3 size={14} />
               Benchmark
             </button>
+            {hasOllama && (
             <button
               onClick={() => setActiveTab('ollama')}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
@@ -416,6 +417,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
               Ollama
               {!hasOllama && <AlertCircle size={12} className="text-gray-400" />}
             </button>
+            )}
           </div>
         )}
 
