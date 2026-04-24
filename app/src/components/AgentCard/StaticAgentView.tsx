@@ -354,11 +354,20 @@ const ModelLocationIndicator: React.FC<{
                             <div className="flex items-center gap-2">
                                 <Server className="w-4 h-4 text-green-500" />
                                 <p className="text-xs text-gray-700">
-                                    <span className="font-semibold text-green-600">Local In-Browser</span> all data stays on your device!
+                                    <span className="font-semibold text-green-600">
+                                        {isIOSPlatform ? 'Local On-Device' : 'Local In-Browser'}
+                                    </span> all data stays on your device!
                                 </p>
                             </div>
-                            {/* Show current load settings */}
-                            {!isIOSPlatform && gemmaState.loadSettings && (
+                            {/* Show engine info */}
+                            {isIOSPlatform ? (
+                                <div className="bg-gray-50 rounded-md p-2">
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-gray-500">Engine:</span>
+                                        <span className="font-medium text-gray-700">llama.cpp</span>
+                                    </div>
+                                </div>
+                            ) : gemmaState.loadSettings && (
                                 <div className="bg-gray-50 rounded-md p-2 space-y-1">
                                     <div className="flex justify-between text-xs">
                                         <span className="text-gray-500">Device:</span>
@@ -547,6 +556,7 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
     // Look up current model info for location indicator
     useEffect(() => {
         let cancelled = false;
+        const isIOSPlatform = isIOS();
 
         const lookupModel = () => {
             if (cancelled) return;
@@ -568,14 +578,23 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
         }
 
         // Subscribe to local model state changes to update loading indicator
-        const gemmaManager = GemmaModelManager.getInstance();
-        const unsubscribe = gemmaManager.onStateChange(() => {
-            lookupModel();
-        });
+        // Use the appropriate manager based on platform
+        const unsubscribes: (() => void)[] = [];
+        if (isIOSPlatform) {
+            const nativeManager = NativeLlmManager.getInstance();
+            unsubscribes.push(nativeManager.onStateChange(() => {
+                lookupModel();
+            }));
+        } else {
+            const gemmaManager = GemmaModelManager.getInstance();
+            unsubscribes.push(gemmaManager.onStateChange(() => {
+                lookupModel();
+            }));
+        }
 
         return () => {
             cancelled = true;
-            unsubscribe();
+            unsubscribes.forEach(unsub => unsub());
         };
     }, [currentModel]);
 

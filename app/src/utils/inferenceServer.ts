@@ -40,6 +40,7 @@ let customServers: CustomServer[] = [];
 const CUSTOM_SERVERS_KEY = 'observer-custom-servers';
 
 export const BROWSER_LOCAL_SENTINEL = 'browser_local';
+export const LLAMA_CPP_LOCAL_SENTINEL = 'llama_cpp_local';
 
 interface ModelsResponse {
   models: Model[];
@@ -218,7 +219,7 @@ export function listModels(): ModelsResponse {
   const localModels: Model[] = [];
 
   if (usesNativeLlm()) {
-    // iOS: Use NativeLlmManager
+    // iOS: Use NativeLlmManager (llama.cpp)
     const nativeManager = NativeLlmManager.getInstance();
     // Don't auto-load - let user trigger load from UI
 
@@ -230,8 +231,8 @@ export function listModels(): ModelsResponse {
       const displayStatus = nativeState.status === 'loaded' ? 'loaded' : nativeState.status === 'unloading' ? 'unloading' : 'loading';
       localModels.push({
         name: modelName,
-        server: BROWSER_LOCAL_SENTINEL,
-        multimodal: false, // GGUF models are text-only for now
+        server: LLAMA_CPP_LOCAL_SENTINEL,
+        multimodal: nativeManager.isMultimodal(),
         status: displayStatus,
         localModelId: filename || undefined,
       });
@@ -242,7 +243,7 @@ export function listModels(): ModelsResponse {
         const modelName = persistedSettings.filename.replace('.gguf', '').replace('.GGUF', '');
         localModels.push({
           name: modelName,
-          server: BROWSER_LOCAL_SENTINEL,
+          server: LLAMA_CPP_LOCAL_SENTINEL,
           multimodal: false,
           status: 'unloaded',
           localModelId: persistedSettings.filename,
@@ -281,12 +282,14 @@ export function listModels(): ModelsResponse {
     }
   }
 
-  // Sort: browser_local first, then user-managed servers, then Observer cloud last
+  // Sort: local models first (browser_local, llama_cpp_local), then user-managed servers, then Observer cloud last
   const sortedModels = [...availableModels, ...localModels].sort((a, b) => {
-    const aScore = a.server === BROWSER_LOCAL_SENTINEL ? 0
+    const isLocalA = a.server === BROWSER_LOCAL_SENTINEL || a.server === LLAMA_CPP_LOCAL_SENTINEL;
+    const isLocalB = b.server === BROWSER_LOCAL_SENTINEL || b.server === LLAMA_CPP_LOCAL_SENTINEL;
+    const aScore = isLocalA ? 0
       : a.server.includes('api.observer-ai.com') ? 2
       : 1;
-    const bScore = b.server === BROWSER_LOCAL_SENTINEL ? 0
+    const bScore = isLocalB ? 0
       : b.server.includes('api.observer-ai.com') ? 2
       : 1;
     return aScore - bScore;

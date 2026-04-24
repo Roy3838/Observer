@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { listModels, Model } from '@utils/inferenceServer'; // Import updated Model interface
 import { Cpu, RefreshCw, Eye, Server } from 'lucide-react';
-import { BROWSER_LOCAL_SENTINEL } from '@utils/inferenceServer';
+import { BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL } from '@utils/inferenceServer';
 import { Logger } from '@utils/logging';
 import { getInferenceAddresses } from '@utils/inferenceServer';
 import TerminalModal from '@components/TerminalModal';
@@ -183,10 +183,15 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({ isProUser = false }) 
                         <Cpu className="h-3.5 w-3.5 inline-block mr-1 -mt-px" />
                         On-Browser
                       </span>
-                    ) : !model.server.includes('api.observer-ai.com') && (
-                      <span title="Running Locally" className="inline-block text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">
-                        <Server className="h-3.5 w-3.5 inline-block mr-1 -mt-px" />
+                    ) : model.server === LLAMA_CPP_LOCAL_SENTINEL ? (
+                      <span title="Runs locally via llama.cpp" className="inline-block text-xs font-medium text-emerald-700 bg-emerald-100 px-2 py-1 rounded">
+                        <Cpu className="h-3.5 w-3.5 inline-block mr-1 -mt-px" />
                         Local
+                      </span>
+                    ) : !model.server.includes('api.observer-ai.com') && (
+                      <span title="Running on local server" className="inline-block text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                        <Server className="h-3.5 w-3.5 inline-block mr-1 -mt-px" />
+                        Server
                       </span>
                     )}
                   </div>

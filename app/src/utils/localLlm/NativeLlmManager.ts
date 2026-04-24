@@ -249,7 +249,7 @@ export class NativeLlmManager {
       Logger.info('NativeLlmManager', 'Model unloaded');
       this.loadedFilename = null;
       this.multimodalAvailable = false;
-      this.clearPersistedSettings();
+      // Don't clear persisted settings - keep them so model shows as "unloaded" in listModels()
       this.setState({ status: 'unloaded', modelId: null, error: null });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
