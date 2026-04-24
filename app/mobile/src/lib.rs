@@ -1,7 +1,10 @@
-use std::sync::Mutex;
+use std::sync::{Mutex, atomic::{AtomicBool, Ordering}};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{ipc::Channel, AppHandle, Manager, State};
 use base64::Engine;
+
+// Global flag to signal download cancellation
+static DOWNLOAD_CANCELLED: AtomicBool = AtomicBool::new(false);
 
 mod server;
 use server::{AudioData, FrameData, ServerState, start_server};
@@ -379,6 +382,9 @@ async fn llm_download_model(
     {
         use tauri_plugin_llm_engine::filename_from_hf_url;
 
+        // Reset cancellation flag at start of new download
+        DOWNLOAD_CANCELLED.store(false, Ordering::SeqCst);
+
         // Extract filename from URL
         let filename = filename_from_hf_url(&url)
             .ok_or_else(|| "Could not extract filename from URL".to_string())?;
@@ -428,6 +434,18 @@ async fn llm_download_model(
         use futures_util::StreamExt;
 
         while let Some(chunk) = stream.next().await {
+            // Check if download was cancelled
+            if DOWNLOAD_CANCELLED.load(Ordering::SeqCst) {
+                eprintln!("[LLM] Download cancelled by user: {}", filename);
+                drop(file); // Close file handle before deleting
+                let _ = std::fs::remove_file(&output_path); // Delete partial file
+                let _ = on_progress.send(serde_json::json!({
+                    "status": "cancelled",
+                    "filename": filename
+                }));
+                return Err("Download cancelled".to_string());
+            }
+
             let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
             file.write_all(&chunk)
                 .map_err(|e| format!("Write error: {}", e))?;
@@ -466,6 +484,14 @@ async fn llm_download_model(
         let _ = (app_handle, url, on_progress);
         Err("LLM download only available on iOS".to_string())
     }
+}
+
+/// Cancel an ongoing download
+#[tauri::command]
+async fn llm_cancel_download() -> Result<(), String> {
+    eprintln!("[LLM] Cancel download requested");
+    DOWNLOAD_CANCELLED.store(true, Ordering::SeqCst);
+    Ok(())
 }
 
 /// Delete a downloaded model by filename
@@ -983,6 +1009,45 @@ async fn llm_set_sampler_params(
     }
 }
 
+/// Set whether to use GPU acceleration (Metal)
+/// Must be called before loading a model to take effect
+#[tauri::command]
+async fn llm_set_use_gpu(use_gpu: bool) -> Result<(), String> {
+    #[cfg(target_os = "ios")]
+    {
+        use tauri_plugin_llm_engine::with_engine;
+
+        with_engine(|engine| {
+            engine.set_use_gpu(use_gpu);
+            Ok(())
+        })
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = use_gpu;
+        Err("LLM only available on iOS".to_string())
+    }
+}
+
+/// Get whether GPU acceleration is enabled
+#[tauri::command]
+async fn llm_get_use_gpu() -> Result<bool, String> {
+    #[cfg(target_os = "ios")]
+    {
+        use tauri_plugin_llm_engine::with_engine;
+
+        with_engine(|engine| {
+            Ok(engine.get_use_gpu())
+        })
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        Err("LLM only available on iOS".to_string())
+    }
+}
+
 /// Test generation with a simple prompt, returns response and metrics
 #[tauri::command]
 async fn llm_test_generate(
@@ -1132,6 +1197,7 @@ pub fn run() {
             // LLM commands (iOS only, no-op on other platforms)
             llm_list_models,
             llm_download_model,
+            llm_cancel_download,
             llm_delete_model,
             llm_load_model,
             llm_generate,
@@ -1143,6 +1209,8 @@ pub fn run() {
             // LLM debug commands
             llm_get_debug_info,
             llm_set_sampler_params,
+            llm_set_use_gpu,
+            llm_get_use_gpu,
             llm_test_generate
         ])
         .run(tauri::generate_context!())

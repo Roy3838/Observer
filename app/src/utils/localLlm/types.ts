@@ -57,7 +57,7 @@ export interface NativeModelInfo {
   isMultimodal: boolean;    // Whether model supports vision/multimodal
 }
 
-export type NativeModelStatus = 'unloaded' | 'loading' | 'loaded' | 'downloading' | 'error';
+export type NativeModelStatus = 'unloaded' | 'loading' | 'loaded' | 'downloading' | 'unloading' | 'error';
 
 export interface NativeModelState {
   status: NativeModelStatus;

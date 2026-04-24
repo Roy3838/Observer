@@ -331,6 +331,11 @@ const ModelLocationIndicator: React.FC<{
                                     Initializing model...
                                 </div>
                             )}
+                            {isIOSPlatform && nativeState.status === 'unloading' && (
+                                <div className="text-xs text-amber-600 text-center">
+                                    Unloading model...
+                                </div>
+                            )}
 
                             {/* Show settings being loaded */}
                             {!isIOSPlatform && gemmaState.loadSettings && (

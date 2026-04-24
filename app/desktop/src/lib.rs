@@ -26,8 +26,11 @@ use futures::future::join_all;
 use http_body_util::BodyExt;
 
 use reqwest::Client;
-use std::sync::Mutex;
+use std::sync::{Mutex, atomic::{AtomicBool, Ordering}};
 use tauri::{AppHandle, Emitter, Manager, State};
+
+// Global flag to signal download cancellation
+static DOWNLOAD_CANCELLED: AtomicBool = AtomicBool::new(false);
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -294,6 +297,9 @@ async fn llm_download_model(
     use tauri_plugin_llm_engine::filename_from_hf_url;
     use futures_util::StreamExt;
 
+    // Reset cancellation flag at start of new download
+    DOWNLOAD_CANCELLED.store(false, Ordering::SeqCst);
+
     let filename = filename_from_hf_url(&url)
         .ok_or_else(|| "Could not extract filename from URL".to_string())?;
 
@@ -338,6 +344,18 @@ async fn llm_download_model(
     let mut stream = response.bytes_stream();
 
     while let Some(chunk) = stream.next().await {
+        // Check if download was cancelled
+        if DOWNLOAD_CANCELLED.load(Ordering::SeqCst) {
+            log::info!("Download cancelled by user: {}", filename);
+            drop(file); // Close file handle before deleting
+            let _ = std::fs::remove_file(&output_path); // Delete partial file
+            let _ = on_progress.send(serde_json::json!({
+                "status": "cancelled",
+                "filename": filename
+            }));
+            return Err("Download cancelled".to_string());
+        }
+
         let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
         file.write_all(&chunk)
             .map_err(|e| format!("Write error: {}", e))?;
@@ -367,6 +385,14 @@ async fn llm_download_model(
     }));
 
     Ok(filename)
+}
+
+/// Cancel an ongoing download
+#[tauri::command]
+async fn llm_cancel_download() -> Result<(), String> {
+    log::info!("Cancel download requested");
+    DOWNLOAD_CANCELLED.store(true, Ordering::SeqCst);
+    Ok(())
 }
 
 /// Delete a downloaded model by filename
@@ -709,6 +735,28 @@ async fn llm_set_sampler_params(
         };
         engine.set_sampler_params(new_params);
         Ok(())
+    })
+}
+
+/// Set whether to use GPU acceleration (Metal)
+/// Must be called before loading a model to take effect
+#[tauri::command]
+async fn llm_set_use_gpu(use_gpu: bool) -> Result<(), String> {
+    use tauri_plugin_llm_engine::with_engine;
+
+    with_engine(|engine| {
+        engine.set_use_gpu(use_gpu);
+        Ok(())
+    })
+}
+
+/// Get whether GPU acceleration is enabled
+#[tauri::command]
+async fn llm_get_use_gpu() -> Result<bool, String> {
+    use tauri_plugin_llm_engine::with_engine;
+
+    with_engine(|engine| {
+        Ok(engine.get_use_gpu())
     })
 }
 
@@ -1201,6 +1249,7 @@ pub fn run() {
             // LLM commands
             llm_list_models,
             llm_download_model,
+            llm_cancel_download,
             llm_delete_model,
             llm_load_model,
             llm_generate,
@@ -1211,6 +1260,8 @@ pub fn run() {
             llm_debug_state,
             llm_get_debug_info,
             llm_set_sampler_params,
+            llm_set_use_gpu,
+            llm_get_use_gpu,
             llm_test_generate
         ])
         .run(tauri::generate_context!())

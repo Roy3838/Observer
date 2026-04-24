@@ -96,6 +96,7 @@ pub struct LlmEngine {
     mmproj_path: Option<PathBuf>,  // Path to loaded mmproj file
     sampler_params: SamplerParams, // Configurable sampler parameters
     last_metrics: Option<GenerationMetrics>, // Metrics from last generation
+    use_gpu: bool, // Whether to use GPU acceleration (Metal). Default false for compatibility.
 }
 
 impl LlmEngine {
@@ -114,6 +115,7 @@ impl LlmEngine {
             mmproj_path: None,
             sampler_params: SamplerParams::default(),
             last_metrics: None,
+            use_gpu: false, // Default to CPU for maximum compatibility
         })
     }
 
@@ -129,8 +131,12 @@ impl LlmEngine {
 
         self.unload();
 
+        // Use GPU layers based on setting: 99 for GPU (offload all), 0 for CPU only
+        let n_gpu_layers = if self.use_gpu { 99 } else { 0 };
+        eprintln!("[LlmEngine] GPU mode: {}, n_gpu_layers: {}", self.use_gpu, n_gpu_layers);
+
         let model_params = LlamaModelParams::default()
-            .with_n_gpu_layers(99);
+            .with_n_gpu_layers(n_gpu_layers);
 
         let model = LlamaModel::load_from_file(&self.backend, &model_path, &model_params)
             .map_err(|e| format!("Failed to load model: {}", e))?;
@@ -212,6 +218,18 @@ impl LlmEngine {
     /// Set the sampler parameters
     pub fn set_sampler_params(&mut self, params: SamplerParams) {
         self.sampler_params = params;
+    }
+
+    /// Get whether GPU acceleration is enabled
+    pub fn get_use_gpu(&self) -> bool {
+        self.use_gpu
+    }
+
+    /// Set whether to use GPU acceleration (Metal)
+    /// Must be called before load_model to take effect
+    pub fn set_use_gpu(&mut self, use_gpu: bool) {
+        self.use_gpu = use_gpu;
+        eprintln!("[LlmEngine] GPU mode set to: {}", use_gpu);
     }
 
     /// Get the last generation metrics

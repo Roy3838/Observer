@@ -223,15 +223,16 @@ export function listModels(): ModelsResponse {
     // Don't auto-load - let user trigger load from UI
 
     const nativeState = nativeManager.getState();
-    if ((nativeState.status === 'loaded' || nativeState.status === 'loading') && nativeState.modelId) {
+    if ((nativeState.status === 'loaded' || nativeState.status === 'loading' || nativeState.status === 'unloading') && nativeState.modelId) {
       // Use the loaded model name (derived from filename)
       const modelName = nativeManager.getLoadedModelName() || nativeState.modelId;
       const filename = nativeManager.getLoadedFilename();
+      const displayStatus = nativeState.status === 'loaded' ? 'loaded' : nativeState.status === 'unloading' ? 'unloading' : 'loading';
       localModels.push({
         name: modelName,
         server: BROWSER_LOCAL_SENTINEL,
         multimodal: false, // GGUF models are text-only for now
-        status: nativeState.status === 'loaded' ? 'loaded' : 'loading',
+        status: displayStatus,
         localModelId: filename || undefined,
       });
     } else {

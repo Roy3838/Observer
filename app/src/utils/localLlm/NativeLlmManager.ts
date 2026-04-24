@@ -34,6 +34,8 @@ export class NativeLlmManager {
   private autoLoadTriggered = false;
   private loadedFilename: string | null = null;
   private multimodalAvailable = false; // Whether loaded model supports vision
+  private currentDownloadFilename: string | null = null; // Track filename being downloaded
+  private downloadSessionId: number = 0; // Track download session to ignore cancelled downloads
 
   private constructor() {}
 
@@ -85,6 +87,7 @@ export class NativeLlmManager {
 
     // Extract filename from URL for display
     const filename = url.split('/').pop() || 'model.gguf';
+    this.currentDownloadFilename = filename;
 
     this.setState({
       status: 'downloading',
@@ -109,12 +112,14 @@ export class NativeLlmManager {
           });
         } else if (event.status === 'complete') {
           Logger.info('NativeLlmManager', `Download complete: ${filename}`);
+          this.currentDownloadFilename = null;
           this.setState({
             status: 'unloaded',
             downloadProgress: 100,
           });
         } else if (event.status === 'error') {
           Logger.error('NativeLlmManager', `Download error: ${event.error}`);
+          this.currentDownloadFilename = null;
           this.setState({
             status: 'error',
             error: event.error || 'Download failed',
@@ -131,8 +136,37 @@ export class NativeLlmManager {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       Logger.error('NativeLlmManager', `Download failed: ${msg}`);
+      this.currentDownloadFilename = null;
       this.setState({ status: 'error', error: msg });
       throw error;
+    }
+  }
+
+  /**
+   * Cancel an ongoing download - signals Rust to stop and delete partial file
+   */
+  public async cancelDownload(): Promise<void> {
+    if (this.state.status === 'downloading') {
+      Logger.info('NativeLlmManager', `Cancelling download: ${this.currentDownloadFilename}`);
+
+      try {
+        // Signal Rust to cancel the download (it will delete the partial file)
+        await invoke('llm_cancel_download');
+        Logger.info('NativeLlmManager', 'Cancel signal sent to backend');
+      } catch (error) {
+        Logger.warn('NativeLlmManager', `Cancel command failed: ${error}`);
+      }
+
+      // Reset local state
+      this.currentDownloadFilename = null;
+      this.setState({
+        status: 'unloaded',
+        modelId: null,
+        downloadProgress: 0,
+        downloadedBytes: 0,
+        totalBytes: 0,
+        error: null,
+      });
     }
   }
 
@@ -177,6 +211,9 @@ export class NativeLlmManager {
     Logger.info('NativeLlmManager', `Loading model: ${filename}, mmproj: ${mmprojFilename ?? 'auto-detect'}`);
 
     try {
+      // Apply GPU setting before loading (must be set before load_model)
+      await this.applyPersistedGpuSetting();
+
       await invoke('llm_load_model', { filename, mmprojFilename: mmprojFilename ?? null });
       Logger.info('NativeLlmManager', 'Model loaded successfully');
       this.loadedFilename = filename;
@@ -202,7 +239,11 @@ export class NativeLlmManager {
    * Unload the current model to free memory
    */
   public async unloadModel(): Promise<void> {
-    if (this.state.status === 'unloaded') return;
+    if (this.state.status === 'unloaded' || this.state.status === 'unloading') return;
+
+    const previousModelId = this.state.modelId;
+    this.setState({ status: 'unloading' });
+    Logger.info('NativeLlmManager', `Unloading model: ${previousModelId}`);
 
     try {
       await invoke('llm_unload_model');
@@ -212,7 +253,10 @@ export class NativeLlmManager {
       this.clearPersistedSettings();
       this.setState({ status: 'unloaded', modelId: null, error: null });
     } catch (error) {
-      Logger.error('NativeLlmManager', `Failed to unload model: ${error}`);
+      const msg = error instanceof Error ? error.message : String(error);
+      Logger.error('NativeLlmManager', `Failed to unload model: ${msg}`);
+      // Revert to loaded state on error
+      this.setState({ status: 'loaded', error: msg });
     }
   }
 
@@ -327,6 +371,9 @@ export class NativeLlmManager {
       Logger.info('NativeLlmManager', `Auto-loading persisted model: ${settings.filename}`);
 
       try {
+        // Apply GPU setting before loading
+        await this.applyPersistedGpuSetting();
+
         // Check if model file still exists
         const models = await this.listModels();
         const model = models.find(m => m.filename === settings.filename);
@@ -399,6 +446,62 @@ export class NativeLlmManager {
       Logger.error('NativeLlmManager', `Failed to set sampler params: ${error}`);
       throw error;
     }
+  }
+
+  /**
+   * Set whether to use GPU acceleration (Metal)
+   * Must be called BEFORE loading a model to take effect.
+   * Setting is persisted to localStorage.
+   * @param useGpu true for GPU (faster but may cause issues on some hardware), false for CPU (safer)
+   */
+  public async setUseGpu(useGpu: boolean): Promise<void> {
+    try {
+      await invoke('llm_set_use_gpu', { useGpu });
+      // Persist the setting
+      localStorage.setItem('observer-native-llm-use-gpu', JSON.stringify(useGpu));
+      Logger.info('NativeLlmManager', `GPU mode set to: ${useGpu}`);
+    } catch (error) {
+      Logger.error('NativeLlmManager', `Failed to set GPU mode: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get whether GPU acceleration is enabled
+   */
+  public async getUseGpu(): Promise<boolean> {
+    try {
+      const useGpu = await invoke<boolean>('llm_get_use_gpu');
+      return useGpu;
+    } catch (error) {
+      Logger.error('NativeLlmManager', `Failed to get GPU mode: ${error}`);
+      return false; // Default to CPU on error
+    }
+  }
+
+  /**
+   * Get persisted GPU setting from localStorage
+   * Returns false (CPU mode) if not set
+   */
+  public getPersistedUseGpu(): boolean {
+    try {
+      const stored = localStorage.getItem('observer-native-llm-use-gpu');
+      if (stored) {
+        return JSON.parse(stored) as boolean;
+      }
+    } catch (error) {
+      Logger.warn('NativeLlmManager', 'Failed to read persisted GPU setting');
+    }
+    return false; // Default to CPU mode for maximum compatibility
+  }
+
+  /**
+   * Apply persisted GPU setting to the engine
+   * Call this before loading a model
+   */
+  public async applyPersistedGpuSetting(): Promise<void> {
+    const useGpu = this.getPersistedUseGpu();
+    await this.setUseGpu(useGpu);
   }
 
   /**
