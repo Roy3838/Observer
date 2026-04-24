@@ -17,7 +17,7 @@ import {
 import { Logger } from '@utils/logging';
 import { isTauri, platformFetch } from '@utils/platform';
 import SharingPermissionsModal from './SharingPermissionsModal';
-import ConnectionSettingsModal from './ConnectionSettingsModal';
+import ModelHub from './ModelHub';
 import AccountModal from './AccountModal';
 import StartupDialogs from './StartupDialogs';
 import type { TokenProvider } from '@utils/main_loop';
@@ -51,7 +51,7 @@ interface AppHeaderProps {
   hostingContext?: 'official-web' | 'self-hosted' | 'tauri';
   getToken: TokenProvider;
   onUpgradeClick?: () => void;
-  onShowTerminalModal?: () => void;
+  onShowModelHub?: () => void;
   quotaInfo: QuotaInfo;
   setQuotaInfo: React.Dispatch<React.SetStateAction<QuotaInfo>>;
   onToggleMobileMenu?: () => void;
@@ -68,7 +68,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
   hostingContext = 'self-hosted',
   getToken,
   onUpgradeClick,
-  onShowTerminalModal,
+  onShowModelHub,
   quotaInfo,
   setQuotaInfo,
   onToggleMobileMenu,
@@ -263,8 +263,8 @@ const AppHeader: React.FC<AppHeaderProps> = ({
         const data = await response.json();
         if (data.models && data.models.length === 0) {
           Logger.info('MODELS', 'Local Ollama server detected with no models, showing terminal modal');
-          if (onShowTerminalModal) {
-            onShowTerminalModal();
+          if (onShowModelHub) {
+            onShowModelHub();
           }
         }
       }
@@ -633,27 +633,25 @@ const AppHeader: React.FC<AppHeaderProps> = ({
         onClose={() => setIsPermissionsModalOpen(false)}
       />
 
-      {/* --- NEW --- Render the settings modal */}
-      <ConnectionSettingsModal
+      {/* Model Hub - central modal for all model/server management */}
+      <ModelHub
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
-        {...{
-          isUsingObServer,
-          handleToggleObServer,
-          showLoginMessage,
-          isAuthenticated,
-          quotaInfo,
-          renderQuotaStatus,
-          localServerOnline,
-          checkLocalServer: checkLocalServerOnly,
-          customServers,
-          onAddCustomServer: handleAddCustomServer,
-          onRemoveCustomServer: handleRemoveCustomServer,
-          onToggleCustomServer: handleToggleCustomServer,
-          onCheckCustomServer: handleCheckCustomServer,
-          appInferenceUrl,
-          onSetAppInferenceUrl: handleSetAppInferenceUrl
-        }}
+        isUsingObServer={isUsingObServer}
+        handleToggleObServer={handleToggleObServer}
+        showLoginMessage={showLoginMessage}
+        isAuthenticated={isAuthenticated}
+        quotaInfo={quotaInfo}
+        renderQuotaStatus={renderQuotaStatus}
+        localServerOnline={localServerOnline}
+        checkLocalServer={checkLocalServerOnly}
+        customServers={customServers}
+        onAddCustomServer={handleAddCustomServer}
+        onRemoveCustomServer={handleRemoveCustomServer}
+        onToggleCustomServer={handleToggleCustomServer}
+        onCheckCustomServer={handleCheckCustomServer}
+        appInferenceUrl={appInferenceUrl}
+        onSetAppInferenceUrl={handleSetAppInferenceUrl}
       />
 
       {isStartupDialogOpen && (

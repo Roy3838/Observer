@@ -1,13 +1,14 @@
-// components/TerminalModal.tsx
+// components/ModelHub.tsx
 
 import React, { useState, useEffect } from 'react';
 import Modal from '@components/EditAgent/Modal';
-import { Download, CheckCircle, AlertTriangle, X, StopCircle, FileDown, Cpu, Trash2, BarChart3, AlertCircle, Settings2 } from 'lucide-react';
+import { Download, CheckCircle, AlertTriangle, X, StopCircle, FileDown, Cpu, Trash2, BarChart3, AlertCircle, Settings2, RefreshCw, Plus, Cloud, Server, Zap } from 'lucide-react';
 import pullModelManager, { PullState } from '@utils/pullModelManager';
 import { platformFetch, isTauri, isMobile } from '@utils/platform';
 import { GemmaModelManager } from '@utils/localLlm/GemmaModelManager';
 import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
 import BenchmarkPanel from '@components/BenchmarkPanel';
+import type { CustomServer } from '@utils/inferenceServer';
 import {
   GemmaModelId,
   GemmaModelState,
@@ -39,12 +40,36 @@ const LLAMA_PRESETS = {
 type LlamaPresetId = keyof typeof LLAMA_PRESETS;
 type ViewMode = 'simple' | 'advanced';
 
-interface TerminalModalProps {
+// Re-using the types from AppHeader
+type QuotaInfo = {
+  used: number;
+  remaining: number;
+  limit: number;
+  tier: string;
+} | null;
+
+interface ModelHubProps {
   isOpen: boolean;
   onClose: () => void;
   onPullComplete?: () => void;
   noModels?: boolean;
   ollamaServers?: string[];
+  // Server connection settings
+  isUsingObServer?: boolean;
+  handleToggleObServer?: () => void;
+  showLoginMessage?: boolean;
+  isAuthenticated?: boolean;
+  quotaInfo?: QuotaInfo;
+  renderQuotaStatus?: () => React.ReactNode;
+  localServerOnline?: boolean;
+  checkLocalServer?: () => void;
+  customServers?: CustomServer[];
+  onAddCustomServer?: (address: string) => void;
+  onRemoveCustomServer?: (address: string) => void;
+  onToggleCustomServer?: (address: string) => void;
+  onCheckCustomServer?: (address: string) => void;
+  appInferenceUrl?: string | null;
+  onSetAppInferenceUrl?: (url: string) => void;
 }
 
 const suggestedModels = [
@@ -72,7 +97,29 @@ const formatBytes = (bytes: number, decimals = 2) => {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 };
 
-const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullComplete, noModels = false, ollamaServers }) => {
+const ModelHub: React.FC<ModelHubProps> = ({
+  isOpen,
+  onClose,
+  onPullComplete,
+  noModels = false,
+  ollamaServers,
+  // Server connection props
+  isUsingObServer = false,
+  handleToggleObServer,
+  showLoginMessage = false,
+  isAuthenticated = false,
+  quotaInfo,
+  renderQuotaStatus,
+  localServerOnline = false,
+  checkLocalServer,
+  customServers = [],
+  onAddCustomServer,
+  onRemoveCustomServer,
+  onToggleCustomServer,
+  onCheckCustomServer,
+  appInferenceUrl,
+  onSetAppInferenceUrl,
+}) => {
   const [modelToPull, setModelToPull] = useState('');
   const [downloadState, setDownloadState] = useState<PullState>(pullModelManager.getInitialState());
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(noModels);
@@ -80,10 +127,10 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
   const availableServers = ollamaServers || detectedServers;
   const [selectedServer, setSelectedServer] = useState<string>(availableServers[0] || '');
 
-  const hasOllama = availableServers.length > 0;
   const isTauriApp = isTauri();
   const isMobileDevice = isMobile();
-  const [activeTab, setActiveTab] = useState<'transformers' | 'llamacpp' | 'benchmark' | 'ollama'>('transformers');
+  const [activeTab, setActiveTab] = useState<'transformers' | 'llamacpp' | 'customserver' | 'observer'>('transformers');
+  const [showBenchmark, setShowBenchmark] = useState(false);
 
   // Simple/Advanced view mode for llama.cpp and Transformers.js tabs
   const [llamaViewMode, setLlamaViewMode] = useState<ViewMode>('simple');
@@ -116,17 +163,22 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
   // GPU acceleration setting for llama.cpp (defaults to CPU for compatibility)
   const [useGpu, setUseGpu] = useState<boolean>(() => NativeLlmManager.getInstance().getPersistedUseGpu());
 
+  // Custom Server tab state
+  const [isAddingServer, setIsAddingServer] = useState(false);
+  const [newServerAddress, setNewServerAddress] = useState('');
+  const [addError, setAddError] = useState('');
+  const [inferenceUrlInput, setInferenceUrlInput] = useState(appInferenceUrl || 'http://localhost:11434');
+
+
   useEffect(() => {
     if (!isOpen) return;
-    // Default to Ollama if available, otherwise llama.cpp on Tauri or Transformers.js on web
-    if (hasOllama) {
-      setActiveTab('ollama');
-    } else if (isTauriApp) {
+    // Default to llama.cpp on Tauri, otherwise Transformers.js on web
+    if (isTauriApp) {
       setActiveTab('llamacpp');
     } else {
       setActiveTab('transformers');
     }
-  }, [isOpen, hasOllama, isTauriApp]);
+  }, [isOpen, isTauriApp]);
 
   useEffect(() => {
     if (isOpen && !ollamaServers && noModels) {
@@ -217,6 +269,13 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
       setSamplerParams({ ...DEFAULT_SAMPLER_PARAMS });
     }
   }, [isOpen, isTauriApp, nativeState.status]);
+
+  // Update inference URL input when appInferenceUrl changes
+  useEffect(() => {
+    if (appInferenceUrl) {
+      setInferenceUrlInput(appInferenceUrl);
+    }
+  }, [appInferenceUrl]);
 
   const handleStartPull = () => {
     if (modelToPull.trim() && selectedServer) {
@@ -337,6 +396,33 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
     return nativeModels.find(m => m.id.includes(ggufFilename.split('-Q')[0]));
   };
 
+  // Custom Server tab handlers
+  const handleAddServer = () => {
+    setAddError('');
+
+    // Basic URL validation
+    if (!newServerAddress.trim()) {
+      setAddError('Please enter a server address');
+      return;
+    }
+
+    // Check if URL has protocol
+    if (!newServerAddress.match(/^https?:\/\//)) {
+      setAddError('URL must start with http:// or https://');
+      return;
+    }
+
+    // Try to validate URL format
+    try {
+      new URL(newServerAddress);
+      onAddCustomServer?.(newServerAddress);
+      setNewServerAddress('');
+      setIsAddingServer(false);
+    } catch {
+      setAddError('Invalid URL format');
+    }
+  };
+
   useEffect(() => {
     if (isOpen) setShowWelcomeScreen(noModels);
   }, [isOpen, noModels]);
@@ -352,6 +438,10 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
   const isFinished = status === 'success' || status === 'error';
   const isNativeDownloading = nativeState.status === 'downloading';
 
+  // Detect Ollama servers from custom servers list
+  const ollamaServersFromCustom = customServers.filter(s => s.enabled && s.status === 'online').map(s => s.address);
+  const allOllamaServers = [...new Set([...availableServers, ...ollamaServersFromCustom])];
+
   return (
     <Modal open={isOpen} onClose={handleDone} className="w-full max-w-3xl">
       <div className="p-8 max-h-[85vh] overflow-y-auto">
@@ -360,12 +450,44 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
             <h2 className="text-2xl font-bold text-gray-900">Model Hub</h2>
             <p className="text-sm text-gray-500 mt-1">Download and manage local AI models</p>
           </div>
-          <button onClick={handleDone} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-2 transition-colors">
-            <X size={22} />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Benchmark button - now in corner */}
+            <button
+              onClick={() => setShowBenchmark(!showBenchmark)}
+              className={`p-2 rounded-lg transition-all ${
+                showBenchmark
+                  ? 'bg-orange-100 text-orange-600'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              }`}
+              title="Run Benchmark"
+            >
+              <BarChart3 size={20} />
+            </button>
+            <button onClick={handleDone} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-2 transition-colors">
+              <X size={22} />
+            </button>
+          </div>
         </div>
 
-        {/* Tab bar - always show all 4 tabs */}
+        {/* Show Benchmark panel when active */}
+        {showBenchmark && (
+          <div className="mb-6 border border-orange-200 rounded-xl overflow-hidden">
+            <div className="bg-orange-50 px-4 py-2 border-b border-orange-200 flex justify-between items-center">
+              <span className="text-sm font-medium text-orange-800">Performance Benchmark</span>
+              <button
+                onClick={() => setShowBenchmark(false)}
+                className="text-orange-400 hover:text-orange-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="bg-white">
+              <BenchmarkPanel isVisible={showBenchmark} />
+            </div>
+          </div>
+        )}
+
+        {/* Tab bar - new structure */}
         {!showWelcomeScreen && (
           <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-xl overflow-x-auto">
             <button
@@ -393,165 +515,419 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
               {!isTauriApp && <AlertCircle size={12} className="text-gray-400" />}
             </button>
             <button
-              onClick={() => setActiveTab('benchmark')}
+              onClick={() => setActiveTab('customserver')}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
-                activeTab === 'benchmark'
-                  ? 'bg-white text-orange-700 shadow-sm'
+                activeTab === 'customserver'
+                  ? 'bg-white text-blue-700 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               }`}
             >
-              <span className={`w-2 h-2 rounded-full ${activeTab === 'benchmark' ? 'bg-orange-500' : 'bg-gray-300'}`} />
-              <BarChart3 size={14} />
-              Benchmark
+              <span className={`w-2 h-2 rounded-full ${activeTab === 'customserver' ? 'bg-blue-500' : 'bg-gray-300'}`} />
+              <Server size={14} />
+              Custom Server
             </button>
-            {hasOllama && (
             <button
-              onClick={() => setActiveTab('ollama')}
+              onClick={() => setActiveTab('observer')}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
-                activeTab === 'ollama'
-                  ? 'bg-white text-blue-700 shadow-sm'
+                activeTab === 'observer'
+                  ? 'bg-white text-indigo-700 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              } ${!hasOllama ? 'opacity-60' : ''}`}
+              }`}
             >
-              <span className={`w-2 h-2 rounded-full ${activeTab === 'ollama' ? 'bg-blue-500' : 'bg-gray-300'}`} />
-              Ollama
-              {!hasOllama && <AlertCircle size={12} className="text-gray-400" />}
+              <span className={`w-2 h-2 rounded-full ${activeTab === 'observer' ? 'bg-indigo-500' : 'bg-gray-300'}`} />
+              <Cloud size={14} />
+              Ob-Server
             </button>
-            )}
           </div>
         )}
 
-        {/* ── OLLAMA TAB ── */}
-        {activeTab === 'ollama' && !showWelcomeScreen && (
+        {/* ── CUSTOM SERVER TAB ── */}
+        {activeTab === 'customserver' && !showWelcomeScreen && (
           <div className="space-y-5">
-            {!hasOllama ? (
-              /* Ollama unavailable state */
-              <div className="text-center py-10">
-                <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gray-100 mb-5">
-                  <AlertCircle size={40} className="text-gray-400" />
+            <p className="text-gray-500 text-sm">
+              Connect to external inference servers including Ollama, OpenAI-compatible APIs, and custom endpoints.
+            </p>
+
+            {/* Tauri-only: Local Server URL */}
+            {isTauriApp && (
+              <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Server size={18} className="text-blue-600" />
+                    <span className="font-semibold text-gray-800">Local Server</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      localServerOnline ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
+                    }`}>
+                      {localServerOnline ? 'Online' : 'Offline'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={checkLocalServer}
+                    className="p-1.5 hover:bg-blue-100 rounded-lg transition-colors"
+                    title="Check server status"
+                  >
+                    <RefreshCw className="h-4 w-4 text-blue-600" />
+                  </button>
                 </div>
-                <h3 className="text-xl font-bold text-gray-800 mb-2">No Ollama Server Detected</h3>
-                <p className="text-gray-500 text-sm mb-5 max-w-md mx-auto">
-                  Ollama must be running locally to download and run models. Start Ollama or check your connection.
-                </p>
-                <a
-                  href="https://ollama.ai"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium text-sm"
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={inferenceUrlInput}
+                    onChange={(e) => setInferenceUrlInput(e.target.value)}
+                    placeholder="http://localhost:11434"
+                    className="flex-grow p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                  <button
+                    onClick={() => onSetAppInferenceUrl?.(inferenceUrlInput)}
+                    className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm"
+                  >
+                    Save
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">Set your Ollama or compatible server address</p>
+              </div>
+            )}
+
+            {/* Quick Add Section */}
+            <div className="border border-gray-200 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Add Custom Server</h3>
+              {!isAddingServer ? (
+                <button
+                  onClick={() => setIsAddingServer(true)}
+                  className="w-full py-3 px-4 border-2 border-dashed border-gray-300 rounded-xl hover:border-blue-400 hover:bg-blue-50 flex items-center justify-center text-gray-600 hover:text-blue-600 transition-all"
                 >
-                  Get Ollama →
-                </a>
-                <div className="mt-8 opacity-50">
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      type="text"
-                      placeholder="Enter model name..."
-                      disabled
-                      className="flex-grow p-3 border border-gray-300 rounded-xl bg-gray-50 cursor-not-allowed"
-                    />
+                  <Plus className="h-5 w-5 mr-2" />
+                  Add Server
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    value={newServerAddress}
+                    onChange={(e) => {
+                      setNewServerAddress(e.target.value);
+                      setAddError('');
+                    }}
+                    placeholder="http://192.168.1.100:8080"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus
+                  />
+                  {addError && (
+                    <p className="text-xs text-red-500">{addError}</p>
+                  )}
+                  <div className="flex gap-2">
                     <button
-                      disabled
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl opacity-50 cursor-not-allowed font-medium"
+                      onClick={handleAddServer}
+                      className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium text-sm"
                     >
-                      <Download size={18} />
-                      <span>Download</span>
+                      Add
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsAddingServer(false);
+                        setNewServerAddress('');
+                        setAddError('');
+                      }}
+                      className="flex-1 py-2.5 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 font-medium text-sm"
+                    >
+                      Cancel
                     </button>
                   </div>
                 </div>
+              )}
+            </div>
+
+            {/* Connected Servers List */}
+            {customServers.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-gray-700">Connected Servers</h3>
+                {customServers.map((server) => (
+                  <div key={server.address} className="border border-gray-200 rounded-xl p-4 hover:border-gray-300 transition-all">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0 mr-3">
+                        <p className="font-medium text-gray-800 truncate">{server.address}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`text-xs font-semibold ${
+                            server.status === 'online' ? 'text-green-600' :
+                            server.status === 'offline' ? 'text-red-500' :
+                            'text-gray-400'
+                          }`}>
+                            {server.status === 'online' ? 'Online' :
+                             server.status === 'offline' ? 'Offline' :
+                             'Unchecked'}
+                          </span>
+                          <button
+                            onClick={() => onCheckCustomServer?.(server.address)}
+                            className="p-1 hover:bg-gray-100 rounded transition-colors"
+                            title="Check server status"
+                          >
+                            <RefreshCw className="h-3 w-3 text-gray-500" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {/* Toggle switch */}
+                        <button
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                            server.enabled ? 'bg-blue-500' : 'bg-gray-300'
+                          }`}
+                          onClick={() => onToggleCustomServer?.(server.address)}
+                          aria-label={server.enabled ? "Disable server" : "Enable server"}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                              server.enabled ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                        {/* Remove button */}
+                        <button
+                          onClick={() => onRemoveCustomServer?.(server.address)}
+                          className="p-1.5 hover:bg-red-100 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
+                          title="Remove server"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ) : !isFinished && !isPulling ? (
-              <>
-                <p className="text-gray-600 text-sm">
-                  Enter a model name from the Ollama library (e.g., <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm font-medium">gemma3:4b</code>).
+            )}
+
+            {/* Ollama Model Pull Section */}
+            {allOllamaServers.length > 0 && (
+              <div className="border border-blue-200 bg-blue-50/50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap size={18} className="text-blue-600" />
+                  <h3 className="text-sm font-semibold text-gray-700">Pull Ollama Model</h3>
+                </div>
+                <p className="text-xs text-gray-600 mb-3">
+                  Download models from the Ollama library (e.g., <code className="bg-blue-100 px-1.5 py-0.5 rounded text-xs font-medium">gemma3:4b</code>).
                 </p>
-                {availableServers.length > 1 && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Select Ollama Server</label>
+                {allOllamaServers.length > 1 && (
+                  <div className="mb-3">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Select Server</label>
                     <select
                       value={selectedServer}
                       onChange={(e) => setSelectedServer(e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white text-sm"
                     >
-                      {availableServers.map((server) => (
+                      {allOllamaServers.map((server) => (
                         <option key={server} value={server}>{server}</option>
                       ))}
                     </select>
                   </div>
                 )}
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <input
-                    type="text" list="ollama-model-suggestions" value={modelToPull}
-                    onChange={(e) => setModelToPull(e.target.value)}
-                    placeholder="Enter model name..."
-                    className="flex-grow p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                {!isPulling && !isFinished && (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      list="ollama-model-suggestions-hub"
+                      value={modelToPull}
+                      onChange={(e) => setModelToPull(e.target.value)}
+                      placeholder="Enter model name..."
+                      className="flex-grow p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-sm"
+                    />
+                    <datalist id="ollama-model-suggestions-hub">
+                      {suggestedModels.map(model => <option key={model} value={model} />)}
+                    </datalist>
+                    <button
+                      onClick={handleStartPull}
+                      disabled={!selectedServer || !modelToPull.trim()}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
+                    >
+                      <Download size={16} />
+                      Pull
+                    </button>
+                  </div>
+                )}
+
+                {isPulling && (
+                  <div className="space-y-3 p-4 bg-blue-100 border border-blue-300 rounded-xl">
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm font-semibold text-gray-800">{statusText}</p>
+                      <p className="text-sm font-bold text-blue-600">{progress}%</p>
+                    </div>
+                    <div className="w-full bg-blue-200 rounded-full h-2">
+                      <div className="bg-blue-600 h-2 rounded-full transition-all duration-150" style={{ width: `${progress}%` }} />
+                    </div>
+                    <div className="flex justify-between items-center">
+                      {totalBytes > 0 ? (
+                        <p className="text-xs text-gray-500 font-mono">{formatBytes(completedBytes)} / {formatBytes(totalBytes)}</p>
+                      ) : <div />}
+                      <button onClick={handleCancelPull} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-600 bg-red-100 hover:bg-red-200 rounded-lg font-semibold transition-colors">
+                        <StopCircle size={14} /> Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {status === 'success' && (
+                  <div className="p-4 bg-green-100 border border-green-300 text-green-800 rounded-xl flex items-center gap-3">
+                    <CheckCircle size={20} className="text-green-600" />
+                    <div>
+                      <span className="font-semibold">Download Complete!</span>
+                      <p className="text-sm text-green-700">{statusText}</p>
+                    </div>
+                  </div>
+                )}
+
+                {status === 'error' && (
+                  <div className="p-4 bg-red-100 border border-red-300 text-red-800 rounded-xl flex items-center gap-3">
+                    <AlertTriangle size={20} className="text-red-600" />
+                    <div>
+                      <span className="font-semibold">Error</span>
+                      <p className="text-sm text-red-700">{errorText}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {customServers.length === 0 && allOllamaServers.length === 0 && !isTauriApp && (
+              <div className="text-center py-8">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gray-100 mb-4">
+                  <Server size={32} className="text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">No Servers Configured</h3>
+                <p className="text-gray-500 text-sm max-w-md mx-auto">
+                  Add a custom server to connect to external inference endpoints like Ollama or OpenAI-compatible APIs.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── OB-SERVER TAB ── */}
+        {activeTab === 'observer' && !showWelcomeScreen && (
+          <div className="space-y-5">
+            <p className="text-gray-500 text-sm">
+              Use Observer's cloud inference service for access to powerful AI models without local setup.
+            </p>
+
+            {/* Main toggle card */}
+            <div className={`p-6 rounded-2xl border-2 transition-all ${
+              isUsingObServer
+                ? 'border-indigo-300 bg-gradient-to-br from-indigo-50 to-purple-50'
+                : 'border-gray-200 bg-gray-50'
+            }`}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    isUsingObServer ? 'bg-indigo-200' : 'bg-gray-200'
+                  }`}>
+                    <Cloud size={24} className={isUsingObServer ? 'text-indigo-600' : 'text-gray-500'} />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Ob-Server Cloud</h3>
+                    <p className="text-sm text-gray-500">
+                      {isUsingObServer ? 'Cloud inference enabled' : 'Fully offline mode'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                    isUsingObServer ? 'bg-indigo-600' : 'bg-gray-300'
+                  }`}
+                  onClick={handleToggleObServer}
+                  aria-label={isUsingObServer ? "Disable Ob-Server" : "Enable Ob-Server"}
+                >
+                  <span
+                    className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${
+                      isUsingObServer ? 'translate-x-7' : 'translate-x-1'
+                    }`}
                   />
-                  <datalist id="ollama-model-suggestions">
-                    {suggestedModels.map(model => <option key={model} value={model} />)}
-                  </datalist>
-                  <button
-                    onClick={handleStartPull}
-                    disabled={!hasOllama}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm"
-                  >
-                    <Download size={18} />
-                    <span>Download</span>
-                  </button>
-                </div>
-              </>
-            ) : null}
-
-            {isPulling && (
-              <div className="space-y-4 p-5 bg-blue-50 border border-blue-200 rounded-xl">
-                <div className="flex justify-between items-center">
-                  <p className="text-sm font-semibold text-gray-800">{statusText}</p>
-                  <p className="text-sm font-bold text-blue-600">{progress}%</p>
-                </div>
-                <div className="w-full bg-blue-200 rounded-full h-2.5">
-                  <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-150" style={{ width: `${progress}%` }} />
-                </div>
-                <div className="flex justify-between items-center">
-                  {totalBytes > 0 ? (
-                    <p className="text-xs text-gray-500 font-mono">{formatBytes(completedBytes)} / {formatBytes(totalBytes)}</p>
-                  ) : <div />}
-                  <button onClick={handleCancelPull} className="flex items-center gap-1.5 px-4 py-2 text-xs text-red-600 bg-red-100 hover:bg-red-200 rounded-lg font-semibold transition-colors">
-                    <StopCircle size={14} /> Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {status === 'success' && (
-              <div className="p-6 bg-green-50 border border-green-200 text-green-800 rounded-xl flex flex-col items-center gap-4 text-center">
-                <div className="w-16 h-16 rounded-full bg-green-200 flex items-center justify-center">
-                  <CheckCircle size={32} className="text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg">Download Complete!</h3>
-                  <p className="text-sm text-green-700 mt-1">{statusText}</p>
-                </div>
-              </div>
-            )}
-
-            {status === 'error' && (
-              <div className="p-6 bg-red-50 border border-red-200 text-red-800 rounded-xl flex flex-col items-center gap-4 text-center">
-                <div className="w-16 h-16 rounded-full bg-red-200 flex items-center justify-center">
-                  <AlertTriangle size={32} className="text-red-600" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg">An Error Occurred</h3>
-                  <p className="text-sm text-red-700 mt-1">{errorText}</p>
-                </div>
-              </div>
-            )}
-
-            {isFinished && (
-              <div className="mt-6 flex justify-end">
-                <button onClick={handleDone} className="px-6 py-2.5 bg-gray-800 text-white rounded-xl hover:bg-gray-900 font-medium shadow-sm transition-colors">
-                  Done
                 </button>
               </div>
-            )}
+
+              {showLoginMessage && (
+                <div className="p-3 bg-red-100 border border-red-200 rounded-xl text-red-700 text-sm font-medium mb-4">
+                  Login required to use Ob-Server Cloud
+                </div>
+              )}
+
+              {isUsingObServer ? (
+                isAuthenticated ? (
+                  <div className="space-y-4">
+                    {/* Quota display */}
+                    <div className="p-4 bg-white rounded-xl border border-indigo-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-600">Usage Quota</span>
+                        {renderQuotaStatus && (
+                          <div className="text-sm">
+                            {renderQuotaStatus()}
+                          </div>
+                        )}
+                      </div>
+                      {quotaInfo && typeof quotaInfo.remaining === 'number' && typeof quotaInfo.limit === 'number' && (
+                        <div className="space-y-2">
+                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div
+                              className={`h-2.5 rounded-full transition-all ${
+                                quotaInfo.remaining <= 10 ? 'bg-red-500' :
+                                quotaInfo.remaining <= quotaInfo.limit * 0.3 ? 'bg-orange-500' :
+                                'bg-indigo-600'
+                              }`}
+                              style={{ width: `${Math.max(0, Math.min(100, ((quotaInfo.limit - quotaInfo.remaining) / quotaInfo.limit) * 100))}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {quotaInfo.remaining} of {quotaInfo.limit} credits remaining
+                          </p>
+                        </div>
+                      )}
+                      {quotaInfo?.tier && (
+                        <div className="mt-3 flex items-center gap-2">
+                          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                            quotaInfo.tier === 'max' ? 'bg-green-100 text-green-700' :
+                            quotaInfo.tier === 'pro' ? 'bg-purple-100 text-purple-700' :
+                            quotaInfo.tier === 'plus' ? 'bg-blue-100 text-blue-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {quotaInfo.tier.toUpperCase()}
+                          </span>
+                          {quotaInfo.tier !== 'max' && quotaInfo.tier !== 'pro' && (
+                            <span className="text-xs text-indigo-600 hover:underline cursor-pointer">
+                              Upgrade for more
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                    <p className="text-sm text-amber-800 font-medium">
+                      Please log in to access Ob-Server Cloud features.
+                    </p>
+                  </div>
+                )
+              ) : (
+                <div className="flex items-center gap-2 p-3 bg-gray-100 rounded-xl">
+                  <div className="w-2 h-2 rounded-full bg-gray-400" />
+                  <span className="text-sm text-gray-600 font-medium">Fully Offline</span>
+                </div>
+              )}
+            </div>
+
+            {/* Benefits list */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-4 bg-white border border-gray-200 rounded-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap size={16} className="text-indigo-600" />
+                  <span className="font-medium text-gray-800 text-sm">Fast Inference</span>
+                </div>
+                <p className="text-xs text-gray-500">Access powerful cloud GPUs for faster responses</p>
+              </div>
+              <div className="p-4 bg-white border border-gray-200 rounded-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <Server size={16} className="text-indigo-600" />
+                  <span className="font-medium text-gray-800 text-sm">No Setup</span>
+                </div>
+                <p className="text-xs text-gray-500">Start using AI immediately without downloads</p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -719,7 +1095,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                             <div className="flex items-center gap-2">
                               {isThisModelUnloading ? (
                                 <span className="flex items-center gap-1.5 px-4 py-2 text-sm bg-amber-100 text-amber-700 rounded-lg font-medium">
-                                  <Cpu size={14} className="animate-pulse" /> Unloading…
+                                  <Cpu size={14} className="animate-pulse" /> Unloading...
                                 </span>
                               ) : isThisModelLoaded ? (
                                 <button
@@ -738,7 +1114,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                                   onClick={() => NativeLlmManager.getInstance().unloadModel()}
                                   className="flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-200 text-gray-600 rounded-lg font-medium"
                                 >
-                                  <Cpu size={14} className="animate-pulse" /> Loading…
+                                  <Cpu size={14} className="animate-pulse" /> Loading...
                                 </button>
                               ) : isDownloaded ? (
                                 <button
@@ -864,7 +1240,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                     {/* mmproj URL input */}
                     <div className="space-y-2">
                       <label className="block text-xs font-medium text-gray-600">
-                        Vision projector — mmproj (.gguf) <span className="text-gray-400 font-normal">optional</span>
+                        Vision projector - mmproj (.gguf) <span className="text-gray-400 font-normal">optional</span>
                       </label>
                       <div className="flex gap-2">
                         <input
@@ -952,14 +1328,14 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                                   <span className="text-xs text-gray-500">
                                     {formatBytes(model.sizeBytes)}
                                     {model.isMultimodal && (
-                                      <span className="ml-2 text-purple-600 font-medium">· Vision ({model.mmprojFilename})</span>
+                                      <span className="ml-2 text-purple-600 font-medium">- Vision ({model.mmprojFilename})</span>
                                     )}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2 ml-2">
                                   {isUnloading ? (
                                     <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-amber-100 text-amber-700 rounded-lg font-medium">
-                                      <Cpu size={14} className="animate-pulse" /> Unloading…
+                                      <Cpu size={14} className="animate-pulse" /> Unloading...
                                     </span>
                                   ) : isLoaded ? (
                                     <>
@@ -979,7 +1355,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                                       onClick={() => NativeLlmManager.getInstance().unloadModel()}
                                       className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-200 text-gray-600 rounded-lg font-medium"
                                     >
-                                      <Cpu size={14} className="animate-pulse" /> Loading…
+                                      <Cpu size={14} className="animate-pulse" /> Loading...
                                     </button>
                                   ) : (
                                     <>
@@ -1261,7 +1637,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                             onClick={() => GemmaModelManager.getInstance().unloadModel()}
                             className="group flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-600 rounded-lg font-medium transition-colors"
                           >
-                            <span className="group-hover:hidden flex items-center gap-1.5"><Cpu size={14} className="animate-pulse" /> Loading…</span>
+                            <span className="group-hover:hidden flex items-center gap-1.5"><Cpu size={14} className="animate-pulse" /> Loading...</span>
                             <span className="hidden group-hover:flex items-center gap-1.5"><StopCircle size={14} /> Cancel</span>
                           </button>
                         ) : (
@@ -1406,7 +1782,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                           <span className="font-medium text-gray-900 truncate block">{gemmaState.modelId}</span>
                           {gemmaState.loadSettings && (
                             <span className="text-xs text-gray-500">
-                              {gemmaState.loadSettings.device} · {gemmaState.loadSettings.dtype} · {gemmaState.loadSettings.imageTokenBudget}tok
+                              {gemmaState.loadSettings.device} - {gemmaState.loadSettings.dtype} - {gemmaState.loadSettings.imageTokenBudget}tok
                             </span>
                           )}
                         </div>
@@ -1429,7 +1805,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                               onClick={() => GemmaModelManager.getInstance().unloadModel()}
                               className="group flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-600 rounded-lg font-medium transition-colors"
                             >
-                              <span className="group-hover:hidden flex items-center gap-1.5"><Cpu size={14} className="animate-pulse" /> Loading…</span>
+                              <span className="group-hover:hidden flex items-center gap-1.5"><Cpu size={14} className="animate-pulse" /> Loading...</span>
                               <span className="hidden group-hover:flex items-center gap-1.5"><StopCircle size={14} /> Cancel</span>
                             </button>
                           ) : gemmaState.status === 'error' ? (
@@ -1502,7 +1878,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                           <div className="flex items-center gap-2">
                             {gemmaState.loadSettings && (
                               <span className="text-xs text-gray-500">
-                                {gemmaState.loadSettings.device} · {gemmaState.loadSettings.dtype} · {gemmaState.loadSettings.imageTokenBudget}tok
+                                {gemmaState.loadSettings.device} - {gemmaState.loadSettings.dtype} - {gemmaState.loadSettings.imageTokenBudget}tok
                               </span>
                             )}
                             <span className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded-full">
@@ -1514,7 +1890,7 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
                             onClick={() => GemmaModelManager.getInstance().unloadModel()}
                             className="group flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-600 rounded-lg font-medium transition-colors"
                           >
-                            <span className="group-hover:hidden flex items-center gap-1.5"><Cpu size={14} /> Loading…</span>
+                            <span className="group-hover:hidden flex items-center gap-1.5"><Cpu size={14} /> Loading...</span>
                             <span className="hidden group-hover:flex items-center gap-1.5"><StopCircle size={14} /> Cancel</span>
                           </button>
                         ) : (
@@ -1570,14 +1946,9 @@ const TerminalModal: React.FC<TerminalModalProps> = ({ isOpen, onClose, onPullCo
             )}
           </div>
         )}
-
-        {/* ── BENCHMARK TAB ── */}
-        {activeTab === 'benchmark' && !showWelcomeScreen && (
-          <BenchmarkPanel isVisible={activeTab === 'benchmark'} />
-        )}
       </div>
     </Modal>
   );
 };
 
-export default TerminalModal;
+export default ModelHub;

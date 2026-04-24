@@ -4,7 +4,7 @@ import { Cpu, RefreshCw, Eye, Server } from 'lucide-react';
 import { BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL } from '@utils/inferenceServer';
 import { Logger } from '@utils/logging';
 import { getInferenceAddresses } from '@utils/inferenceServer';
-import TerminalModal from '@components/TerminalModal';
+import ModelHub from '@components/ModelHub';
 import { platformFetch } from '@utils/platform';
 
 // No need to redefine Model interface here if imported correctly
@@ -210,11 +210,11 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({ isProUser = false }) 
            You can use them in your agents by specifying their name.
          </p>
       </div>
-      <TerminalModal
-      isOpen={showTerminal}
-      onClose={() => setShowTerminal(false)}
-      onPullComplete={handleRefresh}
-      ollamaServers={ollamaServers}
+      <ModelHub
+        isOpen={showTerminal}
+        onClose={() => setShowTerminal(false)}
+        onPullComplete={handleRefresh}
+        ollamaServers={ollamaServers}
       />
     </div>
   );

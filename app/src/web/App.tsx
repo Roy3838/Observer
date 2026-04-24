@@ -44,7 +44,7 @@ import { ObServerTab } from '@components/ObServerTab';
 import { UpgradeModal } from '@components/UpgradeModal';
 import { WelcomeModal } from '@components/WelcomeModal';
 import AgentActivityModal from '@components/AgentCard/AgentActivityModal';
-import TerminalModal from '@components/TerminalModal';
+import ModelHub from '@components/ModelHub';
 import FeedbackDialog from '@components/FeedbackDialog';
 import { startCommandSSE, updateCommandSSEToken } from '@utils/commandSSE';
 import { fetchModels } from '@utils/inferenceServer';
@@ -92,7 +92,7 @@ function AppContent() {
 
   // Terminal modal state
   const [noModels, setNoModels] = useState(false);
-  const [isTerminalModalOpen, setIsTerminalModalOpen] = useState(false);
+  const [isModelHubOpen, setIsModelHubOpen] = useState(false);
 
   // Quota info state
   const [quotaInfo, setQuotaInfo] = useState<{
@@ -716,7 +716,7 @@ function AppContent() {
           setIsHalfwayWarning(true);
           setIsUpgradeModalOpen(true);
         }}
-        onShowTerminalModal={() => setNoModels(true)}
+        onShowModelHub={() => setNoModels(true)}
         quotaInfo={quotaInfo}
         setQuotaInfo={setQuotaInfo}
         onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -1063,11 +1063,11 @@ function AppContent() {
         />
       )}
 
-      <TerminalModal
-        isOpen={!showStartupDialog && (noModels || isTerminalModalOpen)}
+      <ModelHub
+        isOpen={!showStartupDialog && (noModels || isModelHubOpen)}
         onClose={() => {
           setNoModels(false);
-          setIsTerminalModalOpen(false);
+          setIsModelHubOpen(false);
         }}
         onPullComplete={async () => {
           await fetchModels();
