@@ -542,7 +542,7 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
     const [isSensorModalOpen, setIsSensorModalOpen] = useState(false);
     const [isToolsModalOpen, setIsToolsModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-    const [currentModelInfo, setCurrentModelInfo] = useState<{ server?: string; ownedBy?: string; status?: 'loaded' | 'loading' | 'unloaded'; localModelId?: string } | null>(null);
+    const [currentModelInfo, setCurrentModelInfo] = useState<{ server?: string; ownedBy?: string; status?: 'loaded' | 'loading' | 'unloaded' | 'unloading'; localModelId?: string } | null>(null);
 
     // Look up current model info for location indicator
     useEffect(() => {
