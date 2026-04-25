@@ -355,7 +355,6 @@ async fn llm_download_model(
     url: String,
     on_progress: Channel<serde_json::Value>,
 ) -> Result<String, String> {
-    #[cfg(target_os = "ios")]
     {
         use tauri_plugin_llm_engine::filename_from_hf_url;
 
@@ -454,12 +453,6 @@ async fn llm_download_model(
         }));
 
         Ok(filename)
-    }
-
-    #[cfg(not(target_os = "ios"))]
-    {
-        let _ = (app_handle, url, on_progress);
-        Err("LLM download only available on iOS".to_string())
     }
 }
 
