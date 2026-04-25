@@ -825,13 +825,6 @@ const ModelHub: React.FC<ModelHubProps> = ({
             <h3 className="text-sm font-semibold text-gray-700">Download Models</h3>
           </div>
 
-          {isMobileDevice && (
-            <div className="flex items-center gap-2 text-amber-700 text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-              <AlertCircle size={14} className="text-amber-500 flex-shrink-0" />
-              <span>Mobile devices have limited memory. Models may fail to load or run slowly.</span>
-            </div>
-          )}
-
           <div className="space-y-2">
             {MODEL_PRESETS.map(preset => {
               const isLlamaCpp = preset.engine === 'llamacpp';
