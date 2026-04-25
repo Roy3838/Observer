@@ -1,7 +1,7 @@
 // src/components/GenerateAgent.tsx
 import React, { useState } from 'react';
 import { Loader2, Zap, XCircle, Save } from 'lucide-react';
-import { fetchResponse } from '@utils/sendApi';
+import { ModelManager } from '@utils/ModelManager';
 import { CompleteAgent, saveAgent } from '@utils/agent_database';
 import EditAgentModal from './EditAgent/EditAgentModal';
 import getSystemPrompt from '@utils/system_prompt';
@@ -169,11 +169,9 @@ const GenerateAgent: React.FC<GenerateAgentProps> = ({ agentType, modelName, get
         { role: "user", content: userInput }
       ];
 
-      // Use fetchResponse directly for the special Gemini model
-      const response = await fetchResponse(
-        'https://api.observer-ai.com:443',
-        messages,
+      const response = await ModelManager.getInstance().sendMessages(
         'gemini-2.0-flash-lite-free',
+        messages,
         await getToken()
       );
       setFullResponse(response);

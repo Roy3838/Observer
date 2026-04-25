@@ -8,6 +8,9 @@ import { GemmaModelManager } from './localLlm/GemmaModelManager';
 import { GemmaModelId, LocalLlmMessage } from './localLlm/types';
 import { InferenceParams, DEFAULT_INFERENCE_PARAMS } from '../config/inference-params';
 import { PreProcessorResult } from './pre-processor';
+import { UnauthorizedError } from './sendApi';
+
+export { UnauthorizedError };
 
 /**
  * Model entry representing a model from any source (remote or local)
@@ -622,6 +625,62 @@ export class ModelManager {
   private notifyListeners(): void {
     const models = this.listModels().models;
     this.listeners.forEach(l => l(models));
+  }
+
+  /**
+   * Send messages to a model by name. Routes local models directly, remote models via fetchResponse.
+   */
+  public async sendMessages(
+    modelName: string,
+    messages: Array<{ role: string; content: any }>,
+    token?: string,
+    enableStreaming: boolean = false,
+    onStreamChunk?: (chunk: string) => void
+  ): Promise<string> {
+    let modelsResponse = this.listModels();
+    let model = modelsResponse.models.find(m => m.name === modelName);
+    if (!model) {
+      modelsResponse = await this.fetchModels();
+      model = modelsResponse.models.find(m => m.name === modelName);
+    }
+    // Ghost models (agent-creator-only) aren't returned by listModels but are valid on the
+    // Observer API — route them there when a token is present.
+    if (!model && !token) throw new Error(`Model '${modelName}' not found in available models`);
+
+    const serverAddress = model ? model.server : 'https://api.observer-ai.com:443';
+
+    if (this.isLocalModel(serverAddress)) {
+      if (!this.isLocalModelReady(serverAddress)) {
+        throw new Error('Local model not loaded. Please load it from the Add Model panel.');
+      }
+      return this.generateWithLocalModel(serverAddress, messages, onStreamChunk);
+    }
+
+    if (serverAddress.includes('api.observer-ai.com') && token) {
+      this.optimisticUpdateQuota();
+    }
+    const { fetchResponse } = await import('./sendApi');
+    const params = { ...DEFAULT_INFERENCE_PARAMS, ...this.getModelParams(modelName) };
+    return fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, params);
+  }
+
+  /**
+   * Send messages to a known server address directly (bypasses model lookup).
+   */
+  public async sendMessagesToServer(
+    serverAddress: string,
+    messages: Array<{ role: string; content: any }>,
+    modelName: string,
+    token?: string,
+    enableStreaming: boolean = false,
+    onStreamChunk?: (chunk: string) => void,
+    inferenceParams?: InferenceParams
+  ): Promise<string> {
+    if (serverAddress.includes('api.observer-ai.com') && token) {
+      this.optimisticUpdateQuota();
+    }
+    const { fetchResponse } = await import('./sendApi');
+    return fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, inferenceParams);
   }
 
   private optimisticUpdateQuota(): void {

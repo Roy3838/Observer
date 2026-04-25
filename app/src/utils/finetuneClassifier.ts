@@ -1,8 +1,7 @@
 // src/utils/finetuneClassifier.ts
 // Core logic for finetuning classification prompts against ground truth images
 
-import { fetchResponse } from './sendApi';
-import { listModels } from './inferenceServer';
+import { ModelManager } from './ModelManager';
 
 export interface TestCase {
   imageData: string;
@@ -72,12 +71,12 @@ async function testImage(
     }
   ];
 
-  const response = await fetchResponse(
+  const response = await ModelManager.getInstance().sendMessagesToServer(
     config.serverAddress,
     messages,
     config.testModel,
     config.token,
-    false // no streaming for tests
+    false
   );
 
   return response.trim();
@@ -289,7 +288,7 @@ CRITICAL RULES:
     { role: 'user', content: userContent }
   ];
 
-  const response = await fetchResponse(
+  const response = await ModelManager.getInstance().sendMessagesToServer(
     config.serverAddress,
     messages,
     config.finetunerModel,
@@ -462,13 +461,12 @@ export function getServerForModel(modelName: string, isUsingObServer: boolean): 
     return 'https://api.observer-ai.com:443';
   }
 
-  const modelsResponse = listModels();
+  const modelsResponse = ModelManager.getInstance().listModels();
   const model = modelsResponse.models.find(m => m.name === modelName);
 
   if (model) {
     return model.server;
   }
 
-  // Default to localhost if not found
   return 'http://127.0.0.1:11434';
 }

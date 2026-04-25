@@ -1,7 +1,7 @@
 // src/utils/main_loop.ts
 
 import { getAgent, getAgentCode } from './agent_database';
-import { UnauthorizedError } from './sendApi';
+import { UnauthorizedError } from './ModelManager';
 import { ModelManager } from './ModelManager';
 import { Logger } from './logging';
 import { preProcess } from './pre-processor';

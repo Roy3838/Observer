@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Save, Cpu, Plus } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { fetchResponse, UnauthorizedError } from '@utils/sendApi';
+import { ModelManager, UnauthorizedError } from '@utils/ModelManager';
 import { updateAgentImageMemory, saveAgent } from '@utils/agent_database';
 import { extractAgentConfig, parseAgentResponse, extractImageRequest } from '@utils/agentParser';
 import MediaUploadMessage from '../MediaUploadMessage';
@@ -134,10 +134,9 @@ What would you like to create today?`
         if (!token) throw new Error("Authentication failed.");
         // if you think of spamming this model somehow te voy a jalar las patas en la noche >:(
 
-        responseText = await fetchResponse(
-          'https://api.observer-ai.com:443',
-          openaiMessages,
+        responseText = await ModelManager.getInstance().sendMessages(
           'gemini-2.0-flash-lite-free',
+          openaiMessages,
           token,
           true,
           (chunk: string) => {
@@ -151,21 +150,9 @@ What would you like to create today?`
         );
       } else {
         // --- LOCAL PATH ---
-        // Use fetchResponse directly with messages array for local models
-        const { listModels } = await import('@utils/inferenceServer');
-        const modelsResponse = listModels();
-        const model = modelsResponse.models.find(m => m.name === selectedLocalModel);
-
-        if (!model) {
-          throw new Error(`Model '${selectedLocalModel}' not found in available models`);
-        }
-
-        const serverAddress = model.server;
-
-        responseText = await fetchResponse(
-          serverAddress,
-          openaiMessages,
+        responseText = await ModelManager.getInstance().sendMessages(
           selectedLocalModel,
+          openaiMessages,
           undefined,
           true,
           (chunk: string) => {
