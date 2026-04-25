@@ -17,7 +17,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
   },
   {
     name: 'Gemma 4 E2B ONNX',
-    sizeLabel: '~3 GB',
+    sizeLabel: '~3 GB will crash on mobile',
     engine: 'transformers',
     hfModelId: 'onnx-community/gemma-4-E2B-it-ONNX',
   },
@@ -30,14 +30,14 @@ export const MODEL_PRESETS: ModelPreset[] = [
   },
   {
     name: 'Dots OCR',
-    sizeLabel: '~1 GB',
+    sizeLabel: '~5 GB',
     engine: 'llamacpp',
     ggufUrl: 'https://huggingface.co/ggml-org/dots.ocr-GGUF/resolve/main/dots.ocr-Q8_0.gguf',
     mmprojUrl: 'https://huggingface.co/ggml-org/dots.ocr-GGUF/resolve/main/mmproj-dots.ocr-Q8_0.gguf',
   },
   {
     name: 'Gemma 4 E4B ONNX',
-    sizeLabel: '~5 GB',
+    sizeLabel: '~5 GB will crash on mobile',
     engine: 'transformers',
     hfModelId: 'onnx-community/gemma-4-E4B-it-ONNX',
   },
