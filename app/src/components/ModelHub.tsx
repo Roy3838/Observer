@@ -1,22 +1,20 @@
 // components/ModelHub.tsx
 //
-// Control panel for managing local AI models, custom servers, and Ob-Server cloud.
-// First-time setup is handled by a separate onboarding UI — this component is the
-// power-user surface: an always-visible list of installed models + Ob-Server status,
-// plus tabs for the per-engine and server managers.
+// Acquisition + hardware config panel for local AI models, custom servers, and Ob-Server cloud.
+// Handles downloading, load/unload, GPU toggle, and server management.
+// Per-model settings and benchmarking live in the AvailableModels page.
 
 import React, { useState, useEffect } from 'react';
 import Modal from '@components/EditAgent/Modal';
 import {
   Download, CheckCircle, AlertTriangle, X, StopCircle, FileDown, Cpu, Trash2,
-  BarChart3, AlertCircle, Settings2, RefreshCw, Plus, Cloud, Server, Zap,
+  AlertCircle, Settings2, RefreshCw, Plus, Cloud, Server, Zap,
   Sparkles, Package,
 } from 'lucide-react';
 import pullModelManager, { PullState } from '@utils/pullModelManager';
 import { platformFetch, isTauri, isMobile } from '@utils/platform';
 import { GemmaModelManager } from '@utils/localLlm/GemmaModelManager';
 import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
-import BenchmarkPanel from '@components/BenchmarkPanel';
 import type { CustomServer } from '@utils/inferenceServer';
 import {
   GemmaModelState,
@@ -38,7 +36,7 @@ type QuotaInfo = {
   tier: string;
 } | null;
 
-type TabId = 'llamacpp' | 'transformers' | 'servers' | 'benchmark';
+type TabId = 'llamacpp' | 'transformers' | 'servers';
 type TabColor = 'green' | 'purple' | 'blue' | 'orange';
 
 interface ModelHubProps {
@@ -761,13 +759,6 @@ const ModelHub: React.FC<ModelHubProps> = ({
             icon={<Server size={14} />}
             label="Servers"
           />
-          <TabButton
-            active={activeTab === 'benchmark'}
-            onClick={() => setActiveTab('benchmark')}
-            color="orange"
-            icon={<BarChart3 size={14} />}
-            label="Benchmark"
-          />
         </div>
 
         {/* ── llama.cpp tab ───────────────────────────────── */}
@@ -1273,17 +1264,6 @@ const ModelHub: React.FC<ModelHubProps> = ({
           </div>
         )}
 
-        {/* ── Benchmark tab ───────────────────────────────── */}
-        {activeTab === 'benchmark' && (
-          <div className="border border-orange-200 rounded-xl overflow-hidden">
-            <div className="bg-orange-50 px-4 py-2 border-b border-orange-200">
-              <span className="text-sm font-medium text-orange-800">Performance Benchmark</span>
-            </div>
-            <div className="bg-white">
-              <BenchmarkPanel isVisible={true} />
-            </div>
-          </div>
-        )}
       </div>
     </Modal>
   );

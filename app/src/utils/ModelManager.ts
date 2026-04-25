@@ -6,6 +6,8 @@ import { platformFetch, isTauri } from './platform';
 import { NativeLlmManager } from './localLlm/NativeLlmManager';
 import { GemmaModelManager } from './localLlm/GemmaModelManager';
 import { GemmaModelId, LocalLlmMessage } from './localLlm/types';
+import { InferenceParams, DEFAULT_INFERENCE_PARAMS } from '../config/inference-params';
+import { PreProcessorResult } from './pre-processor';
 
 /**
  * Model entry representing a model from any source (remote or local)
@@ -66,6 +68,7 @@ interface ModelsResponse {
 }
 
 const CUSTOM_SERVERS_KEY = 'observer-custom-servers';
+const MODEL_PARAMS_PREFIX = 'observer-ai:inference:model:';
 
 /**
  * ModelManager - Single source of truth for all model state
@@ -506,6 +509,96 @@ export class ModelManager {
   }
 
   // ===========================================================================
+  // Per-Model Inference Params (remote models only — local models use their own settings)
+  // ===========================================================================
+
+  public getModelParams(modelName: string): Partial<InferenceParams> {
+    try {
+      const stored = localStorage.getItem(`${MODEL_PARAMS_PREFIX}${modelName}`);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return {};
+  }
+
+  public setModelParams(modelName: string, params: Partial<InferenceParams>): void {
+    const cleaned: Partial<InferenceParams> = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null) (cleaned as any)[k] = v;
+    }
+    if (Object.keys(cleaned).length === 0) {
+      localStorage.removeItem(`${MODEL_PARAMS_PREFIX}${modelName}`);
+    } else {
+      localStorage.setItem(`${MODEL_PARAMS_PREFIX}${modelName}`, JSON.stringify(cleaned));
+    }
+  }
+
+  public clearModelParams(modelName: string): void {
+    localStorage.removeItem(`${MODEL_PARAMS_PREFIX}${modelName}`);
+  }
+
+  public hasModelParams(modelName: string): boolean {
+    return Object.keys(this.getModelParams(modelName)).length > 0;
+  }
+
+  // ===========================================================================
+  // Central prompt router
+  // ===========================================================================
+
+  /**
+   * Send a prompt through the appropriate backend for the given model.
+   * - Local models (browser_local, llama_cpp_local): routed directly, no inference params
+   * - Remote models: fetches per-model params and delegates to sendApi.fetchResponse
+   */
+  public async sendPrompt(
+    modelName: string,
+    preprocessResult: PreProcessorResult,
+    token?: string,
+    enableStreaming: boolean = false,
+    onStreamChunk?: (chunk: string) => void
+  ): Promise<string> {
+    // Resolve model → server
+    let modelsResponse = this.listModels();
+    let model = modelsResponse.models.find(m => m.name === modelName);
+    if (!model) {
+      modelsResponse = await this.fetchModels();
+      model = modelsResponse.models.find(m => m.name === modelName);
+    }
+    if (!model) throw new Error(`Model '${modelName}' not found in available models`);
+
+    const serverAddress = model.server;
+
+    // Build messages from preprocessResult
+    const hasImages = preprocessResult.images && preprocessResult.images.length > 0;
+    let content: any = preprocessResult.modifiedPrompt;
+    if (hasImages) {
+      content = [
+        { type: 'text', text: preprocessResult.modifiedPrompt },
+        ...preprocessResult.images!.map(img => ({
+          type: 'image',
+          image: `data:image/png;base64,${img}`,
+        })),
+      ];
+    }
+    const messages = [{ role: 'user', content }];
+
+    // Local models: route directly, they manage their own settings
+    if (this.isLocalModel(serverAddress)) {
+      if (!this.isLocalModelReady(serverAddress)) {
+        throw new Error('Local model not loaded. Please load it from the Add Model panel.');
+      }
+      return this.generateWithLocalModel(serverAddress, messages, onStreamChunk);
+    }
+
+    // Remote models: attach per-model inference params
+    if (serverAddress.includes('api.observer-ai.com') && token) {
+      this.optimisticUpdateQuota();
+    }
+    const { fetchResponse } = await import('./sendApi');
+    const params = { ...DEFAULT_INFERENCE_PARAMS, ...this.getModelParams(modelName) };
+    return fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, params);
+  }
+
+  // ===========================================================================
   // Utilities
   // ===========================================================================
 
@@ -529,5 +622,19 @@ export class ModelManager {
   private notifyListeners(): void {
     const models = this.listModels().models;
     this.listeners.forEach(l => l(models));
+  }
+
+  private optimisticUpdateQuota(): void {
+    try {
+      const key = 'observer-quota-remaining';
+      const current = localStorage.getItem(key);
+      if (current !== null) {
+        const n = parseInt(current, 10);
+        if (!isNaN(n)) {
+          localStorage.setItem(key, (n - 1).toString());
+          window.dispatchEvent(new CustomEvent('quotaUpdated'));
+        }
+      }
+    } catch {}
   }
 }

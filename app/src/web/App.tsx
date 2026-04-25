@@ -833,7 +833,12 @@ function AppContent() {
         {/* Models Tab */}
         {activeTab === 'models' && (
           <div className="px-4">
-            <AvailableModels isProUser={isProUser} />
+            <AvailableModels
+              isProUser={isProUser}
+              isUsingObServer={isUsingObServer}
+              isAuthenticated={isAuthenticated}
+              quotaInfo={quotaInfo}
+            />
           </div>
         )}
 

@@ -27,11 +27,7 @@ import {
   Blend,
   Images,
   Info,
-  Settings,
-  SlidersVertical,
-  ArrowLeft
 } from 'lucide-react';
-import InferenceParamsEditor from '../InferenceParamsEditor';
 import { Logger } from '@utils/logging';
 import { useEditAgentModalLogic } from './useEditAgentModalLogic';
 
@@ -184,17 +180,12 @@ interface ConfigContentProps {
   description: string;
   setDescription: (desc: string) => void;
   isProUser?: boolean;
-  // Advanced config button
-  onAdvancedClick?: () => void;
-  isLocalModel: boolean;
-  hasOverrides: boolean;
 }
 const ConfigContent: React.FC<ConfigContentProps> = ({
   name, setName, agentId, setAgentId, createMode, currentModel, setCurrentModel,
   isModelDropdownOpen, setIsModelDropdownOpen, loadingModels, modelsError,
   availableModels, loopInterval, setLoopInterval, onlyOnSignificantChange, setOnlyOnSignificantChange,
   description, setDescription, isProUser = false,
-  onAdvancedClick, isLocalModel, hasOverrides,
 }) => {
   return (
     <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -216,9 +207,8 @@ const ConfigContent: React.FC<ConfigContentProps> = ({
 
         {/* Row 2: Model + Params (left, aligned with Name) | Loop + Only on Change (right, aligned with ID) */}
         {/* Left column: Model + Params */}
-        <div className="flex gap-2">
-          <div className="flex-grow">
-            <label className="block text-gray-600 mb-1 flex items-center"><Brain size={14} className="mr-1.5 text-gray-500" />Model <span className="text-red-500">*</span></label>
+        <div>
+          <label className="block text-gray-600 mb-1 flex items-center"><Brain size={14} className="mr-1.5 text-gray-500" />Model <span className="text-red-500">*</span></label>
             <div className="relative">
               <button onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)} disabled={loadingModels} className="w-full p-2 bg-gray-100 border-gray-300 rounded-md flex justify-between items-center text-left">
                 <span className="truncate">{currentModel || (loadingModels ? 'Loading…' : 'Select model')}</span>
@@ -277,25 +267,6 @@ const ConfigContent: React.FC<ConfigContentProps> = ({
               )}
             </div>
           </div>
-          {/* Params button - only show for local models */}
-          {isLocalModel && onAdvancedClick && (
-            <div className="flex-shrink-0 w-16">
-              <label className="block text-gray-600 mb-1 flex items-center"><SlidersVertical size={14} className="mr-1.5 text-gray-500" />Params</label>
-              <button
-                onClick={onAdvancedClick}
-                title="Inference Parameters"
-                className={`w-full p-2 rounded-md transition-colors flex items-center justify-center ${
-                  hasOverrides
-                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                <Settings size={16} />
-                {hasOverrides && <span className="ml-1 w-2 h-2 bg-blue-500 rounded-full" />}
-              </button>
-            </div>
-          )}
-        </div>
         {/* Right column: Loop + Only on Change */}
         <div className="flex gap-4">
           <div className="flex-1">
@@ -675,33 +646,7 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({
         <MobileTabNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
         <div className="flex-grow min-h-0 bg-gray-50 overflow-y-auto">
-          {/* --- ADVANCED/INFERENCE PARAMS VIEW (Full modal takeover) --- */}
-          {logic.showAdvancedConfig ? (
-            <div className="p-5 h-full overflow-y-auto">
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 h-full flex flex-col">
-                <div className="flex items-center justify-between mb-4 pb-3 border-b">
-                  <h3 className="text-lg font-semibold text-blue-700">Inference Parameters</h3>
-                  <button
-                    onClick={() => logic.setShowAdvancedConfig(false)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  >
-                    <ArrowLeft size={14} />
-                    Back to Agent
-                  </button>
-                </div>
-                <div className="flex-grow overflow-y-auto">
-                  <InferenceParamsEditor
-                    params={logic.agentInferenceParams}
-                    onChange={logic.setAgentInferenceParams}
-                    isAgentOverride={true}
-                    onClearAll={logic.clearAgentInferenceParams}
-                    globalDefaults={logic.globalInferenceParams}
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
+          <>
               {/* --- DESKTOP LAYOUT --- */}
               <div className="hidden md:flex flex-row flex-grow h-full">
                 {/* Left Half: System Prompt (Full Height) */}
@@ -730,9 +675,6 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({
                       onlyOnSignificantChange={logic.onlyOnSignificantChange} setOnlyOnSignificantChange={logic.setOnlyOnSignificantChange}
                       description={logic.description} setDescription={logic.setDescription}
                       isProUser={isProUser}
-                      onAdvancedClick={() => logic.setShowAdvancedConfig(true)}
-                      isLocalModel={logic.isLocalModel()}
-                      hasOverrides={Object.keys(logic.agentInferenceParams).length > 0}
                     />
                   </div>
                   <div className="flex-grow min-h-0">
@@ -760,9 +702,6 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({
                     onlyOnSignificantChange={logic.onlyOnSignificantChange} setOnlyOnSignificantChange={logic.setOnlyOnSignificantChange}
                     description={logic.description} setDescription={logic.setDescription}
                     isProUser={isProUser}
-                    onAdvancedClick={() => logic.setShowAdvancedConfig(true)}
-                    isLocalModel={logic.isLocalModel()}
-                    hasOverrides={Object.keys(logic.agentInferenceParams).length > 0}
                   />
                 }
 
@@ -785,7 +724,6 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({
                 )}
               </div>
             </>
-          )}
         </div>
 
         {/* --- FOOTER --- */}

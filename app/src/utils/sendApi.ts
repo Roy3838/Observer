@@ -1,32 +1,7 @@
 // src/utils/sendApi.ts
-import { PreProcessorResult } from './pre-processor';
-import { listModels, BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL } from './inferenceServer';
-import { ModelManager } from './ModelManager';
 import { platformFetch } from './platform';
 import { InferenceParams } from '../config/inference-params';
 
-/**
- * Decrements the quota counter stored in localStorage and dispatches an event.
- * This is an optimistic update for the UI.
- */
-const optimisticUpdateQuota = () => {
-  try {
-    const key = 'observer-quota-remaining';
-    const currentQuotaStr = localStorage.getItem(key);
-
-    // Only update if there's an existing number value
-    if (currentQuotaStr !== null) {
-      const currentQuota = parseInt(currentQuotaStr, 10);
-      if (!isNaN(currentQuota)) {
-        localStorage.setItem(key, (currentQuota - 1).toString());
-        // Dispatch a custom event that the AppHeader can listen to
-        window.dispatchEvent(new CustomEvent('quotaUpdated'));
-      }
-    }
-  } catch (error) {
-    console.error('Failed to optimistically update quota:', error);
-  }
-};
 
 /**
  * Handles streaming response from the API
@@ -142,15 +117,6 @@ export async function fetchResponse(
   inferenceParams?: InferenceParams
 ): Promise<string> {
   try {
-    // Local model: use ModelManager unified interface
-    if (serverAddress === BROWSER_LOCAL_SENTINEL || serverAddress === LLAMA_CPP_LOCAL_SENTINEL) {
-      const manager = ModelManager.getInstance();
-      if (!manager.isLocalModelReady(serverAddress)) {
-        throw new Error('Local model not loaded. Please load it from the Add Model panel.');
-      }
-      return manager.generateWithLocalModel(serverAddress, messages, onStreamChunk);
-    }
-
     // External API: convert to OpenAI format
     const apiMessages = convertToOpenAIFormat(messages);
     const url = `${serverAddress}/v1/chat/completions`;
@@ -250,77 +216,3 @@ export async function fetchResponse(
   }
 }
 
-/**
- * Send a prompt to the API server using OpenAI-compatible v1 chat completions endpoint
- * @param modelName Name of the model to use
- * @param preprocessResult The preprocessed result containing prompt and optional images
- * @param token Optional authorization token
- * @param enableStreaming Whether to enable streaming response (default: true)
- * @param onStreamChunk Optional callback for streaming chunks (only used when streaming is enabled)
- * @param inferenceParams Optional inference parameters (temperature, top_p, etc.)
- * @returns The model's response text
- */
-export async function sendPrompt(
-  modelName: string,
-  preprocessResult: PreProcessorResult,
-  token?: string,
-  enableStreaming: boolean = false,
-  onStreamChunk?: (chunk: string) => void,
-  inferenceParams?: InferenceParams
-): Promise<string> {
-  try {
-    // Find the server for this model
-    let modelsResponse = listModels();
-    let model = modelsResponse.models.find(m => m.name === modelName);
-
-    // If model not found, try fetching fresh models list (handles race condition on startup)
-    if (!model) {
-      const manager = ModelManager.getInstance();
-      modelsResponse = await manager.fetchModels();
-      model = modelsResponse.models.find(m => m.name === modelName);
-    }
-
-    if (!model) {
-      throw new Error(`Model '${modelName}' not found in available models`);
-    }
-
-    const serverAddress = model.server;
-
-    // Convert single-turn request to messages array format
-    // Use native format internally: { type: 'image', image: '...' }
-    // Conversion to OpenAI format happens in fetchResponse() at API boundary
-    let content: any = preprocessResult.modifiedPrompt;
-    const hasImages = preprocessResult.images && preprocessResult.images.length > 0;
-
-    if (hasImages) {
-      // Multimodal content with images (native format)
-      content = [
-        { type: "text", text: preprocessResult.modifiedPrompt },
-        ...preprocessResult.images!.map(imageBase64Data => ({
-          type: "image",
-          image: `data:image/png;base64,${imageBase64Data}`
-        }))
-      ];
-    }
-
-    // Build messages array (single user message for agent loop)
-    const messages = [
-      {
-        role: "user",
-        content: content
-      }
-    ];
-
-    if (serverAddress.includes('api.observer-ai.com') && token) {
-      optimisticUpdateQuota();
-    }
-
-    // Use the new fetchResponse function with messages array
-    return await fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, inferenceParams);
-
-  } catch (error) {
-    console.error('Error calling API:', error);
-    // Re-throw the error so the calling function knows something went wrong
-    throw error;
-  }
-}

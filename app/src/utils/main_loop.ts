@@ -1,7 +1,8 @@
 // src/utils/main_loop.ts
 
 import { getAgent, getAgentCode } from './agent_database';
-import { sendPrompt, UnauthorizedError } from './sendApi';
+import { UnauthorizedError } from './sendApi';
+import { ModelManager } from './ModelManager';
 import { Logger } from './logging';
 import { preProcess } from './pre-processor';
 import { postProcess } from './post-processor';
@@ -10,7 +11,6 @@ import { recordingManager } from './recordingManager';
 import { IterationStore } from './IterationStore';
 import { detectSignificantChange, clearAgentChangeData } from './change_detector';
 import { checkPhoneWhitelist } from './pre-flight';
-import { inferenceConfigStore } from './inferenceConfigStore';
 
 export type TokenProvider = () => Promise<string | undefined>;
 
@@ -310,9 +310,6 @@ export async function executeAgentIteration(agentId: string): Promise<void> {
           }
       }
 
-      // Fetch inference params for this agent (global defaults + agent overrides)
-      const inferenceParams = inferenceConfigStore.getEffectiveParams(agentId);
-
       Logger.debug(agentId, `Sending prompt to inference server (model: ${agent.model_name})`, { iterationId });
 
       // Streaming callback that logs chunks - Logger dispatches events automatically
@@ -320,23 +317,16 @@ export async function executeAgentIteration(agentId: string): Promise<void> {
       const onStreamChunk = (chunk: string) => {
         try {
           if (isFirstChunk) {
-            Logger.debug(agentId, 'Stream started', {
-              logType: 'stream-start',
-              iterationId
-            });
+            Logger.debug(agentId, 'Stream started', { logType: 'stream-start', iterationId });
             isFirstChunk = false;
           }
-          Logger.debug(agentId, 'Stream chunk', {
-            logType: 'stream-chunk',
-            iterationId,
-            content: { chunk }
-          });
+          Logger.debug(agentId, 'Stream chunk', { logType: 'stream-chunk', iterationId, content: { chunk } });
         } catch (error) {
           Logger.debug(agentId, `Failed to log streaming event: ${error}`, { iterationId });
         }
       };
 
-      response = await sendPrompt(agent.model_name, preprocessResult, token, true, onStreamChunk, inferenceParams);
+      response = await ModelManager.getInstance().sendPrompt(agent.model_name, preprocessResult, token, true, onStreamChunk);
 
       // Cache new response for potential reuse on next iteration
       if (activeLoops[agentId]) {
@@ -479,11 +469,7 @@ export async function executeTestIteration(
 
     // Send the prompt to inference server and get response
     Logger.info(agentId, `Sending prompt to inference server (model: ${modelName})`);
-    const response = await sendPrompt(
-      modelName,
-      processedPrompt,
-      token
-    );
+    const response = await ModelManager.getInstance().sendPrompt(modelName, processedPrompt, token);
     // Since this is a one-off test, we don't use the StreamManager and just stop the capture.
     // This assumes the pre-processor for tests might call startScreenCapture directly.
     // If test logic changes, this might need updating.

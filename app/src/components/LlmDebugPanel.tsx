@@ -199,7 +199,6 @@ const LlmDebugPanel: React.FC<LlmDebugPanelProps> = ({ isVisible }) => {
         // Text-only generation
         const result = await NativeLlmManager.getInstance().testGenerate(
           testPrompt,
-          256,
           (token) => setTestResponse(prev => prev + token)
         );
         setTestMetrics(result.metrics);

@@ -11,13 +11,11 @@ import {
   Cpu,
   StopCircle,
   CheckCircle,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
 import { GemmaModelManager } from '@utils/localLlm/GemmaModelManager';
 import { isTauri } from '@utils/platform';
-import { GenerationMetrics, GEMMA_DISPLAY_NAMES, GemmaModelId, GgufFileInfo, NativeModelState, GemmaModelState } from '@utils/localLlm/types';
+import { GenerationMetrics, GEMMA_DISPLAY_NAMES, GemmaModelId } from '@utils/localLlm/types';
 
 interface BenchmarkPanelProps {
   isVisible: boolean;
@@ -44,11 +42,6 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
   // Backend detection state
   const [backendInfo, setBackendInfo] = useState<BackendInfo>({ backend: null, modelName: '', isMultimodal: false });
 
-  // Model management state
-  const [nativeModels, setNativeModels] = useState<GgufFileInfo[]>([]);
-  const [nativeState, setNativeState] = useState<NativeModelState | null>(null);
-  const [gemmaState, setGemmaState] = useState<GemmaModelState | null>(null);
-  const [showModels, setShowModels] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Detect which backend has a loaded model
@@ -88,26 +81,18 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
     setBackendInfo(detectActiveBackend());
 
     // Get initial states
-    if (isTauri()) {
-      setNativeState(NativeLlmManager.getInstance().getState());
-      NativeLlmManager.getInstance().listGgufFiles().then(setNativeModels);
-    }
-    setGemmaState(GemmaModelManager.getInstance().getState());
+    setBackendInfo(detectActiveBackend());
 
     // Subscribe to llama.cpp state changes
     const unsubNative = isTauri()
-      ? NativeLlmManager.getInstance().onStateChange((state) => {
+      ? NativeLlmManager.getInstance().onStateChange((_state) => {
           setBackendInfo(detectActiveBackend());
-          setNativeState(state);
-          // Refresh models list when status changes
-          NativeLlmManager.getInstance().listGgufFiles().then(setNativeModels);
         })
       : () => {};
 
     // Subscribe to Transformers.js state changes
-    const unsubGemma = GemmaModelManager.getInstance().onStateChange((state) => {
+    const unsubGemma = GemmaModelManager.getInstance().onStateChange(() => {
       setBackendInfo(detectActiveBackend());
-      setGemmaState(state);
     });
 
     return () => {
@@ -191,7 +176,6 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
         } else {
           const result = await NativeLlmManager.getInstance().testGenerate(
             testPrompt,
-            256,
             (token) => setTestResponse(prev => prev + token)
           );
           setTestMetrics(result.metrics);
@@ -415,147 +399,6 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
         )}
       </div>
 
-      {/* Downloaded Models Section - Collapsible */}
-      <div className="border border-gray-200 rounded-xl overflow-hidden">
-        <button
-          onClick={() => setShowModels(!showModels)}
-          className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
-        >
-          <span className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-            <Cpu size={16} />
-            Available Models
-            <span className="text-xs font-normal text-gray-500">
-              ({nativeModels.length} downloaded)
-            </span>
-          </span>
-          {showModels ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
-        </button>
-
-        {showModels && (
-          <div className="p-4 space-y-3 border-t border-gray-200">
-            {/* llama.cpp models */}
-            {isTauri() && nativeModels.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide">llama.cpp</h4>
-                {nativeModels.filter(f => !f.filename.toLowerCase().includes('mmproj')).map((model) => {
-                  const modelId = model.filename.replace(/\.gguf$/i, '');
-                  const isThisModel = nativeState?.modelId === modelId;
-                  const isLoaded = isThisModel && nativeState?.status === 'loaded';
-                  const isLoading = isThisModel && nativeState?.status === 'loading';
-                  const isUnloading = isThisModel && nativeState?.status === 'unloading';
-                  const isAnyBusy = nativeState?.status === 'loading' || nativeState?.status === 'unloading' || nativeState?.status === 'downloading';
-
-                  return (
-                    <div key={model.filename} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
-                      <div className="flex-1 min-w-0">
-                        <span className="font-medium text-gray-900 truncate block text-sm">{modelId}</span>
-                        <span className="text-xs text-gray-500">
-                          {(model.sizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 ml-2">
-                        {isUnloading ? (
-                          <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-lg font-medium">
-                            <Cpu size={12} className="animate-pulse" /> Unloading…
-                          </span>
-                        ) : isLoaded ? (
-                          <button
-                            onClick={() => NativeLlmManager.getInstance().unloadModel()}
-                            className="group flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors bg-green-100 text-green-700 hover:bg-red-100 hover:text-red-600"
-                          >
-                            <span className="group-hover:hidden flex items-center gap-1">
-                              <CheckCircle size={12} /> Ready
-                            </span>
-                            <span className="hidden group-hover:flex items-center gap-1">
-                              <X size={12} /> Unload
-                            </span>
-                          </button>
-                        ) : isLoading ? (
-                          <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-200 text-gray-600 rounded-lg font-medium">
-                            <Cpu size={12} className="animate-pulse" /> Loading…
-                          </span>
-                        ) : (
-                          <button
-                            disabled={isAnyBusy}
-                            onClick={() => NativeLlmManager.getInstance().loadModel(model.filename)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                          >
-                            <Cpu size={12} /> Load
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Transformers.js models - show available models */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide">Transformers.js</h4>
-              {[
-                { id: 'onnx-community/gemma-4-E2B-it-ONNX', name: 'Gemma 4 E2B', size: '~1.5 GB' },
-                { id: 'onnx-community/gemma-4-E4B-it-ONNX', name: 'Gemma 4 E4B', size: '~3 GB' },
-              ].map((model) => {
-                const isThisModel = gemmaState?.modelId === model.id;
-                const isLoaded = isThisModel && gemmaState?.status === 'loaded';
-                const isLoading = isThisModel && gemmaState?.status === 'loading';
-                const isAnyLoading = gemmaState?.status === 'loading';
-
-                return (
-                  <div key={model.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
-                    <div className="flex-1 min-w-0">
-                      <span className="font-medium text-gray-900 truncate block text-sm">{model.name}</span>
-                      <span className="text-xs text-gray-500">{model.size}</span>
-                    </div>
-                    <div className="flex items-center gap-2 ml-2">
-                      {isLoaded ? (
-                        <button
-                          onClick={() => GemmaModelManager.getInstance().unloadModel()}
-                          className="group flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors bg-green-100 text-green-700 hover:bg-red-100 hover:text-red-600"
-                        >
-                          <span className="group-hover:hidden flex items-center gap-1">
-                            <CheckCircle size={12} /> Ready
-                          </span>
-                          <span className="hidden group-hover:flex items-center gap-1">
-                            <X size={12} /> Unload
-                          </span>
-                        </button>
-                      ) : isLoading ? (
-                        <button
-                          onClick={() => GemmaModelManager.getInstance().unloadModel()}
-                          className="group flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-600 rounded-lg font-medium transition-colors"
-                        >
-                          <span className="group-hover:hidden flex items-center gap-1">
-                            <Cpu size={12} className="animate-pulse" /> Loading…
-                          </span>
-                          <span className="hidden group-hover:flex items-center gap-1">
-                            <StopCircle size={12} /> Cancel
-                          </span>
-                        </button>
-                      ) : (
-                        <button
-                          disabled={isAnyLoading}
-                          onClick={() => GemmaModelManager.getInstance().loadModel(model.id as GemmaModelId)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                        >
-                          <Cpu size={12} /> Load
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {nativeModels.length === 0 && !isTauri() && (
-              <p className="text-xs text-gray-500 text-center py-2">
-                Download models from the llama.cpp or Transformers.js tabs to see them here.
-              </p>
-            )}
-          </div>
-        )}
-      </div>
     </div>
   );
 };

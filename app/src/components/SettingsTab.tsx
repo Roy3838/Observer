@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Settings, TestTube2, Loader2, FileDown, CheckCircle2, Database, Trash2, Cloud, Server, Cpu, Mic, Monitor, Play, Square, Volume2, Sliders, RotateCcw, Keyboard, Check, AlertTriangle, Eye, EyeOff, Layers, Move, Maximize2, Zap, ChevronDown, ChevronRight } from 'lucide-react';
+import { Settings, TestTube2, Loader2, FileDown, CheckCircle2, Database, Trash2, Cloud, Server, Cpu, Mic, Monitor, Play, Square, Volume2, Keyboard, Check, AlertTriangle, Eye, EyeOff, Layers, Move, Maximize2, Zap, ChevronDown, ChevronRight } from 'lucide-react';
 import { SensorSettings } from '../utils/settings';
 import { StreamManager } from '../utils/streamManager';
-import { inferenceConfigStore } from '../utils/inferenceConfigStore';
-import { InferenceParams } from '../config/inference-params';
-import InferenceParamsEditor from './InferenceParamsEditor';
 import { isDesktop } from '../utils/platform';
 
 // Whisper imports
@@ -46,22 +43,6 @@ const SettingsTab = () => {
   // --- OCR State Management (Existing) ---
   const [ocrLang, setOcrLang] = useState(SensorSettings.getOcrLanguage());
   const [ocrConfidence, setOcrConfidence] = useState(SensorSettings.getOcrConfidenceThreshold());
-
-  // --- Inference Parameters State ---
-  const [globalInferenceParams, setGlobalInferenceParams] = useState<Partial<InferenceParams>>(
-    inferenceConfigStore.getGlobalDefaults()
-  );
-
-  const handleGlobalInferenceParamsChange = (params: Partial<InferenceParams>) => {
-    setGlobalInferenceParams(params);
-    inferenceConfigStore.setGlobalDefaults(params);
-  };
-
-  const handleResetInferenceParams = () => {
-    inferenceConfigStore.resetGlobalDefaults();
-    setGlobalInferenceParams(inferenceConfigStore.getGlobalDefaults());
-  };
-
 
   // --- OCR Handler Functions (Existing) ---
   const handleOcrLangChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -901,30 +882,7 @@ const SettingsTab = () => {
         </div>
       </SettingsCard>
 
-      {/* --- LLM Inference Parameters Card --- */}
-      <div className="bg-white shadow-md rounded-lg mb-6">
-        <div className="p-4 border-b flex justify-between items-center">
-          <h3 className="text-lg font-semibold flex items-center">
-            <Sliders className="h-5 w-5 mr-2 text-gray-500" />
-            LLM Inference Parameters
-          </h3>
-          <button
-            onClick={handleResetInferenceParams}
-            className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Reset to Defaults
-          </button>
-        </div>
-        <div className="p-6">
-          <InferenceParamsEditor
-            params={globalInferenceParams}
-            onChange={handleGlobalInferenceParamsChange}
-          />
-        </div>
-      </div>
-
-      {/* --- NEW Whisper Model Management Card --- */}
+      {/* --- Whisper Model Management Card --- */}
       <SettingsCard title="Whisper Speech Recognition">
         <div className="space-y-6">
           {/* Transcription Mode Toggle */}
