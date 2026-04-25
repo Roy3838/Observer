@@ -566,7 +566,7 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
             <X size={16} />
           </button>
         </div>
-        <div className="p-4">
+        <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(88vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))' }}>
           <BenchmarkPanel isVisible={true} />
         </div>
       </Modal>
