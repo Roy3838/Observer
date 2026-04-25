@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchModels as fetchAllModels, Model } from '@utils/inferenceServer';
 import {
-  Cpu, RefreshCw, Eye, Server, CheckCircle, X, StopCircle, Sparkles,
+  Cpu, RefreshCw, Eye, CheckCircle, X, StopCircle, Sparkles,
   AlertTriangle, Trash2, Settings2, BarChart3, FileDown, Cpu as CpuIcon,
 } from 'lucide-react';
 import { BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL } from '@utils/inferenceServer';
