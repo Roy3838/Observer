@@ -745,7 +745,7 @@ function AppContent() {
         onClose={() => setIsJupyterModalOpen(false)}
       />
 
-      <main className="w-full pt-4 px-0 md:px-4 pl-2 md:pl-20 wide:px-4 max-w-7xl mx-auto">
+      <main className="w-full pt-4 px-2 md:px-4 md:pl-20 wide:px-4 max-w-7xl mx-auto">
         {error && <ErrorDisplay message={error} />}
 
         {/* My Agents Tab */}
