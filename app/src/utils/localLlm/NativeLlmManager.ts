@@ -319,6 +319,10 @@ export class NativeLlmManager {
    * If neither is set, the model loads as text-only — no auto-detection.
    */
   public async loadModel(filename: string, mmprojFilename?: string): Promise<void> {
+    if (this.state.status === 'downloading') {
+      throw new Error('Cannot load a model while a download is in progress');
+    }
+
     if (this.state.status === 'loading') {
       Logger.warn('NativeLlmManager', 'Already loading a model');
       return;
