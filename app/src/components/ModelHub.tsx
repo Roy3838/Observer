@@ -453,7 +453,6 @@ const ModelHub: React.FC<ModelHubProps> = ({
         <div className="flex justify-between items-start mb-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Model Hub</h2>
-            <p className="text-sm text-gray-500 mt-1">Manage your AI models and inference engines</p>
           </div>
           <button
             onClick={handleDone}
@@ -543,36 +542,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
           </div>
         </section>
 
-        {/* ── GPU / Compute toggle ─────────────────────────── */}
-        <section className="mb-5">
-          <div className="flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-white">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-800">GPU Acceleration</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                  useGpu ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {useGpu ? 'On' : 'Off'}
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {useGpu ? 'WebGPU / Metal — hardware-accelerated' : 'CPU mode — broader compatibility'}
-              </p>
-            </div>
-            <button
-              onClick={() => handleToggleUnifiedGpu(!useGpu)}
-              disabled={nativeState.status === 'loading' || nativeState.status === 'loaded'}
-              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 ${
-                useGpu ? 'bg-green-600' : 'bg-gray-300'
-              }`}
-              title={nativeState.status === 'loaded' ? 'Unload current model to change' : undefined}
-            >
-              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                useGpu ? 'translate-x-6' : 'translate-x-1'
-              }`} />
-            </button>
-          </div>
-        </section>
+
 
         {/* ── Installed Models ─────────────────────────────── */}
         <section className="mb-5">
@@ -815,6 +785,37 @@ const ModelHub: React.FC<ModelHubProps> = ({
               })}
             </div>
           )}
+        </section>
+
+        {/* ── GPU / Compute toggle ─────────────────────────── */}
+        <section className="mb-5">
+          <div className="flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-white">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-800">GPU Acceleration</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                  useGpu ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {useGpu ? 'On' : 'Off'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {useGpu ? 'WebGPU / Metal — hardware-accelerated' : 'CPU mode — broader compatibility'}
+              </p>
+            </div>
+            <button
+              onClick={() => handleToggleUnifiedGpu(!useGpu)}
+              disabled={nativeState.status === 'loading' || nativeState.status === 'loaded'}
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 ${
+                useGpu ? 'bg-green-600' : 'bg-gray-300'
+              }`}
+              title={nativeState.status === 'loaded' ? 'Unload current model to change' : undefined}
+            >
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                useGpu ? 'translate-x-6' : 'translate-x-1'
+              }`} />
+            </button>
+          </div>
         </section>
 
         {/* ── Download Models (catalog) ─────────────────────── */}
