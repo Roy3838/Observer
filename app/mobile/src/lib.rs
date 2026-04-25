@@ -1028,6 +1028,26 @@ async fn llm_set_use_gpu(use_gpu: bool) -> Result<(), String> {
     }
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MemoryInfo {
+    total_bytes: u64,
+    used_bytes: u64,
+    available_bytes: u64,
+}
+
+#[tauri::command]
+fn get_memory_info() -> MemoryInfo {
+    use sysinfo::System;
+    let mut sys = System::new();
+    sys.refresh_memory();
+    MemoryInfo {
+        total_bytes: sys.total_memory(),
+        used_bytes: sys.used_memory(),
+        available_bytes: sys.available_memory(),
+    }
+}
+
 /// Get whether GPU acceleration is enabled
 #[tauri::command]
 async fn llm_get_use_gpu() -> Result<bool, String> {
@@ -1159,6 +1179,7 @@ pub fn run() {
             llm_set_sampler_params,
             llm_set_use_gpu,
             llm_get_use_gpu,
+            get_memory_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
