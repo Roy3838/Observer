@@ -165,7 +165,7 @@ impl LlmEngine {
 
         // Create mtmd context params with GPU acceleration (Metal)
         let mut mtmd_params = MtmdContextParams::default();
-        mtmd_params.use_gpu = true;
+        mtmd_params.use_gpu = self.use_gpu;
 
         let mmproj_str = mmproj_path.to_str()
             .ok_or_else(|| "Invalid mmproj path".to_string())?;
