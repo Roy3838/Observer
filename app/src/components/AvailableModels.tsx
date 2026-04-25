@@ -8,6 +8,7 @@ import { BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL } from '@utils/inferen
 import { Logger } from '@utils/logging';
 import ModelHub from '@components/ModelHub';
 import BenchmarkPanel from '@components/BenchmarkPanel';
+import Modal from '@components/EditAgent/Modal';
 import LlamaCppSamplerPanel from '@components/ModelCard/LlamaCppSamplerPanel';
 import RemoteInferenceParamsPanel from '@components/ModelCard/RemoteInferenceParamsPanel';
 import { platformFetch, isTauri } from '@utils/platform';
@@ -552,25 +553,23 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
         </div>
       )}
 
-      {/* Benchmark panel */}
-      {showBenchmark && (
-        <div className="mt-6 border border-orange-200 rounded-xl overflow-hidden">
-          <div className="bg-orange-50 px-4 py-3 border-b border-orange-200 flex items-center justify-between">
-            <span className="text-sm font-semibold text-orange-800 flex items-center gap-2">
-              <BarChart3 size={15} /> Performance Benchmark
-            </span>
-            <button
-              onClick={() => setShowBenchmark(false)}
-              className="p-1 text-orange-400 hover:text-orange-700 rounded transition-colors"
-            >
-              <X size={16} />
-            </button>
-          </div>
-          <div className="bg-white p-4">
-            <BenchmarkPanel isVisible={true} />
-          </div>
+      {/* Benchmark modal */}
+      <Modal open={showBenchmark} onClose={() => setShowBenchmark(false)} className="w-full max-w-2xl">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-orange-200 bg-orange-50">
+          <span className="text-sm font-semibold text-orange-800 flex items-center gap-2">
+            <BarChart3 size={15} /> Performance Benchmark
+          </span>
+          <button
+            onClick={() => setShowBenchmark(false)}
+            className="p-1 text-orange-400 hover:text-orange-700 rounded transition-colors"
+          >
+            <X size={16} />
+          </button>
         </div>
-      )}
+        <div className="p-4">
+          <BenchmarkPanel isVisible={true} />
+        </div>
+      </Modal>
 
       <ModelHub
         isOpen={showModelHub}
