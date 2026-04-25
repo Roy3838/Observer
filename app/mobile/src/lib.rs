@@ -356,13 +356,12 @@ async fn llm_download_model(
     on_progress: Channel<serde_json::Value>,
 ) -> Result<String, String> {
     {
-        use tauri_plugin_llm_engine::filename_from_hf_url;
-
         // Reset cancellation flag at start of new download
         DOWNLOAD_CANCELLED.store(false, Ordering::SeqCst);
 
         // Extract filename from URL
-        let filename = filename_from_hf_url(&url)
+        let filename = url.split('/').last()
+            .map(|s| s.to_string())
             .ok_or_else(|| "Could not extract filename from URL".to_string())?;
 
         if !filename.ends_with(".gguf") && !filename.ends_with(".GGUF") {
