@@ -39,11 +39,11 @@ pub struct SamplerParams {
 impl Default for SamplerParams {
     fn default() -> Self {
         Self {
-            temperature: 0.7,
+            temperature: 0.8,
             top_p: 0.9,
-            top_k: 40,
+            top_k: 64,
             seed: 42,
-            repeat_penalty: 1.1,
+            repeat_penalty: 1.0,
         }
     }
 }

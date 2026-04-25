@@ -1194,7 +1194,7 @@ pub fn run() {
             stop_audio_stream_cmd,
             set_app_group_path_cmd,
             read_broadcast_debug_log,
-            // LLM commands (iOS only, no-op on other platforms)
+            // LLM commands 
             llm_list_models,
             llm_download_model,
             llm_cancel_download,
