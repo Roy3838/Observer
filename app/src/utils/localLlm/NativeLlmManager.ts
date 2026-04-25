@@ -3,7 +3,8 @@
 // Supports downloading any GGUF model from HuggingFace URLs.
 
 import { invoke, Channel } from '@tauri-apps/api/core';
-import { Logger } from '../logging';
+import { listen } from '@tauri-apps/api/event';
+import { Logger, LogLevel } from '../logging';
 import {
   GgufFileInfo,
   NativeModelState,
@@ -43,6 +44,20 @@ export class NativeLlmManager {
 
   private constructor() {
     this.loadGgufCacheFromStorage();
+    this.subscribeToEngineEvents();
+  }
+
+  private subscribeToEngineEvents(): void {
+    listen<{ level: string; message: string }>('llm-log', (event) => {
+      const { level, message } = event.payload;
+      const logLevel =
+        level === 'error' ? LogLevel.ERROR :
+        level === 'warn'  ? LogLevel.WARNING :
+        LogLevel.INFO;
+      Logger.log(logLevel, 'LlmEngine', message);
+    }).catch(() => {
+      // Not in a Tauri context (e.g. browser dev) — silently ignore
+    });
   }
 
   private loadGgufCacheFromStorage(): void {
@@ -436,6 +451,17 @@ export class NativeLlmManager {
 
   public async cancelGeneration(): Promise<void> {
     await invoke('llm_cancel_generation');
+  }
+
+  /**
+   * Initialize the llama.cpp backend engine explicitly.
+   * Idempotent — safe to call multiple times. On first call this triggers
+   * Metal shader compilation (iOS/macOS) which can take several seconds on a
+   * cold device. Call this when the user opens the model screen so the cost
+   * is paid with visible UI feedback rather than silently during model load.
+   */
+  public async initEngine(): Promise<void> {
+    await invoke('llm_init_engine');
   }
 
   // State query methods

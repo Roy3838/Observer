@@ -576,6 +576,12 @@ async fn llm_is_multimodal() -> Result<bool, String> {
     with_engine(|engine| Ok(engine.is_multimodal()))
 }
 
+/// Initialize the LLM backend engine (idempotent, safe to call multiple times)
+#[tauri::command]
+async fn llm_init_engine() -> Result<(), String> {
+    tauri_plugin_llm_engine::init_engine()
+}
+
 /// Test LLM backend initialization
 #[tauri::command]
 async fn llm_test_init() -> Result<String, String> {
@@ -1053,6 +1059,18 @@ pub fn run() {
                     .build(),
             )?;
 
+            // Forward LlmEngine log lines to the frontend via a Tauri event.
+            // JS subscribes to "llm-log" and pipes entries into the Logger singleton.
+            {
+                let emit_handle = app.handle().clone();
+                tauri_plugin_llm_engine::set_log_emitter(move |level, message| {
+                    let _ = emit_handle.emit("llm-log", serde_json::json!({
+                        "level": level,
+                        "message": message,
+                    }));
+                });
+            }
+
             // HTTP server
             #[cfg(not(debug_assertions))]
             {
@@ -1209,6 +1227,7 @@ pub fn run() {
             llm_unload_model,
             llm_is_loaded,
             llm_is_multimodal,
+            llm_init_engine,
             llm_test_init,
             llm_debug_state,
             llm_get_debug_info,

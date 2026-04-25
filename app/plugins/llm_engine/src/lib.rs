@@ -3,8 +3,41 @@
 // Supports multimodal (vision) models via mmproj (multimodal projector) files.
 
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
+
+// ── Log emitter ──────────────────────────────────────────────────────────────
+// The app sets this once at startup via `set_log_emitter`. Every `llm_log!`
+// call invokes it so log lines cross the IPC bridge into the JS Logger.
+
+static LOG_EMITTER: OnceLock<Box<dyn Fn(&str, &str) + Send + Sync>> = OnceLock::new();
+
+/// Register a function that forwards log lines to the frontend.
+/// Call this once during Tauri setup before any engine activity.
+/// `f(level, message)` — level is one of "info" | "warn" | "error".
+pub fn set_log_emitter(f: impl Fn(&str, &str) + Send + Sync + 'static) {
+    let _ = LOG_EMITTER.set(Box::new(f));
+}
+
+/// Internal logging helper — emits via the registered emitter when available,
+/// always falls back to eprintln so logs are never silently dropped.
+#[doc(hidden)]
+pub fn _emit_log(level: &str, message: String) {
+    if let Some(emit) = LOG_EMITTER.get() {
+        emit(level, &message);
+    } else {
+        eprintln!("[LlmEngine][{}] {}", level, message);
+    }
+}
+
+/// Structured log macro that routes through the registered emitter.
+/// Falls back to eprintln when no emitter is set (e.g. in unit tests).
+#[macro_export]
+macro_rules! llm_log {
+    (warn, $($arg:tt)*) => { $crate::_emit_log("warn",  format!($($arg)*)) };
+    (error, $($arg:tt)*) => { $crate::_emit_log("error", format!($($arg)*)) };
+    ($($arg:tt)*)        => { $crate::_emit_log("info",  format!($($arg)*)) };
+}
 
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
@@ -105,7 +138,7 @@ impl LlmEngine {
         let backend = LlamaBackend::init()
             .map_err(|e| format!("Failed to init llama backend: {}", e))?;
 
-        eprintln!("[LlmEngine] Backend initialized");
+        llm_log!("Backend initialized");
         Ok(Self {
             backend,
             model: None,
@@ -123,7 +156,7 @@ impl LlmEngine {
     /// Loads a model from `model_path`. If `mmproj_path` is provided, the multimodal
     /// projector is loaded alongside it; otherwise the model is treated as text-only.
     pub fn load_model(&mut self, model_path: PathBuf, model_id: String, mmproj_path: Option<PathBuf>) -> Result<(), String> {
-        eprintln!("[LlmEngine] Loading model: {:?}", model_path);
+        llm_log!("Loading model: {:?}", model_path);
 
         if !model_path.exists() {
             return Err(format!("Model file not found: {:?}", model_path));
@@ -133,7 +166,7 @@ impl LlmEngine {
 
         // Use GPU layers based on setting: 99 for GPU (offload all), 0 for CPU only
         let n_gpu_layers = if self.use_gpu { 99 } else { 0 };
-        eprintln!("[LlmEngine] GPU mode: {}, n_gpu_layers: {}", self.use_gpu, n_gpu_layers);
+        llm_log!("GPU mode: {}, n_gpu_layers: {}", self.use_gpu, n_gpu_layers);
 
         let model_params = LlamaModelParams::default()
             .with_n_gpu_layers(n_gpu_layers);
@@ -147,11 +180,11 @@ impl LlmEngine {
 
         if let Some(mmproj) = mmproj_path {
             if let Err(e) = self.load_mmproj(mmproj) {
-                eprintln!("[LlmEngine] Warning: Failed to load mmproj: {}", e);
+                llm_log!(warn, "Failed to load mmproj: {}", e);
             }
         }
 
-        eprintln!("[LlmEngine] Model loaded: {} (multimodal: {})", model_id, self.is_multimodal());
+        llm_log!("Model loaded: {} (multimodal: {})", model_id, self.is_multimodal());
         Ok(())
     }
 
@@ -173,7 +206,7 @@ impl LlmEngine {
         let mtmd_ctx = MtmdContext::init_from_file(mmproj_str, model, &mtmd_params)
             .map_err(|e| format!("Failed to create mtmd context: {:?}", e))?;
 
-        eprintln!("[LlmEngine] mmproj loaded: {:?}", mmproj_path);
+        llm_log!("mmproj loaded: {:?}", mmproj_path);
         self.mtmd_ctx = Some(mtmd_ctx);
         self.mmproj_path = Some(mmproj_path);
 
@@ -188,7 +221,7 @@ impl LlmEngine {
     /// Unload the current model and free memory
     pub fn unload(&mut self) {
         if self.model.is_some() {
-            eprintln!("[LlmEngine] Unloading model");
+            llm_log!("Unloading model");
             // IMPORTANT: Drop mtmd_ctx first since it holds a reference to the model
             self.mtmd_ctx = None;
             self.mmproj_path = None;
@@ -227,7 +260,7 @@ impl LlmEngine {
     /// Must be called before load_model to take effect
     pub fn set_use_gpu(&mut self, use_gpu: bool) {
         self.use_gpu = use_gpu;
-        eprintln!("[LlmEngine] GPU mode set to: {}", use_gpu);
+        llm_log!("GPU mode set to: {}", use_gpu);
     }
 
     /// Get the last generation metrics
@@ -262,7 +295,7 @@ impl LlmEngine {
         let has_images = !images.is_empty();
 
         if has_images && self.mtmd_ctx.is_none() {
-            eprintln!("[LlmEngine] Warning: Images provided but no mmproj loaded");
+            llm_log!(warn, "Images provided but no mmproj loaded");
         }
 
         // If we have images and multimodal context, use mtmd pipeline
@@ -377,7 +410,7 @@ impl LlmEngine {
             tokens_per_second,
         });
 
-        eprintln!("[LlmEngine] Generated {} tokens in {:.1}ms ({:.1} tok/s)",
+        llm_log!("Generated {} tokens in {:.1}ms ({:.1} tok/s)",
             tokens_generated, total_generation_time_ms, tokens_per_second);
         Ok(full_response)
     }
@@ -395,7 +428,7 @@ impl LlmEngine {
         let model = self.model.as_ref().ok_or("No model loaded")?;
         let mtmd_ctx = self.mtmd_ctx.as_ref().ok_or("No multimodal context loaded")?;
 
-        eprintln!("[LlmEngine] Multimodal generation with {} images", images.len());
+        llm_log!("Multimodal generation with {} images", images.len());
 
         // Start timing
         let generation_start = Instant::now();
@@ -524,7 +557,7 @@ impl LlmEngine {
             tokens_per_second,
         });
 
-        eprintln!("[LlmEngine] Generated {} tokens in {:.1}ms ({:.1} tok/s)",
+        llm_log!("Generated {} tokens in {:.1}ms ({:.1} tok/s)",
             tokens_generated, total_generation_time_ms, tokens_per_second);
         Ok(full_response)
     }
@@ -624,17 +657,59 @@ impl Default for LlmEngine {
 /// Global engine instance wrapped in Mutex for thread-safe access
 pub static LLM_ENGINE: Mutex<Option<LlmEngine>> = Mutex::new(None);
 
+// ── llama.cpp / ggml C-level log hook ───────────────────────────────────────
+// `llama-cpp-2` routes internal C logs through `tracing`, which never reaches
+// our JS Logger. We override both `llama_log_set` and `ggml_log_set` with our
+// own callback that feeds directly into `_emit_log` (and thus the emitter).
+
+unsafe extern "C" fn llama_log_hook(
+    level: llama_cpp_sys_2::ggml_log_level,
+    text: *const std::os::raw::c_char,
+    _user_data: *mut std::os::raw::c_void,
+) {
+    if text.is_null() { return; }
+    let msg = unsafe { std::ffi::CStr::from_ptr(text) }
+        .to_string_lossy();
+    let msg = msg.trim_end_matches('\n');
+    if msg.is_empty() { return; }
+
+    let lvl = match level {
+        llama_cpp_sys_2::GGML_LOG_LEVEL_ERROR => "error",
+        llama_cpp_sys_2::GGML_LOG_LEVEL_WARN  => "warn",
+        _                                      => "info",
+    };
+    _emit_log(lvl, msg.to_string());
+}
+
+/// Install our log hook into llama.cpp and ggml so all C-level logs flow
+/// through `_emit_log` and reach the JS Logger.
+fn install_llama_log_hook() {
+    unsafe {
+        // Setting llama resets ggml too, so set ggml last to guarantee both.
+        llama_cpp_sys_2::llama_log_set(
+            Some(llama_log_hook),
+            std::ptr::null_mut(),
+        );
+        llama_cpp_sys_2::ggml_log_set(
+            Some(llama_log_hook),
+            std::ptr::null_mut(),
+        );
+    }
+}
+
 /// Initialize the global LLM engine
 pub fn init_engine() -> Result<(), String> {
     let mut guard = LLM_ENGINE.lock().map_err(|e| format!("Lock error: {}", e))?;
 
     if guard.is_none() {
+        // Install C-level log hook before the backend touches llama.cpp at all.
+        install_llama_log_hook();
         match LlmEngine::new() {
             Ok(engine) => {
                 *guard = Some(engine);
             }
             Err(e) => {
-                eprintln!("[LlmEngine] Failed to create engine: {}", e);
+                llm_log!(error, "Failed to create engine: {}", e);
                 return Err(e);
             }
         }

@@ -3,15 +3,16 @@
 // Acquisition + hardware config panel for local AI models, custom servers, and Ob-Server cloud.
 // Primary path: curated model catalog. Advanced: raw GGUF download, custom servers, sampler settings.
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Modal from '@components/EditAgent/Modal';
 import {
   Download, CheckCircle, AlertTriangle, X, StopCircle, FileDown, Cpu, Trash2,
   AlertCircle, Settings2, RefreshCw, Plus, Cloud, Server, Zap,
-  Sparkles, Package, ChevronDown,
+  Sparkles, Package, ChevronDown, Terminal, Play,
 } from 'lucide-react';
+import { Logger, LogEntry, LogLevel } from '@utils/logging';
 import pullModelManager, { PullState } from '@utils/pullModelManager';
-import { platformFetch, isTauri } from '@utils/platform';
+import { platformFetch, isTauri, isWeb } from '@utils/platform';
 import { GemmaModelManager } from '@utils/localLlm/GemmaModelManager';
 import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
 import type { CustomServer } from '@utils/inferenceServer';
@@ -184,7 +185,16 @@ const ModelHub: React.FC<ModelHubProps> = ({
   const [ggufUrl, setGgufUrl] = useState('');
   const [samplerParams, setSamplerParams] = useState<SamplerParams>({ ...DEFAULT_SAMPLER_PARAMS });
   const [showSamplerSettings, setShowSamplerSettings] = useState(false);
-  const [useGpu, setUseGpu] = useState<boolean>(() => NativeLlmManager.getInstance().getPersistedUseGpu());
+  const [useGpu, setUseGpu] = useState<boolean>(() => {
+    if (isWeb()) return true;
+    return NativeLlmManager.getInstance().getPersistedUseGpu();
+  });
+
+  // ── Engine init state
+  const [engineInitStatus, setEngineInitStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  const [engineInitError, setEngineInitError] = useState<string | null>(null);
+  const [engineLogs, setEngineLogs] = useState<LogEntry[]>([]);
+  const engineLogsEndRef = useRef<HTMLDivElement>(null);
 
   // ── Preset download state
   const [downloadingPreset, setDownloadingPreset] = useState<ModelPreset | null>(null);
@@ -200,6 +210,26 @@ const ModelHub: React.FC<ModelHubProps> = ({
     if (!isOpen) return;
     setActiveTab(isTauriApp ? 'llamacpp' : 'transformers');
   }, [isOpen, isTauriApp]);
+
+  // Subscribe to LLM logs while the Advanced panel is open on the llama.cpp tab
+  useEffect(() => {
+    if (!isOpen || !showAdvanced || activeTab !== 'llamacpp') return;
+
+    const existing = Logger.getFilteredLogs({ source: ['NativeLlmManager', 'LlmEngine'] }).slice(-200);
+    setEngineLogs(existing);
+
+    const listener = (entry: LogEntry) => {
+      if (entry.source === 'NativeLlmManager' || entry.source === 'LlmEngine') {
+        setEngineLogs(prev => [...prev, entry].slice(-200));
+      }
+    };
+    Logger.addListener(listener);
+    return () => Logger.removeListener(listener);
+  }, [isOpen, showAdvanced, activeTab]);
+
+  useEffect(() => {
+    engineLogsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [engineLogs]);
 
   useEffect(() => {
     if (!isOpen || ollamaServers) return;
@@ -1070,6 +1100,80 @@ const ModelHub: React.FC<ModelHubProps> = ({
                       </div>
                     ) : (
                       <>
+                        {/* Engine initialization */}
+                        <div className="border border-gray-200 rounded-xl overflow-hidden">
+                          <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
+                            <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                              <Play size={14} className="text-green-500" /> Engine
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {engineInitStatus === 'ok' && (
+                                <span className="text-xs text-green-600 font-medium">Initialized</span>
+                              )}
+                              {engineInitStatus === 'error' && (
+                                <span className="text-xs text-red-600 font-medium">Error</span>
+                              )}
+                              <button
+                                onClick={async () => {
+                                  setEngineInitStatus('loading');
+                                  setEngineInitError(null);
+                                  try {
+                                    await NativeLlmManager.getInstance().initEngine();
+                                    setEngineInitStatus('ok');
+                                  } catch (e) {
+                                    setEngineInitStatus('error');
+                                    setEngineInitError(e instanceof Error ? e.message : String(e));
+                                  }
+                                }}
+                                disabled={engineInitStatus === 'loading'}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                              >
+                                <RefreshCw size={12} className={engineInitStatus === 'loading' ? 'animate-spin' : ''} />
+                                {engineInitStatus === 'loading' ? 'Initializing...' : 'Init Engine'}
+                              </button>
+                            </div>
+                          </div>
+                          {engineInitError && (
+                            <div className="px-4 py-2 text-xs text-red-700 bg-red-50 border-t border-red-200">
+                              {engineInitError}
+                            </div>
+                          )}
+                          {/* Live logs */}
+                          <div className="border-t border-gray-200">
+                            <div className="flex items-center justify-between px-4 py-2">
+                              <span className="flex items-center gap-1.5 text-xs font-medium text-gray-600">
+                                <Terminal size={12} /> Logs
+                              </span>
+                              <button
+                                onClick={() => setEngineLogs([])}
+                                className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                            <div className="h-36 overflow-y-auto bg-gray-900 mx-3 mb-3 rounded p-2 font-mono text-[10px] leading-tight">
+                              {engineLogs.length === 0 ? (
+                                <span className="text-gray-500">No logs yet — init the engine or load a model</span>
+                              ) : (
+                                engineLogs.map(log => (
+                                  <div
+                                    key={log.id}
+                                    className={
+                                      log.level === LogLevel.ERROR ? 'text-red-400' :
+                                      log.level === LogLevel.WARNING ? 'text-yellow-400' :
+                                      'text-gray-300'
+                                    }
+                                  >
+                                    <span className="text-gray-500">{log.timestamp.toLocaleTimeString()} </span>
+                                    {log.message}
+                                  </div>
+                                ))
+                              )}
+                              <div ref={engineLogsEndRef} />
+                            </div>
+                          </div>
+                        </div>
+
                         {/* Custom GGUF download */}
                         <div>
                           <label className="block text-xs font-medium text-gray-600 mb-1">Download GGUF from URL</label>

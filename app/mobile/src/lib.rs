@@ -1,6 +1,6 @@
 use std::sync::{Mutex, atomic::{AtomicBool, Ordering}};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{ipc::Channel, AppHandle, Manager, State};
+use tauri::{ipc::Channel, AppHandle, Emitter, Manager, State};
 use base64::Engine;
 
 // Global flag to signal download cancellation
@@ -780,6 +780,12 @@ async fn llm_is_multimodal() -> Result<bool, String> {
     }
 }
 
+/// Initialize the LLM backend engine (idempotent, safe to call multiple times)
+#[tauri::command]
+async fn llm_init_engine() -> Result<(), String> {
+    tauri_plugin_llm_engine::init_engine()
+}
+
 /// Test LLM backend initialization - call this to check if llama.cpp works
 #[tauri::command]
 async fn llm_test_init() -> Result<String, String> {
@@ -1110,6 +1116,17 @@ pub fn run() {
             });
             eprintln!("✅ Server task spawned");
 
+            // Forward LlmEngine log lines to the frontend via a Tauri event.
+            {
+                let emit_handle = app.handle().clone();
+                tauri_plugin_llm_engine::set_log_emitter(move |level, message| {
+                    let _ = emit_handle.emit("llm-log", serde_json::json!({
+                        "level": level,
+                        "message": message,
+                    }));
+                });
+            }
+
             Ok(())
         })
         .manage(server_state) // Make state available to commands
@@ -1135,6 +1152,7 @@ pub fn run() {
             llm_is_loaded,
             llm_is_multimodal,
             llm_debug_state,
+            llm_init_engine,
             llm_test_init,
             // LLM debug commands
             llm_get_debug_info,
