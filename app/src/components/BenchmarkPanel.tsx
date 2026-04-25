@@ -17,7 +17,7 @@ import {
 import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
 import { GemmaModelManager } from '@utils/localLlm/GemmaModelManager';
 import { isTauri } from '@utils/platform';
-import { GenerationMetrics, GEMMA_DISPLAY_NAMES, GemmaModelId, NativeModelInfo, NativeModelState, GemmaModelState } from '@utils/localLlm/types';
+import { GenerationMetrics, GEMMA_DISPLAY_NAMES, GemmaModelId, GgufFileInfo, NativeModelState, GemmaModelState } from '@utils/localLlm/types';
 
 interface BenchmarkPanelProps {
   isVisible: boolean;
@@ -45,7 +45,7 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
   const [backendInfo, setBackendInfo] = useState<BackendInfo>({ backend: null, modelName: '', isMultimodal: false });
 
   // Model management state
-  const [nativeModels, setNativeModels] = useState<NativeModelInfo[]>([]);
+  const [nativeModels, setNativeModels] = useState<GgufFileInfo[]>([]);
   const [nativeState, setNativeState] = useState<NativeModelState | null>(null);
   const [gemmaState, setGemmaState] = useState<GemmaModelState | null>(null);
   const [showModels, setShowModels] = useState(false);
@@ -90,7 +90,7 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
     // Get initial states
     if (isTauri()) {
       setNativeState(NativeLlmManager.getInstance().getState());
-      NativeLlmManager.getInstance().listModels().then(setNativeModels);
+      NativeLlmManager.getInstance().listGgufFiles().then(setNativeModels);
     }
     setGemmaState(GemmaModelManager.getInstance().getState());
 
@@ -100,7 +100,7 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
           setBackendInfo(detectActiveBackend());
           setNativeState(state);
           // Refresh models list when status changes
-          NativeLlmManager.getInstance().listModels().then(setNativeModels);
+          NativeLlmManager.getInstance().listGgufFiles().then(setNativeModels);
         })
       : () => {};
 
@@ -148,12 +148,15 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
 
   // Stop ongoing generation
   const stopGeneration = useCallback(() => {
+    if (backendInfo.backend === 'llamacpp') {
+      NativeLlmManager.getInstance().cancelGeneration();
+    }
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
     setIsGenerating(false);
-  }, []);
+  }, [backendInfo.backend]);
 
   // Run test generation using the active backend
   const runTestGeneration = async () => {
@@ -434,8 +437,9 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
             {isTauri() && nativeModels.length > 0 && (
               <div className="space-y-2">
                 <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide">llama.cpp</h4>
-                {nativeModels.map((model) => {
-                  const isThisModel = nativeState?.modelId === model.id;
+                {nativeModels.filter(f => !f.filename.toLowerCase().includes('mmproj')).map((model) => {
+                  const modelId = model.filename.replace(/\.gguf$/i, '');
+                  const isThisModel = nativeState?.modelId === modelId;
                   const isLoaded = isThisModel && nativeState?.status === 'loaded';
                   const isLoading = isThisModel && nativeState?.status === 'loading';
                   const isUnloading = isThisModel && nativeState?.status === 'unloading';
@@ -444,10 +448,9 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
                   return (
                     <div key={model.filename} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
                       <div className="flex-1 min-w-0">
-                        <span className="font-medium text-gray-900 truncate block text-sm">{model.name}</span>
+                        <span className="font-medium text-gray-900 truncate block text-sm">{modelId}</span>
                         <span className="text-xs text-gray-500">
                           {(model.sizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB
-                          {model.isMultimodal && <span className="ml-1 text-purple-600 font-medium">· Vision</span>}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 ml-2">
@@ -474,7 +477,7 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
                         ) : (
                           <button
                             disabled={isAnyBusy}
-                            onClick={() => NativeLlmManager.getInstance().loadModel(model.filename, model.mmprojFilename)}
+                            onClick={() => NativeLlmManager.getInstance().loadModel(model.filename)}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                           >
                             <Cpu size={12} /> Load

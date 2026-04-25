@@ -193,7 +193,7 @@ export class ModelManager {
       // Refresh local model caches
       // llama.cpp models (Tauri only)
       if (isTauri()) {
-        await NativeLlmManager.getInstance().refreshModelCache();
+        await NativeLlmManager.getInstance().refreshGgufCache();
       }
       // Note: GemmaModelManager doesn't have a refresh - it reads from localStorage synchronously
 

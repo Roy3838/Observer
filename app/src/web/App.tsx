@@ -44,10 +44,10 @@ import { ObServerTab } from '@components/ObServerTab';
 import { UpgradeModal } from '@components/UpgradeModal';
 import { WelcomeModal } from '@components/WelcomeModal';
 import AgentActivityModal from '@components/AgentCard/AgentActivityModal';
-import ModelHub from '@components/ModelHub';
+import LocalServerSetupDialog from '@components/LocalServerSetupDialog';
 import FeedbackDialog from '@components/FeedbackDialog';
 import { startCommandSSE, updateCommandSSEToken } from '@utils/commandSSE';
-import { fetchModels } from '@utils/inferenceServer';
+import { ModelManager } from '@utils/ModelManager';
 import WhitelistModal from '@components/WhitelistModal';
 import InteractiveTutorial from '@components/InteractiveTutorial';
 
@@ -90,9 +90,8 @@ function AppContent() {
   const [activityModalOpen, setActivityModalOpen] = useState(false);
   const [activityModalAgentId, setActivityModalAgentId] = useState<string | null>(null);
 
-  // Terminal modal state
-  const [noModels, setNoModels] = useState(false);
-  const [isModelHubOpen, setIsModelHubOpen] = useState(false);
+  // Local model setup dialog — shown on startup when no local models are configured
+  const [showLocalSetup, setShowLocalSetup] = useState(false);
 
   // Quota info state
   const [quotaInfo, setQuotaInfo] = useState<{
@@ -589,6 +588,17 @@ function AppContent() {
     }
   }, [isLoading, isAuthenticated]);
 
+  // Once on startup, if the user has no local models, open the local setup dialog.
+  // "Local" = anything that isn't the Ob-Server cloud (sentinels + custom servers).
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const { models } = ModelManager.getInstance().listModels();
+      const hasLocalModels = models.some(m => !m.server.includes('api.observer-ai.com'));
+      if (!hasLocalModels) setShowLocalSetup(true);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Welcome modal - check for login intent after auth completes
   useEffect(() => {
     if (!isLoading && isAuthenticated && user && 'sub' in user) {
@@ -716,7 +726,6 @@ function AppContent() {
           setIsHalfwayWarning(true);
           setIsUpgradeModalOpen(true);
         }}
-        onShowModelHub={() => setNoModels(true)}
         quotaInfo={quotaInfo}
         setQuotaInfo={setQuotaInfo}
         onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -1063,16 +1072,12 @@ function AppContent() {
         />
       )}
 
-      <ModelHub
-        isOpen={!showStartupDialog && (noModels || isModelHubOpen)}
-        onClose={() => {
-          setNoModels(false);
-          setIsModelHubOpen(false);
-        }}
-        onPullComplete={async () => {
-          await fetchModels();
-        }}
-      />
+      {showLocalSetup && !showStartupDialog && (
+        <LocalServerSetupDialog
+          onDismiss={() => setShowLocalSetup(false)}
+          onModelLoaded={() => setShowLocalSetup(false)}
+        />
+      )}
 
       <FeedbackDialog
         isOpen={isFeedbackOpen}

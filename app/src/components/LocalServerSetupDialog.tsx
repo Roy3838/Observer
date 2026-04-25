@@ -92,12 +92,11 @@ const LocalServerSetupDialog = ({
     setError(null);
 
     try {
-      // Find the downloaded model
-      const models = await NativeLlmManager.getInstance().listModels();
-      const gemmaModel = models.find(m => m.id.includes('gemma-4-E2B'));
+      const files = await NativeLlmManager.getInstance().listGgufFiles();
+      const gemmaModel = files.find(f => f.filename.toLowerCase().includes('gemma-4-e2b') && !f.filename.toLowerCase().includes('mmproj'));
 
       if (gemmaModel) {
-        await NativeLlmManager.getInstance().loadModel(gemmaModel.filename, gemmaModel.mmprojFilename);
+        await NativeLlmManager.getInstance().loadModel(gemmaModel.filename);
       } else {
         throw new Error('Model not found after download');
       }

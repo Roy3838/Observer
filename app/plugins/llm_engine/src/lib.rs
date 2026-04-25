@@ -120,8 +120,8 @@ impl LlmEngine {
     }
 
     /// Load a GGUF model from the given path.
-    /// If mmproj_path is provided it is used directly; otherwise the models directory
-    /// is scanned for any file containing "mmproj" in its name (auto-detect fallback).
+    /// Loads a model from `model_path`. If `mmproj_path` is provided, the multimodal
+    /// projector is loaded alongside it; otherwise the model is treated as text-only.
     pub fn load_model(&mut self, model_path: PathBuf, model_id: String, mmproj_path: Option<PathBuf>) -> Result<(), String> {
         eprintln!("[LlmEngine] Loading model: {:?}", model_path);
 
@@ -145,9 +145,7 @@ impl LlmEngine {
         self.model_path = Some(model_path.clone());
         self.loaded_model_id = Some(model_id.clone());
 
-        // Resolve mmproj: explicit > auto-detect
-        let resolved_mmproj = mmproj_path.or_else(|| find_mmproj_for_model(&model_path));
-        if let Some(mmproj) = resolved_mmproj {
+        if let Some(mmproj) = mmproj_path {
             if let Err(e) = self.load_mmproj(mmproj) {
                 eprintln!("[LlmEngine] Warning: Failed to load mmproj: {}", e);
             }
@@ -252,11 +250,10 @@ impl LlmEngine {
     pub fn generate<F>(
         &mut self,
         messages: Vec<ChatMessage>,
-        max_tokens: u32,
         mut on_token: F,
     ) -> Result<String, String>
     where
-        F: FnMut(&str),
+        F: FnMut(&str) -> bool, // return false to cancel generation
     {
         let model = self.model.as_ref().ok_or("No model loaded")?;
 
@@ -270,7 +267,7 @@ impl LlmEngine {
 
         // If we have images and multimodal context, use mtmd pipeline
         if has_images && self.mtmd_ctx.is_some() {
-            return self.generate_multimodal(messages, images, max_tokens, on_token);
+            return self.generate_multimodal(messages, images, on_token);
         }
 
         // Text-only generation path
@@ -322,7 +319,7 @@ impl LlmEngine {
         let mut n_cur = tokens.len();
         let mut tokens_generated: u32 = 0;
 
-        for _ in 0..max_tokens {
+        loop {
             // Sample next token
             let new_token = sampler.sample(&ctx, batch.n_tokens() - 1);
 
@@ -342,8 +339,10 @@ impl LlmEngine {
                 .token_to_str(new_token, Special::Tokenize)
                 .map_err(|e| format!("Failed to decode token: {}", e))?;
 
-            // Stream the token
-            on_token(&token_str);
+            // Stream the token; callback returns false to cancel
+            if !on_token(&token_str) {
+                break;
+            }
             full_response.push_str(&token_str);
 
             // Prepare next batch
@@ -388,11 +387,10 @@ impl LlmEngine {
         &mut self,
         messages: Vec<ChatMessage>,
         images: Vec<Vec<u8>>,
-        max_tokens: u32,
         mut on_token: F,
     ) -> Result<String, String>
     where
-        F: FnMut(&str),
+        F: FnMut(&str) -> bool,
     {
         let model = self.model.as_ref().ok_or("No model loaded")?;
         let mtmd_ctx = self.mtmd_ctx.as_ref().ok_or("No multimodal context loaded")?;
@@ -459,7 +457,7 @@ impl LlmEngine {
         // Create batch for generation
         let mut batch = LlamaBatch::new(512, 1);
 
-        for _ in 0..max_tokens {
+        loop {
             // For first token, we sample from the last position after eval
             // For subsequent tokens, we decode the batch first
             if batch.n_tokens() > 0 {
@@ -492,8 +490,10 @@ impl LlmEngine {
                 .token_to_str(new_token, Special::Tokenize)
                 .map_err(|e| format!("Failed to decode token: {}", e))?;
 
-            // Stream the token
-            on_token(&token_str);
+            // Stream the token; callback returns false to cancel
+            if !on_token(&token_str) {
+                break;
+            }
             full_response.push_str(&token_str);
 
             // Prepare next batch

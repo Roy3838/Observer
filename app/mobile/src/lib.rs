@@ -5,6 +5,8 @@ use base64::Engine;
 
 // Global flag to signal download cancellation
 static DOWNLOAD_CANCELLED: AtomicBool = AtomicBool::new(false);
+// Global flag to signal generation cancellation
+static GENERATION_CANCELLED: AtomicBool = AtomicBool::new(false);
 
 mod server;
 use server::{AudioData, FrameData, ServerState, start_server};
@@ -300,21 +302,19 @@ async fn stop_audio_stream_cmd(
 // LLM Engine Commands (iOS only)
 // ============================================================================
 
-/// List downloaded GGUF models from the models directory
-/// Now includes multimodal detection (checks for associated mmproj files)
+/// List all GGUF files in the models directory (models and projectors alike).
+/// No filtering or auto-detection — the frontend decides how to use each file.
 #[tauri::command]
-async fn llm_list_models(
+async fn llm_list_gguf(
     app_handle: AppHandle,
 ) -> Result<Vec<serde_json::Value>, String> {
     #[cfg(target_os = "ios")]
     {
-        use tauri_plugin_llm_engine::{NativeModelInfo, model_id_from_filename, find_mmproj_for_model};
-
         let models_dir = app_handle.path().app_data_dir()
             .map_err(|e| e.to_string())?
             .join("models");
 
-        let mut models: Vec<serde_json::Value> = Vec::new();
+        let mut files: Vec<serde_json::Value> = Vec::new();
 
         if models_dir.exists() {
             if let Ok(entries) = std::fs::read_dir(&models_dir) {
@@ -323,45 +323,22 @@ async fn llm_list_models(
                     if let Some(ext) = path.extension() {
                         if ext == "gguf" || ext == "GGUF" {
                             if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                                // Skip mmproj files - they're not standalone models
-                                if filename.to_lowercase().contains("mmproj") {
-                                    continue;
-                                }
-
                                 let size_bytes = std::fs::metadata(&path)
                                     .map(|m| m.len())
                                     .unwrap_or(0);
 
-                                // Check if this model has an associated mmproj file
-                                let mmproj_path = find_mmproj_for_model(&path);
-                                let mmproj_filename = mmproj_path.as_ref()
-                                    .and_then(|p| p.file_name())
-                                    .and_then(|n| n.to_str())
-                                    .map(String::from);
-                                let is_multimodal = mmproj_path.is_some();
-
-                                let model_id = model_id_from_filename(filename);
-                                let info = NativeModelInfo {
-                                    id: model_id.clone(),
-                                    name: model_id,
-                                    filename: filename.to_string(),
-                                    size_bytes,
-                                    hf_url: None,
-                                    mmproj_filename,
-                                    is_multimodal,
-                                };
-
-                                if let Ok(json) = serde_json::to_value(info) {
-                                    models.push(json);
-                                }
+                                files.push(serde_json::json!({
+                                    "filename": filename,
+                                    "sizeBytes": size_bytes,
+                                }));
                             }
                         }
                     }
                 }
-            }
+        }
         }
 
-        Ok(models)
+        Ok(files)
     }
 
     #[cfg(not(target_os = "ios"))]
@@ -494,6 +471,14 @@ async fn llm_cancel_download() -> Result<(), String> {
     Ok(())
 }
 
+/// Cancel an ongoing generation
+#[tauri::command]
+async fn llm_cancel_generation() -> Result<(), String> {
+    eprintln!("[LLM] Cancel generation requested");
+    GENERATION_CANCELLED.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
 /// Delete a downloaded model by filename
 #[tauri::command]
 async fn llm_delete_model(
@@ -525,7 +510,7 @@ async fn llm_delete_model(
 }
 
 /// Load a model into memory for inference by filename.
-/// Optionally specify mmproj_filename explicitly — if omitted, falls back to auto-detection.
+/// Pass mmproj_filename to enable vision; omit for text-only inference.
 #[tauri::command]
 async fn llm_load_model(
     app_handle: AppHandle,
@@ -619,7 +604,7 @@ async fn llm_load_model(
 async fn llm_generate(
     messages: Vec<serde_json::Value>,
     on_token: Channel<String>,
-) -> Result<String, String> {
+) -> Result<serde_json::Value, String> {
     #[cfg(target_os = "ios")]
     {
         use tauri_plugin_llm_engine::{with_engine, ChatMessage, ChatContent, ChatContentPart, LLM_ENGINE};
@@ -653,11 +638,9 @@ async fn llm_generate(
 
                 // Content can be either a string or an array of content parts
                 let content = if let Some(text) = content_value.as_str() {
-                    // Simple text content
                     eprintln!("[LLM] Message: role={}, content_len={}", role, text.len());
                     ChatContent::Text(text.to_string())
                 } else if let Some(parts_array) = content_value.as_array() {
-                    // Multimodal content parts
                     let parts: Vec<ChatContentPart> = parts_array.iter()
                         .filter_map(|part| {
                             let part_type = part.get("type")?.as_str()?;
@@ -691,21 +674,38 @@ async fn llm_generate(
 
         eprintln!("[LLM] Parsed {} chat messages, starting generation...", chat_messages.len());
 
-        // Use catch_unwind to catch any panics from llama.cpp
+        GENERATION_CANCELLED.store(false, Ordering::SeqCst);
         let on_token_clone = on_token.clone();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             with_engine(|engine| {
-                engine.generate(chat_messages, 2048, |token| {
+                let response = engine.generate(chat_messages, |token| {
+                    if GENERATION_CANCELLED.load(Ordering::SeqCst) {
+                        return false;
+                    }
                     let _ = on_token_clone.send(token.to_string());
-                })
+                    true
+                })?;
+
+                let metrics = engine.get_last_metrics().map(|m| serde_json::json!({
+                    "tokensGenerated": m.tokens_generated,
+                    "promptTokens": m.prompt_tokens,
+                    "timeToFirstTokenMs": m.time_to_first_token_ms,
+                    "totalGenerationTimeMs": m.total_generation_time_ms,
+                    "tokensPerSecond": m.tokens_per_second,
+                }));
+
+                Ok(serde_json::json!({
+                    "response": response,
+                    "metrics": metrics,
+                }))
             })
         }));
 
         match result {
-            Ok(Ok(response)) => {
-                eprintln!("[LLM] ✅ Generation complete, response_len={}", response.len());
+            Ok(Ok(value)) => {
+                eprintln!("[LLM] ✅ Generation complete");
                 eprintln!("[LLM] ========== GENERATE END ==========");
-                Ok(response)
+                Ok(value)
             }
             Ok(Err(e)) => {
                 eprintln!("[LLM] ❌ Generation error: {}", e);
@@ -1048,69 +1048,6 @@ async fn llm_get_use_gpu() -> Result<bool, String> {
     }
 }
 
-/// Test generation with a simple prompt, returns response and metrics
-#[tauri::command]
-async fn llm_test_generate(
-    prompt: String,
-    max_tokens: Option<u32>,
-    on_token: Channel<String>,
-) -> Result<serde_json::Value, String> {
-    #[cfg(target_os = "ios")]
-    {
-        use tauri_plugin_llm_engine::{with_engine, ChatMessage, ChatContent};
-
-        let max_tokens = max_tokens.unwrap_or(256);
-
-        let messages = vec![ChatMessage {
-            role: "user".to_string(),
-            content: ChatContent::Text(prompt),
-        }];
-
-        let on_token_clone = on_token.clone();
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            with_engine(|engine| {
-                let response = engine.generate(messages, max_tokens, |token| {
-                    let _ = on_token_clone.send(token.to_string());
-                })?;
-
-                let metrics = engine.get_last_metrics().map(|m| serde_json::json!({
-                    "tokensGenerated": m.tokens_generated,
-                    "promptTokens": m.prompt_tokens,
-                    "timeToFirstTokenMs": m.time_to_first_token_ms,
-                    "totalGenerationTimeMs": m.total_generation_time_ms,
-                    "tokensPerSecond": m.tokens_per_second,
-                }));
-
-                Ok(serde_json::json!({
-                    "response": response,
-                    "metrics": metrics,
-                }))
-            })
-        }));
-
-        match result {
-            Ok(Ok(response)) => Ok(response),
-            Ok(Err(e)) => Err(e),
-            Err(panic_info) => {
-                let panic_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                    s.to_string()
-                } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                    s.clone()
-                } else {
-                    "Unknown panic".to_string()
-                };
-                Err(format!("Panic during test generation: {}", panic_msg))
-            }
-        }
-    }
-
-    #[cfg(not(target_os = "ios"))]
-    {
-        let _ = (prompt, max_tokens, on_token);
-        Err("LLM only available on iOS".to_string())
-    }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // EARLY LOG - Check if app is starting
@@ -1195,9 +1132,10 @@ pub fn run() {
             set_app_group_path_cmd,
             read_broadcast_debug_log,
             // LLM commands 
-            llm_list_models,
+            llm_list_gguf,
             llm_download_model,
             llm_cancel_download,
+            llm_cancel_generation,
             llm_delete_model,
             llm_load_model,
             llm_generate,
@@ -1211,7 +1149,6 @@ pub fn run() {
             llm_set_sampler_params,
             llm_set_use_gpu,
             llm_get_use_gpu,
-            llm_test_generate
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

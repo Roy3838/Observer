@@ -24,7 +24,8 @@ import {
   GemmaDtype,
   GemmaImageTokenBudget,
   GemmaModelId,
-  NativeModelInfo,
+  LocalModelEntry,
+  GgufFileInfo,
   NativeModelState,
   SamplerParams,
   DEFAULT_SAMPLER_PARAMS,
@@ -170,6 +171,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
 
   // ── Transformers.js (Gemma) state
   const [gemmaState, setGemmaState] = useState<GemmaModelState>(GemmaModelManager.getInstance().getState());
+  const [transformersModels, setTransformersModels] = useState<LocalModelEntry[]>(GemmaModelManager.getInstance().listLocalModels());
   const [gemmaDevice, setGemmaDevice] = useState<GemmaDevice>('webgpu');
   const [gemmaDtype, setGemmaDtype] = useState<GemmaDtype>('q4');
   const [gemmaTokenBudget, setGemmaTokenBudget] = useState<GemmaImageTokenBudget>(70);
@@ -177,10 +179,9 @@ const ModelHub: React.FC<ModelHubProps> = ({
 
   // ── llama.cpp (Native) state
   const [nativeState, setNativeState] = useState<NativeModelState>(NativeLlmManager.getInstance().getState());
-  const [nativeModels, setNativeModels] = useState<NativeModelInfo[]>([]);
+  const [ggufFiles, setGgufFiles] = useState<GgufFileInfo[]>(() => NativeLlmManager.getInstance().getCachedGgufFiles());
+  const [mmprojAssignments, setMmprojAssignments] = useState<Record<string, string>>(() => NativeLlmManager.getInstance().getMmprojAssignments());
   const [ggufUrl, setGgufUrl] = useState('');
-  const [mmprojUrl, setMmprojUrl] = useState('');
-  const [currentDownload, setCurrentDownload] = useState<'gguf' | 'mmproj' | null>(null);
   const [samplerParams, setSamplerParams] = useState<SamplerParams>({ ...DEFAULT_SAMPLER_PARAMS });
   const [showSamplerSettings, setShowSamplerSettings] = useState(false);
   const [useGpu, setUseGpu] = useState<boolean>(() => NativeLlmManager.getInstance().getPersistedUseGpu());
@@ -224,9 +225,13 @@ const ModelHub: React.FC<ModelHubProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const manager = GemmaModelManager.getInstance();
-    const unsubscribe = manager.onStateChange(setGemmaState);
+    const unsubscribe = manager.onStateChange((state) => {
+      setGemmaState(state);
+      setTransformersModels(manager.listLocalModels());
+    });
     const currentState = manager.getState();
     setGemmaState(currentState);
+    setTransformersModels(manager.listLocalModels());
     if (currentState.loadSettings) {
       setGemmaDevice(currentState.loadSettings.device);
       setGemmaDtype(currentState.loadSettings.dtype);
@@ -244,7 +249,8 @@ const ModelHub: React.FC<ModelHubProps> = ({
 
   useEffect(() => {
     if (!isOpen || !isTauriApp) return;
-    NativeLlmManager.getInstance().listModels().then(setNativeModels);
+    NativeLlmManager.getInstance().listGgufFiles().then(setGgufFiles);
+    setMmprojAssignments(NativeLlmManager.getInstance().getMmprojAssignments());
   }, [isOpen, isTauriApp, nativeState.status]);
 
   useEffect(() => {
@@ -287,24 +293,15 @@ const ModelHub: React.FC<ModelHubProps> = ({
 
   const handleDownloadGguf = async () => {
     if (!ggufUrl.trim()) return;
-    setCurrentDownload('gguf');
     try {
       await NativeLlmManager.getInstance().downloadModel(ggufUrl.trim());
       setGgufUrl('');
-    } catch { /* surfaced via nativeState.error */ } finally {
-      setCurrentDownload(null);
-    }
+    } catch { /* surfaced via nativeState.error */ }
   };
 
-  const handleDownloadMmproj = async () => {
-    if (!mmprojUrl.trim()) return;
-    setCurrentDownload('mmproj');
-    try {
-      await NativeLlmManager.getInstance().downloadModel(mmprojUrl.trim());
-      setMmprojUrl('');
-    } catch { /* surfaced via nativeState.error */ } finally {
-      setCurrentDownload(null);
-    }
+  const handleMmprojAssignment = (modelFilename: string, mmprojFilename: string | null) => {
+    NativeLlmManager.getInstance().setMmprojAssignment(modelFilename, mmprojFilename);
+    setMmprojAssignments(NativeLlmManager.getInstance().getMmprojAssignments());
   };
 
   const handleSamplerParamChange = async (key: keyof SamplerParams, value: number) => {
@@ -370,10 +367,10 @@ const ModelHub: React.FC<ModelHubProps> = ({
     .map(s => s.address);
   const allOllamaServers = [...new Set([...availableServers, ...ollamaServersFromCustom])];
 
-  // Transformers.js shows in the unified list whenever a model is in flight.
-  const transformersInFlight = !!gemmaState.modelId &&
-    (gemmaState.status === 'loaded' || gemmaState.status === 'loading' || gemmaState.status === 'error');
-  const installedCount = nativeModels.length + (transformersInFlight ? 1 : 0);
+  // Split GGUFs for display: models vs projectors (heuristic, display-only)
+  const ggufModels = ggufFiles.filter(f => !f.filename.toLowerCase().includes('mmproj'));
+  const ggufProjectors = ggufFiles.filter(f => f.filename.toLowerCase().includes('mmproj'));
+  const installedCount = ggufFiles.length + transformersModels.length;
 
   return (
     <Modal open={isOpen} onClose={handleDone} className="w-full max-w-3xl">
@@ -419,16 +416,21 @@ const ModelHub: React.FC<ModelHubProps> = ({
             </div>
           ) : (
             <div className="space-y-2">
-              {/* llama.cpp downloaded models */}
-              {nativeModels.map((model) => {
-                const isThisModel = nativeState.modelId === model.id;
+              {/* llama.cpp model files */}
+              {ggufModels.map((file) => {
+                const modelId = file.filename.replace(/\.gguf$/i, '');
+                const isThisModel = nativeState.modelId === modelId;
                 const isLoaded = isThisModel && nativeState.status === 'loaded';
                 const isLoading = isThisModel && nativeState.status === 'loading';
                 const isUnloading = isThisModel && nativeState.status === 'unloading';
+                const assignedMmproj = mmprojAssignments[file.filename] ?? null;
+                const isMultimodal = isThisModel
+                  ? NativeLlmManager.getInstance().isMultimodal()
+                  : !!assignedMmproj;
 
                 return (
                   <div
-                    key={model.filename}
+                    key={file.filename}
                     className={`border rounded-xl p-3 transition-all ${
                       isLoaded ? 'border-green-300 bg-green-50/50' : 'border-gray-200 bg-white hover:border-gray-300'
                     }`}
@@ -442,13 +444,30 @@ const ModelHub: React.FC<ModelHubProps> = ({
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-medium text-gray-900 truncate">{model.name}</span>
+                            <span className="font-medium text-gray-900 truncate">{modelId}</span>
                             <span className="text-[10px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded">llama.cpp</span>
-                            {model.isMultimodal && (
+                            {isMultimodal && (
                               <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">Vision</span>
                             )}
                           </div>
-                          <p className="text-xs text-gray-500 mt-0.5">{formatBytes(model.sizeBytes)}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-xs text-gray-500">{formatBytes(file.sizeBytes)}</p>
+                            {/* mmproj selector */}
+                            {ggufProjectors.length > 0 && (
+                              <select
+                                value={assignedMmproj ?? ''}
+                                onChange={e => handleMmprojAssignment(file.filename, e.target.value || null)}
+                                disabled={isLoaded || isLoading}
+                                className="text-xs border border-gray-200 rounded px-1.5 py-0.5 bg-white text-gray-600 focus:ring-1 focus:ring-purple-400 disabled:opacity-50 max-w-[160px] truncate"
+                                title="Assign a vision projector"
+                              >
+                                <option value="">No projector</option>
+                                {ggufProjectors.map(p => (
+                                  <option key={p.filename} value={p.filename}>{p.filename.replace(/\.gguf$/i, '')}</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -475,16 +494,16 @@ const ModelHub: React.FC<ModelHubProps> = ({
                           <>
                             <button
                               disabled={isAnyNativeBusy}
-                              onClick={() => NativeLlmManager.getInstance().loadModel(model.filename, model.mmprojFilename)}
+                              onClick={() => NativeLlmManager.getInstance().loadModel(file.filename)}
                               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm"
                             >
                               <Cpu size={12} /> Load
                             </button>
                             <button
                               disabled={isAnyNativeBusy}
-                              onClick={() => NativeLlmManager.getInstance().deleteModel(model.filename)}
+                              onClick={() => NativeLlmManager.getInstance().deleteModel(file.filename)}
                               className="p-1.5 text-gray-400 hover:text-red-600 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                              title="Delete model"
+                              title="Delete"
                             >
                               <Trash2 size={14} />
                             </button>
@@ -496,92 +515,145 @@ const ModelHub: React.FC<ModelHubProps> = ({
                 );
               })}
 
-              {/* Transformers.js currently in-flight model */}
-              {transformersInFlight && gemmaState.modelId && (
-                <div className={`border rounded-xl p-3 transition-all ${
-                  gemmaState.status === 'loaded' ? 'border-purple-300 bg-purple-50/50' : 'border-gray-200 bg-white'
-                }`}>
+              {/* Projector files */}
+              {ggufProjectors.map((file) => (
+                <div key={file.filename} className="border border-purple-100 bg-purple-50/30 rounded-xl p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                        gemmaState.status === 'loaded' ? 'bg-purple-200' : 'bg-gray-100'
-                      }`}>
-                        <Sparkles size={18} className={gemmaState.status === 'loaded' ? 'text-purple-700' : 'text-gray-500'} />
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-purple-100">
+                        <Sparkles size={18} className="text-purple-500" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-medium text-gray-900 truncate">{gemmaState.modelId}</span>
-                          <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">Transformers.js</span>
+                          <span className="font-medium text-gray-900 truncate">{file.filename.replace(/\.gguf$/i, '')}</span>
+                          <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">Projector</span>
                         </div>
-                        {gemmaState.loadSettings && (
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {gemmaState.loadSettings.device} · {gemmaState.loadSettings.dtype} · {gemmaState.loadSettings.imageTokenBudget} tokens
-                          </p>
+                        <p className="text-xs text-gray-500 mt-0.5">{formatBytes(file.sizeBytes)}</p>
+                      </div>
+                    </div>
+                    <button
+                      disabled={isAnyNativeBusy}
+                      onClick={() => NativeLlmManager.getInstance().deleteModel(file.filename)}
+                      className="p-1.5 text-gray-400 hover:text-red-600 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Transformers.js installed models */}
+              {transformersModels.map((model) => {
+                const isThisModel = gemmaState.modelId === model.id;
+                const status = isThisModel ? gemmaState.status : model.status;
+                const isLoaded = status === 'loaded';
+                const isLoading = status === 'loading';
+                const isError = status === 'error';
+                const loadSettings = isThisModel ? gemmaState.loadSettings : null;
+
+                return (
+                  <div key={model.id} className={`border rounded-xl p-3 transition-all ${
+                    isLoaded ? 'border-purple-300 bg-purple-50/50' : 'border-gray-200 bg-white'
+                  }`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                          isLoaded ? 'bg-purple-200' : 'bg-gray-100'
+                        }`}>
+                          <Sparkles size={18} className={isLoaded ? 'text-purple-700' : 'text-gray-500'} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-medium text-gray-900 truncate">{model.name}</span>
+                            <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">Transformers.js</span>
+                          </div>
+                          {loadSettings && (
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {loadSettings.device} · {loadSettings.dtype} · {loadSettings.imageTokenBudget} tokens
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {isLoaded ? (
+                          <button
+                            onClick={() => GemmaModelManager.getInstance().unloadModel()}
+                            className="group flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors bg-purple-200 text-purple-800 hover:bg-red-100 hover:text-red-700"
+                          >
+                            <span className="group-hover:hidden flex items-center gap-1.5"><CheckCircle size={12} /> Ready</span>
+                            <span className="hidden group-hover:flex items-center gap-1.5"><X size={12} /> Unload</span>
+                          </button>
+                        ) : isLoading ? (
+                          <button
+                            onClick={() => GemmaModelManager.getInstance().unloadModel()}
+                            className="group flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-700 rounded-lg font-medium transition-colors"
+                          >
+                            <span className="group-hover:hidden flex items-center gap-1.5"><Cpu size={12} className="animate-pulse" /> Loading</span>
+                            <span className="hidden group-hover:flex items-center gap-1.5"><StopCircle size={12} /> Cancel</span>
+                          </button>
+                        ) : isError ? (
+                          <span className="flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-100 px-2 py-1 rounded-full">
+                            <AlertTriangle size={12} /> Error
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => GemmaModelManager.getInstance().loadModel(model.id as GemmaModelId)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium shadow-sm"
+                            >
+                              <Sparkles size={12} /> Load
+                            </button>
+                            <button
+                              onClick={() => GemmaModelManager.getInstance().deleteModel(model.id as GemmaModelId)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 rounded transition-colors"
+                              title="Delete model"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      {gemmaState.status === 'loaded' ? (
-                        <button
-                          onClick={() => GemmaModelManager.getInstance().unloadModel()}
-                          className="group flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors bg-purple-200 text-purple-800 hover:bg-red-100 hover:text-red-700"
-                        >
-                          <span className="group-hover:hidden flex items-center gap-1.5"><CheckCircle size={12} /> Ready</span>
-                          <span className="hidden group-hover:flex items-center gap-1.5"><X size={12} /> Unload</span>
-                        </button>
-                      ) : gemmaState.status === 'loading' ? (
-                        <button
-                          onClick={() => GemmaModelManager.getInstance().unloadModel()}
-                          className="group flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-700 rounded-lg font-medium transition-colors"
-                        >
-                          <span className="group-hover:hidden flex items-center gap-1.5"><Cpu size={12} className="animate-pulse" /> Loading</span>
-                          <span className="hidden group-hover:flex items-center gap-1.5"><StopCircle size={12} /> Cancel</span>
-                        </button>
-                      ) : gemmaState.status === 'error' ? (
-                        <span className="flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-100 px-2 py-1 rounded-full">
-                          <AlertTriangle size={12} /> Error
-                        </span>
-                      ) : null}
-                    </div>
+
+                    {isThisModel && isLoading && gemmaState.progress.length > 0 && (
+                      <div className="space-y-1.5 mt-3">
+                        {gemmaState.progress.map((item) => (
+                          <div key={item.file}>
+                            <div className="flex justify-between items-center text-[11px] mb-1">
+                              <span className="text-gray-600 flex items-center gap-1.5 truncate max-w-[55%]">
+                                {item.status === 'done'
+                                  ? <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                  : <FileDown className="h-3 w-3 text-purple-400 flex-shrink-0" />
+                                }
+                                {item.file}
+                              </span>
+                              <span className="font-medium text-gray-500 flex-shrink-0">
+                                {item.status === 'done'
+                                  ? 'Done'
+                                  : item.total > 0
+                                    ? `${formatBytes(item.loaded)} / ${formatBytes(item.total)}`
+                                    : `${Math.round(item.progress)}%`
+                                }
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className={`h-1.5 rounded-full transition-all duration-300 ${item.status === 'done' ? 'bg-green-500' : 'bg-purple-600'}`}
+                                style={{ width: `${item.progress}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {isThisModel && isError && (
+                      <p className="mt-2 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{gemmaState.error}</p>
+                    )}
                   </div>
-
-                  {gemmaState.status === 'loading' && gemmaState.progress.length > 0 && (
-                    <div className="space-y-1.5 mt-3">
-                      {gemmaState.progress.map((item) => (
-                        <div key={item.file}>
-                          <div className="flex justify-between items-center text-[11px] mb-1">
-                            <span className="text-gray-600 flex items-center gap-1.5 truncate max-w-[55%]">
-                              {item.status === 'done'
-                                ? <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
-                                : <FileDown className="h-3 w-3 text-purple-400 flex-shrink-0" />
-                              }
-                              {item.file}
-                            </span>
-                            <span className="font-medium text-gray-500 flex-shrink-0">
-                              {item.status === 'done'
-                                ? 'Done'
-                                : item.total > 0
-                                  ? `${formatBytes(item.loaded)} / ${formatBytes(item.total)}`
-                                  : `${Math.round(item.progress)}%`
-                              }
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-1.5">
-                            <div
-                              className={`h-1.5 rounded-full transition-all duration-300 ${item.status === 'done' ? 'bg-green-500' : 'bg-purple-600'}`}
-                              style={{ width: `${item.progress}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {gemmaState.status === 'error' && (
-                    <p className="mt-2 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{gemmaState.error}</p>
-                  )}
-                </div>
-              )}
+                );
+              })}
             </div>
           )}
         </section>
@@ -742,9 +814,10 @@ const ModelHub: React.FC<ModelHubProps> = ({
                   </button>
                 </div>
 
-                {/* GGUF URL */}
+                {/* GGUF download — works for both model files and projectors */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Model URL (.gguf)</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Download GGUF</label>
+                  <p className="text-xs text-gray-400 mb-2">Works for model files and vision projectors alike.</p>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -764,42 +837,13 @@ const ModelHub: React.FC<ModelHubProps> = ({
                   </div>
                 </div>
 
-                {/* mmproj URL */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                    Vision projector — mmproj <span className="text-gray-400 font-normal">(optional)</span>
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={mmprojUrl}
-                      onChange={(e) => setMmprojUrl(e.target.value)}
-                      placeholder="https://huggingface.co/.../resolve/main/mmproj.gguf"
-                      disabled={isNativeDownloading}
-                      className="flex-grow p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 disabled:opacity-50 text-sm"
-                    />
-                    <button
-                      onClick={handleDownloadMmproj}
-                      disabled={!mmprojUrl.trim() || isNativeDownloading}
-                      className="flex items-center gap-1.5 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
-                    >
-                      <Download size={14} /> Download
-                    </button>
-                  </div>
-                </div>
-
                 {/* Download progress */}
                 {isNativeDownloading && (
                   <div className="border border-blue-200 bg-blue-50 rounded-xl p-4">
                     <div className="flex justify-between items-center mb-3">
-                      <span className="text-sm text-gray-800 font-semibold">
-                        Downloading {currentDownload === 'mmproj' ? 'vision projector' : 'model'}
-                      </span>
+                      <span className="text-sm text-gray-800 font-semibold">Downloading</span>
                       <button
-                        onClick={async () => {
-                          await NativeLlmManager.getInstance().cancelDownload();
-                          setCurrentDownload(null);
-                        }}
+                        onClick={() => NativeLlmManager.getInstance().cancelDownload()}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-100 text-red-600 hover:bg-red-200 rounded-lg font-medium transition-colors"
                       >
                         <StopCircle size={12} /> Cancel
@@ -807,7 +851,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                     </div>
                     <div className="flex justify-between items-center text-xs mb-1.5">
                       <span className="text-gray-600 flex items-center gap-1.5 truncate max-w-[60%]">
-                        <FileDown className={`h-3.5 w-3.5 ${currentDownload === 'mmproj' ? 'text-purple-500' : 'text-blue-500'}`} />
+                        <FileDown className="h-3.5 w-3.5 text-blue-500" />
                         <span className="truncate">{nativeState.modelId}</span>
                       </span>
                       <span className="font-medium text-gray-500 flex-shrink-0">
@@ -819,7 +863,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                     </div>
                     <div className="w-full bg-blue-200 rounded-full h-2">
                       <div
-                        className={`h-2 rounded-full transition-all duration-300 ${currentDownload === 'mmproj' ? 'bg-purple-500' : 'bg-blue-600'}`}
+                        className="h-2 rounded-full bg-blue-600 transition-all duration-300"
                         style={{ width: `${nativeState.downloadProgress}%` }}
                       />
                     </div>

@@ -31,6 +31,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 // Global flag to signal download cancellation
 static DOWNLOAD_CANCELLED: AtomicBool = AtomicBool::new(false);
+// Global flag to signal generation cancellation
+static GENERATION_CANCELLED: AtomicBool = AtomicBool::new(false);
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -230,16 +232,15 @@ async fn hide_overlay(app_handle: tauri::AppHandle) -> Result<(), String> {
 
 use tauri::ipc::Channel;
 
-/// List downloaded GGUF models from the models directory
+/// List all GGUF files in the models directory (models and projectors alike).
+/// No filtering or auto-detection — the frontend decides how to use each file.
 #[tauri::command]
-async fn llm_list_models(app_handle: AppHandle) -> Result<Vec<serde_json::Value>, String> {
-    use tauri_plugin_llm_engine::{NativeModelInfo, model_id_from_filename, find_mmproj_for_model};
-
+async fn llm_list_gguf(app_handle: AppHandle) -> Result<Vec<serde_json::Value>, String> {
     let models_dir = app_handle.path().app_data_dir()
         .map_err(|e| e.to_string())?
         .join("models");
 
-    let mut models: Vec<serde_json::Value> = Vec::new();
+    let mut files: Vec<serde_json::Value> = Vec::new();
 
     if models_dir.exists() {
         if let Ok(entries) = std::fs::read_dir(&models_dir) {
@@ -248,35 +249,14 @@ async fn llm_list_models(app_handle: AppHandle) -> Result<Vec<serde_json::Value>
                 if let Some(ext) = path.extension() {
                     if ext == "gguf" || ext == "GGUF" {
                         if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                            if filename.to_lowercase().contains("mmproj") {
-                                continue;
-                            }
-
                             let size_bytes = std::fs::metadata(&path)
                                 .map(|m| m.len())
                                 .unwrap_or(0);
 
-                            let mmproj_path = find_mmproj_for_model(&path);
-                            let mmproj_filename = mmproj_path.as_ref()
-                                .and_then(|p| p.file_name())
-                                .and_then(|n| n.to_str())
-                                .map(String::from);
-                            let is_multimodal = mmproj_path.is_some();
-
-                            let model_id = model_id_from_filename(filename);
-                            let info = NativeModelInfo {
-                                id: model_id.clone(),
-                                name: model_id,
-                                filename: filename.to_string(),
-                                size_bytes,
-                                hf_url: None,
-                                mmproj_filename,
-                                is_multimodal,
-                            };
-
-                            if let Ok(json) = serde_json::to_value(info) {
-                                models.push(json);
-                            }
+                            files.push(serde_json::json!({
+                                "filename": filename,
+                                "sizeBytes": size_bytes,
+                            }));
                         }
                     }
                 }
@@ -284,7 +264,7 @@ async fn llm_list_models(app_handle: AppHandle) -> Result<Vec<serde_json::Value>
         }
     }
 
-    Ok(models)
+    Ok(files)
 }
 
 /// Download a GGUF model from a HuggingFace URL with progress reporting
@@ -395,6 +375,14 @@ async fn llm_cancel_download() -> Result<(), String> {
     Ok(())
 }
 
+/// Cancel an ongoing generation
+#[tauri::command]
+async fn llm_cancel_generation() -> Result<(), String> {
+    log::info!("Cancel generation requested");
+    GENERATION_CANCELLED.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
 /// Delete a downloaded model by filename
 #[tauri::command]
 async fn llm_delete_model(app_handle: AppHandle, filename: String) -> Result<(), String> {
@@ -467,7 +455,7 @@ async fn llm_load_model(
 async fn llm_generate(
     messages: Vec<serde_json::Value>,
     on_token: Channel<String>,
-) -> Result<String, String> {
+) -> Result<serde_json::Value, String> {
     use tauri_plugin_llm_engine::{with_engine, ChatMessage, ChatContent, ChatContentPart, LLM_ENGINE};
 
     {
@@ -521,17 +509,35 @@ async fn llm_generate(
         return Err("No valid messages provided".to_string());
     }
 
+    GENERATION_CANCELLED.store(false, Ordering::SeqCst);
     let on_token_clone = on_token.clone();
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         with_engine(|engine| {
-            engine.generate(chat_messages, 2048, |token| {
+            let response = engine.generate(chat_messages, |token| {
+                if GENERATION_CANCELLED.load(Ordering::SeqCst) {
+                    return false;
+                }
                 let _ = on_token_clone.send(token.to_string());
-            })
+                true
+            })?;
+
+            let metrics = engine.get_last_metrics().map(|m| serde_json::json!({
+                "tokensGenerated": m.tokens_generated,
+                "promptTokens": m.prompt_tokens,
+                "timeToFirstTokenMs": m.time_to_first_token_ms,
+                "totalGenerationTimeMs": m.total_generation_time_ms,
+                "tokensPerSecond": m.tokens_per_second,
+            }));
+
+            Ok(serde_json::json!({
+                "response": response,
+                "metrics": metrics,
+            }))
         })
     }));
 
     match result {
-        Ok(Ok(response)) => Ok(response),
+        Ok(Ok(value)) => Ok(value),
         Ok(Err(e)) => Err(e),
         Err(panic_info) => {
             let panic_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
@@ -758,60 +764,6 @@ async fn llm_get_use_gpu() -> Result<bool, String> {
     with_engine(|engine| {
         Ok(engine.get_use_gpu())
     })
-}
-
-/// Test generation with a simple prompt
-#[tauri::command]
-async fn llm_test_generate(
-    prompt: String,
-    max_tokens: Option<u32>,
-    on_token: Channel<String>,
-) -> Result<serde_json::Value, String> {
-    use tauri_plugin_llm_engine::{with_engine, ChatMessage, ChatContent};
-
-    let max_tokens = max_tokens.unwrap_or(256);
-
-    let messages = vec![ChatMessage {
-        role: "user".to_string(),
-        content: ChatContent::Text(prompt),
-    }];
-
-    let on_token_clone = on_token.clone();
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        with_engine(|engine| {
-            let response = engine.generate(messages, max_tokens, |token| {
-                let _ = on_token_clone.send(token.to_string());
-            })?;
-
-            let metrics = engine.get_last_metrics().map(|m| serde_json::json!({
-                "tokensGenerated": m.tokens_generated,
-                "promptTokens": m.prompt_tokens,
-                "timeToFirstTokenMs": m.time_to_first_token_ms,
-                "totalGenerationTimeMs": m.total_generation_time_ms,
-                "tokensPerSecond": m.tokens_per_second,
-            }));
-
-            Ok(serde_json::json!({
-                "response": response,
-                "metrics": metrics,
-            }))
-        })
-    }));
-
-    match result {
-        Ok(Ok(response)) => Ok(response),
-        Ok(Err(e)) => Err(e),
-        Err(panic_info) => {
-            let panic_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                s.to_string()
-            } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                s.clone()
-            } else {
-                "Unknown panic".to_string()
-            };
-            Err(format!("Panic during test generation: {}", panic_msg))
-        }
-    }
 }
 
 // Shared state for our application (desktop only)
@@ -1247,9 +1199,10 @@ pub fn run() {
             shortcuts::get_registered_shortcuts,
             shortcuts::set_shortcut_config,
             // LLM commands
-            llm_list_models,
+            llm_list_gguf,
             llm_download_model,
             llm_cancel_download,
+            llm_cancel_generation,
             llm_delete_model,
             llm_load_model,
             llm_generate,
@@ -1262,7 +1215,6 @@ pub fn run() {
             llm_set_sampler_params,
             llm_set_use_gpu,
             llm_get_use_gpu,
-            llm_test_generate
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -46,15 +46,11 @@ export interface GemmaModelState {
 // Native LLM Types (iOS llama.cpp)
 // ============================================================================
 
-// Native models are identified by their filename (without .gguf extension)
-export interface NativeModelInfo {
-  id: string;           // Model ID (filename without extension)
-  name: string;         // Display name
-  filename: string;     // Full filename on disk
-  sizeBytes: number;    // File size in bytes
-  hfUrl?: string;       // Original HuggingFace URL if known
-  mmprojFilename?: string;  // Associated mmproj file if multimodal
-  isMultimodal: boolean;    // Whether model supports vision/multimodal
+// A single GGUF file on disk — could be a model or a projector (mmproj).
+// The frontend decides how each file is used; no auto-detection on the backend.
+export interface GgufFileInfo {
+  filename: string;   // Full filename on disk (e.g. "gemma-4-E2B-Q4.gguf")
+  sizeBytes: number;
 }
 
 export type NativeModelStatus = 'unloaded' | 'loading' | 'loaded' | 'downloading' | 'unloading' | 'error';

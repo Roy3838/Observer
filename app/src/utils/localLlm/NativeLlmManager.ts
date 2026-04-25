@@ -5,7 +5,7 @@
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { Logger } from '../logging';
 import {
-  NativeModelInfo,
+  GgufFileInfo,
   NativeModelState,
   NativeProgressEvent,
   LocalLlmMessage,
@@ -16,7 +16,8 @@ import {
 } from './types';
 
 const NATIVE_LLM_STORAGE_KEY = 'observer-native-llm-settings';
-const NATIVE_LLM_MODELS_CACHE_KEY = 'observer-native-llm-models-cache';
+const NATIVE_LLM_GGUF_CACHE_KEY = 'observer-native-llm-gguf-cache';
+const NATIVE_LLM_MMPROJ_ASSIGNMENTS_KEY = 'observer-native-llm-mmproj-assignments';
 
 interface PersistedNativeSettings {
   filename: string;  // Filename of the loaded model
@@ -35,40 +36,64 @@ export class NativeLlmManager {
   private stateChangeListeners: Array<(state: NativeModelState) => void> = [];
   private autoLoadTriggered = false;
   private loadedFilename: string | null = null;
-  private multimodalAvailable = false; // Whether loaded model supports vision
-  private currentDownloadFilename: string | null = null; // Track filename being downloaded
-  private cachedModels: NativeModelInfo[] = []; // Cached list of downloaded models
+  private loadedMmprojFilename: string | null = null;
+  private multimodalAvailable = false;
+  private currentDownloadFilename: string | null = null;
+  private cachedGgufFiles: GgufFileInfo[] = [];
 
   private constructor() {
-    // Load cached models from localStorage for instant UI on startup
-    this.loadCachedModelsFromStorage();
+    this.loadGgufCacheFromStorage();
   }
 
-  /**
-   * Load cached models from localStorage (for instant UI on startup)
-   */
-  private loadCachedModelsFromStorage(): void {
+  private loadGgufCacheFromStorage(): void {
     try {
-      const stored = localStorage.getItem(NATIVE_LLM_MODELS_CACHE_KEY);
+      const stored = localStorage.getItem(NATIVE_LLM_GGUF_CACHE_KEY);
       if (stored) {
-        this.cachedModels = JSON.parse(stored) as NativeModelInfo[];
-        Logger.info('NativeLlmManager', `Loaded ${this.cachedModels.length} models from cache`);
+        this.cachedGgufFiles = JSON.parse(stored) as GgufFileInfo[];
       }
-    } catch (error) {
-      Logger.warn('NativeLlmManager', 'Failed to load cached models from storage');
-      this.cachedModels = [];
+    } catch {
+      this.cachedGgufFiles = [];
     }
   }
 
-  /**
-   * Save cached models to localStorage
-   */
-  private saveCachedModelsToStorage(): void {
+  private saveGgufCacheToStorage(): void {
     try {
-      localStorage.setItem(NATIVE_LLM_MODELS_CACHE_KEY, JSON.stringify(this.cachedModels));
-    } catch (error) {
-      Logger.warn('NativeLlmManager', 'Failed to save cached models to storage');
+      localStorage.setItem(NATIVE_LLM_GGUF_CACHE_KEY, JSON.stringify(this.cachedGgufFiles));
+    } catch {
+      Logger.warn('NativeLlmManager', 'Failed to save GGUF cache to storage');
     }
+  }
+
+  // ── mmproj assignment map ──────────────────────────────────────────────────
+  // Persisted map of { [modelFilename]: mmprojFilename }.
+  // The frontend owns this relationship; the backend receives it explicitly on load.
+
+  public getMmprojAssignments(): Record<string, string> {
+    try {
+      const stored = localStorage.getItem(NATIVE_LLM_MMPROJ_ASSIGNMENTS_KEY);
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  public setMmprojAssignment(modelFilename: string, mmprojFilename: string | null): void {
+    const assignments = this.getMmprojAssignments();
+    if (mmprojFilename === null) {
+      delete assignments[modelFilename];
+    } else {
+      assignments[modelFilename] = mmprojFilename;
+    }
+    try {
+      localStorage.setItem(NATIVE_LLM_MMPROJ_ASSIGNMENTS_KEY, JSON.stringify(assignments));
+    } catch {
+      Logger.warn('NativeLlmManager', 'Failed to save mmproj assignments');
+    }
+    this.stateChangeListeners.forEach(l => l(this.getState()));
+  }
+
+  public getMmprojAssignment(modelFilename: string): string | null {
+    return this.getMmprojAssignments()[modelFilename] ?? null;
   }
 
   public static getInstance(): NativeLlmManager {
@@ -95,64 +120,76 @@ export class NativeLlmManager {
   }
 
   /**
-   * List downloaded models from the models directory (async, updates cache)
+   * List all GGUF files in the models directory (async, updates cache).
+   * Both model files and projector files are returned — no filtering.
    */
-  public async listModels(): Promise<NativeModelInfo[]> {
+  public async listGgufFiles(): Promise<GgufFileInfo[]> {
     try {
-      const models = await invoke<NativeModelInfo[]>('llm_list_models');
-      this.cachedModels = models;
-      // Persist to localStorage for instant UI on next app startup
-      this.saveCachedModelsToStorage();
-      // Trigger state change so UI components re-render with updated models
+      const files = await invoke<GgufFileInfo[]>('llm_list_gguf');
+      this.cachedGgufFiles = files;
+      this.saveGgufCacheToStorage();
       this.stateChangeListeners.forEach(l => l(this.getState()));
-      return models;
+      return files;
     } catch (error) {
-      Logger.error('NativeLlmManager', `Failed to list models: ${error}`);
+      Logger.error('NativeLlmManager', `Failed to list GGUF files: ${error}`);
       return [];
     }
   }
 
+  /** Sync access to the last-fetched GGUF file list. */
+  public getCachedGgufFiles(): GgufFileInfo[] {
+    return [...this.cachedGgufFiles];
+  }
+
   /**
-   * Get cached list of downloaded models (sync, for use in listModels())
+   * Convenience: all files whose filename does NOT suggest they are a projector.
+   * Heuristic is filename-based and used for display only — not load logic.
    */
-  public getCachedModels(): NativeModelInfo[] {
-    return [...this.cachedModels];
+  public getCachedModelFiles(): GgufFileInfo[] {
+    return this.cachedGgufFiles.filter(
+      f => !f.filename.toLowerCase().includes('mmproj')
+    );
+  }
+
+  /**
+   * Convenience: all files that look like projectors (mmproj in filename).
+   * Heuristic for display only.
+   */
+  public getCachedProjectorFiles(): GgufFileInfo[] {
+    return this.cachedGgufFiles.filter(
+      f => f.filename.toLowerCase().includes('mmproj')
+    );
   }
 
   /**
    * List all local models with unified status tracking.
-   * Returns cached models with their current status.
+   * Returns model-looking files (non-mmproj) with their current status.
    */
   public listLocalModels(): LocalModelEntry[] {
-    return this.cachedModels.map(model => {
-      // Check if this model is currently loaded OR being loaded/unloaded
-      const isThisModelLoaded = this.loadedFilename === model.filename;
-      const modelIdFromFilename = model.filename.replace('.gguf', '').replace('.GGUF', '');
-      const isThisModelActive = isThisModelLoaded || this.state.modelId === modelIdFromFilename;
+    return this.getCachedModelFiles().map(file => {
+      const isThisFile = this.loadedFilename === file.filename;
+      const modelIdFromFilename = file.filename.replace('.gguf', '').replace('.GGUF', '');
+      const isThisModelActive = isThisFile || this.state.modelId === modelIdFromFilename;
 
       let status: LocalModelEntry['status'] = 'unloaded';
       if (isThisModelActive) {
         if (this.state.status === 'loaded') status = 'loaded';
         else if (this.state.status === 'loading') status = 'loading';
         else if (this.state.status === 'error') status = 'error';
-        // 'unloading' and 'downloading' map to 'unloaded' for the unified interface
       }
 
       return {
-        id: model.filename,
-        name: model.name,
+        id: file.filename,
+        name: file.filename.replace(/\.gguf$/i, ''),
         status,
-        sizeBytes: model.sizeBytes,
-        isMultimodal: isThisModelLoaded ? this.multimodalAvailable : model.isMultimodal,
+        sizeBytes: file.sizeBytes,
+        isMultimodal: isThisFile ? this.multimodalAvailable : false,
       };
     });
   }
 
-  /**
-   * Refresh the cached models list (call on app start, after downloads, etc.)
-   */
-  public async refreshModelCache(): Promise<void> {
-    await this.listModels();
+  public async refreshGgufCache(): Promise<void> {
+    await this.listGgufFiles();
   }
 
   /**
@@ -197,8 +234,8 @@ export class NativeLlmManager {
             status: 'unloaded',
             downloadProgress: 100,
           });
-          // Refresh model cache so the new model shows up in listModels()
-          this.refreshModelCache();
+          // Refresh GGUF file list so the new file appears
+          this.refreshGgufCache();
         } else if (event.status === 'error') {
           Logger.error('NativeLlmManager', `Download error: ${event.error}`);
           this.currentDownloadFilename = null;
@@ -267,8 +304,8 @@ export class NativeLlmManager {
         this.clearPersistedSettings();
       }
 
-      // Refresh model cache so the deleted model is removed from listModels()
-      this.refreshModelCache();
+      // Refresh GGUF file list so the deleted file disappears
+      this.refreshGgufCache();
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       Logger.error('NativeLlmManager', `Failed to delete model: ${msg}`);
@@ -277,8 +314,9 @@ export class NativeLlmManager {
   }
 
   /**
-   * Load a model into memory for inference by filename.
-   * Pass mmprojFilename explicitly to avoid ambiguity when multiple mmproj files exist.
+   * Load a model into memory for inference.
+   * If mmprojFilename is omitted, the persisted assignment map is checked.
+   * If neither is set, the model loads as text-only — no auto-detection.
    */
   public async loadModel(filename: string, mmprojFilename?: string): Promise<void> {
     if (this.state.status === 'loading') {
@@ -292,21 +330,21 @@ export class NativeLlmManager {
     }
 
     const modelId = filename.replace('.gguf', '').replace('.GGUF', '');
+    const resolvedMmproj = mmprojFilename ?? this.getMmprojAssignment(filename) ?? undefined;
     this.setState({ status: 'loading', modelId: modelId as any, error: null });
-    Logger.info('NativeLlmManager', `Loading model: ${filename}, mmproj: ${mmprojFilename ?? 'auto-detect'}`);
+    Logger.info('NativeLlmManager', `Loading model: ${filename}, mmproj: ${resolvedMmproj ?? 'none'}`);
 
     try {
-      // Apply GPU setting before loading (must be set before load_model)
       await this.applyPersistedGpuSetting();
 
-      await invoke('llm_load_model', { filename, mmprojFilename: mmprojFilename ?? null });
+      await invoke('llm_load_model', { filename, mmprojFilename: resolvedMmproj ?? null });
       Logger.info('NativeLlmManager', 'Model loaded successfully');
       this.loadedFilename = filename;
+      this.loadedMmprojFilename = resolvedMmproj ?? null;
       this.setState({ status: 'loaded' });
       this.persistSettings(filename);
 
-      // Refresh model cache so listModels() returns updated state
-      this.refreshModelCache();
+      this.refreshGgufCache();
 
       // Check if multimodal is available after loading
       try {
@@ -337,12 +375,12 @@ export class NativeLlmManager {
       await invoke('llm_unload_model');
       Logger.info('NativeLlmManager', 'Model unloaded');
       this.loadedFilename = null;
+      this.loadedMmprojFilename = null;
       this.multimodalAvailable = false;
-      // Don't clear persisted settings - keep them so model shows as "unloaded" in listModels()
       this.setState({ status: 'unloaded', modelId: null, error: null });
 
-      // Refresh model cache so listModels() returns updated state
-      this.refreshModelCache();
+      // Refresh GGUF file list so UI reflects current state
+      this.refreshGgufCache();
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       Logger.error('NativeLlmManager', `Failed to unload model: ${msg}`);
@@ -377,19 +415,23 @@ export class NativeLlmManager {
         tokenChannel.onmessage = onToken;
       }
 
-      const result = await invoke<string>('llm_generate', {
+      const result = await invoke<{ response: string; metrics: GenerationMetrics | null }>('llm_generate', {
         messages,
         onToken: tokenChannel,
       });
 
-      Logger.info('NativeModelInfo', `Generated response from llama.cpp ${result}`);
+      Logger.info('NativeLlmManager', `Generated response from llama.cpp ${result.response}`);
 
-      return result;
+      return result.response;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       Logger.error('NativeLlmManager', `Generation failed: ${msg}`);
       throw error;
     }
+  }
+
+  public async cancelGeneration(): Promise<void> {
+    await invoke('llm_cancel_generation');
   }
 
   // State query methods
@@ -405,12 +447,8 @@ export class NativeLlmManager {
    */
   public isMultimodal(): boolean { return this.multimodalAvailable; }
 
-  /**
-   * Get the filename of the loaded model
-   */
-  public getLoadedFilename(): string | null {
-    return this.loadedFilename;
-  }
+  public getLoadedFilename(): string | null { return this.loadedFilename; }
+  public getLoadedMmprojFilename(): string | null { return this.loadedMmprojFilename; }
 
   /**
    * Get display name for the loaded model
@@ -458,24 +496,18 @@ export class NativeLlmManager {
     if (this.autoLoadTriggered) return;
     this.autoLoadTriggered = true;
 
-    // Always refresh model cache on startup so downloaded models show up
-    const models = await this.listModels();
-    Logger.info('NativeLlmManager', `Found ${models.length} downloaded models`);
+    const files = await this.listGgufFiles();
+    Logger.info('NativeLlmManager', `Found ${files.length} GGUF files`);
 
     if (this.state.status !== 'unloaded') return;
 
     const settings = this.getPersistedSettings();
     if (settings) {
       Logger.info('NativeLlmManager', `Auto-loading persisted model: ${settings.filename}`);
-
       try {
-        // Apply GPU setting before loading
-        await this.applyPersistedGpuSetting();
-
-        // Check if model file still exists
-        const model = models.find(m => m.filename === settings.filename);
-        if (model) {
-          await this.loadModel(settings.filename, model.mmprojFilename);
+        const exists = files.some(f => f.filename === settings.filename);
+        if (exists) {
+          await this.loadModel(settings.filename);
         } else {
           Logger.warn('NativeLlmManager', 'Persisted model not found, clearing settings');
           this.clearPersistedSettings();
@@ -606,7 +638,6 @@ export class NativeLlmManager {
    */
   public async testGenerate(
     prompt: string,
-    maxTokens?: number,
     onToken?: (token: string) => void
   ): Promise<{ response: string; metrics: GenerationMetrics | null }> {
     if (this.state.status !== 'loaded') {
@@ -622,9 +653,9 @@ export class NativeLlmManager {
         tokenChannel.onmessage = onToken;
       }
 
-      const result = await invoke<{ response: string; metrics: GenerationMetrics | null }>('llm_test_generate', {
-        prompt,
-        maxTokens: maxTokens ?? 256,
+      const messages = [{ role: 'user', content: prompt }];
+      const result = await invoke<{ response: string; metrics: GenerationMetrics | null }>('llm_generate', {
+        messages,
         onToken: tokenChannel,
       });
 

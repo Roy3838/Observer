@@ -292,6 +292,21 @@ export class GemmaModelManager {
     return {};
   }
 
+  public deleteModel(modelId: GemmaModelId): void {
+    try {
+      if (this.state.modelId === modelId) {
+        this.unloadModel();
+      }
+      const all = this.getAllPersistedSettings();
+      delete all[modelId];
+      localStorage.setItem(GEMMA_STORAGE_KEY, JSON.stringify(all));
+      Logger.info('GemmaModelManager', `Deleted model from storage: ${modelId}`);
+      this.stateChangeListeners.forEach(l => l(this.getState()));
+    } catch (error) {
+      Logger.warn('GemmaModelManager', `Failed to delete model ${modelId} from localStorage`);
+    }
+  }
+
   private persistSettingsForModel(modelId: GemmaModelId, settings: GemmaLoadSettings): void {
     try {
       const all = this.getAllPersistedSettings();
