@@ -1080,7 +1080,6 @@ function AppContent() {
       {showLocalSetup && !showStartupDialog && (
         <LocalServerSetupDialog
           onDismiss={() => setShowLocalSetup(false)}
-          onModelLoaded={() => setShowLocalSetup(false)}
         />
       )}
 

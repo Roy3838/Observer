@@ -89,6 +89,17 @@ const AppHeader: React.FC<AppHeaderProps> = ({
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isStartupDialogOpen, setIsStartupDialogOpen] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [autoDownloadPreset, setAutoDownloadPreset] = useState<import('@utils/modelPresets').ModelPreset | undefined>(undefined);
+
+  useEffect(() => {
+    const handleOpenModelHub = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.autoDownloadPreset) setAutoDownloadPreset(detail.autoDownloadPreset);
+      setIsSettingsModalOpen(true);
+    };
+    window.addEventListener('openModelHub', handleOpenModelHub);
+    return () => window.removeEventListener('openModelHub', handleOpenModelHub);
+  }, []);
 
   const isUsingObServer = externalIsUsingObServer !== undefined
     ? externalIsUsingObServer
@@ -610,7 +621,8 @@ const AppHeader: React.FC<AppHeaderProps> = ({
       {/* Model Hub - central modal for all model/server management */}
       <ModelHub
         isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
+        onClose={() => { setIsSettingsModalOpen(false); setAutoDownloadPreset(undefined); }}
+        autoDownloadPreset={autoDownloadPreset}
         isUsingObServer={isUsingObServer}
         handleToggleObServer={handleToggleObServer}
         showLoginMessage={showLoginMessage}
