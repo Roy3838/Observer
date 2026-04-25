@@ -54,6 +54,7 @@ tauri-plugin-screen-capture = { path = "../plugins/screen-capture" }
 tauri-plugin-llm-engine = { path = "../plugins/llm_engine" }
 futures-util = "0.3"
 dirs = "5"
+sysinfo = "0.33"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

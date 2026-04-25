@@ -772,6 +772,26 @@ async fn llm_get_use_gpu() -> Result<bool, String> {
     })
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MemoryInfo {
+    total_bytes: u64,
+    used_bytes: u64,
+    available_bytes: u64,
+}
+
+#[tauri::command]
+fn get_memory_info() -> MemoryInfo {
+    use sysinfo::System;
+    let mut sys = System::new();
+    sys.refresh_memory();
+    MemoryInfo {
+        total_bytes: sys.total_memory(),
+        used_bytes: sys.used_memory(),
+        available_bytes: sys.available_memory(),
+    }
+}
+
 // Shared state for our application (desktop only)
 #[derive(Clone)]
 struct AppState {
@@ -1234,6 +1254,7 @@ pub fn run() {
             llm_set_sampler_params,
             llm_set_use_gpu,
             llm_get_use_gpu,
+            get_memory_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

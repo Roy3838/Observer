@@ -13,6 +13,7 @@ import {
 import { Logger, LogEntry, LogLevel } from '@utils/logging';
 import pullModelManager, { PullState } from '@utils/pullModelManager';
 import { platformFetch, isTauri, isWeb } from '@utils/platform';
+import { invoke } from '@tauri-apps/api/core';
 import { GemmaModelManager } from '@utils/localLlm/GemmaModelManager';
 import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
 import type { CustomServer } from '@utils/inferenceServer';
@@ -200,6 +201,9 @@ const ModelHub: React.FC<ModelHubProps> = ({
   const [downloadingPreset, setDownloadingPreset] = useState<ModelPreset | null>(null);
   const [presetDownloadStep, setPresetDownloadStep] = useState<'gguf' | 'mmproj' | null>(null);
 
+  // ── System memory
+  const [memInfo, setMemInfo] = useState<{ totalBytes: number; usedBytes: number; availableBytes: number } | null>(null);
+
   // ── Custom server state
   const [isAddingServer, setIsAddingServer] = useState(false);
   const [newServerAddress, setNewServerAddress] = useState('');
@@ -306,6 +310,19 @@ const ModelHub: React.FC<ModelHubProps> = ({
       setSelectedServer(availableServers[0]);
     }
   }, [availableServers, selectedServer]);
+
+  useEffect(() => {
+    if (!isOpen || !isTauriApp) return;
+    const poll = async () => {
+      try {
+        const info = await invoke<{ totalBytes: number; usedBytes: number; availableBytes: number }>('get_memory_info');
+        setMemInfo(info);
+      } catch {}
+    };
+    poll();
+    const id = setInterval(poll, 1000);
+    return () => clearInterval(id);
+  }, [isOpen, isTauriApp]);
 
   // Auto-start download when opened via LocalServerSetupDialog
   useEffect(() => {
@@ -816,34 +833,53 @@ const ModelHub: React.FC<ModelHubProps> = ({
           )}
         </section>
 
-        {/* ── GPU / Compute toggle ─────────────────────────── */}
+        {/* ── GPU + RAM ────────────────────────────────────── */}
         <section className="mb-5">
-          <div className="flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-white">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-800">GPU Acceleration</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                  useGpu ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {useGpu ? 'On' : 'Off'}
+          <div className="p-3 border border-gray-200 rounded-xl bg-white space-y-2.5">
+            {/* GPU row */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-sm font-semibold text-gray-800 whitespace-nowrap">GPU</span>
+                <span className="text-xs text-gray-500 truncate">
+                  {useGpu ? 'WebGPU / Metal' : 'CPU only'}
                 </span>
               </div>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {useGpu ? 'WebGPU / Metal — hardware-accelerated' : 'CPU mode — broader compatibility'}
-              </p>
+              <button
+                onClick={() => handleToggleUnifiedGpu(!useGpu)}
+                disabled={nativeState.status === 'loading' || nativeState.status === 'loaded'}
+                className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 ${
+                  useGpu ? 'bg-green-600' : 'bg-gray-300'
+                }`}
+                title={nativeState.status === 'loaded' ? 'Unload current model to change' : undefined}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  useGpu ? 'translate-x-5' : 'translate-x-1'
+                }`} />
+              </button>
             </div>
-            <button
-              onClick={() => handleToggleUnifiedGpu(!useGpu)}
-              disabled={nativeState.status === 'loading' || nativeState.status === 'loaded'}
-              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 ${
-                useGpu ? 'bg-green-600' : 'bg-gray-300'
-              }`}
-              title={nativeState.status === 'loaded' ? 'Unload current model to change' : undefined}
-            >
-              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                useGpu ? 'translate-x-6' : 'translate-x-1'
-              }`} />
-            </button>
+
+            {/* RAM row */}
+            {isTauriApp && memInfo && (() => {
+              const pct = memInfo.usedBytes / memInfo.totalBytes;
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-semibold text-gray-800">RAM</span>
+                    <span className="text-xs font-mono text-gray-500">
+                      {formatBytes(memInfo.usedBytes)} / {formatBytes(memInfo.totalBytes)}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1.5">
+                    <div
+                      className={`h-1.5 rounded-full transition-all duration-500 ${
+                        pct > 0.9 ? 'bg-red-500' : pct > 0.7 ? 'bg-orange-400' : 'bg-green-500'
+                      }`}
+                      style={{ width: `${Math.min(100, pct * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </section>
 
