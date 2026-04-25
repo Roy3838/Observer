@@ -1072,7 +1072,6 @@ function AppContent() {
         onPullComplete={async () => {
           await fetchModels();
         }}
-        noModels={noModels}
       />
 
       <FeedbackDialog

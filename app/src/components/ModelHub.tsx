@@ -1,8 +1,17 @@
 // components/ModelHub.tsx
+//
+// Control panel for managing local AI models, custom servers, and Ob-Server cloud.
+// First-time setup is handled by a separate onboarding UI — this component is the
+// power-user surface: an always-visible list of installed models + Ob-Server status,
+// plus tabs for the per-engine and server managers.
 
 import React, { useState, useEffect } from 'react';
 import Modal from '@components/EditAgent/Modal';
-import { Download, CheckCircle, AlertTriangle, X, StopCircle, FileDown, Cpu, Trash2, BarChart3, AlertCircle, Settings2, RefreshCw, Plus, Cloud, Server, Zap } from 'lucide-react';
+import {
+  Download, CheckCircle, AlertTriangle, X, StopCircle, FileDown, Cpu, Trash2,
+  BarChart3, AlertCircle, Settings2, RefreshCw, Plus, Cloud, Server, Zap,
+  Sparkles, Package,
+} from 'lucide-react';
 import pullModelManager, { PullState } from '@utils/pullModelManager';
 import { platformFetch, isTauri, isMobile } from '@utils/platform';
 import { GemmaModelManager } from '@utils/localLlm/GemmaModelManager';
@@ -10,37 +19,17 @@ import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
 import BenchmarkPanel from '@components/BenchmarkPanel';
 import type { CustomServer } from '@utils/inferenceServer';
 import {
-  GemmaModelId,
   GemmaModelState,
   GemmaDevice,
   GemmaDtype,
   GemmaImageTokenBudget,
+  GemmaModelId,
   NativeModelInfo,
   NativeModelState,
   SamplerParams,
   DEFAULT_SAMPLER_PARAMS,
 } from '@utils/localLlm/types';
 
-// Preset GGUF models for llama.cpp simple mode
-const LLAMA_PRESETS = {
-  'gemma-4-E2B': {
-    label: 'Gemma 4 E2B',
-    size: '~1.5 GB',
-    gguf: 'https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q3_K_S.gguf',
-    mmproj: 'https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/mmproj-F16.gguf',
-  },
-  'gemma-4-E4B': {
-    label: 'Gemma 4 E4B',
-    size: '~3 GB',
-    gguf: 'https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q3_K_S.gguf',
-    mmproj: 'https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-F16.gguf',
-  },
-} as const;
-
-type LlamaPresetId = keyof typeof LLAMA_PRESETS;
-type ViewMode = 'simple' | 'advanced';
-
-// Re-using the types from AppHeader
 type QuotaInfo = {
   used: number;
   remaining: number;
@@ -48,13 +37,14 @@ type QuotaInfo = {
   tier: string;
 } | null;
 
+type TabId = 'llamacpp' | 'transformers' | 'servers' | 'benchmark';
+type TabColor = 'green' | 'purple' | 'blue' | 'orange';
+
 interface ModelHubProps {
   isOpen: boolean;
   onClose: () => void;
   onPullComplete?: () => void;
-  noModels?: boolean;
   ollamaServers?: string[];
-  // Server connection settings
   isUsingObServer?: boolean;
   handleToggleObServer?: () => void;
   showLoginMessage?: boolean;
@@ -72,20 +62,9 @@ interface ModelHubProps {
   onSetAppInferenceUrl?: (url: string) => void;
 }
 
-const suggestedModels = [
-  'gemma3:4b',
-  'gemma3:12b',
-  'gemma3:27b',
-  'gemma3:27b-it-qat',
-  'qwen2.5vl:3b',
-  'qwen2.5vl:7b',
-  'llava:7b',
-  'llava:13b'
-];
-
-const GEMMA_CARDS: { modelId: GemmaModelId; label: string; size: string }[] = [
-  { modelId: 'onnx-community/gemma-4-E2B-it-ONNX', label: 'Gemma 4 E2B', size: '~1.5 GB' },
-  { modelId: 'onnx-community/gemma-4-E4B-it-ONNX', label: 'Gemma 4 E4B', size: '~3 GB' },
+const SUGGESTED_OLLAMA_MODELS = [
+  'gemma3:4b', 'gemma3:12b', 'gemma3:27b', 'gemma3:27b-it-qat',
+  'qwen2.5vl:3b', 'qwen2.5vl:7b', 'llava:7b', 'llava:13b',
 ];
 
 const formatBytes = (bytes: number, decimals = 2) => {
@@ -97,13 +76,69 @@ const formatBytes = (bytes: number, decimals = 2) => {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 };
 
+const TAB_COLORS: Record<TabColor, { active: string; dot: string }> = {
+  green:  { active: 'bg-white text-green-700 shadow-sm',  dot: 'bg-green-500' },
+  purple: { active: 'bg-white text-purple-700 shadow-sm', dot: 'bg-purple-500' },
+  blue:   { active: 'bg-white text-blue-700 shadow-sm',   dot: 'bg-blue-500' },
+  orange: { active: 'bg-white text-orange-700 shadow-sm', dot: 'bg-orange-500' },
+};
+
+const TabButton: React.FC<{
+  active: boolean;
+  onClick: () => void;
+  color: TabColor;
+  icon: React.ReactNode;
+  label: string;
+  dimmed?: boolean;
+}> = ({ active, onClick, color, icon, label, dimmed }) => (
+  <button
+    onClick={onClick}
+    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap flex-1 justify-center ${
+      active ? TAB_COLORS[color].active : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+    } ${dimmed ? 'opacity-60' : ''}`}
+  >
+    <span className={`w-1.5 h-1.5 rounded-full ${active ? TAB_COLORS[color].dot : 'bg-gray-300'}`} />
+    {icon}
+    <span className="hidden sm:inline">{label}</span>
+    {dimmed && <AlertCircle size={11} className="text-gray-400" />}
+  </button>
+);
+
+const SamplerSlider: React.FC<{
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  disabled: boolean;
+  hint?: string;
+  format: (v: number) => string;
+  onChange: (v: number) => void;
+}> = ({ label, value, min, max, step, disabled, hint, format, onChange }) => (
+  <div>
+    <div className="flex justify-between items-center mb-1">
+      <label className="text-xs font-medium text-gray-600">{label}</label>
+      <span className="text-xs text-gray-500 font-mono">{format(value)}</span>
+    </div>
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={e => onChange(parseFloat(e.target.value))}
+      disabled={disabled}
+      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50 accent-green-600"
+    />
+    {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
+  </div>
+);
+
 const ModelHub: React.FC<ModelHubProps> = ({
   isOpen,
   onClose,
   onPullComplete,
-  noModels = false,
   ollamaServers,
-  // Server connection props
   isUsingObServer = false,
   handleToggleObServer,
   showLoginMessage = false,
@@ -120,94 +155,70 @@ const ModelHub: React.FC<ModelHubProps> = ({
   appInferenceUrl,
   onSetAppInferenceUrl,
 }) => {
+  const isTauriApp = isTauri();
+  const isMobileDevice = isMobile();
+
+  // ── Ollama pull state
   const [modelToPull, setModelToPull] = useState('');
   const [downloadState, setDownloadState] = useState<PullState>(pullModelManager.getInitialState());
-  const [showWelcomeScreen, setShowWelcomeScreen] = useState(noModels);
   const [detectedServers, setDetectedServers] = useState<string[]>([]);
   const availableServers = ollamaServers || detectedServers;
   const [selectedServer, setSelectedServer] = useState<string>(availableServers[0] || '');
 
-  const isTauriApp = isTauri();
-  const isMobileDevice = isMobile();
-  const [activeTab, setActiveTab] = useState<'transformers' | 'llamacpp' | 'customserver' | 'observer'>('transformers');
-  const [showBenchmark, setShowBenchmark] = useState(false);
+  // ── Tabs
+  const [activeTab, setActiveTab] = useState<TabId>(isTauriApp ? 'llamacpp' : 'transformers');
 
-  // Simple/Advanced view mode for llama.cpp and Transformers.js tabs
-  const [llamaViewMode, setLlamaViewMode] = useState<ViewMode>('simple');
-  const [transformersViewMode, setTransformersViewMode] = useState<ViewMode>('simple');
-
-  // Track which preset is currently downloading (for sequential GGUF + mmproj download)
-  const [downloadingPreset, setDownloadingPreset] = useState<LlamaPresetId | null>(null);
-  const [presetDownloadStep, setPresetDownloadStep] = useState<'gguf' | 'mmproj' | null>(null);
-
+  // ── Transformers.js (Gemma) state
   const [gemmaState, setGemmaState] = useState<GemmaModelState>(GemmaModelManager.getInstance().getState());
-  // Default values match GemmaModelManager.DEFAULT_SETTINGS
   const [gemmaDevice, setGemmaDevice] = useState<GemmaDevice>('webgpu');
   const [gemmaDtype, setGemmaDtype] = useState<GemmaDtype>('q4');
   const [gemmaTokenBudget, setGemmaTokenBudget] = useState<GemmaImageTokenBudget>(70);
+  const [customOnnxModelId, setCustomOnnxModelId] = useState('');
 
-  // Native LLM state (llama.cpp on Tauri - iOS/macOS)
+  // ── llama.cpp (Native) state
   const [nativeState, setNativeState] = useState<NativeModelState>(NativeLlmManager.getInstance().getState());
   const [nativeModels, setNativeModels] = useState<NativeModelInfo[]>([]);
   const [ggufUrl, setGgufUrl] = useState('');
   const [mmprojUrl, setMmprojUrl] = useState('');
   const [currentDownload, setCurrentDownload] = useState<'gguf' | 'mmproj' | null>(null);
-
-  // Sampler parameters for llama.cpp advanced settings
   const [samplerParams, setSamplerParams] = useState<SamplerParams>({ ...DEFAULT_SAMPLER_PARAMS });
   const [showSamplerSettings, setShowSamplerSettings] = useState(false);
-
-  // Custom ONNX model input for Transformers.js advanced mode
-  const [customOnnxModelId, setCustomOnnxModelId] = useState('');
-
-  // GPU acceleration setting for llama.cpp (defaults to CPU for compatibility)
   const [useGpu, setUseGpu] = useState<boolean>(() => NativeLlmManager.getInstance().getPersistedUseGpu());
 
-  // Custom Server tab state
+  // ── Custom server state
   const [isAddingServer, setIsAddingServer] = useState(false);
   const [newServerAddress, setNewServerAddress] = useState('');
   const [addError, setAddError] = useState('');
   const [inferenceUrlInput, setInferenceUrlInput] = useState(appInferenceUrl || 'http://localhost:11434');
 
-
+  // Reset to a sensible default tab whenever the modal opens.
   useEffect(() => {
     if (!isOpen) return;
-    // Default to llama.cpp on Tauri, otherwise Transformers.js on web
-    if (isTauriApp) {
-      setActiveTab('llamacpp');
-    } else {
-      setActiveTab('transformers');
-    }
+    setActiveTab(isTauriApp ? 'llamacpp' : 'transformers');
   }, [isOpen, isTauriApp]);
 
   useEffect(() => {
-    if (isOpen && !ollamaServers && noModels) {
-      const checkLocalhost = async () => {
-        try {
-          const response = await platformFetch('http://localhost:3838/api/tags', {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-          });
-          if (response.ok) {
-            setDetectedServers(['http://localhost:3838']);
-          }
-        } catch {
-          setDetectedServers([]);
-        }
-      };
-      checkLocalhost();
-    }
-  }, [isOpen, ollamaServers, noModels]);
+    if (!isOpen || ollamaServers) return;
+    const checkLocalhost = async () => {
+      try {
+        const response = await platformFetch('http://localhost:3838/api/tags', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (response.ok) setDetectedServers(['http://localhost:3838']);
+      } catch {
+        setDetectedServers([]);
+      }
+    };
+    checkLocalhost();
+  }, [isOpen, ollamaServers]);
 
   useEffect(() => {
     if (!isOpen) return;
-    const unsubscribe = pullModelManager.subscribe((newState) => {
+    return pullModelManager.subscribe((newState) => {
       setDownloadState(newState);
-      if (newState.status === 'success' && onPullComplete) {
-        onPullComplete();
-      }
+      if (newState.status === 'success' && onPullComplete) onPullComplete();
     });
-    return unsubscribe;
   }, [isOpen, onPullComplete]);
 
   useEffect(() => {
@@ -216,25 +227,14 @@ const ModelHub: React.FC<ModelHubProps> = ({
     const unsubscribe = manager.onStateChange(setGemmaState);
     const currentState = manager.getState();
     setGemmaState(currentState);
-
-    // Initialize dropdown values from loaded model's settings, or first model's saved settings
     if (currentState.loadSettings) {
       setGemmaDevice(currentState.loadSettings.device);
       setGemmaDtype(currentState.loadSettings.dtype);
       setGemmaTokenBudget(currentState.loadSettings.imageTokenBudget);
-    } else {
-      // Use saved settings from first available model
-      const defaultModelId = GEMMA_CARDS[0].modelId;
-      const savedSettings = manager.getSettingsForModel(defaultModelId);
-      setGemmaDevice(savedSettings.device);
-      setGemmaDtype(savedSettings.dtype);
-      setGemmaTokenBudget(savedSettings.imageTokenBudget);
     }
-
     return unsubscribe;
   }, [isOpen]);
 
-  // Tauri: Subscribe to native LLM state changes
   useEffect(() => {
     if (!isOpen || !isTauriApp) return;
     const unsubscribe = NativeLlmManager.getInstance().onStateChange(setNativeState);
@@ -242,40 +242,33 @@ const ModelHub: React.FC<ModelHubProps> = ({
     return unsubscribe;
   }, [isOpen, isTauriApp]);
 
-  // Tauri: Fetch available native models whenever status changes
   useEffect(() => {
     if (!isOpen || !isTauriApp) return;
     NativeLlmManager.getInstance().listModels().then(setNativeModels);
   }, [isOpen, isTauriApp, nativeState.status]);
 
-  // Tauri: Reset sampler params to defaults when model starts loading, fetch actual values when loaded
   useEffect(() => {
     if (!isOpen || !isTauriApp) return;
-
-    if (nativeState.status === 'loading') {
-      // Reset to defaults when a new model starts loading
+    if (nativeState.status === 'loading' || nativeState.status === 'unloaded') {
       setSamplerParams({ ...DEFAULT_SAMPLER_PARAMS });
     } else if (nativeState.status === 'loaded') {
-      // Fetch current params from the backend once loaded
       NativeLlmManager.getInstance().getDebugInfo().then(info => {
-        if (info.engine.samplerParams) {
-          setSamplerParams(info.engine.samplerParams);
-        }
-      }).catch(() => {
-        // Ignore errors, use defaults
-      });
-    } else if (nativeState.status === 'unloaded') {
-      // Reset when unloaded
-      setSamplerParams({ ...DEFAULT_SAMPLER_PARAMS });
+        if (info.engine.samplerParams) setSamplerParams(info.engine.samplerParams);
+      }).catch(() => {});
     }
   }, [isOpen, isTauriApp, nativeState.status]);
 
-  // Update inference URL input when appInferenceUrl changes
   useEffect(() => {
-    if (appInferenceUrl) {
-      setInferenceUrlInput(appInferenceUrl);
-    }
+    if (appInferenceUrl) setInferenceUrlInput(appInferenceUrl);
   }, [appInferenceUrl]);
+
+  useEffect(() => {
+    if (availableServers.length > 0 && !selectedServer) {
+      setSelectedServer(availableServers[0]);
+    }
+  }, [availableServers, selectedServer]);
+
+  // ── Handlers ─────────────────────────────────────────────
 
   const handleStartPull = () => {
     if (modelToPull.trim() && selectedServer) {
@@ -283,21 +276,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
     }
   };
 
-  const handlePullModelClick = () => {
-    setModelToPull('gemma3:4b');
-    setShowWelcomeScreen(false);
-    if (selectedServer) {
-      pullModelManager.pullModel('gemma3:4b', selectedServer);
-    }
-  };
-
-  const handleSkipForNow = () => {
-    setShowWelcomeScreen(false);
-  };
-
-  const handleCancelPull = () => {
-    pullModelManager.cancelPull();
-  };
+  const handleCancelPull = () => pullModelManager.cancelPull();
 
   const handleDone = () => {
     if (downloadState.status === 'success' || downloadState.status === 'error') {
@@ -312,9 +291,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
     try {
       await NativeLlmManager.getInstance().downloadModel(ggufUrl.trim());
       setGgufUrl('');
-    } catch {
-      // Error shown via nativeState.error
-    } finally {
+    } catch { /* surfaced via nativeState.error */ } finally {
       setCurrentDownload(null);
     }
   };
@@ -325,94 +302,40 @@ const ModelHub: React.FC<ModelHubProps> = ({
     try {
       await NativeLlmManager.getInstance().downloadModel(mmprojUrl.trim());
       setMmprojUrl('');
-    } catch {
-      // Error shown via nativeState.error
-    } finally {
+    } catch { /* surfaced via nativeState.error */ } finally {
       setCurrentDownload(null);
     }
   };
 
-  // Update a single sampler parameter and sync to backend
   const handleSamplerParamChange = async (key: keyof SamplerParams, value: number) => {
-    const newParams = { ...samplerParams, [key]: value };
-    setSamplerParams(newParams);
+    setSamplerParams(prev => ({ ...prev, [key]: value }));
     if (nativeState.status === 'loaded') {
-      try {
-        await NativeLlmManager.getInstance().setSamplerParams({ [key]: value });
-      } catch {
-        // Ignore errors, state is still updated locally
-      }
+      try { await NativeLlmManager.getInstance().setSamplerParams({ [key]: value }); } catch {}
     }
   };
 
-  // Reset sampler params to defaults
   const handleResetSamplerParams = async () => {
     setSamplerParams({ ...DEFAULT_SAMPLER_PARAMS });
     if (nativeState.status === 'loaded') {
-      try {
-        await NativeLlmManager.getInstance().setSamplerParams(DEFAULT_SAMPLER_PARAMS);
-      } catch {
-        // Ignore errors
-      }
+      try { await NativeLlmManager.getInstance().setSamplerParams(DEFAULT_SAMPLER_PARAMS); } catch {}
     }
   };
 
-  // Toggle GPU acceleration for llama.cpp
   const handleToggleGpu = async (enabled: boolean) => {
     setUseGpu(enabled);
-    try {
-      await NativeLlmManager.getInstance().setUseGpu(enabled);
-    } catch {
-      // Ignore errors, setting is still persisted locally
-    }
+    try { await NativeLlmManager.getInstance().setUseGpu(enabled); } catch {}
   };
 
-  // Sequential download for preset models (GGUF first, then mmproj automatically)
-  const handleDownloadPreset = async (presetId: LlamaPresetId) => {
-    const preset = LLAMA_PRESETS[presetId];
-    setDownloadingPreset(presetId);
-
-    try {
-      // Step 1: Download GGUF
-      setPresetDownloadStep('gguf');
-      await NativeLlmManager.getInstance().downloadModel(preset.gguf);
-
-      // Step 2: Download mmproj automatically
-      setPresetDownloadStep('mmproj');
-      await NativeLlmManager.getInstance().downloadModel(preset.mmproj);
-
-    } catch {
-      // Error shown via nativeState.error
-    } finally {
-      setDownloadingPreset(null);
-      setPresetDownloadStep(null);
-    }
-  };
-
-  // Get native model matching a preset
-  const getPresetModel = (presetId: LlamaPresetId): NativeModelInfo | undefined => {
-    const preset = LLAMA_PRESETS[presetId];
-    const ggufFilename = preset.gguf.split('/').pop()?.replace('.gguf', '') || '';
-    return nativeModels.find(m => m.id.includes(ggufFilename.split('-Q')[0]));
-  };
-
-  // Custom Server tab handlers
   const handleAddServer = () => {
     setAddError('');
-
-    // Basic URL validation
     if (!newServerAddress.trim()) {
       setAddError('Please enter a server address');
       return;
     }
-
-    // Check if URL has protocol
     if (!newServerAddress.match(/^https?:\/\//)) {
       setAddError('URL must start with http:// or https://');
       return;
     }
-
-    // Try to validate URL format
     try {
       new URL(newServerAddress);
       onAddCustomServer?.(newServerAddress);
@@ -423,150 +346,682 @@ const ModelHub: React.FC<ModelHubProps> = ({
     }
   };
 
-  useEffect(() => {
-    if (isOpen) setShowWelcomeScreen(noModels);
-  }, [isOpen, noModels]);
-
-  useEffect(() => {
-    if (availableServers.length > 0 && !selectedServer) {
-      setSelectedServer(availableServers[0]);
+  const handleLoadCustomOnnx = () => {
+    if (customOnnxModelId.trim()) {
+      GemmaModelManager.getInstance().loadModelWithSettings(
+        customOnnxModelId.trim() as GemmaModelId,
+        gemmaDevice,
+        gemmaDtype,
+        gemmaTokenBudget,
+      );
     }
-  }, [availableServers, selectedServer]);
+  };
+
+  // ── Derived ──────────────────────────────────────────────
 
   const { status, progress, statusText, errorText, completedBytes, totalBytes } = downloadState;
   const isPulling = status === 'pulling';
   const isFinished = status === 'success' || status === 'error';
   const isNativeDownloading = nativeState.status === 'downloading';
+  const isAnyNativeBusy = nativeState.status === 'loading' || nativeState.status === 'unloading' || isNativeDownloading;
 
-  // Detect Ollama servers from custom servers list
-  const ollamaServersFromCustom = customServers.filter(s => s.enabled && s.status === 'online').map(s => s.address);
+  const ollamaServersFromCustom = customServers
+    .filter(s => s.enabled && s.status === 'online')
+    .map(s => s.address);
   const allOllamaServers = [...new Set([...availableServers, ...ollamaServersFromCustom])];
+
+  // Transformers.js shows in the unified list whenever a model is in flight.
+  const transformersInFlight = !!gemmaState.modelId &&
+    (gemmaState.status === 'loaded' || gemmaState.status === 'loading' || gemmaState.status === 'error');
+  const installedCount = nativeModels.length + (transformersInFlight ? 1 : 0);
 
   return (
     <Modal open={isOpen} onClose={handleDone} className="w-full max-w-3xl">
-      <div className="p-8 max-h-[85vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
+      <div className="p-6 sm:p-8 max-h-[88vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex justify-between items-start mb-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Model Hub</h2>
-            <p className="text-sm text-gray-500 mt-1">Download and manage local AI models</p>
+            <p className="text-sm text-gray-500 mt-1">Manage your AI models and inference engines</p>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Benchmark button - now in corner */}
-            <button
-              onClick={() => setShowBenchmark(!showBenchmark)}
-              className={`p-2 rounded-lg transition-all ${
-                showBenchmark
-                  ? 'bg-orange-100 text-orange-600'
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-              }`}
-              title="Run Benchmark"
-            >
-              <BarChart3 size={20} />
-            </button>
-            <button onClick={handleDone} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-2 transition-colors">
-              <X size={22} />
-            </button>
-          </div>
+          <button
+            onClick={handleDone}
+            className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-2 transition-colors"
+            aria-label="Close"
+          >
+            <X size={22} />
+          </button>
         </div>
 
-        {/* Show Benchmark panel when active */}
-        {showBenchmark && (
-          <div className="mb-6 border border-orange-200 rounded-xl overflow-hidden">
-            <div className="bg-orange-50 px-4 py-2 border-b border-orange-200 flex justify-between items-center">
-              <span className="text-sm font-medium text-orange-800">Performance Benchmark</span>
+        {/* ── Installed Models (always visible) ───────────── */}
+        <section className="mb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Package size={16} className="text-gray-500" />
+            <h3 className="text-sm font-semibold text-gray-700">Installed Models</h3>
+            {installedCount > 0 && (
+              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                {installedCount}
+              </span>
+            )}
+          </div>
+
+          {installedCount === 0 ? (
+            <div className="border border-dashed border-gray-200 rounded-xl p-6 text-center">
+              <p className="text-sm text-gray-500">No local models installed yet.</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Use the{' '}
+                {isTauriApp
+                  ? <span className="font-medium text-green-600">llama.cpp</span>
+                  : <span className="font-medium text-purple-600">Transformers.js</span>
+                }
+                {' '}tab below to download one.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {/* llama.cpp downloaded models */}
+              {nativeModels.map((model) => {
+                const isThisModel = nativeState.modelId === model.id;
+                const isLoaded = isThisModel && nativeState.status === 'loaded';
+                const isLoading = isThisModel && nativeState.status === 'loading';
+                const isUnloading = isThisModel && nativeState.status === 'unloading';
+
+                return (
+                  <div
+                    key={model.filename}
+                    className={`border rounded-xl p-3 transition-all ${
+                      isLoaded ? 'border-green-300 bg-green-50/50' : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                          isLoaded ? 'bg-green-200' : 'bg-gray-100'
+                        }`}>
+                          <Cpu size={18} className={isLoaded ? 'text-green-700' : 'text-gray-500'} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-medium text-gray-900 truncate">{model.name}</span>
+                            <span className="text-[10px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded">llama.cpp</span>
+                            {model.isMultimodal && (
+                              <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">Vision</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">{formatBytes(model.sizeBytes)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {isUnloading ? (
+                          <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-lg font-medium">
+                            <Cpu size={12} className="animate-pulse" /> Unloading
+                          </span>
+                        ) : isLoaded ? (
+                          <button
+                            onClick={() => NativeLlmManager.getInstance().unloadModel()}
+                            className="group flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors bg-green-200 text-green-800 hover:bg-red-100 hover:text-red-700"
+                          >
+                            <span className="group-hover:hidden flex items-center gap-1.5"><CheckCircle size={12} /> Ready</span>
+                            <span className="hidden group-hover:flex items-center gap-1.5"><X size={12} /> Unload</span>
+                          </button>
+                        ) : isLoading ? (
+                          <button
+                            onClick={() => NativeLlmManager.getInstance().unloadModel()}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-200 text-gray-600 rounded-lg font-medium"
+                          >
+                            <Cpu size={12} className="animate-pulse" /> Loading
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              disabled={isAnyNativeBusy}
+                              onClick={() => NativeLlmManager.getInstance().loadModel(model.filename, model.mmprojFilename)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm"
+                            >
+                              <Cpu size={12} /> Load
+                            </button>
+                            <button
+                              disabled={isAnyNativeBusy}
+                              onClick={() => NativeLlmManager.getInstance().deleteModel(model.filename)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Delete model"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Transformers.js currently in-flight model */}
+              {transformersInFlight && gemmaState.modelId && (
+                <div className={`border rounded-xl p-3 transition-all ${
+                  gemmaState.status === 'loaded' ? 'border-purple-300 bg-purple-50/50' : 'border-gray-200 bg-white'
+                }`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                        gemmaState.status === 'loaded' ? 'bg-purple-200' : 'bg-gray-100'
+                      }`}>
+                        <Sparkles size={18} className={gemmaState.status === 'loaded' ? 'text-purple-700' : 'text-gray-500'} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-gray-900 truncate">{gemmaState.modelId}</span>
+                          <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">Transformers.js</span>
+                        </div>
+                        {gemmaState.loadSettings && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {gemmaState.loadSettings.device} · {gemmaState.loadSettings.dtype} · {gemmaState.loadSettings.imageTokenBudget} tokens
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {gemmaState.status === 'loaded' ? (
+                        <button
+                          onClick={() => GemmaModelManager.getInstance().unloadModel()}
+                          className="group flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors bg-purple-200 text-purple-800 hover:bg-red-100 hover:text-red-700"
+                        >
+                          <span className="group-hover:hidden flex items-center gap-1.5"><CheckCircle size={12} /> Ready</span>
+                          <span className="hidden group-hover:flex items-center gap-1.5"><X size={12} /> Unload</span>
+                        </button>
+                      ) : gemmaState.status === 'loading' ? (
+                        <button
+                          onClick={() => GemmaModelManager.getInstance().unloadModel()}
+                          className="group flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-700 rounded-lg font-medium transition-colors"
+                        >
+                          <span className="group-hover:hidden flex items-center gap-1.5"><Cpu size={12} className="animate-pulse" /> Loading</span>
+                          <span className="hidden group-hover:flex items-center gap-1.5"><StopCircle size={12} /> Cancel</span>
+                        </button>
+                      ) : gemmaState.status === 'error' ? (
+                        <span className="flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-100 px-2 py-1 rounded-full">
+                          <AlertTriangle size={12} /> Error
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {gemmaState.status === 'loading' && gemmaState.progress.length > 0 && (
+                    <div className="space-y-1.5 mt-3">
+                      {gemmaState.progress.map((item) => (
+                        <div key={item.file}>
+                          <div className="flex justify-between items-center text-[11px] mb-1">
+                            <span className="text-gray-600 flex items-center gap-1.5 truncate max-w-[55%]">
+                              {item.status === 'done'
+                                ? <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                : <FileDown className="h-3 w-3 text-purple-400 flex-shrink-0" />
+                              }
+                              {item.file}
+                            </span>
+                            <span className="font-medium text-gray-500 flex-shrink-0">
+                              {item.status === 'done'
+                                ? 'Done'
+                                : item.total > 0
+                                  ? `${formatBytes(item.loaded)} / ${formatBytes(item.total)}`
+                                  : `${Math.round(item.progress)}%`
+                              }
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-1.5">
+                            <div
+                              className={`h-1.5 rounded-full transition-all duration-300 ${item.status === 'done' ? 'bg-green-500' : 'bg-purple-600'}`}
+                              style={{ width: `${item.progress}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {gemmaState.status === 'error' && (
+                    <p className="mt-2 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{gemmaState.error}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* ── Ob-Server card (always visible) ─────────────── */}
+        <section className="mb-6">
+          <div className={`p-4 rounded-xl border transition-all ${
+            isUsingObServer
+              ? 'bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200'
+              : 'bg-gray-50 border-gray-200'
+          }`}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                  isUsingObServer ? 'bg-indigo-200' : 'bg-gray-200'
+                }`}>
+                  <Cloud size={20} className={isUsingObServer ? 'text-indigo-600' : 'text-gray-500'} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-gray-900">Ob-Server Cloud</span>
+                    {isUsingObServer && quotaInfo?.tier && (
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                        quotaInfo.tier === 'max' ? 'bg-green-100 text-green-700' :
+                        quotaInfo.tier === 'pro' ? 'bg-purple-100 text-purple-700' :
+                        quotaInfo.tier === 'plus' ? 'bg-blue-100 text-blue-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {quotaInfo.tier.toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">
+                    {!isUsingObServer
+                      ? 'Disabled — fully offline mode'
+                      : !isAuthenticated
+                        ? 'Login required'
+                        : quotaInfo && typeof quotaInfo.remaining === 'number' && typeof quotaInfo.limit === 'number'
+                          ? `${quotaInfo.remaining} of ${quotaInfo.limit} credits remaining`
+                          : 'Cloud inference enabled'
+                    }
+                  </p>
+                </div>
+              </div>
               <button
-                onClick={() => setShowBenchmark(false)}
-                className="text-orange-400 hover:text-orange-600"
+                onClick={handleToggleObServer}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none flex-shrink-0 ${
+                  isUsingObServer ? 'bg-indigo-600' : 'bg-gray-300'
+                }`}
+                aria-label={isUsingObServer ? 'Disable Ob-Server' : 'Enable Ob-Server'}
               >
-                <X size={16} />
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                  isUsingObServer ? 'translate-x-6' : 'translate-x-1'
+                }`} />
               </button>
             </div>
-            <div className="bg-white">
-              <BenchmarkPanel isVisible={showBenchmark} />
+
+            {isUsingObServer && isAuthenticated && quotaInfo && typeof quotaInfo.remaining === 'number' && typeof quotaInfo.limit === 'number' && (
+              <div className="mt-3 pt-3 border-t border-indigo-100">
+                <div className="w-full bg-white/70 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${
+                      quotaInfo.remaining <= 10 ? 'bg-red-500' :
+                      quotaInfo.remaining <= quotaInfo.limit * 0.3 ? 'bg-orange-500' :
+                      'bg-indigo-600'
+                    }`}
+                    style={{ width: `${Math.max(0, Math.min(100, ((quotaInfo.limit - quotaInfo.remaining) / quotaInfo.limit) * 100))}%` }}
+                  />
+                </div>
+                {renderQuotaStatus && (
+                  <div className="text-xs text-gray-600 mt-1.5">{renderQuotaStatus()}</div>
+                )}
+              </div>
+            )}
+
+            {showLoginMessage && (
+              <div className="mt-3 p-2.5 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs font-medium">
+                Login required to use Ob-Server Cloud
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ── Tab bar ─────────────────────────────────────── */}
+        <div className="flex gap-1 mb-5 p-1 bg-gray-100 rounded-xl overflow-x-auto">
+          <TabButton
+            active={activeTab === 'llamacpp'}
+            onClick={() => setActiveTab('llamacpp')}
+            color="green"
+            icon={<Cpu size={14} />}
+            label="llama.cpp"
+            dimmed={!isTauriApp}
+          />
+          <TabButton
+            active={activeTab === 'transformers'}
+            onClick={() => setActiveTab('transformers')}
+            color="purple"
+            icon={<Sparkles size={14} />}
+            label="Transformers.js"
+          />
+          <TabButton
+            active={activeTab === 'servers'}
+            onClick={() => setActiveTab('servers')}
+            color="blue"
+            icon={<Server size={14} />}
+            label="Servers"
+          />
+          <TabButton
+            active={activeTab === 'benchmark'}
+            onClick={() => setActiveTab('benchmark')}
+            color="orange"
+            icon={<BarChart3 size={14} />}
+            label="Benchmark"
+          />
+        </div>
+
+        {/* ── llama.cpp tab ───────────────────────────────── */}
+        {activeTab === 'llamacpp' && (
+          <div className="space-y-4">
+            {!isTauriApp ? (
+              <div className="text-center py-10 border border-gray-200 rounded-xl bg-gray-50">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white border border-gray-200 mb-4">
+                  <Cpu size={32} className="text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-1">Native app required</h3>
+                <p className="text-sm text-gray-500 max-w-md mx-auto">
+                  llama.cpp runs natively with GPU acceleration. Install the desktop or mobile app to use this engine.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* GPU toggle */}
+                <div className="flex items-center justify-between p-3 border border-gray-200 rounded-xl">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-800">GPU acceleration</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                        useGpu ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {useGpu ? 'On' : 'Off'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {useGpu ? 'Hardware-accelerated. May reduce stability.' : 'CPU mode for broader compatibility.'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleToggleGpu(!useGpu)}
+                    disabled={nativeState.status === 'loading' || nativeState.status === 'loaded'}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 ${
+                      useGpu ? 'bg-green-600' : 'bg-gray-300'
+                    }`}
+                    title={nativeState.status === 'loaded' ? 'Unload current model to change' : undefined}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      useGpu ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+
+                {/* GGUF URL */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Model URL (.gguf)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={ggufUrl}
+                      onChange={(e) => setGgufUrl(e.target.value)}
+                      placeholder="https://huggingface.co/.../resolve/main/model.gguf"
+                      disabled={isNativeDownloading}
+                      className="flex-grow p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 disabled:opacity-50 text-sm"
+                    />
+                    <button
+                      onClick={handleDownloadGguf}
+                      disabled={!ggufUrl.trim() || isNativeDownloading}
+                      className="flex items-center gap-1.5 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
+                    >
+                      <Download size={14} /> Download
+                    </button>
+                  </div>
+                </div>
+
+                {/* mmproj URL */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                    Vision projector — mmproj <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={mmprojUrl}
+                      onChange={(e) => setMmprojUrl(e.target.value)}
+                      placeholder="https://huggingface.co/.../resolve/main/mmproj.gguf"
+                      disabled={isNativeDownloading}
+                      className="flex-grow p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 disabled:opacity-50 text-sm"
+                    />
+                    <button
+                      onClick={handleDownloadMmproj}
+                      disabled={!mmprojUrl.trim() || isNativeDownloading}
+                      className="flex items-center gap-1.5 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
+                    >
+                      <Download size={14} /> Download
+                    </button>
+                  </div>
+                </div>
+
+                {/* Download progress */}
+                {isNativeDownloading && (
+                  <div className="border border-blue-200 bg-blue-50 rounded-xl p-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-sm text-gray-800 font-semibold">
+                        Downloading {currentDownload === 'mmproj' ? 'vision projector' : 'model'}
+                      </span>
+                      <button
+                        onClick={async () => {
+                          await NativeLlmManager.getInstance().cancelDownload();
+                          setCurrentDownload(null);
+                        }}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-100 text-red-600 hover:bg-red-200 rounded-lg font-medium transition-colors"
+                      >
+                        <StopCircle size={12} /> Cancel
+                      </button>
+                    </div>
+                    <div className="flex justify-between items-center text-xs mb-1.5">
+                      <span className="text-gray-600 flex items-center gap-1.5 truncate max-w-[60%]">
+                        <FileDown className={`h-3.5 w-3.5 ${currentDownload === 'mmproj' ? 'text-purple-500' : 'text-blue-500'}`} />
+                        <span className="truncate">{nativeState.modelId}</span>
+                      </span>
+                      <span className="font-medium text-gray-500 flex-shrink-0">
+                        {nativeState.totalBytes > 0
+                          ? `${formatBytes(nativeState.downloadedBytes)} / ${formatBytes(nativeState.totalBytes)}`
+                          : `${nativeState.downloadProgress}%`
+                        }
+                      </span>
+                    </div>
+                    <div className="w-full bg-blue-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-300 ${currentDownload === 'mmproj' ? 'bg-purple-500' : 'bg-blue-600'}`}
+                        style={{ width: `${nativeState.downloadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {nativeState.status === 'error' && (
+                  <div className="border border-red-200 bg-red-50 rounded-lg p-3">
+                    <p className="text-xs text-red-700">{nativeState.error}</p>
+                  </div>
+                )}
+
+                {/* Sampler settings (collapsible) */}
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <button
+                    onClick={() => setShowSamplerSettings(!showSamplerSettings)}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <Settings2 size={14} /> Generation Settings
+                    </span>
+                    <span className={`text-gray-400 transition-transform text-xs ${showSamplerSettings ? 'rotate-180' : ''}`}>▼</span>
+                  </button>
+                  {showSamplerSettings && (
+                    <div className="p-4 space-y-4 border-t border-gray-200">
+                      {nativeState.status !== 'loaded' && (
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          Load a model to configure generation settings.
+                        </p>
+                      )}
+
+                      <SamplerSlider
+                        label="Temperature"
+                        value={samplerParams.temperature}
+                        min={0} max={2} step={0.05}
+                        disabled={nativeState.status !== 'loaded'}
+                        hint="Higher = more creative, lower = more focused"
+                        format={(v) => v.toFixed(2)}
+                        onChange={(v) => handleSamplerParamChange('temperature', v)}
+                      />
+                      <SamplerSlider
+                        label="Top P (nucleus sampling)"
+                        value={samplerParams.topP}
+                        min={0} max={1} step={0.05}
+                        disabled={nativeState.status !== 'loaded'}
+                        format={(v) => v.toFixed(2)}
+                        onChange={(v) => handleSamplerParamChange('topP', v)}
+                      />
+                      <SamplerSlider
+                        label="Top K"
+                        value={samplerParams.topK}
+                        min={1} max={100} step={1}
+                        disabled={nativeState.status !== 'loaded'}
+                        format={(v) => v.toString()}
+                        onChange={(v) => handleSamplerParamChange('topK', v)}
+                      />
+                      <SamplerSlider
+                        label="Repeat Penalty"
+                        value={samplerParams.repeatPenalty}
+                        min={1} max={2} step={0.05}
+                        disabled={nativeState.status !== 'loaded'}
+                        hint="Discourages repetitive text"
+                        format={(v) => v.toFixed(2)}
+                        onChange={(v) => handleSamplerParamChange('repeatPenalty', v)}
+                      />
+
+                      <div>
+                        <label className="text-xs font-medium text-gray-600">Seed</label>
+                        <input
+                          type="number"
+                          value={samplerParams.seed}
+                          onChange={(e) => handleSamplerParamChange('seed', parseInt(e.target.value) || 0)}
+                          disabled={nativeState.status !== 'loaded'}
+                          className="w-full mt-1 p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-green-500 disabled:opacity-50 font-mono"
+                          placeholder="42"
+                        />
+                        <p className="text-xs text-gray-400 mt-0.5">Use -1 for random seed</p>
+                      </div>
+
+                      <button
+                        onClick={handleResetSamplerParams}
+                        disabled={nativeState.status !== 'loaded'}
+                        className="text-xs text-gray-500 hover:text-gray-700 underline disabled:opacity-50 disabled:no-underline"
+                      >
+                        Reset to defaults
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Transformers.js tab ─────────────────────────── */}
+        {activeTab === 'transformers' && (
+          <div className="space-y-4">
+            {isMobileDevice && (
+              <div className="flex items-center gap-2 text-amber-700 text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <AlertCircle size={14} className="text-amber-500 flex-shrink-0" />
+                <span>Mobile devices have limited memory. Models may fail to load or run slowly.</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Device</label>
+                <select
+                  value={gemmaDevice}
+                  onChange={e => setGemmaDevice(e.target.value as GemmaDevice)}
+                  disabled={gemmaState.status === 'loading'}
+                  className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+                >
+                  <option value="webgpu">WebGPU (GPU)</option>
+                  <option value="wasm">WASM (CPU)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Precision</label>
+                <select
+                  value={gemmaDtype}
+                  onChange={e => setGemmaDtype(e.target.value as GemmaDtype)}
+                  disabled={gemmaState.status === 'loading'}
+                  className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+                >
+                  <option value="q4f16">q4f16 (4-bit + f16)</option>
+                  <option value="q4">q4 (4-bit)</option>
+                  <option value="q8">q8 (8-bit INT8)</option>
+                  <option value="fp16">fp16 (half)</option>
+                  <option value="fp32">fp32 (full)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Image Tokens</label>
+                <select
+                  value={gemmaTokenBudget}
+                  onChange={e => setGemmaTokenBudget(Number(e.target.value) as GemmaImageTokenBudget)}
+                  disabled={gemmaState.status === 'loading'}
+                  className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+                >
+                  <option value={70}>70 (fastest)</option>
+                  <option value={140}>140</option>
+                  <option value={280}>280</option>
+                  <option value={560}>560</option>
+                  <option value={1120}>1120 (OCR)</option>
+                </select>
+              </div>
+            </div>
+
+            {gemmaState.status === 'loaded' && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                Unload the current model to apply settings changes.
+              </p>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Hugging Face Model ID</label>
+              <p className="text-xs text-gray-500 mb-2">
+                e.g. <code className="bg-gray-100 px-1 py-0.5 rounded">onnx-community/gemma-3n-E2B-it-ONNX</code>
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={customOnnxModelId}
+                  onChange={(e) => setCustomOnnxModelId(e.target.value)}
+                  placeholder="onnx-community/model-name"
+                  disabled={gemmaState.status === 'loading'}
+                  className="flex-grow p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 disabled:opacity-50 text-sm"
+                />
+                <button
+                  onClick={handleLoadCustomOnnx}
+                  disabled={!customOnnxModelId.trim() || gemmaState.status === 'loading'}
+                  className="flex items-center gap-1.5 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
+                >
+                  <Cpu size={14} /> Load
+                </button>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Tab bar - new structure */}
-        {!showWelcomeScreen && (
-          <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-xl overflow-x-auto">
-            <button
-              onClick={() => setActiveTab('transformers')}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
-                activeTab === 'transformers'
-                  ? 'bg-white text-purple-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${activeTab === 'transformers' ? 'bg-purple-500' : 'bg-gray-300'}`} />
-              Transformers.js
-            </button>
-            <button
-              onClick={() => setActiveTab('llamacpp')}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
-                activeTab === 'llamacpp'
-                  ? 'bg-white text-green-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              } ${!isTauriApp ? 'opacity-60' : ''}`}
-            >
-              <span className={`w-2 h-2 rounded-full ${activeTab === 'llamacpp' ? 'bg-green-500' : 'bg-gray-300'}`} />
-              <Cpu size={14} />
-              llama.cpp
-              {!isTauriApp && <AlertCircle size={12} className="text-gray-400" />}
-            </button>
-            <button
-              onClick={() => setActiveTab('customserver')}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
-                activeTab === 'customserver'
-                  ? 'bg-white text-blue-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${activeTab === 'customserver' ? 'bg-blue-500' : 'bg-gray-300'}`} />
-              <Server size={14} />
-              Custom Server
-            </button>
-            <button
-              onClick={() => setActiveTab('observer')}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
-                activeTab === 'observer'
-                  ? 'bg-white text-indigo-700 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${activeTab === 'observer' ? 'bg-indigo-500' : 'bg-gray-300'}`} />
-              <Cloud size={14} />
-              Ob-Server
-            </button>
-          </div>
-        )}
-
-        {/* ── CUSTOM SERVER TAB ── */}
-        {activeTab === 'customserver' && !showWelcomeScreen && (
-          <div className="space-y-5">
-            <p className="text-gray-500 text-sm">
-              Connect to external inference servers including Ollama, OpenAI-compatible APIs, and custom endpoints.
-            </p>
-
-            {/* Tauri-only: Local Server URL */}
+        {/* ── Servers tab ─────────────────────────────────── */}
+        {activeTab === 'servers' && (
+          <div className="space-y-4">
             {isTauriApp && (
               <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Server size={18} className="text-blue-600" />
-                    <span className="font-semibold text-gray-800">Local Server</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      localServerOnline ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
+                    <Server size={16} className="text-blue-600" />
+                    <span className="font-semibold text-gray-800 text-sm">Local Server</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                      localServerOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                     }`}>
                       {localServerOnline ? 'Online' : 'Offline'}
                     </span>
                   </div>
                   <button
                     onClick={checkLocalServer}
-                    className="p-1.5 hover:bg-blue-100 rounded-lg transition-colors"
-                    title="Check server status"
+                    className="p-1.5 hover:bg-white rounded transition-colors"
+                    title="Re-check status"
                   >
-                    <RefreshCw className="h-4 w-4 text-blue-600" />
+                    <RefreshCw className="h-3.5 w-3.5 text-blue-600" />
                   </button>
                 </div>
                 <div className="flex gap-2">
@@ -584,138 +1039,115 @@ const ModelHub: React.FC<ModelHubProps> = ({
                     Save
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">Set your Ollama or compatible server address</p>
+                <p className="text-xs text-gray-500 mt-2">Set your local Ollama or compatible server</p>
               </div>
             )}
 
-            {/* Quick Add Section */}
             <div className="border border-gray-200 rounded-xl p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Add Custom Server</h3>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Custom Servers</h3>
               {!isAddingServer ? (
                 <button
                   onClick={() => setIsAddingServer(true)}
-                  className="w-full py-3 px-4 border-2 border-dashed border-gray-300 rounded-xl hover:border-blue-400 hover:bg-blue-50 flex items-center justify-center text-gray-600 hover:text-blue-600 transition-all"
+                  className="w-full py-2.5 px-4 border-2 border-dashed border-gray-300 rounded-xl hover:border-blue-400 hover:bg-blue-50 flex items-center justify-center text-sm text-gray-600 hover:text-blue-600 transition-all"
                 >
-                  <Plus className="h-5 w-5 mr-2" />
-                  Add Server
+                  <Plus className="h-4 w-4 mr-2" /> Add Server
                 </button>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <input
                     type="text"
                     value={newServerAddress}
-                    onChange={(e) => {
-                      setNewServerAddress(e.target.value);
-                      setAddError('');
-                    }}
+                    onChange={(e) => { setNewServerAddress(e.target.value); setAddError(''); }}
                     placeholder="http://192.168.1.100:8080"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     autoFocus
                   />
-                  {addError && (
-                    <p className="text-xs text-red-500">{addError}</p>
-                  )}
+                  {addError && <p className="text-xs text-red-500">{addError}</p>}
                   <div className="flex gap-2">
                     <button
                       onClick={handleAddServer}
-                      className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium text-sm"
+                      className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm"
                     >
                       Add
                     </button>
                     <button
-                      onClick={() => {
-                        setIsAddingServer(false);
-                        setNewServerAddress('');
-                        setAddError('');
-                      }}
-                      className="flex-1 py-2.5 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 font-medium text-sm"
+                      onClick={() => { setIsAddingServer(false); setNewServerAddress(''); setAddError(''); }}
+                      className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium text-sm"
                     >
                       Cancel
                     </button>
                   </div>
                 </div>
               )}
-            </div>
 
-            {/* Connected Servers List */}
-            {customServers.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-gray-700">Connected Servers</h3>
-                {customServers.map((server) => (
-                  <div key={server.address} className="border border-gray-200 rounded-xl p-4 hover:border-gray-300 transition-all">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0 mr-3">
-                        <p className="font-medium text-gray-800 truncate">{server.address}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-xs font-semibold ${
-                            server.status === 'online' ? 'text-green-600' :
-                            server.status === 'offline' ? 'text-red-500' :
-                            'text-gray-400'
-                          }`}>
-                            {server.status === 'online' ? 'Online' :
-                             server.status === 'offline' ? 'Offline' :
-                             'Unchecked'}
-                          </span>
+              {customServers.length > 0 && (
+                <div className="space-y-2 mt-3">
+                  {customServers.map(server => (
+                    <div key={server.address} className="border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition-all">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-800 text-sm truncate">{server.address}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className={`text-[10px] font-semibold ${
+                              server.status === 'online' ? 'text-green-600' :
+                              server.status === 'offline' ? 'text-red-500' : 'text-gray-400'
+                            }`}>
+                              {server.status === 'online' ? 'Online' : server.status === 'offline' ? 'Offline' : 'Unchecked'}
+                            </span>
+                            <button
+                              onClick={() => onCheckCustomServer?.(server.address)}
+                              className="p-0.5 hover:bg-gray-100 rounded transition-colors"
+                              title="Re-check"
+                            >
+                              <RefreshCw className="h-3 w-3 text-gray-500" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
                           <button
-                            onClick={() => onCheckCustomServer?.(server.address)}
-                            className="p-1 hover:bg-gray-100 rounded transition-colors"
-                            title="Check server status"
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                              server.enabled ? 'bg-blue-500' : 'bg-gray-300'
+                            }`}
+                            onClick={() => onToggleCustomServer?.(server.address)}
+                            aria-label={server.enabled ? 'Disable server' : 'Enable server'}
                           >
-                            <RefreshCw className="h-3 w-3 text-gray-500" />
+                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                              server.enabled ? 'translate-x-5' : 'translate-x-1'
+                            }`} />
+                          </button>
+                          <button
+                            onClick={() => onRemoveCustomServer?.(server.address)}
+                            className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition-colors"
+                            title="Remove server"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        {/* Toggle switch */}
-                        <button
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                            server.enabled ? 'bg-blue-500' : 'bg-gray-300'
-                          }`}
-                          onClick={() => onToggleCustomServer?.(server.address)}
-                          aria-label={server.enabled ? "Disable server" : "Enable server"}
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                              server.enabled ? 'translate-x-6' : 'translate-x-1'
-                            }`}
-                          />
-                        </button>
-                        {/* Remove button */}
-                        <button
-                          onClick={() => onRemoveCustomServer?.(server.address)}
-                          className="p-1.5 hover:bg-red-100 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
-                          title="Remove server"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
 
-            {/* Ollama Model Pull Section */}
             {allOllamaServers.length > 0 && (
               <div className="border border-blue-200 bg-blue-50/50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Zap size={18} className="text-blue-600" />
+                  <Zap size={16} className="text-blue-600" />
                   <h3 className="text-sm font-semibold text-gray-700">Pull Ollama Model</h3>
                 </div>
                 <p className="text-xs text-gray-600 mb-3">
-                  Download models from the Ollama library (e.g., <code className="bg-blue-100 px-1.5 py-0.5 rounded text-xs font-medium">gemma3:4b</code>).
+                  Download from the Ollama library (e.g. <code className="bg-blue-100 px-1.5 py-0.5 rounded text-xs font-medium">gemma3:4b</code>).
                 </p>
                 {allOllamaServers.length > 1 && (
                   <div className="mb-3">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Select Server</label>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Server</label>
                     <select
                       value={selectedServer}
                       onChange={(e) => setSelectedServer(e.target.value)}
-                      className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm"
                     >
-                      {allOllamaServers.map((server) => (
-                        <option key={server} value={server}>{server}</option>
-                      ))}
+                      {allOllamaServers.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                 )}
@@ -727,58 +1159,60 @@ const ModelHub: React.FC<ModelHubProps> = ({
                       value={modelToPull}
                       onChange={(e) => setModelToPull(e.target.value)}
                       placeholder="Enter model name..."
-                      className="flex-grow p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-sm"
+                      className="flex-grow p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                     />
                     <datalist id="ollama-model-suggestions-hub">
-                      {suggestedModels.map(model => <option key={model} value={model} />)}
+                      {SUGGESTED_OLLAMA_MODELS.map(m => <option key={m} value={m} />)}
                     </datalist>
                     <button
                       onClick={handleStartPull}
                       disabled={!selectedServer || !modelToPull.trim()}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
+                      className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
                     >
-                      <Download size={16} />
-                      Pull
+                      <Download size={14} /> Pull
                     </button>
                   </div>
                 )}
 
                 {isPulling && (
-                  <div className="space-y-3 p-4 bg-blue-100 border border-blue-300 rounded-xl">
+                  <div className="space-y-2 p-3 bg-blue-100 border border-blue-200 rounded-lg">
                     <div className="flex justify-between items-center">
-                      <p className="text-sm font-semibold text-gray-800">{statusText}</p>
-                      <p className="text-sm font-bold text-blue-600">{progress}%</p>
+                      <p className="text-sm font-semibold text-gray-800 truncate">{statusText}</p>
+                      <p className="text-sm font-bold text-blue-600 flex-shrink-0">{progress}%</p>
                     </div>
                     <div className="w-full bg-blue-200 rounded-full h-2">
-                      <div className="bg-blue-600 h-2 rounded-full transition-all duration-150" style={{ width: `${progress}%` }} />
+                      <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
                     </div>
                     <div className="flex justify-between items-center">
-                      {totalBytes > 0 ? (
-                        <p className="text-xs text-gray-500 font-mono">{formatBytes(completedBytes)} / {formatBytes(totalBytes)}</p>
-                      ) : <div />}
-                      <button onClick={handleCancelPull} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-600 bg-red-100 hover:bg-red-200 rounded-lg font-semibold transition-colors">
-                        <StopCircle size={14} /> Cancel
+                      {totalBytes > 0
+                        ? <p className="text-xs text-gray-500 font-mono">{formatBytes(completedBytes)} / {formatBytes(totalBytes)}</p>
+                        : <div />}
+                      <button
+                        onClick={handleCancelPull}
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs text-red-600 bg-red-100 hover:bg-red-200 rounded-lg font-semibold transition-colors"
+                      >
+                        <StopCircle size={12} /> Cancel
                       </button>
                     </div>
                   </div>
                 )}
 
                 {status === 'success' && (
-                  <div className="p-4 bg-green-100 border border-green-300 text-green-800 rounded-xl flex items-center gap-3">
-                    <CheckCircle size={20} className="text-green-600" />
+                  <div className="p-3 bg-green-100 border border-green-200 text-green-800 rounded-lg flex items-center gap-2">
+                    <CheckCircle size={18} className="text-green-600" />
                     <div>
-                      <span className="font-semibold">Download Complete!</span>
-                      <p className="text-sm text-green-700">{statusText}</p>
+                      <span className="font-semibold text-sm">Download complete</span>
+                      <p className="text-xs text-green-700">{statusText}</p>
                     </div>
                   </div>
                 )}
 
                 {status === 'error' && (
-                  <div className="p-4 bg-red-100 border border-red-300 text-red-800 rounded-xl flex items-center gap-3">
-                    <AlertTriangle size={20} className="text-red-600" />
+                  <div className="p-3 bg-red-100 border border-red-200 text-red-800 rounded-lg flex items-center gap-2">
+                    <AlertTriangle size={18} className="text-red-600" />
                     <div>
-                      <span className="font-semibold">Error</span>
-                      <p className="text-sm text-red-700">{errorText}</p>
+                      <span className="font-semibold text-sm">Error</span>
+                      <p className="text-xs text-red-700">{errorText}</p>
                     </div>
                   </div>
                 )}
@@ -786,1164 +1220,24 @@ const ModelHub: React.FC<ModelHubProps> = ({
             )}
 
             {customServers.length === 0 && allOllamaServers.length === 0 && !isTauriApp && (
-              <div className="text-center py-8">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gray-100 mb-4">
-                  <Server size={32} className="text-gray-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">No Servers Configured</h3>
-                <p className="text-gray-500 text-sm max-w-md mx-auto">
-                  Add a custom server to connect to external inference endpoints like Ollama or OpenAI-compatible APIs.
-                </p>
+              <div className="text-center py-6 border border-dashed border-gray-200 rounded-xl">
+                <Server size={28} className="text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">No servers configured</p>
+                <p className="text-xs text-gray-400 mt-1">Add a custom server to connect to Ollama or OpenAI-compatible endpoints.</p>
               </div>
             )}
           </div>
         )}
 
-        {/* ── OB-SERVER TAB ── */}
-        {activeTab === 'observer' && !showWelcomeScreen && (
-          <div className="space-y-5">
-            <p className="text-gray-500 text-sm">
-              Use Observer's cloud inference service for access to powerful AI models without local setup.
-            </p>
-
-            {/* Main toggle card */}
-            <div className={`p-6 rounded-2xl border-2 transition-all ${
-              isUsingObServer
-                ? 'border-indigo-300 bg-gradient-to-br from-indigo-50 to-purple-50'
-                : 'border-gray-200 bg-gray-50'
-            }`}>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                    isUsingObServer ? 'bg-indigo-200' : 'bg-gray-200'
-                  }`}>
-                    <Cloud size={24} className={isUsingObServer ? 'text-indigo-600' : 'text-gray-500'} />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Ob-Server Cloud</h3>
-                    <p className="text-sm text-gray-500">
-                      {isUsingObServer ? 'Cloud inference enabled' : 'Fully offline mode'}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                    isUsingObServer ? 'bg-indigo-600' : 'bg-gray-300'
-                  }`}
-                  onClick={handleToggleObServer}
-                  aria-label={isUsingObServer ? "Disable Ob-Server" : "Enable Ob-Server"}
-                >
-                  <span
-                    className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${
-                      isUsingObServer ? 'translate-x-7' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {showLoginMessage && (
-                <div className="p-3 bg-red-100 border border-red-200 rounded-xl text-red-700 text-sm font-medium mb-4">
-                  Login required to use Ob-Server Cloud
-                </div>
-              )}
-
-              {isUsingObServer ? (
-                isAuthenticated ? (
-                  <div className="space-y-4">
-                    {/* Quota display */}
-                    <div className="p-4 bg-white rounded-xl border border-indigo-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-600">Usage Quota</span>
-                        {renderQuotaStatus && (
-                          <div className="text-sm">
-                            {renderQuotaStatus()}
-                          </div>
-                        )}
-                      </div>
-                      {quotaInfo && typeof quotaInfo.remaining === 'number' && typeof quotaInfo.limit === 'number' && (
-                        <div className="space-y-2">
-                          <div className="w-full bg-gray-200 rounded-full h-2.5">
-                            <div
-                              className={`h-2.5 rounded-full transition-all ${
-                                quotaInfo.remaining <= 10 ? 'bg-red-500' :
-                                quotaInfo.remaining <= quotaInfo.limit * 0.3 ? 'bg-orange-500' :
-                                'bg-indigo-600'
-                              }`}
-                              style={{ width: `${Math.max(0, Math.min(100, ((quotaInfo.limit - quotaInfo.remaining) / quotaInfo.limit) * 100))}%` }}
-                            />
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            {quotaInfo.remaining} of {quotaInfo.limit} credits remaining
-                          </p>
-                        </div>
-                      )}
-                      {quotaInfo?.tier && (
-                        <div className="mt-3 flex items-center gap-2">
-                          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                            quotaInfo.tier === 'max' ? 'bg-green-100 text-green-700' :
-                            quotaInfo.tier === 'pro' ? 'bg-purple-100 text-purple-700' :
-                            quotaInfo.tier === 'plus' ? 'bg-blue-100 text-blue-700' :
-                            'bg-gray-100 text-gray-700'
-                          }`}>
-                            {quotaInfo.tier.toUpperCase()}
-                          </span>
-                          {quotaInfo.tier !== 'max' && quotaInfo.tier !== 'pro' && (
-                            <span className="text-xs text-indigo-600 hover:underline cursor-pointer">
-                              Upgrade for more
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                    <p className="text-sm text-amber-800 font-medium">
-                      Please log in to access Ob-Server Cloud features.
-                    </p>
-                  </div>
-                )
-              ) : (
-                <div className="flex items-center gap-2 p-3 bg-gray-100 rounded-xl">
-                  <div className="w-2 h-2 rounded-full bg-gray-400" />
-                  <span className="text-sm text-gray-600 font-medium">Fully Offline</span>
-                </div>
-              )}
+        {/* ── Benchmark tab ───────────────────────────────── */}
+        {activeTab === 'benchmark' && (
+          <div className="border border-orange-200 rounded-xl overflow-hidden">
+            <div className="bg-orange-50 px-4 py-2 border-b border-orange-200">
+              <span className="text-sm font-medium text-orange-800">Performance Benchmark</span>
             </div>
-
-            {/* Benefits list */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="p-4 bg-white border border-gray-200 rounded-xl">
-                <div className="flex items-center gap-2 mb-2">
-                  <Zap size={16} className="text-indigo-600" />
-                  <span className="font-medium text-gray-800 text-sm">Fast Inference</span>
-                </div>
-                <p className="text-xs text-gray-500">Access powerful cloud GPUs for faster responses</p>
-              </div>
-              <div className="p-4 bg-white border border-gray-200 rounded-xl">
-                <div className="flex items-center gap-2 mb-2">
-                  <Server size={16} className="text-indigo-600" />
-                  <span className="font-medium text-gray-800 text-sm">No Setup</span>
-                </div>
-                <p className="text-xs text-gray-500">Start using AI immediately without downloads</p>
-              </div>
+            <div className="bg-white">
+              <BenchmarkPanel isVisible={true} />
             </div>
-          </div>
-        )}
-
-        {/* Welcome screen (always shown regardless of tab when noModels) */}
-        {showWelcomeScreen && (
-          <div>
-            <div className="flex items-center gap-3 mb-4">
-              <Download className="h-7 w-7 text-green-500 flex-shrink-0" />
-              <h2 className="text-xl sm:text-2xl font-semibold">Let's Get Your First Model</h2>
-            </div>
-            <p className="text-gray-700 mb-6">
-              Your local server is running, but it looks like you don't have any AI models installed yet. Models are the "brains" that power your agents.
-            </p>
-            <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-              <h3 className="font-semibold text-green-800 mb-2 text-lg">Recommended Model: Gemma3 4B</h3>
-              <button
-                onClick={handlePullModelClick}
-                className="w-full sm:w-auto px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-base shadow-sm hover:shadow-md"
-              >
-                Pull Your First Model!
-              </button>
-            </div>
-            <div className="mt-8 flex flex-col-reverse sm:flex-row justify-between items-center gap-4">
-              <button onClick={handleSkipForNow} className="text-sm text-gray-600 hover:underline">
-                Choose a different model
-              </button>
-              <button onClick={handleDone} className="text-sm text-gray-600 hover:underline">
-                I'll do this later
-              </button>
-            </div>
-          </div>
-        )}
-
-
-        {/* ── LLAMA.CPP TAB ── */}
-        {activeTab === 'llamacpp' && !showWelcomeScreen && (
-          <div className="space-y-5">
-            {!isTauriApp ? (
-              /* llama.cpp unavailable - not in Tauri */
-              <div className="text-center py-10">
-                <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gray-100 mb-5">
-                  <Cpu size={40} className="text-gray-400" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-800 mb-2">Native App Required</h3>
-                <p className="text-gray-500 text-sm mb-5 max-w-md mx-auto">
-                  llama.cpp runs natively with GPU acceleration. Install the native app for the best local AI experience.
-                </p>
-                <div className="mt-8 opacity-50">
-                  <div className="space-y-3">
-                    {Object.entries(LLAMA_PRESETS).map(([id, preset]) => (
-                      <div key={id} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-gray-200 flex items-center justify-center">
-                              <Cpu size={20} className="text-gray-400" />
-                            </div>
-                            <div>
-                              <span className="font-semibold text-gray-700">{preset.label}</span>
-                              <span className="block text-xs text-gray-400">{preset.size}</span>
-                            </div>
-                          </div>
-                          <button
-                            disabled
-                            className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg opacity-50 cursor-not-allowed font-medium"
-                          >
-                            Download
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* Simple/Advanced toggle */}
-                <div className="flex items-center justify-between">
-                  <p className="text-gray-500 text-sm">
-                    Run models on your device.
-                  </p>
-                  <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-gray-100 p-0.5">
-                    <button
-                      onClick={() => setLlamaViewMode('simple')}
-                      className={`px-4 py-1.5 text-xs font-medium transition-all rounded-lg ${
-                        llamaViewMode === 'simple'
-                          ? 'bg-white text-green-700 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      Simple
-                    </button>
-                    <button
-                      onClick={() => setLlamaViewMode('advanced')}
-                      className={`px-4 py-1.5 text-xs font-medium transition-all rounded-lg ${
-                        llamaViewMode === 'advanced'
-                          ? 'bg-white text-green-700 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      Advanced
-                    </button>
-                  </div>
-                </div>
-
-                {llamaViewMode === 'simple' ? (
-                  /* Simple mode: Preset cards */
-                  <div className="space-y-3">
-                    {/* GPU Toggle */}
-                    <div className="flex items-center justify-between p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-gray-800">GPU Acceleration</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${useGpu ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700'}`}>
-                            {useGpu ? 'On' : 'Off'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {useGpu
-                            ? 'Hardware-accelerated for faster performance. May cause instability.'
-                            : 'CPU mode for broader compatibility.'}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleToggleGpu(!useGpu)}
-                        disabled={nativeState.status === 'loading' || nativeState.status === 'loaded'}
-                        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                          useGpu ? 'bg-green-600' : 'bg-gray-300'
-                        }`}
-                        title={nativeState.status === 'loaded' ? 'Unload model to change this setting' : undefined}
-                      >
-                        <span
-                          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                            useGpu ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    </div>
-
-                    {(Object.entries(LLAMA_PRESETS) as [LlamaPresetId, typeof LLAMA_PRESETS[LlamaPresetId]][]).map(([presetId, preset]) => {
-                      const presetModel = getPresetModel(presetId);
-                      const isDownloaded = !!presetModel;
-                      const isThisDownloading = downloadingPreset === presetId;
-                      const isThisModelLoaded = presetModel && nativeState.modelId === presetModel.id && nativeState.status === 'loaded';
-                      const isThisModelLoading = presetModel && nativeState.modelId === presetModel.id && nativeState.status === 'loading';
-                      const isThisModelUnloading = presetModel && nativeState.modelId === presetModel.id && nativeState.status === 'unloading';
-                      const isAnyModelBusy = nativeState.status === 'loading' || nativeState.status === 'unloading' || isNativeDownloading;
-
-                      return (
-                        <div key={presetId} className={`border rounded-xl p-4 transition-all ${isThisModelLoaded ? 'border-green-300 bg-green-50/50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isThisModelLoaded ? 'bg-green-200' : 'bg-gray-100'}`}>
-                                <Cpu size={20} className={isThisModelLoaded ? 'text-green-700' : 'text-gray-500'} />
-                              </div>
-                              <div>
-                                <span className="font-semibold text-gray-900">{preset.label}</span>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-xs text-gray-500">{preset.size}</span>
-                                  {isDownloaded && presetModel?.isMultimodal && (
-                                    <span className="text-xs text-purple-600 font-medium bg-purple-100 px-1.5 py-0.5 rounded">Vision</span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {isThisModelUnloading ? (
-                                <span className="flex items-center gap-1.5 px-4 py-2 text-sm bg-amber-100 text-amber-700 rounded-lg font-medium">
-                                  <Cpu size={14} className="animate-pulse" /> Unloading...
-                                </span>
-                              ) : isThisModelLoaded ? (
-                                <button
-                                  onClick={() => NativeLlmManager.getInstance().unloadModel()}
-                                  className="group flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium transition-colors bg-green-200 text-green-800 hover:bg-red-100 hover:text-red-600"
-                                >
-                                  <span className="group-hover:hidden flex items-center gap-1.5">
-                                    <CheckCircle size={14} /> Ready
-                                  </span>
-                                  <span className="hidden group-hover:flex items-center gap-1.5">
-                                    <X size={14} /> Unload
-                                  </span>
-                                </button>
-                              ) : isThisModelLoading ? (
-                                <button
-                                  onClick={() => NativeLlmManager.getInstance().unloadModel()}
-                                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-200 text-gray-600 rounded-lg font-medium"
-                                >
-                                  <Cpu size={14} className="animate-pulse" /> Loading...
-                                </button>
-                              ) : isDownloaded ? (
-                                <button
-                                  disabled={isAnyModelBusy}
-                                  onClick={() => NativeLlmManager.getInstance().loadModel(presetModel!.filename, presetModel!.mmprojFilename)}
-                                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm"
-                                >
-                                  <Cpu size={14} /> Load
-                                </button>
-                              ) : isThisDownloading ? (
-                                <button
-                                  onClick={async () => {
-                                    await NativeLlmManager.getInstance().cancelDownload();
-                                    setDownloadingPreset(null);
-                                    setPresetDownloadStep(null);
-                                  }}
-                                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-red-100 text-red-600 hover:bg-red-200 rounded-lg font-medium transition-colors"
-                                >
-                                  <StopCircle size={14} /> Cancel
-                                </button>
-                              ) : (
-                                <button
-                                  disabled={isNativeDownloading || !!downloadingPreset}
-                                  onClick={() => handleDownloadPreset(presetId)}
-                                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm"
-                                >
-                                  <Download size={14} /> Download
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Download progress for this preset - show both bars */}
-                          {isThisDownloading && (
-                            <div className="mt-4 space-y-3">
-                              {/* GGUF Model Progress */}
-                              <div>
-                                <div className="flex justify-between items-center text-xs mb-1.5">
-                                  <span className="text-gray-600 flex items-center gap-1.5">
-                                    {presetDownloadStep === 'mmproj' ? (
-                                      <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                                    ) : (
-                                      <FileDown className="h-3.5 w-3.5 text-blue-500" />
-                                    )}
-                                    Model (.gguf)
-                                  </span>
-                                  <span className="font-medium text-gray-500">
-                                    {presetDownloadStep === 'mmproj'
-                                      ? 'Done'
-                                      : nativeState.totalBytes > 0
-                                        ? `${formatBytes(nativeState.downloadedBytes)} / ${formatBytes(nativeState.totalBytes)}`
-                                        : `${nativeState.downloadProgress}%`
-                                    }
-                                  </span>
-                                </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2">
-                                  <div
-                                    className={`h-2 rounded-full transition-all duration-300 ${presetDownloadStep === 'mmproj' ? 'bg-green-500' : 'bg-blue-600'}`}
-                                    style={{ width: presetDownloadStep === 'mmproj' ? '100%' : `${nativeState.downloadProgress}%` }}
-                                  />
-                                </div>
-                              </div>
-
-                              {/* mmproj Vision Projector Progress */}
-                              <div>
-                                <div className="flex justify-between items-center text-xs mb-1.5">
-                                  <span className="text-gray-600 flex items-center gap-1.5">
-                                    {presetDownloadStep === 'mmproj' ? (
-                                      <FileDown className="h-3.5 w-3.5 text-purple-500" />
-                                    ) : (
-                                      <FileDown className="h-3.5 w-3.5 text-gray-300" />
-                                    )}
-                                    Vision projector (.gguf)
-                                  </span>
-                                  <span className="font-medium text-gray-500">
-                                    {presetDownloadStep === 'mmproj'
-                                      ? nativeState.totalBytes > 0
-                                        ? `${formatBytes(nativeState.downloadedBytes)} / ${formatBytes(nativeState.totalBytes)}`
-                                        : `${nativeState.downloadProgress}%`
-                                      : 'Pending'
-                                    }
-                                  </span>
-                                </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2">
-                                  <div
-                                    className={`h-2 rounded-full transition-all duration-300 ${presetDownloadStep === 'mmproj' ? 'bg-purple-500' : 'bg-gray-200'}`}
-                                    style={{ width: presetDownloadStep === 'mmproj' ? `${nativeState.downloadProgress}%` : '0%' }}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  /* Advanced mode: Custom URLs + downloaded models list */
-                  <>
-                    {/* GGUF URL input */}
-                    <div className="space-y-2">
-                      <label className="block text-xs font-medium text-gray-600">Model (.gguf)</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={ggufUrl}
-                          onChange={(e) => setGgufUrl(e.target.value)}
-                          placeholder="https://huggingface.co/.../resolve/main/model.gguf"
-                          disabled={isNativeDownloading}
-                          className="flex-grow p-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 disabled:opacity-50 text-sm"
-                        />
-                        <button
-                          onClick={handleDownloadGguf}
-                          disabled={!ggufUrl.trim() || isNativeDownloading}
-                          className="flex items-center gap-1.5 px-3 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
-                        >
-                          <Download size={16} />
-                          Download
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* mmproj URL input */}
-                    <div className="space-y-2">
-                      <label className="block text-xs font-medium text-gray-600">
-                        Vision projector - mmproj (.gguf) <span className="text-gray-400 font-normal">optional</span>
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={mmprojUrl}
-                          onChange={(e) => setMmprojUrl(e.target.value)}
-                          placeholder="https://huggingface.co/.../resolve/main/mmproj.gguf"
-                          disabled={isNativeDownloading}
-                          className="flex-grow p-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 disabled:opacity-50 text-sm"
-                        />
-                        <button
-                          onClick={handleDownloadMmproj}
-                          disabled={!mmprojUrl.trim() || isNativeDownloading}
-                          className="flex items-center gap-1.5 px-3 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
-                        >
-                          <Download size={16} />
-                          Download
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Download progress */}
-                    {isNativeDownloading && !downloadingPreset && (
-                      <div className="border border-blue-200 bg-blue-50 rounded-xl p-4">
-                        <div className="flex justify-between items-center mb-3">
-                          <span className="text-sm text-gray-800 font-semibold">
-                            Downloading {currentDownload === 'mmproj' ? 'vision projector' : 'model'}
-                          </span>
-                          <button
-                            onClick={async () => {
-                              await NativeLlmManager.getInstance().cancelDownload();
-                              setCurrentDownload(null);
-                            }}
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-100 text-red-600 hover:bg-red-200 rounded-lg font-medium transition-colors"
-                          >
-                            <StopCircle size={12} /> Cancel
-                          </button>
-                        </div>
-                        <div>
-                          <div className="flex justify-between items-center text-xs mb-1.5">
-                            <span className="text-gray-600 flex items-center gap-1.5">
-                              <FileDown className={`h-3.5 w-3.5 ${currentDownload === 'mmproj' ? 'text-purple-500' : 'text-blue-500'}`} />
-                              {nativeState.modelId}
-                            </span>
-                            <span className="font-medium text-gray-500">
-                              {nativeState.totalBytes > 0
-                                ? `${formatBytes(nativeState.downloadedBytes)} / ${formatBytes(nativeState.totalBytes)}`
-                                : `${nativeState.downloadProgress}%`
-                              }
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className={`h-2 rounded-full transition-all duration-300 ${currentDownload === 'mmproj' ? 'bg-purple-500' : 'bg-blue-600'}`}
-                              style={{ width: `${nativeState.downloadProgress}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Error state */}
-                    {nativeState.status === 'error' && (
-                      <div className="border border-red-200 bg-red-50 rounded-lg p-3">
-                        <p className="text-xs text-red-600">{nativeState.error}</p>
-                      </div>
-                    )}
-
-                    {/* Downloaded models list */}
-                    {nativeModels.length > 0 && (
-                      <div className="space-y-2">
-                        <h3 className="text-sm font-medium text-gray-700">Downloaded Models</h3>
-                        {nativeModels.map((model) => {
-                          const isThisModel = nativeState.modelId === model.id;
-                          const isLoaded = isThisModel && nativeState.status === 'loaded';
-                          const isLoading = isThisModel && nativeState.status === 'loading';
-                          const isUnloading = isThisModel && nativeState.status === 'unloading';
-                          const isAnyModelBusy = nativeState.status === 'loading' || nativeState.status === 'unloading' || isNativeDownloading;
-
-                          return (
-                            <div key={model.filename} className="border border-gray-200 rounded-lg p-3">
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1 min-w-0">
-                                  <span className="font-medium text-gray-900 truncate block">{model.name}</span>
-                                  <span className="text-xs text-gray-500">
-                                    {formatBytes(model.sizeBytes)}
-                                    {model.isMultimodal && (
-                                      <span className="ml-2 text-purple-600 font-medium">- Vision ({model.mmprojFilename})</span>
-                                    )}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2 ml-2">
-                                  {isUnloading ? (
-                                    <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-amber-100 text-amber-700 rounded-lg font-medium">
-                                      <Cpu size={14} className="animate-pulse" /> Unloading...
-                                    </span>
-                                  ) : isLoaded ? (
-                                    <>
-                                      <span className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded-full">
-                                        <CheckCircle size={12} /> Ready
-                                      </span>
-                                      <button
-                                        onClick={() => NativeLlmManager.getInstance().unloadModel()}
-                                        className="p-1.5 text-gray-400 hover:text-red-600 rounded transition-colors"
-                                        title="Unload model"
-                                      >
-                                        <X size={16} />
-                                      </button>
-                                    </>
-                                  ) : isLoading ? (
-                                    <button
-                                      onClick={() => NativeLlmManager.getInstance().unloadModel()}
-                                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-200 text-gray-600 rounded-lg font-medium"
-                                    >
-                                      <Cpu size={14} className="animate-pulse" /> Loading...
-                                    </button>
-                                  ) : (
-                                    <>
-                                      <button
-                                        disabled={isAnyModelBusy}
-                                        onClick={() => NativeLlmManager.getInstance().loadModel(model.filename, model.mmprojFilename)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                                      >
-                                        <Cpu size={14} /> Load
-                                      </button>
-                                      <button
-                                        disabled={isAnyModelBusy}
-                                        onClick={() => NativeLlmManager.getInstance().deleteModel(model.filename)}
-                                        className="p-1.5 text-gray-400 hover:text-red-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title="Delete model"
-                                      >
-                                        <Trash2 size={16} />
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {nativeModels.length === 0 && !isNativeDownloading && (
-                      <p className="text-gray-500 text-sm text-center py-4">
-                        No models downloaded yet. Paste a HuggingFace GGUF URL above to get started.
-                      </p>
-                    )}
-
-                    {/* Sampler Settings - collapsible panel */}
-                    <div className="border border-gray-200 rounded-lg overflow-hidden">
-                      <button
-                        onClick={() => setShowSamplerSettings(!showSamplerSettings)}
-                        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
-                      >
-                        <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                          <Settings2 size={16} />
-                          Generation Settings
-                        </span>
-                        <span className={`text-gray-400 transition-transform ${showSamplerSettings ? 'rotate-180' : ''}`}>
-                          ▼
-                        </span>
-                      </button>
-                      {showSamplerSettings && (
-                        <div className="p-4 space-y-4 border-t border-gray-200">
-                          {nativeState.status !== 'loaded' && (
-                            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
-                              Load a model to configure generation settings.
-                            </p>
-                          )}
-
-                          {/* Temperature */}
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-xs font-medium text-gray-600">Temperature</label>
-                              <span className="text-xs text-gray-500 font-mono">{samplerParams.temperature.toFixed(2)}</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="0"
-                              max="2"
-                              step="0.05"
-                              value={samplerParams.temperature}
-                              onChange={(e) => handleSamplerParamChange('temperature', parseFloat(e.target.value))}
-                              disabled={nativeState.status !== 'loaded'}
-                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50 accent-green-600"
-                            />
-                            <p className="text-xs text-gray-400 mt-0.5">Higher = more creative, lower = more focused</p>
-                          </div>
-
-                          {/* Top P */}
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-xs font-medium text-gray-600">Top P (nucleus sampling)</label>
-                              <span className="text-xs text-gray-500 font-mono">{samplerParams.topP.toFixed(2)}</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="0"
-                              max="1"
-                              step="0.05"
-                              value={samplerParams.topP}
-                              onChange={(e) => handleSamplerParamChange('topP', parseFloat(e.target.value))}
-                              disabled={nativeState.status !== 'loaded'}
-                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50 accent-green-600"
-                            />
-                          </div>
-
-                          {/* Top K */}
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-xs font-medium text-gray-600">Top K</label>
-                              <span className="text-xs text-gray-500 font-mono">{samplerParams.topK}</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="1"
-                              max="100"
-                              step="1"
-                              value={samplerParams.topK}
-                              onChange={(e) => handleSamplerParamChange('topK', parseInt(e.target.value))}
-                              disabled={nativeState.status !== 'loaded'}
-                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50 accent-green-600"
-                            />
-                          </div>
-
-                          {/* Repeat Penalty */}
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-xs font-medium text-gray-600">Repeat Penalty</label>
-                              <span className="text-xs text-gray-500 font-mono">{samplerParams.repeatPenalty.toFixed(2)}</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="1.0"
-                              max="2.0"
-                              step="0.05"
-                              value={samplerParams.repeatPenalty}
-                              onChange={(e) => handleSamplerParamChange('repeatPenalty', parseFloat(e.target.value))}
-                              disabled={nativeState.status !== 'loaded'}
-                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50 accent-green-600"
-                            />
-                            <p className="text-xs text-gray-400 mt-0.5">Discourages repetitive text</p>
-                          </div>
-
-                          {/* Seed */}
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-xs font-medium text-gray-600">Seed</label>
-                            </div>
-                            <input
-                              type="number"
-                              value={samplerParams.seed}
-                              onChange={(e) => handleSamplerParamChange('seed', parseInt(e.target.value) || 0)}
-                              disabled={nativeState.status !== 'loaded'}
-                              className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-green-500 disabled:opacity-50 font-mono"
-                              placeholder="42"
-                            />
-                            <p className="text-xs text-gray-400 mt-0.5">Use -1 for random seed</p>
-                          </div>
-
-                          {/* Reset button */}
-                          <button
-                            onClick={handleResetSamplerParams}
-                            disabled={nativeState.status !== 'loaded'}
-                            className="text-xs text-gray-500 hover:text-gray-700 underline disabled:opacity-50 disabled:no-underline"
-                          >
-                            Reset to defaults
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ── TRANSFORMERS.JS TAB ── */}
-        {activeTab === 'transformers' && !showWelcomeScreen && (
-          <div className="space-y-5">
-            {/* Simple/Advanced toggle */}
-            <div className="flex items-center justify-between">
-              <p className="text-gray-500 text-sm">
-                Run models in-browser using WebGPU.
-              </p>
-              <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-gray-100 p-0.5">
-                <button
-                  onClick={() => setTransformersViewMode('simple')}
-                  className={`px-4 py-1.5 text-xs font-medium transition-all rounded-lg ${
-                    transformersViewMode === 'simple'
-                      ? 'bg-white text-purple-700 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Simple
-                </button>
-                <button
-                  onClick={() => setTransformersViewMode('advanced')}
-                  className={`px-4 py-1.5 text-xs font-medium transition-all rounded-lg ${
-                    transformersViewMode === 'advanced'
-                      ? 'bg-white text-purple-700 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Advanced
-                </button>
-              </div>
-            </div>
-
-            {/* Mobile warning */}
-            {isMobileDevice && (
-              <div className="flex items-center gap-2 text-amber-700 text-xs bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                <AlertCircle size={16} className="text-amber-500 flex-shrink-0" />
-                <span>Mobile devices have limited memory. Models may fail to load or run slowly.</span>
-              </div>
-            )}
-
-            {transformersViewMode === 'simple' ? (
-              /* Simple mode: Device toggle + model cards */
-              <div className="space-y-3">
-                {/* Device Toggle */}
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-800">Processing</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${gemmaDevice === 'webgpu' ? 'bg-purple-200 text-purple-800' : 'bg-gray-200 text-gray-700'}`}>
-                        {gemmaDevice === 'webgpu' ? 'WebGPU' : 'WASM'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {gemmaDevice === 'webgpu'
-                        ? 'GPU-accelerated for faster performance.'
-                        : 'CPU mode.'}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setGemmaDevice(gemmaDevice === 'webgpu' ? 'wasm' : 'webgpu')}
-                    disabled={gemmaState.status === 'loading' || gemmaState.status === 'loaded'}
-                    className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                      gemmaDevice === 'webgpu' ? 'bg-purple-600' : 'bg-gray-300'
-                    }`}
-                    title={gemmaState.status === 'loaded' ? 'Unload model to change this setting' : undefined}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                        gemmaDevice === 'webgpu' ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-                {gemmaState.status === 'loaded' && (
-                  <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    Unload the current model to change processing settings.
-                  </p>
-                )}
-
-                {GEMMA_CARDS.map(({ modelId, label, size }) => {
-                  const isThisModel = gemmaState.modelId === modelId;
-                  const isLoaded = isThisModel && gemmaState.status === 'loaded';
-                  const isLoading = isThisModel && gemmaState.status === 'loading';
-                  const hasError = isThisModel && gemmaState.status === 'error';
-
-                  return (
-                    <div key={modelId} className={`border rounded-xl p-4 transition-all ${isLoaded ? 'border-purple-300 bg-purple-50/50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isLoaded ? 'bg-purple-200' : 'bg-gray-100'}`}>
-                            <Cpu size={20} className={isLoaded ? 'text-purple-700' : 'text-gray-500'} />
-                          </div>
-                          <div>
-                            <span className="font-semibold text-gray-900">{label}</span>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-xs text-gray-500">{size}</span>
-                              <span className="text-xs text-purple-600 font-medium bg-purple-100 px-1.5 py-0.5 rounded">Vision</span>
-                            </div>
-                          </div>
-                        </div>
-                        {isLoaded ? (
-                          <button
-                            onClick={() => GemmaModelManager.getInstance().unloadModel()}
-                            className="group flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium transition-colors bg-purple-200 text-purple-800 hover:bg-red-100 hover:text-red-600"
-                          >
-                            <span className="group-hover:hidden flex items-center gap-1.5">
-                              <CheckCircle size={14} /> Ready
-                            </span>
-                            <span className="hidden group-hover:flex items-center gap-1.5">
-                              <X size={14} /> Unload
-                            </span>
-                          </button>
-                        ) : isLoading ? (
-                          <button
-                            onClick={() => GemmaModelManager.getInstance().unloadModel()}
-                            className="group flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-600 rounded-lg font-medium transition-colors"
-                          >
-                            <span className="group-hover:hidden flex items-center gap-1.5"><Cpu size={14} className="animate-pulse" /> Loading...</span>
-                            <span className="hidden group-hover:flex items-center gap-1.5"><StopCircle size={14} /> Cancel</span>
-                          </button>
-                        ) : (
-                          <button
-                            disabled={gemmaState.status === 'loading'}
-                            onClick={() => GemmaModelManager.getInstance().loadModelWithSettings(modelId, gemmaDevice, gemmaDtype, gemmaTokenBudget)}
-                            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm"
-                          >
-                            <Cpu size={14} /> Load
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Loading progress */}
-                      {isLoading && gemmaState.progress.length > 0 && (
-                        <div className="space-y-2 mt-4">
-                          {gemmaState.progress.map((item) => (
-                            <div key={item.file}>
-                              <div className="flex justify-between items-center text-xs mb-1.5">
-                                <span className="text-gray-600 flex items-center gap-1.5 truncate max-w-[55%]">
-                                  {item.status === 'done'
-                                    ? <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
-                                    : <FileDown className="h-3.5 w-3.5 text-purple-400 flex-shrink-0" />
-                                  }
-                                  {item.file}
-                                </span>
-                                <span className="font-medium text-gray-500 flex-shrink-0">
-                                  {item.status === 'done'
-                                    ? 'Done'
-                                    : item.total > 0
-                                      ? `${formatBytes(item.loaded)} / ${formatBytes(item.total)}`
-                                      : `${Math.round(item.progress)}%`
-                                  }
-                                </span>
-                              </div>
-                              <div className="w-full bg-gray-200 rounded-full h-2">
-                                <div
-                                  className={`h-2 rounded-full transition-all duration-300 ${item.status === 'done' ? 'bg-green-500' : 'bg-purple-600'}`}
-                                  style={{ width: `${item.progress}%` }}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {hasError && (
-                        <p className="mt-3 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{gemmaState.error}</p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              /* Advanced mode: Settings dropdowns + model cards */
-              <>
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Device</label>
-                    <select
-                      value={gemmaDevice}
-                      onChange={e => setGemmaDevice(e.target.value as GemmaDevice)}
-                      disabled={gemmaState.status === 'loading'}
-                      className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
-                    >
-                      <option value="webgpu">WebGPU (GPU)</option>
-                      <option value="wasm">WASM (CPU)</option>
-                    </select>
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Precision</label>
-                    <select
-                      value={gemmaDtype}
-                      onChange={e => setGemmaDtype(e.target.value as GemmaDtype)}
-                      disabled={gemmaState.status === 'loading'}
-                      className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
-                    >
-                      <option value="q4f16">q4f16 (4-bit + f16)</option>
-                      <option value="q4">q4 (4-bit)</option>
-                      <option value="q8">q8 (8-bit INT8)</option>
-                      <option value="fp16">fp16 (half)</option>
-                      <option value="fp32">fp32 (full)</option>
-                    </select>
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Image Tokens</label>
-                    <select
-                      value={gemmaTokenBudget}
-                      onChange={e => setGemmaTokenBudget(Number(e.target.value) as GemmaImageTokenBudget)}
-                      disabled={gemmaState.status === 'loading'}
-                      className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
-                    >
-                      <option value={70}>70 (fastest)</option>
-                      <option value={140}>140</option>
-                      <option value={280}>280</option>
-                      <option value={560}>560</option>
-                      <option value={1120}>1120 (OCR/detail)</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Custom ONNX model input */}
-                <div className="border border-purple-200 bg-purple-50/50 rounded-xl p-4 space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Import Custom ONNX Model</label>
-                    <p className="text-xs text-gray-500 mb-2">
-                      Enter a Hugging Face model ID (e.g., <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">onnx-community/Florence-2-base-ft</code>)
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={customOnnxModelId}
-                      onChange={(e) => setCustomOnnxModelId(e.target.value)}
-                      placeholder="onnx-community/model-name"
-                      disabled={gemmaState.status === 'loading'}
-                      className="flex-grow p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 disabled:opacity-50 text-sm"
-                    />
-                    <button
-                      onClick={() => {
-                        if (customOnnxModelId.trim()) {
-                          GemmaModelManager.getInstance().loadModelWithSettings(
-                            customOnnxModelId.trim() as GemmaModelId,
-                            gemmaDevice,
-                            gemmaDtype,
-                            gemmaTokenBudget
-                          );
-                        }
-                      }}
-                      disabled={!customOnnxModelId.trim() || gemmaState.status === 'loading'}
-                      className="flex items-center gap-1.5 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
-                    >
-                      <Cpu size={16} />
-                      Load
-                    </button>
-                  </div>
-                  {/* Show loading/loaded state for custom model */}
-                  {gemmaState.modelId && !GEMMA_CARDS.some(c => c.modelId === gemmaState.modelId) && (
-                    <div className="border border-purple-200 bg-white rounded-lg p-3 mt-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium text-gray-900 truncate block">{gemmaState.modelId}</span>
-                          {gemmaState.loadSettings && (
-                            <span className="text-xs text-gray-500">
-                              {gemmaState.loadSettings.device} - {gemmaState.loadSettings.dtype} - {gemmaState.loadSettings.imageTokenBudget}tok
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 ml-2">
-                          {gemmaState.status === 'loaded' ? (
-                            <>
-                              <span className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded-full">
-                                <CheckCircle size={12} /> Ready
-                              </span>
-                              <button
-                                onClick={() => GemmaModelManager.getInstance().unloadModel()}
-                                className="p-1.5 text-gray-400 hover:text-red-600 rounded transition-colors"
-                                title="Unload model"
-                              >
-                                <X size={16} />
-                              </button>
-                            </>
-                          ) : gemmaState.status === 'loading' ? (
-                            <button
-                              onClick={() => GemmaModelManager.getInstance().unloadModel()}
-                              className="group flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-600 rounded-lg font-medium transition-colors"
-                            >
-                              <span className="group-hover:hidden flex items-center gap-1.5"><Cpu size={14} className="animate-pulse" /> Loading...</span>
-                              <span className="hidden group-hover:flex items-center gap-1.5"><StopCircle size={14} /> Cancel</span>
-                            </button>
-                          ) : gemmaState.status === 'error' ? (
-                            <span className="flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-100 px-2 py-1 rounded-full">
-                              <AlertTriangle size={12} /> Error
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                      {/* Loading progress for custom model */}
-                      {gemmaState.status === 'loading' && gemmaState.progress.length > 0 && (
-                        <div className="space-y-2 mt-3">
-                          {gemmaState.progress.map((item) => (
-                            <div key={item.file}>
-                              <div className="flex justify-between items-center text-xs mb-1">
-                                <span className="text-gray-600 flex items-center gap-1 truncate max-w-[55%]">
-                                  {item.status === 'done'
-                                    ? <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
-                                    : <FileDown className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                                  }
-                                  {item.file}
-                                </span>
-                                <span className="font-medium text-gray-500 flex-shrink-0">
-                                  {item.status === 'done'
-                                    ? 'Done'
-                                    : item.total > 0
-                                      ? `${formatBytes(item.loaded)} / ${formatBytes(item.total)}`
-                                      : `${Math.round(item.progress)}%`
-                                  }
-                                </span>
-                              </div>
-                              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                                <div
-                                  className={`h-1.5 rounded-full transition-all duration-300 ${item.status === 'done' ? 'bg-green-500' : 'bg-purple-600'}`}
-                                  style={{ width: `${item.progress}%` }}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {gemmaState.status === 'error' && (
-                        <p className="mt-2 text-xs text-red-600">{gemmaState.error}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Preset models divider */}
-                <div className="flex items-center gap-3 pt-2">
-                  <div className="flex-1 border-t border-gray-200" />
-                  <span className="text-xs text-gray-400 font-medium">Preset Models</span>
-                  <div className="flex-1 border-t border-gray-200" />
-                </div>
-
-                {GEMMA_CARDS.map(({ modelId, label, size }) => {
-                  const isThisModel = gemmaState.modelId === modelId;
-                  const isLoaded = isThisModel && gemmaState.status === 'loaded';
-                  const isLoading = isThisModel && gemmaState.status === 'loading';
-                  const hasError = isThisModel && gemmaState.status === 'error';
-
-                  return (
-                    <div key={modelId} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <span className="font-medium text-gray-900">{label}</span>
-                          <span className="ml-2 text-xs text-gray-500">{size}</span>
-                        </div>
-                        {isLoaded ? (
-                          <div className="flex items-center gap-2">
-                            {gemmaState.loadSettings && (
-                              <span className="text-xs text-gray-500">
-                                {gemmaState.loadSettings.device} - {gemmaState.loadSettings.dtype} - {gemmaState.loadSettings.imageTokenBudget}tok
-                              </span>
-                            )}
-                            <span className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded-full">
-                              <CheckCircle size={12} /> Ready
-                            </span>
-                          </div>
-                        ) : isLoading ? (
-                          <button
-                            onClick={() => GemmaModelManager.getInstance().unloadModel()}
-                            className="group flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-600 rounded-lg font-medium transition-colors"
-                          >
-                            <span className="group-hover:hidden flex items-center gap-1.5"><Cpu size={14} /> Loading...</span>
-                            <span className="hidden group-hover:flex items-center gap-1.5"><StopCircle size={14} /> Cancel</span>
-                          </button>
-                        ) : (
-                          <button
-                            disabled={gemmaState.status === 'loading'}
-                            onClick={() => GemmaModelManager.getInstance().loadModelWithSettings(modelId, gemmaDevice, gemmaDtype, gemmaTokenBudget)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                          >
-                            <Cpu size={14} /> Load
-                          </button>
-                        )}
-                      </div>
-
-                      {isLoading && gemmaState.progress.length > 0 && (
-                        <div className="space-y-2 mt-3">
-                          {gemmaState.progress.map((item) => (
-                            <div key={item.file}>
-                              <div className="flex justify-between items-center text-xs mb-1">
-                                <span className="text-gray-600 flex items-center gap-1 truncate max-w-[55%]">
-                                  {item.status === 'done'
-                                    ? <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
-                                    : <FileDown className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                                  }
-                                  {item.file}
-                                </span>
-                                <span className="font-medium text-gray-500 flex-shrink-0">
-                                  {item.status === 'done'
-                                    ? 'Done'
-                                    : item.total > 0
-                                      ? `${formatBytes(item.loaded)} / ${formatBytes(item.total)}`
-                                      : `${Math.round(item.progress)}%`
-                                  }
-                                </span>
-                              </div>
-                              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                                <div
-                                  className={`h-1.5 rounded-full transition-all duration-300 ${item.status === 'done' ? 'bg-green-500' : 'bg-purple-600'}`}
-                                  style={{ width: `${item.progress}%` }}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {hasError && (
-                        <p className="mt-2 text-xs text-red-600">{gemmaState.error}</p>
-                      )}
-                    </div>
-                  );
-                })}
-              </>
-            )}
           </div>
         )}
       </div>
