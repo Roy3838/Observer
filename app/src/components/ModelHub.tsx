@@ -11,7 +11,7 @@ import {
   Sparkles, Package, ChevronDown,
 } from 'lucide-react';
 import pullModelManager, { PullState } from '@utils/pullModelManager';
-import { platformFetch, isTauri, isMobile } from '@utils/platform';
+import { platformFetch, isTauri } from '@utils/platform';
 import { GemmaModelManager } from '@utils/localLlm/GemmaModelManager';
 import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
 import type { CustomServer } from '@utils/inferenceServer';
@@ -157,7 +157,6 @@ const ModelHub: React.FC<ModelHubProps> = ({
   onSetAppInferenceUrl,
 }) => {
   const isTauriApp = isTauri();
-  const isMobileDevice = isMobile();
 
   // ── Ollama pull state
   const [modelToPull, setModelToPull] = useState('');
@@ -447,7 +446,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
 
   return (
     <Modal open={isOpen} onClose={handleDone} className="w-full max-w-3xl">
-      <div className="p-6 sm:p-8 max-h-[88vh] overflow-y-auto">
+      <div className="p-6 sm:p-8 overflow-y-auto" style={{ maxHeight: 'calc(88vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))' }}>
 
         {/* Header */}
         <div className="flex justify-between items-start mb-6">
