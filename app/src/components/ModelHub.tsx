@@ -679,6 +679,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                               disabled={isAnyNativeBusy}
                               onClick={async () => {
                                 const mmproj = mmprojAssignments[file.filename] ?? null;
+                                setGgufFiles(prev => prev.filter(f => f.filename !== file.filename && f.filename !== mmproj));
                                 await NativeLlmManager.getInstance().deleteModel(file.filename);
                                 if (mmproj) {
                                   const stillUsed = ggufModels.some(
@@ -763,7 +764,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                               <Sparkles size={12} /> Load
                             </button>
                             <button
-                              onClick={() => GemmaModelManager.getInstance().deleteModel(model.id as GemmaModelId)}
+                              onClick={() => { setTransformersModels(prev => prev.filter(m => m.id !== model.id)); GemmaModelManager.getInstance().deleteModel(model.id as GemmaModelId); }}
                               className="p-1.5 text-gray-400 hover:text-red-600 rounded transition-colors"
                               title="Delete model"
                             >
@@ -879,6 +880,16 @@ const ModelHub: React.FC<ModelHubProps> = ({
                             ? (presetDownloadStep === 'gguf' ? 'Model…' : 'Vision…')
                             : 'Downloading…'
                           }
+                          <button
+                            onClick={isLlamaCpp
+                              ? () => { NativeLlmManager.getInstance().cancelDownload(); setDownloadingPreset(null); setPresetDownloadStep(null); }
+                              : () => GemmaModelManager.getInstance().unloadModel()
+                            }
+                            className="ml-1 p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Cancel"
+                          >
+                            <StopCircle size={12} />
+                          </button>
                         </span>
                       ) : (
                         <button

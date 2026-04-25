@@ -16,6 +16,8 @@ import {
 } from '@utils/inferenceServer';
 import { Logger } from '@utils/logging';
 import { isTauri } from '@utils/platform';
+import { GemmaModelManager } from '@utils/localLlm/GemmaModelManager';
+import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
 import SharingPermissionsModal from './SharingPermissionsModal';
 import ModelHub from './ModelHub';
 import AccountModal from './AccountModal';
@@ -90,6 +92,8 @@ const AppHeader: React.FC<AppHeaderProps> = ({
   const [isStartupDialogOpen, setIsStartupDialogOpen] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [autoDownloadPreset, setAutoDownloadPreset] = useState<import('@utils/modelPresets').ModelPreset | undefined>(undefined);
+  const [isModelDownloading, setIsModelDownloading] = useState(false);
+  const [isModelLoading, setIsModelLoading] = useState(false);
 
   useEffect(() => {
     const handleOpenModelHub = (e: Event) => {
@@ -100,6 +104,37 @@ const AppHeader: React.FC<AppHeaderProps> = ({
     window.addEventListener('openModelHub', handleOpenModelHub);
     return () => window.removeEventListener('openModelHub', handleOpenModelHub);
   }, []);
+
+  const [isNativeLoading, setIsNativeLoading] = useState(false);
+  const [isNativeDownloading, setIsNativeDownloading] = useState(false);
+
+  // Track Transformers.js model loading state
+  useEffect(() => {
+    const manager = GemmaModelManager.getInstance();
+    const unsubscribe = manager.onStateChange((state) => {
+      setIsModelLoading(state.status === 'loading');
+    });
+    const initial = manager.getState();
+    setIsModelLoading(initial.status === 'loading');
+    return unsubscribe;
+  }, []);
+
+  // Track llama.cpp download/loading state (Tauri only)
+  useEffect(() => {
+    if (!isTauri()) return;
+    const manager = NativeLlmManager.getInstance();
+    const unsubscribe = manager.onStateChange((state) => {
+      setIsNativeDownloading(state.status === 'downloading');
+      setIsNativeLoading(state.status === 'loading');
+    });
+    const initial = manager.getState();
+    setIsNativeDownloading(initial.status === 'downloading');
+    setIsNativeLoading(initial.status === 'loading');
+    return unsubscribe;
+  }, []);
+
+  const anyModelDownloading = isModelDownloading || isNativeDownloading;
+  const anyModelLoading = isModelLoading || isNativeLoading;
 
   const isUsingObServer = externalIsUsingObServer !== undefined
     ? externalIsUsingObServer
@@ -551,9 +586,19 @@ const AppHeader: React.FC<AppHeaderProps> = ({
               {/* Server Status and Settings Button (All screen sizes) */}
               <div className="flex items-center space-x-2">
                 {/* Status Indicator Dot */}
-                <div className={`w-3 h-3 rounded-full
-                    ${computedServerStatus === 'online' ? 'bg-green-500' : computedServerStatus === 'offline' ? 'bg-red-500' : 'bg-orange-500 animate-pulse'}
-                `} title={`Status: ${computedServerStatus}`}></div>
+                {anyModelDownloading ? (
+                  <svg className="h-4 w-4 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none" title="Downloading model…">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25" />
+                    <path d="M22 12a10 10 0 00-10-10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <div className={`w-3 h-3 rounded-full
+                      ${anyModelLoading ? 'bg-yellow-400 animate-pulse'
+                      : computedServerStatus === 'online' ? 'bg-green-500'
+                      : computedServerStatus === 'offline' ? 'bg-red-500'
+                      : 'bg-orange-500 animate-pulse'}
+                  `} title={anyModelLoading ? 'Loading model…' : `Status: ${computedServerStatus}`} />
+                )}
 
                 {/* Settings Button */}
                 <button
