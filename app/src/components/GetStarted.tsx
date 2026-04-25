@@ -125,10 +125,10 @@ const GetStarted: React.FC<GetStartedProps> = ({
           {/* Community Card */}
           <div
             onClick={onExploreCommunity}
-            className="flex-1 md:flex-initial bg-white shadow-sm cursor-pointer p-3 md:p-6 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+            className="flex-1 md:flex-initial bg-white shadow-sm cursor-pointer p-3 md:p-6 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex flex-col justify-center"
           >
-            <div className="mb-3 md:mb-4 flex items-center">
-              <div className="mr-3 bg-blue-50 flex justify-center items-center rounded-lg w-10 h-10">
+            <div className="md:mb-4 flex items-center justify-center md:justify-start">
+              <div className="mr-3 bg-blue-50 flex justify-center items-center rounded-lg w-10 h-10 shrink-0">
                 <Users className="text-blue-600 w-5 h-5" strokeWidth={2} />
               </div>
               <h3 className="text-gray-900 font-semibold">
@@ -143,10 +143,10 @@ const GetStarted: React.FC<GetStartedProps> = ({
           {/* Build Custom Card */}
           <div
             onClick={onCreateNewAgent}
-            className="flex-1 md:flex-initial bg-white shadow-sm cursor-pointer p-3 md:p-6 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+            className="flex-1 md:flex-initial bg-white shadow-sm cursor-pointer p-3 md:p-6 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex flex-col justify-center"
           >
-            <div className="mb-3 md:mb-4 flex items-center">
-              <div className="mr-3 bg-purple-50 flex justify-center items-center rounded-lg w-10 h-10">
+            <div className="md:mb-4 flex items-center justify-center md:justify-start -translate-x-[10px] md:translate-x-0">
+              <div className="mr-3 bg-purple-50 flex justify-center items-center rounded-lg w-10 h-10 shrink-0">
                 <Code className="text-purple-600 w-5 h-5" strokeWidth={2} />
               </div>
               <h3 className="text-gray-900 font-semibold">
