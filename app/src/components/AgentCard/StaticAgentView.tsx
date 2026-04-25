@@ -115,6 +115,9 @@ const ModelLocationIndicator: React.FC<{
     const [localState, setLocalState] = useState<LocalModelState | null>(
         isLocalModel && server ? ModelManager.getInstance().getLocalModelState(server) : null
     );
+    const [isNativeDownloading, setIsNativeDownloading] = useState(
+        () => ModelManager.getInstance().getLocalModelState(LLAMA_CPP_LOCAL_SENTINEL)?.status === 'downloading'
+    );
 
     const updatePopoverPosition = () => {
         if (buttonRef.current) {
@@ -131,6 +134,9 @@ const ModelLocationIndicator: React.FC<{
         if (!isOpen || !isLocalModel || !server) return;
         const unsubscribe = ModelManager.getInstance().onModelsChange(() => {
             setLocalState(ModelManager.getInstance().getLocalModelState(server));
+            setIsNativeDownloading(
+                ModelManager.getInstance().getLocalModelState(LLAMA_CPP_LOCAL_SENTINEL)?.status === 'downloading'
+            );
         });
         return unsubscribe;
     }, [isOpen, isLocalModel, server]);
@@ -256,10 +262,12 @@ const ModelLocationIndicator: React.FC<{
                             </div>
                             <button
                                 onClick={handleLoadModel}
-                                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors"
+                                disabled={isNativeDownloading}
+                                title={isNativeDownloading ? 'A model is currently downloading — please wait' : undefined}
+                                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
                             >
                                 <Cpu size={14} />
-                                <span>Load Model</span>
+                                <span>{isNativeDownloading ? 'Downloading...' : 'Load Model'}</span>
                             </button>
                             <p className="text-xs text-gray-400 text-center">
                                 All data stays on your device
