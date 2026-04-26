@@ -32,6 +32,7 @@ export interface GemmaLoadSettings {
   device: GemmaDevice;
   dtype: GemmaDtype;
   imageTokenBudget: GemmaImageTokenBudget;
+  enableThinking?: boolean;
 }
 
 export interface GemmaModelState {

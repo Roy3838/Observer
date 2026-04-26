@@ -490,14 +490,16 @@ export class ModelManager {
   public async generateWithLocalModel(
     server: string,
     messages: LocalLlmMessage[],
-    onToken?: (token: string) => void
+    onToken?: (token: string) => void,
+    onReasoningToken?: (token: string) => void,
   ): Promise<string> {
     if (server === ModelManager.BROWSER_LOCAL) {
       const manager = GemmaModelManager.getInstance();
       if (!manager.isReady()) {
         throw new Error('Transformers.js model not loaded');
       }
-      return manager.generate(messages, onToken);
+      const enableThinking = manager.getState().loadSettings?.enableThinking ?? false;
+      return manager.generate(messages, onToken, enableThinking, onReasoningToken);
     }
 
     if (server === ModelManager.LLAMA_CPP_LOCAL && isTauri()) {
@@ -590,7 +592,7 @@ export class ModelManager {
       if (!this.isLocalModelReady(serverAddress)) {
         throw new Error('Local model not loaded. Please load it from the Add Model panel.');
       }
-      return this.generateWithLocalModel(serverAddress, messages, onStreamChunk);
+      return this.generateWithLocalModel(serverAddress, messages, onStreamChunk, onReasoningChunk);
     }
 
     // Remote models: attach per-model inference params
@@ -655,7 +657,7 @@ export class ModelManager {
       if (!this.isLocalModelReady(serverAddress)) {
         throw new Error('Local model not loaded. Please load it from the Add Model panel.');
       }
-      return this.generateWithLocalModel(serverAddress, messages, onStreamChunk);
+      return this.generateWithLocalModel(serverAddress, messages, onStreamChunk, onReasoningChunk);
     }
 
     if (serverAddress.includes('api.observer-ai.com') && token) {

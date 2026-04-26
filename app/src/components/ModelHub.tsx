@@ -178,6 +178,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
   const [gemmaDevice, setGemmaDevice] = useState<GemmaDevice>('webgpu');
   const [gemmaDtype, setGemmaDtype] = useState<GemmaDtype>('q4');
   const [gemmaTokenBudget, setGemmaTokenBudget] = useState<GemmaImageTokenBudget>(70);
+  const [gemmaEnableThinking, setGemmaEnableThinking] = useState(false);
   const [customOnnxModelId, setCustomOnnxModelId] = useState('');
 
   // ── llama.cpp (Native) state
@@ -274,10 +275,13 @@ const ModelHub: React.FC<ModelHubProps> = ({
     const currentState = manager.getState();
     setGemmaState(currentState);
     setTransformersModels(manager.listLocalModels());
-    if (currentState.loadSettings) {
-      setGemmaDevice(currentState.loadSettings.device);
+    const runtime = manager.getRuntimeSettings();
+    setGemmaDevice(runtime.device);
+    setGemmaTokenBudget(runtime.imageTokenBudget);
+    setGemmaEnableThinking(runtime.enableThinking);
+    // dtype comes from the currently loaded model (if any), otherwise leave at default
+    if (currentState.loadSettings?.dtype) {
       setGemmaDtype(currentState.loadSettings.dtype);
-      setGemmaTokenBudget(currentState.loadSettings.imageTokenBudget);
     }
     return unsubscribe;
   }, [isOpen]);
@@ -415,6 +419,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
         useGpu ? 'webgpu' : 'wasm',
         gemmaDtype,
         gemmaTokenBudget,
+        gemmaEnableThinking,
       );
       return;
     }
@@ -462,6 +467,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
         gemmaDevice,
         gemmaDtype,
         gemmaTokenBudget,
+        gemmaEnableThinking,
       );
     }
   };
@@ -1409,6 +1415,28 @@ const ModelHub: React.FC<ModelHubProps> = ({
                           <option value={1120}>1120 (OCR)</option>
                         </select>
                       </div>
+                    </div>
+
+                    {/* Thinking toggle */}
+                    <div className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-xl bg-white">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-800">Thinking Mode</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Model reasons step-by-step before answering.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setGemmaEnableThinking(v => !v)}
+                        disabled={gemmaState.status === 'loading'}
+                        className={`relative inline-flex h-6 w-10 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                          gemmaEnableThinking ? 'bg-purple-600' : 'bg-gray-300'
+                        }`}
+                        aria-label={gemmaEnableThinking ? 'Disable thinking' : 'Enable thinking'}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                          gemmaEnableThinking ? 'translate-x-5' : 'translate-x-1'
+                        }`} />
+                      </button>
                     </div>
 
                     {gemmaState.status === 'loaded' && (

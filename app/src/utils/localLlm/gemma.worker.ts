@@ -95,7 +95,7 @@ self.onmessage = async (event: MessageEvent) => {
       }
 
       case 'generate': {
-        const { messages, generationId } = data;
+        const { messages, generationId, enableThinking = false } = data;
 
         if (!processor || !model) {
           throw new Error('Model not loaded');
@@ -128,7 +128,7 @@ self.onmessage = async (event: MessageEvent) => {
         console.log('[Gemma Worker] Images extracted:', images.length);
 
         const prompt = processor.apply_chat_template(templateMessages, {
-          enable_thinking: false,
+          enable_thinking: enableThinking,
           add_generation_prompt: true,
         });
 
@@ -152,13 +152,90 @@ self.onmessage = async (event: MessageEvent) => {
 
         let fullText = '';
 
+        // When thinking is enabled we keep special tokens so we can detect the
+        // <|channel>thought\n … <channel|> delimiters that wrap the reasoning.
+        //
+        // State machine:
+        //   'scanning'  – buffering output until we know if thinking block starts
+        //   'thinking'  – inside the thinking block, routing to reasoning-token
+        //   'answering' – past the thinking block, routing to generation-token
+        const THINK_PREFIX = '<|channel>thought\n';
+        const THINK_END    = '<channel|>';
+        // Known extra special tokens to silently drop when skip_special_tokens is off
+        const DROP_TOKENS  = new Set(['<bos>', '<eos>', '<|end_of_turn|>']);
+
+        type ThinkState = 'scanning' | 'thinking' | 'answering';
+        let thinkState: ThinkState = enableThinking ? 'scanning' : 'answering';
+        let scanBuf = '';   // accumulator for prefix detection / partial-end detection
+
+        const handleToken = (raw: string) => {
+          if (DROP_TOKENS.has(raw)) return;
+
+          if (thinkState === 'answering') {
+            fullText += raw;
+            self.postMessage({ type: 'generation-token', data: { token: raw, generationId } });
+            return;
+          }
+
+          // --- scanning: try to match THINK_PREFIX ---
+          if (thinkState === 'scanning') {
+            scanBuf += raw;
+            if (THINK_PREFIX.startsWith(scanBuf)) {
+              if (scanBuf === THINK_PREFIX) {
+                thinkState = 'thinking';
+                scanBuf = '';
+              }
+              // else still building prefix – don't emit yet
+              return;
+            }
+            // Mismatch: not a thinking response; emit buffered content as answer
+            const flushed = scanBuf;
+            scanBuf = '';
+            thinkState = 'answering';
+            fullText += flushed;
+            self.postMessage({ type: 'generation-token', data: { token: flushed, generationId } });
+            return;
+          }
+
+          // --- thinking: look for THINK_END, keep a tail buffer for partial matches ---
+          if (thinkState === 'thinking') {
+            const combined = scanBuf + raw;
+            const endIdx = combined.indexOf(THINK_END);
+            if (endIdx !== -1) {
+              const thinkPart  = combined.slice(0, endIdx);
+              const answerPart = combined.slice(endIdx + THINK_END.length);
+              scanBuf = '';
+              thinkState = 'answering';
+              if (thinkPart) {
+                self.postMessage({ type: 'reasoning-token', data: { token: thinkPart, generationId } });
+              }
+              if (answerPart) {
+                fullText += answerPart;
+                self.postMessage({ type: 'generation-token', data: { token: answerPart, generationId } });
+              }
+              return;
+            }
+
+            // Check if tail of combined could be the start of THINK_END
+            let keepLen = 0;
+            for (let pl = Math.min(THINK_END.length - 1, combined.length); pl > 0; pl--) {
+              if (THINK_END.startsWith(combined.slice(-pl))) {
+                keepLen = pl;
+                break;
+              }
+            }
+            const toEmit = combined.slice(0, combined.length - keepLen);
+            scanBuf = combined.slice(combined.length - keepLen);
+            if (toEmit) {
+              self.postMessage({ type: 'reasoning-token', data: { token: toEmit, generationId } });
+            }
+          }
+        };
+
         const streamer = new TextStreamer(processor.tokenizer, {
           skip_prompt: true,
-          skip_special_tokens: true,
-          callback_function: (token: string) => {
-            fullText += token;
-            self.postMessage({ type: 'generation-token', data: { token, generationId } });
-          },
+          skip_special_tokens: !enableThinking,
+          callback_function: handleToken,
         });
 
         await model.generate({
@@ -167,6 +244,12 @@ self.onmessage = async (event: MessageEvent) => {
           do_sample: false,
           streamer,
         });
+
+        // Flush any remaining scan buffer as answer (shouldn't normally happen)
+        if (scanBuf) {
+          fullText += scanBuf;
+          self.postMessage({ type: 'generation-token', data: { token: scanBuf, generationId } });
+        }
 
         self.postMessage({ type: 'generation-complete', data: { text: fullText, generationId } });
         break;
