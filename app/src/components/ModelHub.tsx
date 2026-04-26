@@ -8,7 +8,7 @@ import Modal from '@components/EditAgent/Modal';
 import {
   Download, CheckCircle, AlertTriangle, X, StopCircle, FileDown, Cpu, Trash2,
   AlertCircle, Settings2, RefreshCw, Plus, Cloud, Server, Zap,
-  Sparkles, Package, ChevronDown, Terminal, Play,
+  Sparkles, Package, ChevronDown, Terminal, Play, Eye,
 } from 'lucide-react';
 import { Logger, LogEntry, LogLevel } from '@utils/logging';
 import pullModelManager, { PullState } from '@utils/pullModelManager';
@@ -79,8 +79,8 @@ const formatBytes = (bytes: number, decimals = 2) => {
 };
 
 const TAB_COLORS: Record<TabColor, { active: string; dot: string }> = {
-  green:  { active: 'bg-white text-green-700 shadow-sm',  dot: 'bg-green-500' },
-  purple: { active: 'bg-white text-purple-700 shadow-sm', dot: 'bg-purple-500' },
+  green:  { active: 'bg-white text-gray-800 shadow-sm',   dot: 'bg-gray-500' },
+  purple: { active: 'bg-white text-yellow-800 shadow-sm', dot: 'bg-yellow-400' },
   blue:   { active: 'bg-white text-blue-700 shadow-sm',   dot: 'bg-blue-500' },
   orange: { active: 'bg-white text-orange-700 shadow-sm', dot: 'bg-orange-500' },
 };
@@ -625,22 +625,22 @@ const ModelHub: React.FC<ModelHubProps> = ({
                   <div
                     key={file.filename}
                     className={`border rounded-xl p-3 transition-all ${
-                      isLoaded ? 'border-green-300 bg-green-50/50' : 'border-gray-200 bg-white hover:border-gray-300'
+                      isLoaded ? 'border-gray-400 bg-gray-50' : 'border-gray-200 bg-white hover:border-gray-300'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                          isLoaded ? 'bg-green-200' : 'bg-gray-100'
+                          isLoaded ? 'bg-gray-200' : 'bg-gray-100'
                         }`}>
-                          <Cpu size={18} className={isLoaded ? 'text-green-700' : 'text-gray-500'} />
+                          <Cpu size={18} className={isLoaded ? 'text-gray-800' : 'text-gray-500'} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-medium text-gray-900 truncate">{modelId}</span>
-                            <span className="text-[10px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded">llama.cpp</span>
+                            <span className="text-[10px] font-semibold text-gray-700 bg-gray-200 px-1.5 py-0.5 rounded">llama.cpp</span>
                             {isMultimodal && (
-                              <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">Vision</span>
+                              <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded flex items-center gap-0.5"><Eye size={9} /></span>
                             )}
                           </div>
                           <div className="flex items-center gap-2 mt-1">
@@ -664,13 +664,13 @@ const ModelHub: React.FC<ModelHubProps> = ({
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {isUnloading ? (
-                          <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-lg font-medium">
+                          <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-200 text-gray-600 rounded-lg font-medium">
                             <Cpu size={12} className="animate-pulse" /> Unloading
                           </span>
                         ) : isLoaded ? (
                           <button
                             onClick={() => NativeLlmManager.getInstance().unloadModel()}
-                            className="group flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors bg-green-200 text-green-800 hover:bg-red-100 hover:text-red-700"
+                            className="group flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors bg-gray-200 text-gray-800 hover:bg-red-100 hover:text-red-700"
                           >
                             <span className="group-hover:hidden flex items-center gap-1.5"><CheckCircle size={12} /> Ready</span>
                             <span className="hidden group-hover:flex items-center gap-1.5"><X size={12} /> Unload</span>
@@ -687,7 +687,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                             <button
                               disabled={isAnyNativeBusy}
                               onClick={() => NativeLlmManager.getInstance().loadModel(file.filename)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm"
                             >
                               <Cpu size={12} /> Load
                             </button>
@@ -729,19 +729,19 @@ const ModelHub: React.FC<ModelHubProps> = ({
 
                 return (
                   <div key={model.id} className={`border rounded-xl p-3 transition-all ${
-                    isLoaded ? 'border-purple-300 bg-purple-50/50' : 'border-gray-200 bg-white'
+                    isLoaded ? 'border-gray-400 bg-gray-50' : 'border-gray-200 bg-white'
                   }`}>
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                          isLoaded ? 'bg-purple-200' : 'bg-gray-100'
+                          isLoaded ? 'bg-gray-200' : 'bg-gray-100'
                         }`}>
-                          <Sparkles size={18} className={isLoaded ? 'text-purple-700' : 'text-gray-500'} />
+                          <Sparkles size={18} className={isLoaded ? 'text-gray-800' : 'text-gray-500'} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-medium text-gray-900 truncate">{model.name}</span>
-                            <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">Transformers.js</span>
+                            <span className="text-[10px] font-semibold text-yellow-800 bg-yellow-300 px-1.5 py-0.5 rounded">Transformers.js</span>
                           </div>
                           {loadSettings && (
                             <p className="text-xs text-gray-500 mt-0.5">
@@ -754,7 +754,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                         {isLoaded ? (
                           <button
                             onClick={() => GemmaModelManager.getInstance().unloadModel()}
-                            className="group flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors bg-purple-200 text-purple-800 hover:bg-red-100 hover:text-red-700"
+                            className="group flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors bg-gray-200 text-gray-800 hover:bg-red-100 hover:text-red-700"
                           >
                             <span className="group-hover:hidden flex items-center gap-1.5"><CheckCircle size={12} /> Ready</span>
                             <span className="hidden group-hover:flex items-center gap-1.5"><X size={12} /> Unload</span>
@@ -775,7 +775,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                           <>
                             <button
                               onClick={() => GemmaModelManager.getInstance().loadModel(model.id as GemmaModelId)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium shadow-sm"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-lg hover:bg-gray-900 font-medium shadow-sm"
                             >
                               <Sparkles size={12} /> Load
                             </button>
@@ -905,7 +905,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                   key={preset.name}
                   className={`border rounded-xl p-3 transition-all ${
                     unavailable ? 'opacity-50 bg-gray-50' :
-                    installed ? 'border-green-200 bg-green-50/30' :
+                    installed ? 'border-gray-400 bg-gray-50' :
                     'border-gray-200 bg-white hover:border-gray-300'
                   }`}
                 >
@@ -914,12 +914,12 @@ const ModelHub: React.FC<ModelHubProps> = ({
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-medium text-gray-900">{preset.name}</span>
                         <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                          isLlamaCpp ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700'
+                          isLlamaCpp ? 'bg-gray-200 text-gray-700' : 'bg-yellow-300 text-yellow-800'
                         }`}>
                           {isLlamaCpp ? 'llama.cpp' : 'Transformers.js'}
                         </span>
                         {(preset.mmprojUrl || preset.hfModelId) && (
-                          <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">Vision</span>
+                          <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded flex items-center gap-0.5"><Eye size={9} /></span>
                         )}
                       </div>
                       <p className="text-xs text-gray-500 mt-0.5">{preset.sizeLabel}</p>
@@ -1162,7 +1162,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                                   }
                                 }}
                                 disabled={engineInitStatus === 'loading'}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                               >
                                 <RefreshCw size={12} className={engineInitStatus === 'loading' ? 'animate-spin' : ''} />
                                 {engineInitStatus === 'loading' ? 'Initializing...' : 'Init Engine'}
@@ -1226,7 +1226,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                             <button
                               onClick={handleDownloadGguf}
                               disabled={!ggufUrl.trim() || isNativeDownloading}
-                              className="flex items-center gap-1.5 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
+                              className="flex items-center gap-1.5 px-4 py-2.5 bg-gray-700 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
                             >
                               <Download size={14} /> Download
                             </button>
@@ -1420,7 +1420,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                         <button
                           onClick={handleLoadCustomOnnx}
                           disabled={!customOnnxModelId.trim() || gemmaState.status === 'loading'}
-                          className="flex items-center gap-1.5 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
+                          className="flex items-center gap-1.5 px-4 py-2.5 bg-gray-700 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
                         >
                           <Cpu size={14} /> Load
                         </button>

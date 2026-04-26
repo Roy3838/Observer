@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fetchModels as fetchAllModels, Model } from '@utils/inferenceServer';
 import {
   Cpu, RefreshCw, Eye, CheckCircle, X, StopCircle, Sparkles,
-  AlertTriangle, Trash2, Settings2, BarChart3, FileDown, Cpu as CpuIcon,
+  AlertTriangle, Trash2, Settings2, BarChart3, FileDown, Cpu as CpuIcon, Cloud,
 } from 'lucide-react';
 import { BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL } from '@utils/inferenceServer';
 import { Logger } from '@utils/logging';
@@ -265,14 +265,14 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
 
             return (
               <div key={file.filename} className={`border rounded-xl transition-all ${
-                isLoaded ? 'border-green-300 bg-green-50/50' : 'border-gray-200 bg-white'
+                isLoaded ? 'border-gray-400 bg-gray-50' : 'border-gray-200 bg-white'
               }`}>
                 <div className="flex items-center justify-between gap-3 p-3">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      isLoaded ? 'bg-green-200' : 'bg-gray-100'
+                      isLoaded ? 'bg-gray-200' : 'bg-gray-100'
                     }`}>
-                      <CpuIcon size={18} className={isLoaded ? 'text-green-700' : 'text-gray-500'} />
+                      <CpuIcon size={18} className={isLoaded ? 'text-gray-800' : 'text-gray-500'} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -307,20 +307,20 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
                     {isLoaded && (
                       <button
                         onClick={() => toggleSettings(modelId)}
-                        className={`p-1.5 rounded transition-colors ${settingsOpen ? 'text-green-700 bg-green-100' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+                        className={`p-1.5 rounded transition-colors ${settingsOpen ? 'text-gray-800 bg-gray-200' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
                         title="Generation settings"
                       >
                         <Settings2 size={14} />
                       </button>
                     )}
                     {isUnloading ? (
-                      <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-lg font-medium">
+                      <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-200 text-gray-600 rounded-lg font-medium">
                         <CpuIcon size={12} className="animate-pulse" /> Unloading
                       </span>
                     ) : isLoaded ? (
                       <button
                         onClick={() => NativeLlmManager.getInstance().unloadModel()}
-                        className="group flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors bg-green-200 text-green-800 hover:bg-red-100 hover:text-red-700"
+                        className="group flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors bg-gray-200 text-gray-800 hover:bg-red-100 hover:text-red-700"
                       >
                         <span className="group-hover:hidden flex items-center gap-1.5"><CheckCircle size={12} /> Ready</span>
                         <span className="hidden group-hover:flex items-center gap-1.5"><X size={12} /> Unload</span>
@@ -337,7 +337,7 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
                         <button
                           disabled={isAnyNativeBusy}
                           onClick={() => NativeLlmManager.getInstance().loadModel(file.filename)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm"
                         >
                           <CpuIcon size={12} /> Load
                         </button>
@@ -381,19 +381,19 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
 
             return (
               <div key={model.id} className={`border rounded-xl p-3 transition-all ${
-                isLoaded ? 'border-purple-300 bg-purple-50/50' : 'border-gray-200 bg-white'
+                isLoaded ? 'border-gray-400 bg-gray-50' : 'border-gray-200 bg-white'
               }`}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      isLoaded ? 'bg-purple-200' : 'bg-gray-100'
+                      isLoaded ? 'bg-gray-200' : 'bg-gray-100'
                     }`}>
-                      <CpuIcon size={18} className={isLoaded ? 'text-purple-700' : 'text-gray-500'} />
+                      <CpuIcon size={18} className={isLoaded ? 'text-gray-800' : 'text-gray-500'} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-medium text-gray-900 truncate">{model.name}</span>
-                        <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">Transformers.js</span>
+                        <span className="text-[10px] font-semibold text-yellow-800 bg-yellow-300 px-1.5 py-0.5 rounded">Transformers.js</span>
                       </div>
                       {loadSettings && (
                         <p className="text-xs text-gray-500 mt-0.5">
@@ -406,7 +406,7 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
                     {isLoaded ? (
                       <button
                         onClick={() => GemmaModelManager.getInstance().unloadModel()}
-                        className="group flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors bg-purple-200 text-purple-800 hover:bg-red-100 hover:text-red-700"
+                        className="group flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors bg-gray-200 text-gray-800 hover:bg-red-100 hover:text-red-700"
                       >
                         <span className="group-hover:hidden flex items-center gap-1.5"><CheckCircle size={12} /> Ready</span>
                         <span className="hidden group-hover:flex items-center gap-1.5"><X size={12} /> Unload</span>
@@ -427,7 +427,7 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
                       <>
                         <button
                           onClick={() => GemmaModelManager.getInstance().loadModel(model.id as GemmaModelId)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium shadow-sm"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-lg hover:bg-gray-900 font-medium shadow-sm"
                         >
                           <Sparkles size={12} /> Load
                         </button>
@@ -510,11 +510,13 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
                         )}
                         {model.multimodal && (
                           <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                            <Eye size={9} /> Vision
+                            <Eye size={9} />
                           </span>
                         )}
                         {isObServer ? (
-                          <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded">Cloud</span>
+                          <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                            <Cloud size={9} />
+                          </span>
                         ) : (
                           <span className="text-[10px] font-semibold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">Server</span>
                         )}
