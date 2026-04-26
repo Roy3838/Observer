@@ -90,7 +90,7 @@ export const useEditAgentModalLogic = ({
   const [description, setDescription] = useState('');
   const [currentModel, setCurrentModel] = useState('');
   const [loopInterval, setLoopInterval] = useState(10.0);
-  const [onlyOnSignificantChange, setOnlyOnSignificantChange] = useState(true);
+  const [onlyOnSignificantChange, setOnlyOnSignificantChange] = useState(false);
   const [availableModels, setAvailableModels] = useState<Model[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -221,7 +221,7 @@ export const useEditAgentModalLogic = ({
       setDescription(agent.description);
       setCurrentModel(agent.model_name);
       setLoopInterval(agent.loop_interval_seconds);
-      setOnlyOnSignificantChange(agent.only_on_significant_change ?? true);
+      setOnlyOnSignificantChange(agent.only_on_significant_change ?? false);
       setSystemPrompt(agent.system_prompt);
     } else { // createMode
       setName('');

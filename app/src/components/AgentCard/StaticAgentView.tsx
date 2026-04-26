@@ -698,16 +698,16 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
                                 <div className="flex items-center gap-1.5">
                                     <div className="relative group">
                                         <button
-                                            onClick={() => onToggleSignificantChange(!(agent.only_on_significant_change ?? true))}
+                                            onClick={() => onToggleSignificantChange(!(agent.only_on_significant_change ?? false))}
                                             className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors ${
-                                                (agent.only_on_significant_change ?? true)
+                                                (agent.only_on_significant_change ?? false)
                                                     ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
                                                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                             }`}
                                         >
                                             <Zap className="w-4 h-4" />
                                             <span className="text-xs font-medium">
-                                                {(agent.only_on_significant_change ?? true) ? 'On' : 'Off'}
+                                                {(agent.only_on_significant_change ?? false) ? 'On' : 'Off'}
                                             </span>
                                         </button>
                                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs p-2 bg-gray-800 text-white text-xs rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
@@ -766,16 +766,16 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
                             <div className="flex items-center gap-1.5">
                                 <div className="relative group">
                                     <button
-                                        onClick={() => onToggleSignificantChange(!(agent.only_on_significant_change ?? true))}
+                                        onClick={() => onToggleSignificantChange(!(agent.only_on_significant_change ?? false))}
                                         className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors ${
-                                            (agent.only_on_significant_change ?? true)
+                                            (agent.only_on_significant_change ?? false)
                                                 ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
                                                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                         }`}
                                     >
                                         <Zap className="w-4 h-4" />
                                         <span className="text-xs font-medium">
-                                            {(agent.only_on_significant_change ?? true) ? 'On' : 'Off'}
+                                            {(agent.only_on_significant_change ?? false) ? 'On' : 'Off'}
                                         </span>
                                     </button>
                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs p-2 bg-gray-800 text-white text-xs rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
