@@ -44,7 +44,6 @@ import { ObServerTab } from '@components/ObServerTab';
 import { UpgradeModal } from '@components/UpgradeModal';
 import { AcceptToS } from '@components/AcceptToS';
 import AgentActivityModal from '@components/AgentCard/AgentActivityModal';
-import LocalServerSetupDialog from '@components/LocalServerSetupDialog';
 import FeedbackDialog from '@components/FeedbackDialog';
 import { startCommandSSE, updateCommandSSEToken } from '@utils/commandSSE';
 import { ModelManager } from '@utils/ModelManager';
@@ -91,9 +90,6 @@ function AppContent() {
   // Activity modal state
   const [activityModalOpen, setActivityModalOpen] = useState(false);
   const [activityModalAgentId, setActivityModalAgentId] = useState<string | null>(null);
-
-  // Local model setup dialog — shown on startup when no local models are configured
-  const [showLocalSetup, setShowLocalSetup] = useState(false);
 
   // Quota info state
   const [quotaInfo, setQuotaInfo] = useState<{
@@ -581,16 +577,6 @@ function AppContent() {
     }
   }, [isLoading, isAuthenticated]);
 
-  // Once on startup, if the user has no local models, open the local setup dialog.
-  // "Local" = anything that isn't the Ob-Server cloud (sentinels + custom servers).
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const { models } = ModelManager.getInstance().listModels();
-      const hasLocalModels = models.some(m => !m.server.includes('api.observer-ai.com'));
-      if (!hasLocalModels) setShowLocalSetup(true);
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, []);
 
   // Onboarding / welcome logic after auth resolves
   useEffect(() => {
@@ -1078,12 +1064,6 @@ function AppContent() {
           onToggleObServer={() => setIsUsingObServer(true)}
           isAuthenticated={isAuthenticated}
           hostingContext={hostingContext}
-        />
-      )}
-
-      {showLocalSetup && !showStartupDialog && (
-        <LocalServerSetupDialog
-          onDismiss={() => setShowLocalSetup(false)}
         />
       )}
 
