@@ -199,6 +199,47 @@ const MarkdownRenderer: React.FC<{ content: string }> = ({ content }) => {
   );
 };
 
+const ThinkingBox: React.FC<{
+  content: string;
+  isExpanded: boolean;
+  onToggle: () => void;
+}> = ({ content, isExpanded, onToggle }) => {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isExpanded && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [content, isExpanded]);
+
+  const lastWords = content.trimEnd().split(/\s+/).slice(-10).join(' ');
+
+  return (
+    <div className="bg-gray-50 border border-gray-200 rounded-lg shadow-sm text-xs text-gray-500">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded-lg transition-colors text-left"
+      >
+        <span className="flex-shrink-0">💭</span>
+        {isExpanded ? (
+          <span className="italic flex-1 truncate">Thinking...</span>
+        ) : (
+          <span className="italic flex-1 truncate text-gray-400">...{lastWords}</span>
+        )}
+        <span className="flex-shrink-0 text-gray-400">{isExpanded ? '▲' : '▼'}</span>
+      </button>
+      {isExpanded && (
+        <div
+          ref={scrollRef}
+          className="px-3 pb-2 max-h-32 overflow-y-auto scrollbar-thin italic text-gray-400 whitespace-pre-wrap"
+        >
+          {content}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const LastResponse: React.FC<{ response: string, responseKey: number }> = ({ response, responseKey }) => {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = React.useState(true);
@@ -282,6 +323,8 @@ const ActiveAgentView: React.FC<ActiveAgentViewProps> = ({
 }) => {
     const [streamingResponse, setStreamingResponse] = useState('');
     const [isStreaming, setIsStreaming] = useState(false);
+    const [thinkingContent, setThinkingContent] = useState('');
+    const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
     const lastTools = useLastTools(agentId);
     const [changeDetectionData, setChangeDetectionData] = useState<ChangeDetectionData | null>(null);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -317,6 +360,14 @@ const ActiveAgentView: React.FC<ActiveAgentViewProps> = ({
             if (event.detail.agentId === agentId) {
                 setIsStreaming(false);
                 setStreamingResponse('');
+                setThinkingContent('');
+                setIsThinkingExpanded(false);
+            }
+        };
+
+        const handleThinkingChunk = (event: CustomEvent) => {
+            if (event.detail.agentId === agentId) {
+                setThinkingContent(prev => prev + event.detail.chunk);
             }
         };
 
@@ -335,12 +386,14 @@ const ActiveAgentView: React.FC<ActiveAgentViewProps> = ({
         window.addEventListener('agentResponseChunk', handleStreamChunk as EventListener);
         window.addEventListener('agentIterationStart', handleIterationStart as EventListener);
         window.addEventListener('agentChangeDetectionResult', handleChangeDetection as EventListener);
+        window.addEventListener('agentThinkingChunk', handleThinkingChunk as EventListener);
 
         return () => {
             window.removeEventListener('agentStreamStart', handleStreamStart as EventListener);
             window.removeEventListener('agentResponseChunk', handleStreamChunk as EventListener);
             window.removeEventListener('agentIterationStart', handleIterationStart as EventListener);
             window.removeEventListener('agentChangeDetectionResult', handleChangeDetection as EventListener);
+            window.removeEventListener('agentThinkingChunk', handleThinkingChunk as EventListener);
         };
     }, [agentId]);
 
@@ -396,6 +449,13 @@ const ActiveAgentView: React.FC<ActiveAgentViewProps> = ({
                     skipReason={skipReason}
                     isOverrun={isOverrun}
                 />
+                {thinkingContent.length > 0 && (
+                    <ThinkingBox
+                        content={thinkingContent}
+                        isExpanded={isThinkingExpanded}
+                        onToggle={() => setIsThinkingExpanded(prev => !prev)}
+                    />
+                )}
                 <LastResponse
                     response={isStreaming ? streamingResponse : lastResponse}
                     responseKey={isStreaming ? -1 : responseKey}

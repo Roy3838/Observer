@@ -261,6 +261,18 @@ class LoggingService {
           );
           break;
 
+        case 'thinking-chunk':
+          window.dispatchEvent(
+            new CustomEvent('agentThinkingChunk', {
+              detail: {
+                agentId: entry.source,
+                chunk: entry.details.content?.chunk,
+                iterationId: entry.details.iterationId
+              }
+            })
+          );
+          break;
+
         case 'agent-error':
           window.dispatchEvent(
             new CustomEvent('agentRuntimeError', {

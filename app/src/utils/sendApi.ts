@@ -9,7 +9,7 @@ import { InferenceParams } from '../config/inference-params';
  * @param onStreamChunk Optional callback for each chunk
  * @returns The complete message content
  */
-async function handleStreamingResponse(response: Response, onStreamChunk?: (chunk: string) => void): Promise<string> {
+async function handleStreamingResponse(response: Response, onStreamChunk?: (chunk: string) => void, onReasoningChunk?: (chunk: string) => void): Promise<string> {
   const reader = response.body?.getReader();
   if (!reader) {
     throw new Error('No response body available for streaming');
@@ -42,6 +42,11 @@ async function handleStreamingResponse(response: Response, onStreamChunk?: (chun
           try {
             const parsed = JSON.parse(data);
             const content = parsed.choices?.[0]?.delta?.content;
+            const reasoning = parsed.choices?.[0]?.delta?.reasoning;
+
+            if (reasoning && onReasoningChunk) {
+              onReasoningChunk(reasoning);
+            }
 
             if (content) {
               //console.log('📝 Token:', content);
@@ -114,7 +119,8 @@ export async function fetchResponse(
   token?: string,
   enableStreaming: boolean = false,
   onStreamChunk?: (chunk: string) => void,
-  inferenceParams?: InferenceParams
+  inferenceParams?: InferenceParams,
+  onReasoningChunk?: (chunk: string) => void
 ): Promise<string> {
   try {
     // External API: convert to OpenAI format
@@ -198,7 +204,7 @@ export async function fetchResponse(
     }
 
     if (enableStreaming) {
-      return await handleStreamingResponse(response, onStreamChunk);
+      return await handleStreamingResponse(response, onStreamChunk, onReasoningChunk);
     } else {
       const data = await response.json();
 

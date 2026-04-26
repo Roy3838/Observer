@@ -557,7 +557,8 @@ export class ModelManager {
     preprocessResult: PreProcessorResult,
     token?: string,
     enableStreaming: boolean = false,
-    onStreamChunk?: (chunk: string) => void
+    onStreamChunk?: (chunk: string) => void,
+    onReasoningChunk?: (chunk: string) => void
   ): Promise<string> {
     // Resolve model → server
     let modelsResponse = this.listModels();
@@ -598,7 +599,7 @@ export class ModelManager {
     }
     const { fetchResponse } = await import('./sendApi');
     const params = { ...DEFAULT_INFERENCE_PARAMS, ...this.getModelParams(modelName) };
-    return fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, params);
+    return fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, params, onReasoningChunk);
   }
 
   // ===========================================================================
@@ -635,7 +636,8 @@ export class ModelManager {
     messages: Array<{ role: string; content: any }>,
     token?: string,
     enableStreaming: boolean = false,
-    onStreamChunk?: (chunk: string) => void
+    onStreamChunk?: (chunk: string) => void,
+    onReasoningChunk?: (chunk: string) => void
   ): Promise<string> {
     let modelsResponse = this.listModels();
     let model = modelsResponse.models.find(m => m.name === modelName);
@@ -661,7 +663,7 @@ export class ModelManager {
     }
     const { fetchResponse } = await import('./sendApi');
     const params = { ...DEFAULT_INFERENCE_PARAMS, ...this.getModelParams(modelName) };
-    return fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, params);
+    return fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, params, onReasoningChunk);
   }
 
   /**
@@ -674,13 +676,14 @@ export class ModelManager {
     token?: string,
     enableStreaming: boolean = false,
     onStreamChunk?: (chunk: string) => void,
-    inferenceParams?: InferenceParams
+    inferenceParams?: InferenceParams,
+    onReasoningChunk?: (chunk: string) => void
   ): Promise<string> {
     if (serverAddress.includes('api.observer-ai.com') && token) {
       this.optimisticUpdateQuota();
     }
     const { fetchResponse } = await import('./sendApi');
-    return fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, inferenceParams);
+    return fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, inferenceParams, onReasoningChunk);
   }
 
   private optimisticUpdateQuota(): void {

@@ -326,7 +326,15 @@ export async function executeAgentIteration(agentId: string): Promise<void> {
         }
       };
 
-      response = await ModelManager.getInstance().sendPrompt(agent.model_name, preprocessResult, token, true, onStreamChunk);
+      const onReasoningChunk = (chunk: string) => {
+        try {
+          Logger.debug(agentId, 'Thinking chunk', { logType: 'thinking-chunk', iterationId, content: { chunk } });
+        } catch (error) {
+          Logger.debug(agentId, `Failed to log thinking event: ${error}`, { iterationId });
+        }
+      };
+
+      response = await ModelManager.getInstance().sendPrompt(agent.model_name, preprocessResult, token, true, onStreamChunk, onReasoningChunk);
 
       // Cache new response for potential reuse on next iteration
       if (activeLoops[agentId]) {
