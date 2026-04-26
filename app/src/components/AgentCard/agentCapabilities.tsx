@@ -78,6 +78,7 @@ export const TOOL_CONFIG: Record<string, ToolConfigEntry> = {
     overlay: { label: 'Overlay', iconName: 'Monitor', iconType: 'lucide', regex: /overlay\s*\(/g },
     click: { label: 'Mouse Click', iconName: 'MousePointer', iconType: 'lucide', regex: /\bclick\s*\(/g, warning: 'Position mouse before agent runs' },
     call: { label: 'Phone Call', iconName: 'Phone', iconType: 'lucide', regex: /\bcall\s*\(/g },
+    celebrate: { label: 'Celebrate', iconName: 'PartyPopper', iconType: 'lucide', regex: /\bcelebrate\s*\(/g },
 };
 
 // --- Icon Loading Helpers ---

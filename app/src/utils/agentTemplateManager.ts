@@ -2,7 +2,7 @@
 
 import { CompleteAgent } from './agent_database';
 
-export type SimpleTool = 'notification' | 'memory' | 'sms' | 'email' | 'whatsapp' | 'call' | 'start_clip' | 'mark_clip' | 'pushover' | 'discord' | 'telegram' | 'ask' | 'system_notify' | 'message' | 'overlay' | 'click';
+export type SimpleTool = 'notification' | 'memory' | 'sms' | 'email' | 'whatsapp' | 'call' | 'start_clip' | 'mark_clip' | 'pushover' | 'discord' | 'telegram' | 'ask' | 'system_notify' | 'message' | 'overlay' | 'click' | 'celebrate';
 
 export interface ToolData {
   smsPhoneNumber?: string;
@@ -112,6 +112,12 @@ overlay(response);
 // Triggers a mouse click at the current cursor position.
 // IMPORTANT: Position the mouse before the agent runs.
 click();
+`,
+
+  celebrate: () => `
+// --- CELEBRATE TOOL ---
+// Triggers a celebration animation in the Observer UI.
+celebrate();
 `,
   call: (data: ToolData) => {
     const phoneNumber = data.phoneNumber ? JSON.stringify(data.phoneNumber) : '""';

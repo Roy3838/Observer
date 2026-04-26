@@ -3,7 +3,7 @@ import Modal from '@components/EditAgent/Modal';
 import {
   X, Mail, MessageSquare, MessageSquareQuote, Bell, Monitor, MessageCircle,
   MessageSquarePlus, CheckCircle, XCircle, Loader2, Save, SquarePen, PlayCircle,
-  StopCircle, Hourglass, Video, VideoOff, Tag, Info, MousePointer, Phone, Zap, Brain
+  StopCircle, Hourglass, Video, VideoOff, Tag, Info, MousePointer, Phone, Zap, Brain, PartyPopper
 } from 'lucide-react';
 import { WhatsAppIcon, DiscordIcon } from './icons';
 import type { TokenProvider } from '@utils/main_loop';
@@ -233,6 +233,16 @@ function getAllTools(channel?: WhitelistChannel): ToolConfig[] {
       parameters: [],
       testMessage: '',
       warning: '⚠️ IMPORTANT: Position mouse on a button that the agent will click.'
+    },
+    {
+      id: 'celebrate',
+      name: 'celebrate()',
+      functionName: 'celebrate',
+      icon: PartyPopper,
+      description: 'Trigger a celebration animation in the Observer UI',
+      isTestable: true,
+      parameters: [],
+      testMessage: ''
     },
 
     // Non-testable tools (info only)
@@ -1262,6 +1272,11 @@ const ToolsModal: React.FC<ToolsModalProps> = ({ isOpen, onClose, code, agentNam
         case 'click': {
           const appUrl = 'http://localhost:3838';
           await utils.click(appUrl);
+          break;
+        }
+
+        case 'celebrate': {
+          window.dispatchEvent(new CustomEvent('celebrateAgent', { detail: { agentId } }));
           break;
         }
 

@@ -189,6 +189,7 @@ App Tools:
   * `system_notify(body, title="Observer AI")` - Sends a system notification
   * `overlay(body)` - Pushes a message to the overlay
   * `click('left'|'right')` - Triggers a mouse click at the current cursor position accepts either 'left' or 'right', defaults to left.
+  * `celebrate()` - Triggers a celebration animation in the Observer UI.
 ## Code Tab
 
 The "Code" tab receives the following variables as context before running: 

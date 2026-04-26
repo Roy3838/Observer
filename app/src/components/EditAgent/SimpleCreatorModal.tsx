@@ -7,7 +7,7 @@ import { isIOS } from '@utils/platform';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { listAgents, CompleteAgent } from '@utils/agent_database';
 import {
-  Bell, Save, Monitor, ScanText, Eye, Camera, Clipboard, Mic, ArrowRight, ArrowLeft, ChevronDown, AlertTriangle, Info, Loader2, CheckCircle2, MessageSquare, Smartphone, Mail, Volume2, Blend, Clapperboard, Tag, HelpCircle, MessageCircle, Images, Server, MousePointer, Phone
+  Bell, Save, Monitor, ScanText, Eye, Camera, Clipboard, Mic, ArrowRight, ArrowLeft, ChevronDown, AlertTriangle, Info, Loader2, CheckCircle2, MessageSquare, Smartphone, Mail, Volume2, Blend, Clapperboard, Tag, HelpCircle, MessageCircle, Images, Server, MousePointer, Phone, PartyPopper
 } from 'lucide-react';
 
 
@@ -473,6 +473,7 @@ const SimpleCreatorModal: React.FC<SimpleCreatorModalProps> = ({ isOpen, onClose
                       <button type="button" onClick={() => toggleTool('overlay')} className={`group flex items-center space-x-4 p-4 border-2 rounded-lg text-left transition-all ${selectedTools.has('overlay') ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}><Monitor className={`h-8 w-8 transition-colors ${selectedTools.has('overlay') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-600'}`} /><div><h3 className="font-semibold text-gray-900">Show Overlay</h3><p className="text-sm text-gray-500">Displays message in translucent overlay.</p></div></button>
                       {/* Click Tool */}
                       <button type="button" onClick={() => toggleTool('click')} className={`group flex items-center space-x-4 p-4 border-2 rounded-lg text-left transition-all ${selectedTools.has('click') ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}><MousePointer className={`h-8 w-8 transition-colors ${selectedTools.has('click') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-600'}`} /><div><h3 className="font-semibold text-gray-900">Mouse Click</h3><p className="text-sm text-gray-500">Clicks at current cursor position.</p></div></button>
+                      <button type="button" onClick={() => toggleTool('celebrate')} className={`group flex items-center space-x-4 p-4 border-2 rounded-lg text-left transition-all ${selectedTools.has('celebrate') ? 'border-yellow-500 bg-yellow-50' : 'border-gray-300 hover:border-gray-400'}`}><PartyPopper className={`h-8 w-8 transition-colors ${selectedTools.has('celebrate') ? 'text-yellow-500' : 'text-gray-400 group-hover:text-gray-600'}`} /><div><h3 className="font-semibold text-gray-900">Celebrate</h3><p className="text-sm text-gray-500">Triggers a celebration animation.</p></div></button>
                     </div>
                   </div>
                 )}

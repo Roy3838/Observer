@@ -48,7 +48,8 @@ App Tools (only available with Observer App installed)
   * \`message(message, title="Agent Message")\` 
   * \`system_notify(body, title="Observer AI")\` 
   * \`overlay(body)\` 
-  * \`click()\` 
+  * \`click()\`
+  * \`celebrate()\`
 
 **Your Philosophy:**
 
