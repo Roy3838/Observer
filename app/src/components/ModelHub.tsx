@@ -941,7 +941,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
 
                     <div className="flex-shrink-0">
                       {unavailable ? (
-                        <span className="text-xs text-gray-400" title="Install the desktop app to use llama.cpp">Desktop only</span>
+                        <span className="text-xs text-gray-400" title="Install the desktop app to use llama.cpp">App only</span>
                       ) : installed ? (
                         <span className="flex items-center gap-1 text-xs text-green-700 font-medium">
                           <CheckCircle size={12} /> Installed
