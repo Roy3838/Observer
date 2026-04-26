@@ -77,6 +77,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.6.2",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/dom-speech-recognition": "^0.0.6",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.17.10",
