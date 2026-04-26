@@ -46,7 +46,6 @@ import { AcceptToS } from '@components/AcceptToS';
 import AgentActivityModal from '@components/AgentCard/AgentActivityModal';
 import FeedbackDialog from '@components/FeedbackDialog';
 import { startCommandSSE, updateCommandSSEToken } from '@utils/commandSSE';
-import { ModelManager } from '@utils/ModelManager';
 import WhitelistModal from '@components/WhitelistModal';
 import InteractiveTutorial from '@components/InteractiveTutorial';
 import AgentChip from '@components/AgentChip';
