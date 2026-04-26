@@ -10,6 +10,7 @@ import { isMobile } from '@utils/platform';
 import ToolStatus from '@components/AgentCard/ToolStatus';
 import SensorPreviewPanel from './SensorPreviewPanel';
 import ChangeDetectionIndicator from './ChangeDetectionIndicator';
+import PieTimer from './PieTimer';
 import ChangeDetectionSettings from '@components/ChangeDetectionSettings';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -20,7 +21,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import 'katex/dist/katex.min.css';
 
-type AgentLiveStatus = 'STARTING' | 'CAPTURING' | 'THINKING' | 'RESPONDING' | 'WAITING' | 'SKIPPED' | 'SLEEPING' | 'IDLE';
+export type AgentLiveStatus = 'STARTING' | 'CAPTURING' | 'THINKING' | 'RESPONDING' | 'WAITING' | 'SKIPPED' | 'SLEEPING' | 'IDLE';
 
 // Define the type for change detection data
 interface ChangeDetectionData {
@@ -45,86 +46,6 @@ interface ChangeDetectionData {
 }
 
 // --- Helper Components ---
-
-const PieTimer: React.FC<{
-  progress: number;      // 0-100
-  color: 'green' | 'blue' | 'orange';
-  totalDurationMs?: number;
-  isFilling?: boolean;   // true = filling (WAITING), false = draining (SLEEPING)
-  size?: number;         // default: 20
-}> = ({ progress, color, totalDurationMs, isFilling = true, size = 20 }) => {
-  const strokeWidth = 2;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (progress / 100) * circumference;
-
-  const strokeColor = color === 'green' ? 'stroke-green-500' : color === 'orange' ? 'stroke-orange-400' : 'stroke-blue-500';
-  const textColor = color === 'green' ? 'fill-green-600' : color === 'orange' ? 'fill-orange-500' : 'fill-blue-600';
-
-  // Calculate remaining seconds and format as MM:SS
-  let timeDisplay = '';
-  if (totalDurationMs) {
-    let remainingSeconds = 0;
-    if (isFilling) {
-      // For WAITING (fills 0→100%): calculate remaining time
-      remainingSeconds = Math.ceil((totalDurationMs * (100 - progress)) / 100 / 1000);
-    } else {
-      // For SLEEPING (drains 100→0%): calculate remaining time
-      remainingSeconds = Math.ceil((totalDurationMs * progress) / 100 / 1000);
-    }
-
-    // Format as M:SS or MM:SS
-    const minutes = Math.floor(remainingSeconds / 60);
-    const seconds = remainingSeconds % 60;
-
-    if (minutes > 0) {
-      timeDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    } else {
-      timeDisplay = `${seconds}`;
-    }
-  }
-
-  return (
-    <svg width={size} height={size} className="flex-shrink-0 -rotate-90">
-      {/* Background circle */}
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={strokeWidth}
-        className="stroke-gray-200"
-      />
-      {/* Progress circle */}
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        strokeWidth={strokeWidth}
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        className={strokeColor}
-        style={{ transition: 'stroke-dashoffset 0.1s linear' }}
-      />
-      {/* Text in center - rotate back to normal */}
-      {totalDurationMs && timeDisplay && (
-        <text
-          x={size / 2}
-          y={size / 2}
-          textAnchor="middle"
-          dominantBaseline="central"
-          className={`text-[7px] font-semibold ${textColor} rotate-90`}
-          style={{ transform: 'rotate(90deg)', transformOrigin: 'center' }}
-        >
-          {timeDisplay}
-        </text>
-      )}
-    </svg>
-  );
-};
 
 const SleepIcon: React.FC<{ onWake?: () => void }> = ({ onWake }) => {
   const [isHovered, setIsHovered] = useState(false);

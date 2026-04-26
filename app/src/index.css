@@ -2,6 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Agent card minimize-to-tray animation */
+@keyframes minimize-to-tray {
+  0%   { transform: scale(1) translate(0, 0);         opacity: 1; }
+  100% { transform: scale(0.05) translate(80px, 80px); opacity: 0; }
+}
+.animate-minimize-to-tray {
+  animation: minimize-to-tray 0.32s cubic-bezier(0.4, 0, 0.8, 1) forwards;
+  transform-origin: bottom right;
+  pointer-events: none;
+}
+
+/* Agent chip pop-in animation */
+@keyframes chip-pop-in {
+  0%   { transform: scale(0.4); opacity: 0; }
+  65%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+.animate-chip-pop-in {
+  animation: chip-pop-in 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
 /* iOS WebView scroll fix: Prevent body scroll, use inner scroll container */
 html, body {
   height: 100%;

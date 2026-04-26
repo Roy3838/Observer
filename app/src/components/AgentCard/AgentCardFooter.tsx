@@ -1,6 +1,6 @@
 // components/AgentCard/AgentCardFooter.tsx
 import React from 'react';
-import { Edit, Trash2, Terminal, Sparkles } from 'lucide-react';
+import { Edit, Trash2, Terminal, Sparkles, Minus } from 'lucide-react';
 
 interface AgentCardFooterProps {
     agentId: string;
@@ -13,17 +13,19 @@ interface AgentCardFooterProps {
     onActivity: (agentId: string) => void;
     onShowJupyterModal: () => void;
     onAIEdit?: (agentId: string) => void;
+    onMinimize: () => void;
 }
 
 const AgentCardFooter: React.FC<AgentCardFooterProps> = ({
     agentId, isPythonAgent, isJupyterConnected, isMemoryFlashing,
-    onEdit, onDelete, onMemory, onActivity, onShowJupyterModal, onAIEdit
+    onEdit, onDelete, onMemory, onActivity, onShowJupyterModal, onAIEdit, onMinimize
 }) => {
     return (
         <div className="border-t border-gray-200 bg-gray-50 px-4 py-2 flex justify-between items-center">
-            {/* Left Side: Delete */}
+            {/* Left Side: Delete + Minimize */}
             <div className="flex items-center gap-2">
                 <button onClick={() => onDelete(agentId)} className="flex items-center justify-center p-2 text-red-600 hover:bg-red-100 rounded-md" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                <button onClick={onMinimize} className="flex items-center justify-center p-2 text-gray-400 hover:bg-gray-200 hover:text-gray-600 rounded-md" title="Minimize to tray"><Minus className="w-4 h-4" /></button>
             </div>
 
             {/* Center: Memory and Activity */}

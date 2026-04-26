@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Terminal, MessageSquare, ChevronUp, X } from 'lucide-react';
+import { Terminal, MessageSquare, ChevronUp } from 'lucide-react';
 import { Auth0Provider } from '@auth0/auth0-react';
 import { platform as getPlatform } from '@tauri-apps/plugin-os';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
@@ -50,6 +50,7 @@ import { startCommandSSE, updateCommandSSEToken } from '@utils/commandSSE';
 import { ModelManager } from '@utils/ModelManager';
 import WhitelistModal from '@components/WhitelistModal';
 import InteractiveTutorial from '@components/InteractiveTutorial';
+import AgentChip from '@components/AgentChip';
 
 // Main app content - uses the unified auth hook
 function AppContent() {
@@ -128,6 +129,22 @@ function AppContent() {
   } | null>(null);
 
   const hasAutoStartedTutorialRef = useRef(false);
+
+  // Minimized agents — persisted to localStorage
+  const [minimizedAgents, setMinimizedAgents] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('observer_minimized_agents');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+
+  useEffect(() => {
+    localStorage.setItem('observer_minimized_agents', JSON.stringify([...minimizedAgents]));
+  }, [minimizedAgents]);
+
+  const handleMinimize = (agentId: string) =>
+    setMinimizedAgents(prev => new Set([...prev, agentId]));
+
+  const handleRestore = (agentId: string) =>
+    setMinimizedAgents(prev => { const s = new Set(prev); s.delete(agentId); return s; });
 
   // Dark mode state
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -371,6 +388,7 @@ function AppContent() {
 
       await deleteAgent(agentId);
       Logger.info('APP', `Agent "${agent.name}" deleted successfully`);
+      setMinimizedAgents(prev => { const s = new Set(prev); s.delete(agentId); return s; });
       await fetchAgents();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
@@ -681,6 +699,9 @@ function AppContent() {
     });
   }, [agents, runningAgents, startingAgents]);
 
+  // Show GetStarted when no agents exist OR all are minimized
+  const showGetStarted = agents.length === 0 || minimizedAgents.size === agents.length;
+
   return (
     <div className="app-container bg-gray-50">
       <style>
@@ -745,62 +766,66 @@ function AppContent() {
         onClose={() => setIsJupyterModalOpen(false)}
       />
 
-      <main className="w-full pt-4 px-2 md:px-4 md:pl-20 wide:px-4 max-w-7xl mx-auto">
+      <main className="w-full pt-4 px-2 md:px-4 md:pl-20 wide:px-4 max-w-7xl mx-auto pb-20 md:pb-4">
         {error && <ErrorDisplay message={error} />}
 
         {/* My Agents Tab */}
         <div className={activeTab !== 'myAgents' ? 'hidden' : ''}>
-          {sortedAgents.length > 0 ? (
-            <div className="px-4">
-              <AgentImportHandler
-                onAddAgent={handleAddAgentClick}
-                agentCount={agents.length}
-                activeAgentCount={runningAgents.size}
-                isRefreshing={isRefreshing}
-                onRefresh={fetchAgents}
-                onGenerateAgent={() => setIsConversationalModalOpen(true)}
-              />
+          {/* Agent grid — hidden (not unmounted) when showGetStarted so cards keep their state */}
+          <div className={showGetStarted ? 'hidden' : 'px-4'}>
+            <AgentImportHandler
+              onAddAgent={handleAddAgentClick}
+              agentCount={agents.length}
+              activeAgentCount={runningAgents.size}
+              isRefreshing={isRefreshing}
+              onRefresh={fetchAgents}
+              onGenerateAgent={() => setIsConversationalModalOpen(true)}
+            />
 
-              <div className="flex flex-wrap gap-6 items-start overflow-x-hidden">
-                {sortedAgents.map(agent => {
-                  const isAgentLive = runningAgents.has(agent.id) || startingAgents.has(agent.id);
-                  return (
-                    <div
-                      key={agent.id}
-                      className={`flex-shrink-0 transition-all duration-700 ease-in-out ${
-                        isAgentLive ? 'w-full' : 'w-full xl:w-[calc(50%-12px)]'
-                      }`}
-                    >
-                      <AgentCard
-                        agent={agent}
-                        code={agentCodes[agent.id]}
-                        isRunning={runningAgents.has(agent.id)}
-                        isStarting={startingAgents.has(agent.id)}
-                        isMemoryFlashing={flashingMemories.has(agent.id)}
-                        onEdit={handleEditClick}
-                        onDelete={handleDeleteClick}
-                        onToggle={toggleAgent}
-                        onMemory={handleMemoryClick}
-                        onActivity={handleActivityClick}
-                        onShowJupyterModal={() => setIsJupyterModalOpen(true)}
-                        getToken={getToken}
-                        isAuthenticated={isAuthenticated}
-                        hasQuotaError={agentsWithQuotaError.has(agent.id)}
-                        onUpgradeClick={() => {
-                          setIsHalfwayWarning(false);
-                          setIsUpgradeModalOpen(true);
-                        }}
-                        onSave={handleSaveAgent}
-                        isProUser={isProUser}
-                        onAIEdit={handleAIEditClick}
-                        hostingContext={hostingContext}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+            <div className="flex flex-wrap gap-6 items-start overflow-x-hidden">
+              {sortedAgents.map(agent => {
+                const isMinimized = minimizedAgents.has(agent.id);
+                const isAgentLive = runningAgents.has(agent.id) || startingAgents.has(agent.id);
+                return (
+                  <div
+                    key={agent.id}
+                    className={`flex-shrink-0 transition-all duration-700 ease-in-out ${
+                      isAgentLive ? 'w-full' : 'w-full xl:w-[calc(50%-12px)]'
+                    } ${isMinimized ? 'hidden' : ''}`}
+                  >
+                    <AgentCard
+                      agent={agent}
+                      code={agentCodes[agent.id]}
+                      isRunning={runningAgents.has(agent.id)}
+                      isStarting={startingAgents.has(agent.id)}
+                      isMemoryFlashing={flashingMemories.has(agent.id)}
+                      onEdit={handleEditClick}
+                      onDelete={handleDeleteClick}
+                      onToggle={toggleAgent}
+                      onMemory={handleMemoryClick}
+                      onActivity={handleActivityClick}
+                      onShowJupyterModal={() => setIsJupyterModalOpen(true)}
+                      getToken={getToken}
+                      isAuthenticated={isAuthenticated}
+                      hasQuotaError={agentsWithQuotaError.has(agent.id)}
+                      onUpgradeClick={() => {
+                        setIsHalfwayWarning(false);
+                        setIsUpgradeModalOpen(true);
+                      }}
+                      onSave={handleSaveAgent}
+                      isProUser={isProUser}
+                      onAIEdit={handleAIEditClick}
+                      hostingContext={hostingContext}
+                      onMinimize={() => handleMinimize(agent.id)}
+                      isMinimized={minimizedAgents.has(agent.id)}
+                    />
+                  </div>
+                );
+              })}
             </div>
-          ) : (
+          </div>
+
+          {showGetStarted && (
             <GetStarted
               onExploreCommunity={() => setActiveTab('community')}
               onCreateNewAgent={handleAddAgentClick}
@@ -940,74 +965,113 @@ function AppContent() {
         />
       )}
 
-      {/* Mobile FAB / Floating bubble */}
-      {!isMobileFooterOpen ? (
-        <button
-          onClick={() => setIsMobileFooterOpen(true)}
-          className="fixed bottom-4 right-4 z-50 md:hidden w-10 h-10 bg-white/95 backdrop-blur-sm text-gray-700 rounded-full shadow-lg border border-gray-200 flex items-center justify-center"
-          style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
-        >
-          <ChevronUp size={18} />
-        </button>
-      ) : (
-        <>
-          <div
-            className="fixed inset-0 z-50 md:hidden"
-            onClick={() => setIsMobileFooterOpen(false)}
-          />
-          <div
-            className="fixed bottom-4 right-4 z-50 md:hidden flex items-center space-x-2 bg-white/95 backdrop-blur-sm rounded-full shadow-lg border border-gray-200 px-3 py-2"
-            style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
-          >
-            <button
-              className="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full hover:bg-gray-200 transition"
-              onClick={() => {
-                setShowGlobalLogs(!showGlobalLogs);
-                setIsMobileFooterOpen(false);
-              }}
-              title="Logs"
-            >
-              <Terminal className="h-4 w-4" />
-            </button>
-            <div className="w-px h-5 bg-gray-200" />
-            <button
-              onClick={() => {
-                setIsFeedbackOpen(true);
-                setIsMobileFooterOpen(false);
-              }}
-              className="p-1.5 text-gray-700 hover:text-blue-600 transition"
-              title="Send feedback"
-            >
-              <MessageSquare className="h-4 w-4" />
-            </button>
-            <div className="w-px h-5 bg-gray-200" />
-            <div className="flex items-center space-x-2">
-              <a href="https://discord.gg/wnBb7ZQDUC" target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-600 transition" title="Discord">
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.127 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z" /></svg>
-              </a>
-              <a href="https://x.com/AppObserverAI" target="_blank" rel="noopener noreferrer" className="text-gray-800 hover:text-gray-900 transition" title="X">
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.244H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
-              </a>
-              <a href="https://buymeacoffee.com/roy3838" target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-gray-900 transition" title="Support">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-              </a>
-              <a href="https://github.com/Roy3838/Observer" target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-gray-900 transition" title="GitHub">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" /></svg>
-              </a>
+      {/* Mobile bottom nav — always visible floating bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+
+        {/* Expanded panel — floats above the bar */}
+        {isMobileFooterOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setIsMobileFooterOpen(false)} />
+            <div className="relative z-50 mx-4 mb-2 bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-100/80 px-5 py-4">
+              <div className="flex items-center justify-between">
+                {/* Action tiles */}
+                <div className="flex items-center gap-3">
+                  <button
+                    className="flex flex-col items-center justify-center w-16 h-16 bg-gray-50 rounded-2xl active:scale-95 transition-transform"
+                    onClick={() => { setShowGlobalLogs(!showGlobalLogs); setIsMobileFooterOpen(false); }}
+                  >
+                    <Terminal className="h-5 w-5 text-gray-600" />
+                    <span className="text-[10px] text-gray-500 mt-1.5 font-medium tracking-wide">Logs</span>
+                  </button>
+                  <button
+                    onClick={() => { setIsFeedbackOpen(true); setIsMobileFooterOpen(false); }}
+                    className="flex flex-col items-center justify-center w-16 h-16 bg-blue-50 rounded-2xl active:scale-95 transition-transform"
+                  >
+                    <MessageSquare className="h-5 w-5 text-blue-500" />
+                    <span className="text-[10px] text-blue-500 mt-1.5 font-medium tracking-wide">Feedback</span>
+                  </button>
+                </div>
+
+                {/* Social icon tiles */}
+                <div className="flex items-center gap-2.5">
+                  <a href="https://discord.gg/wnBb7ZQDUC" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 active:scale-95 transition-transform" title="Discord">
+                    <div className="w-11 h-11 bg-indigo-50 rounded-xl flex items-center justify-center">
+                      <svg className="h-5 w-5 text-indigo-500" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.127 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z" /></svg>
+                    </div>
+                  </a>
+                  <a href="https://x.com/AppObserverAI" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 active:scale-95 transition-transform" title="X / Twitter">
+                    <div className="w-11 h-11 bg-gray-50 rounded-xl flex items-center justify-center">
+                      <svg className="h-5 w-5 text-gray-800" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.244H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
+                    </div>
+                  </a>
+                  <a href="https://buymeacoffee.com/roy3838" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 active:scale-95 transition-transform" title="Support">
+                    <div className="w-11 h-11 bg-yellow-50 rounded-xl flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5 text-yellow-600"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                    </div>
+                  </a>
+                  <a href="https://github.com/Roy3838/Observer" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 active:scale-95 transition-transform" title="GitHub">
+                    <div className="w-11 h-11 bg-gray-50 rounded-xl flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-5 w-5 text-gray-700"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" /></svg>
+                    </div>
+                  </a>
+                </div>
+              </div>
             </div>
-            <div className="w-px h-5 bg-gray-200" />
-            <button
-              onClick={() => setIsMobileFooterOpen(false)}
-              className="p-1 text-gray-500 hover:text-gray-700 transition"
-            >
-              <X size={16} />
-            </button>
+          </>
+        )}
+
+        {/* Always-visible pill bar */}
+        <div className="mx-4 mb-3 h-14 bg-white/85 backdrop-blur-xl rounded-3xl shadow-xl border border-gray-100/80 px-3 flex items-center gap-2">
+          {/* Minimized agent chips — scrollable */}
+          <div className="flex items-center gap-2 flex-1 overflow-x-auto min-w-0" style={{ scrollbarWidth: 'none' }}>
+            {minimizedAgents.size === 0 ? (
+              <span className="text-xs text-gray-400 px-1 select-none">No minimized agents</span>
+            ) : (
+              agents.map(a => minimizedAgents.has(a.id) ? (
+                <AgentChip
+                  key={a.id}
+                  agent={a}
+                  isRunning={runningAgents.has(a.id)}
+                  isStarting={startingAgents.has(a.id)}
+                  isMinimized={true}
+                  onRestore={() => handleRestore(a.id)}
+                  onToggle={toggleAgent}
+                />
+              ) : null)
+            )}
           </div>
-        </>
-      )}
+
+          {/* Chevron toggle — 44px touch target */}
+          <button
+            onClick={() => setIsMobileFooterOpen(!isMobileFooterOpen)}
+            className={`flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-2xl active:scale-90 transition-all duration-200 ${
+              isMobileFooterOpen
+                ? 'bg-gray-800 text-white shadow-md'
+                : 'bg-gray-100 text-gray-500'
+            }`}
+          >
+            <ChevronUp size={18} className={`transition-transform duration-300 ${isMobileFooterOpen ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+      </div>
 
       {/* Desktop floating bubble */}
       <div className="fixed bottom-4 right-4 z-40 hidden md:flex items-center space-x-3 bg-white/95 backdrop-blur-sm rounded-full shadow-lg border border-gray-200 px-4 py-2.5">
+        <div className={`flex items-center gap-1.5 max-w-[40vw] overflow-x-auto ${minimizedAgents.size === 0 ? 'hidden' : ''}`} style={{ scrollbarWidth: 'none' }}>
+          {agents.map(a => (
+            <div key={a.id} className={minimizedAgents.has(a.id) ? '' : 'hidden'}>
+              <AgentChip
+                agent={a}
+                isRunning={runningAgents.has(a.id)}
+                isStarting={startingAgents.has(a.id)}
+                isMinimized={minimizedAgents.has(a.id)}
+                onRestore={() => handleRestore(a.id)}
+                onToggle={toggleAgent}
+              />
+            </div>
+          ))}
+        </div>
+        {minimizedAgents.size > 0 && <div className="w-px h-5 bg-gray-200 flex-shrink-0" />}
         <button
           className="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full hover:bg-gray-200 transition"
           onClick={() => setShowGlobalLogs(!showGlobalLogs)}

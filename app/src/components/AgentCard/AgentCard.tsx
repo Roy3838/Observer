@@ -53,12 +53,14 @@ interface AgentCardProps {
   isProUser?: boolean;
   onAIEdit?: (agentId: string) => void;
   hostingContext?: 'official-web' | 'self-hosted' | 'tauri';
+  onMinimize: () => void;
+  isMinimized?: boolean;
 }
 
 
 const AgentCard: React.FC<AgentCardProps> = ({
   agent, code, isRunning, isStarting, isMemoryFlashing, onEdit, onDelete, onToggle,
-  onMemory, onActivity, onShowJupyterModal, getToken, hasQuotaError, onUpgradeClick, onSave, isProUser = false, onAIEdit, hostingContext
+  onMemory, onActivity, onShowJupyterModal, getToken, hasQuotaError, onUpgradeClick, onSave, isProUser = false, onAIEdit, hostingContext, onMinimize, isMinimized
 }) => {
   const [isPythonAgent, setIsPythonAgent] = useState(false);
   const [startWarning, setStartWarning] = useState<string | null>(null);
@@ -78,6 +80,18 @@ const AgentCard: React.FC<AgentCardProps> = ({
   const loopStartTimeRef = useRef(0);
   const loopDurationRef = useRef(0);
   const [isOverrun, setIsOverrun] = useState(false);
+
+  const [isMinimizing, setIsMinimizing] = useState(false);
+
+  // Reset animation state when card is restored
+  useEffect(() => {
+    if (!isMinimized) setIsMinimizing(false);
+  }, [isMinimized]);
+
+  const handleMinimizeClick = () => {
+    setIsMinimizing(true);
+    setTimeout(onMinimize, 300);
+  };
 
   const showStartingState = useMemo(() => isStarting || isCheckingModel, [isStarting, isCheckingModel]);
   const isLive = useMemo(() => (isRunning || showStartingState) && !hasQuotaError, [isRunning, showStartingState, hasQuotaError]);
@@ -345,7 +359,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
 
   return (
     <div
-      className="relative bg-white rounded-xl shadow-sm border border-gray-200 transition-all duration-300 flex flex-col"
+      className={`relative bg-white rounded-xl shadow-sm border border-gray-200 transition-all duration-300 flex flex-col ${isMinimizing ? 'animate-minimize-to-tray' : ''}`}
       data-tutorial-agent-card={agent.id}
     >
       {isRunning && (
@@ -447,6 +461,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
         onActivity={onActivity}
         onShowJupyterModal={onShowJupyterModal}
         onAIEdit={onAIEdit}
+        onMinimize={handleMinimizeClick}
       />
     </div>
   );
