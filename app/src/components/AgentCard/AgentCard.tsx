@@ -1,5 +1,6 @@
 // components/AgentCard/AgentCard.tsx
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import confetti from 'canvas-confetti';
 import { Zap } from 'lucide-react';
 import { CompleteAgent } from '@utils/agent_database';
 import { isJupyterConnected } from '@utils/handlers/JupyterConfig';
@@ -87,6 +88,23 @@ const AgentCard: React.FC<AgentCardProps> = ({
   useEffect(() => {
     if (!isMinimized) setIsMinimizing(false);
   }, [isMinimized]);
+
+  // Confetti celebration triggered by celebrate() tool
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      if (e.detail?.agentId !== agent.id) return;
+      const card = document.querySelector(`[data-tutorial-agent-card="${agent.id}"]`);
+      const origin = card
+        ? (() => {
+            const r = card.getBoundingClientRect();
+            return { x: (r.left + r.width / 2) / window.innerWidth, y: (r.top + r.height / 2) / window.innerHeight };
+          })()
+        : { x: 0.5, y: 0.5 };
+      confetti({ particleCount: 120, spread: 70, origin });
+    };
+    window.addEventListener('celebrateAgent', handler as EventListener);
+    return () => window.removeEventListener('celebrateAgent', handler as EventListener);
+  }, [agent.id]);
 
   const handleMinimizeClick = () => {
     setIsMinimizing(true);

@@ -681,6 +681,11 @@ export async function executeJavaScript(
         }
       },
 
+      celebrate: (): void => {
+        window.dispatchEvent(new CustomEvent('celebrateAgent', { detail: { agentId } }));
+        Logger.info(agentId, 'celebrate() called', { logType: 'tool-success', iterationId });
+      },
+
     };
 
     const wrappedCode = `

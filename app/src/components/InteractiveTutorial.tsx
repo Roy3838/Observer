@@ -1,29 +1,35 @@
 // src/components/InteractiveTutorial.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { X as CloseIcon, Sparkles, Play, Eye, Camera, CheckCircle2, Square, Zap, Heart, Star, Loader2 } from 'lucide-react';
 import { useAuth } from '@contexts/AuthContext';
-import { X as CloseIcon, Sparkles, Wrench, Play } from 'lucide-react';
+import { useApplePayments } from '@hooks/useApplePayments';
+import { isIOS } from '@utils/platform';
+import { CreditInfoButton } from './CreditVisualization';
 import { Logger } from '@utils/logging';
 
 export type TutorialStep = {
   id: string;
-  targetSelector?: string; // CSS selector for the element to highlight (optional for non-spotlight steps)
+  targetSelector?: string;
   title: string;
   message: string;
   icon?: React.ReactNode;
-  position?: 'top' | 'bottom' | 'left' | 'right' | 'center' | 'top-left'; // 'center' for floating messages, 'top-left' for corner
-  action?: 'click' | 'auto'; // 'click' = user must click the highlighted element, 'auto' = auto-advance
-  waitForEvent?: string; // Custom event name to wait for before advancing
-  noSpotlight?: boolean; // If true, shows message without highlighting any element
-  noOverlay?: boolean; // If true, doesn't show any background overlay (allows full interaction)
+  position?: 'top' | 'bottom' | 'left' | 'right' | 'center' | 'top-left';
+  action?: 'click' | 'auto';
+  waitForEvent?: string;
+  noSpotlight?: boolean;
+  noOverlay?: boolean;
 };
 
 interface InteractiveTutorialProps {
   isActive: boolean;
-  onComplete: () => void;
+  onComplete: (agentId: string) => void;
   onDismiss: () => void;
   agentId: string;
-  hasPhoneTools: boolean;
+  onImportAgent: () => Promise<void>;
+  onViewAllTiers: () => void;
+  tier?: string | null;
 }
 
 export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
@@ -31,243 +37,190 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
   onComplete,
   onDismiss,
   agentId,
-  hasPhoneTools,
+  onImportAgent,
+  onViewAllTiers,
+  tier,
 }) => {
-  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
-  const [dontShowAgain, setDontShowAgain] = useState(false);
-  const [isTemporarilyHidden, setIsTemporarilyHidden] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [detected, setDetected] = useState(false);
+  const detectedRef = useRef(false);
 
-  // Define tutorial steps
+  // Upsell state
+  const [upsellError, setUpsellError] = useState<string | null>(null);
+  const [isButtonLoading, setIsButtonLoading] = useState(false);
+  const { getAccessToken } = useAuth();
+  const { isLoading: isAppleLoading, error: appleError, purchaseProduct } = useApplePayments();
+  const isAppleDevice = isIOS();
+
   const steps: TutorialStep[] = [
     {
       id: 'welcome',
-      targetSelector: `[data-tutorial-agent-card="${agentId}"]`,
-      title: 'This is your first agent!',
-      message: 'See the timer? It runs in a loop - every few seconds it observes, thinks, acts, then waits to loop again!',
-      icon: <Sparkles className="h-6 w-6 text-blue-500" />,
-      position: 'bottom',
-      action: 'auto',
-    },
-    {
-      id: 'show-tools',
-      targetSelector: `[data-tutorial-tools-button="${agentId}"]`,
-      title: 'This is what your agent will do',
-      message: 'Click the Tools button to see what your agent can do',
-      icon: <Wrench className="h-6 w-6 text-purple-500" />,
-      position: 'right',
-      action: 'click',
-    },
-    {
-      id: 'test-tools',
-      targetSelector: '[data-tutorial-tool-card]',
-      title: 'Test Your Tools',
-      message: 'Click on any tool card to see what it does and test it out!',
-      icon: <Wrench className="h-6 w-6 text-purple-500" />,
-      position: 'right',
-      action: 'click',
-    },
-    {
-      id: 'tools-done',
-      title: 'Great!',
-      message: hasPhoneTools
-        ? 'Test more tools if you want, or close this modal when you\'re ready. Note: Phone tools will require verification when you start your agent.'
-        : 'Test more tools if you want, or close this modal when you\'re ready to continue.',
-      icon: <Wrench className="h-6 w-6 text-purple-500" />,
-      position: 'top-left',
-      action: 'auto',
-      waitForEvent: 'toolsModalClosed',
+      title: 'Welcome to Observer!',
+      message: '',
       noSpotlight: true,
       noOverlay: true,
     },
     {
-      id: 'start',
+      id: 'start-agent',
       targetSelector: `[data-tutorial-start-button="${agentId}"]`,
       title: 'Start Your Agent',
-      message: 'Now click here to start your agent and watch it work!',
+      message: 'Your agent is ready! Hit Start to watch it look for a person.',
       icon: <Play className="h-6 w-6 text-green-500" />,
       position: 'right',
       action: 'click',
+    },
+    {
+      id: 'detecting',
+      title: detected ? '🎉 Person Detected!' : 'Looking...',
+      message: detected
+        ? 'Amazing! Your first agent is working. Now let\'s stop it.'
+        : 'Stand in front of your camera. Your agent is watching every 15 seconds.',
+      icon: <Eye className="h-6 w-6 text-blue-500" />,
+      position: 'top-left',
+      noSpotlight: true,
+      noOverlay: true,
+      waitForEvent: 'celebrateAgent',
+    },
+    {
+      id: 'stop-agent',
+      targetSelector: `[data-tutorial-start-button="${agentId}"]`,
+      title: 'Stop the Agent',
+      message: 'Good job! Click Stop to pause your agent.',
+      icon: <Square className="h-6 w-6 text-red-500" />,
+      position: 'right',
+      action: 'click',
+    },
+    {
+      id: 'minimize-agent',
+      targetSelector: `[data-tutorial-minimize-button="${agentId}"]`,
+      title: 'Minimize to Tray',
+      message: 'Click the minus button to minimize your agent to the bottom nav bar — it keeps running there!',
+      icon: <Square className="h-6 w-6 text-gray-500" />,
+      position: 'right',
+      action: 'click',
+    },
+    {
+      id: 'upsell',
+      title: '',
+      message: '',
+      noSpotlight: true,
+      noOverlay: true,
     },
   ];
 
   const currentStepData = steps[currentStep];
 
-  const handleComplete = () => {
-    if (dontShowAgain && user && 'sub' in user && user.sub) {
-      localStorage.setItem(`observer_tutorial_dismissed_${user.sub}`, 'true');
-      Logger.info('TUTORIAL', 'User completed tutorial with "Don\'t show again"');
-    }
-    onComplete();
-  };
-
   const advanceStep = () => {
     if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1);
+      setCurrentStep(s => s + 1);
     } else {
-      handleComplete();
+      onComplete(agentId);
     }
   };
 
-  const handleDismiss = () => {
-    // Special case: if user closes on step 3 (index 2), hide tutorial, wait for modal to close, then show step 4
-    if (currentStep === 2) {
-      Logger.info('TUTORIAL', 'User closed step 3, hiding tutorial until modal closes');
-      setIsTemporarilyHidden(true);
-      advanceStep();
-      // Listen for modal close event to show tutorial again
-      const handleModalClosed = () => {
-        setIsTemporarilyHidden(false);
-      };
-      window.addEventListener('toolsModalClosed', handleModalClosed, { once: true });
-      return;
-    }
+  const handleDismiss = () => onDismiss();
 
-    if (dontShowAgain && user && 'sub' in user && user.sub) {
-      localStorage.setItem(`observer_tutorial_dismissed_${user.sub}`, 'true');
-      Logger.info('TUTORIAL', 'User dismissed tutorial with "Don\'t show again"');
+  const handleImport = async () => {
+    setIsImporting(true);
+    try {
+      await onImportAgent();
+      setCurrentStep(1);
+    } finally {
+      setIsImporting(false);
     }
-    onDismiss();
   };
 
-  // Update target element position
+  // Upsell handlers (mirrored from WelcomeModal)
+  const handleProCheckout = async () => {
+    setIsButtonLoading(true);
+    setUpsellError(null);
+    try {
+      const token = await getAccessToken();
+      const response = await fetch('https://api.observer-ai.com/payments/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ return_base_url: window.location.origin }),
+      });
+      if (!response.ok) throw new Error('Failed to create checkout session');
+      const { url } = await response.json();
+      window.location.href = url;
+    } catch (err) {
+      setUpsellError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setIsButtonLoading(false);
+    }
+  };
+
+  const handleApplePurchasePro = useCallback(async () => {
+    setIsButtonLoading(true);
+    setUpsellError(null);
+    try {
+      const result = await purchaseProduct('pro');
+      if (result.success) {
+        Logger.info('TUTORIAL', 'StoreKit purchase succeeded');
+        window.location.href = '/upgrade-success';
+      } else {
+        setUpsellError(result.error || 'Purchase failed');
+      }
+    } catch (err) {
+      setUpsellError(err instanceof Error ? err.message : 'Purchase failed');
+    } finally {
+      setIsButtonLoading(false);
+    }
+  }, [purchaseProduct]);
+
+  // Listen for celebrateAgent to advance from detecting step
   useEffect(() => {
-    if (!isActive || !currentStepData) return;
+    if (!isActive || currentStepData?.id !== 'detecting') return;
 
-    // Skip if this is a non-spotlight step
-    if (currentStepData.noSpotlight || !currentStepData.targetSelector) {
+    const handler = () => {
+      if (detectedRef.current) return;
+      detectedRef.current = true;
+      setDetected(true);
+      setTimeout(() => advanceStep(), 2000);
+    };
+
+    window.addEventListener('celebrateAgent', handler);
+    return () => window.removeEventListener('celebrateAgent', handler);
+  }, [isActive, currentStepData, agentId]);
+
+  // Track target element position for spotlight steps
+  useEffect(() => {
+    if (!isActive || !currentStepData?.targetSelector || currentStepData.noSpotlight) {
       setTargetRect(null);
       return;
     }
 
-    const updateTargetPosition = () => {
-      const element = document.querySelector(currentStepData.targetSelector!);
-      if (element) {
-        const rect = element.getBoundingClientRect();
-        setTargetRect(rect);
-      }
+    const update = () => {
+      const el = document.querySelector(currentStepData.targetSelector!);
+      if (el) setTargetRect(el.getBoundingClientRect());
     };
 
-    // Initial update
-    updateTargetPosition();
-
-    // Continuous updates using requestAnimationFrame for smooth tracking
+    update();
     let rafId: number;
-    const continuousUpdate = () => {
-      updateTargetPosition();
-      rafId = requestAnimationFrame(continuousUpdate);
-    };
-    rafId = requestAnimationFrame(continuousUpdate);
-
-    // Update on scroll/resize as backup
-    window.addEventListener('scroll', updateTargetPosition, true);
-    window.addEventListener('resize', updateTargetPosition);
-
-    // Observe DOM changes in case element moves
-    const observer = new MutationObserver(updateTargetPosition);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      characterData: true,
-    });
+    const loop = () => { update(); rafId = requestAnimationFrame(loop); };
+    rafId = requestAnimationFrame(loop);
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
 
     return () => {
       cancelAnimationFrame(rafId);
-      window.removeEventListener('scroll', updateTargetPosition, true);
-      window.removeEventListener('resize', updateTargetPosition);
-      observer.disconnect();
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
     };
   }, [isActive, currentStepData]);
 
-  // Listen for custom events to advance tutorial
-  useEffect(() => {
-    const eventName = currentStepData?.waitForEvent;
-    if (!isActive || !eventName) return;
-
-    const handleEvent = () => {
-      advanceStep();
-    };
-
-    window.addEventListener(eventName, handleEvent);
-
-    return () => {
-      window.removeEventListener(eventName, handleEvent);
-    };
-  }, [isActive, currentStepData]);
-
-  // Listen for ESC key to dismiss tutorial
-  useEffect(() => {
-    if (!isActive) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        handleDismiss();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isActive]);
-
-  // Allow users to temporarily dismiss the welcome step by clicking inside the agent card
-  useEffect(() => {
-    if (
-      !isActive ||
-      currentStepData?.id !== 'welcome' ||
-      !currentStepData.targetSelector ||
-      isTemporarilyHidden
-    ) {
-      return;
-    }
-
-    const handleAgentCardClick = (event: Event) => {
-      const target = event.target as HTMLElement;
-      const highlightedElement = document.querySelector(currentStepData.targetSelector!);
-
-      if (highlightedElement && (highlightedElement === target || highlightedElement.contains(target))) {
-        Logger.info('TUTORIAL', 'User clicked inside agent card on welcome step, hiding until tools modal opens');
-        setIsTemporarilyHidden(true);
-
-        const handleToolsModalOpened = () => {
-          const resumeIndex = steps.findIndex(step => step.id === 'test-tools');
-          if (resumeIndex !== -1) {
-            Logger.info('TUTORIAL', 'Tools modal opened, resuming tutorial at "Test Your Tools" step');
-            setCurrentStep(resumeIndex);
-          }
-          setIsTemporarilyHidden(false);
-        };
-
-        window.addEventListener('toolsModalOpened', handleToolsModalOpened, { once: true });
-      }
-    };
-
-    document.addEventListener('click', handleAgentCardClick, true);
-
-    return () => {
-      document.removeEventListener('click', handleAgentCardClick, true);
-    };
-  }, [isActive, currentStepData, isTemporarilyHidden, steps]);
-
-  // Handle clicks on highlighted elements
+  // Handle clicks on highlighted elements for click-to-advance steps
   useEffect(() => {
     if (!isActive || currentStepData?.action !== 'click' || !currentStepData.targetSelector) return;
 
     const handleClick = (e: Event) => {
       const target = e.target as HTMLElement;
-      const highlightedElement = document.querySelector(currentStepData.targetSelector!);
-      const clickedInside = highlightedElement && (highlightedElement === target || highlightedElement.contains(target));
-
-      if (clickedInside) {
-        // User clicked the highlighted element - advance tutorial
-        currentStep === steps.length - 1 ? handleComplete() : advanceStep();
-      } else if (currentStepData.id === 'test-tools') {
-        // Step 3 special case: clicking outside the tool card dismisses
-        handleDismiss();
+      const highlighted = document.querySelector(currentStepData.targetSelector!);
+      if (highlighted && (highlighted === target || highlighted.contains(target))) {
+        advanceStep();
       }
     };
 
@@ -275,18 +228,234 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
     return () => document.removeEventListener('click', handleClick, true);
   }, [isActive, currentStep, currentStepData]);
 
-  if (!isActive || !currentStepData || isTemporarilyHidden) {
-    return null;
+
+  if (!isActive || !currentStepData) return null;
+
+  // ── Welcome modal (step 0) ──────────────────────────────────────────────────
+  if (currentStepData.id === 'welcome') {
+    return createPortal(
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] backdrop-blur-sm">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 overflow-hidden">
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-100 to-purple-100 mb-4">
+              <Sparkles className="h-8 w-8 text-blue-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Observer!</h2>
+            <p className="text-gray-600">
+              Let's run your first agent. It will watch your camera and celebrate when it sees you.
+            </p>
+          </div>
+
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-5 mb-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-200 flex items-center justify-center">
+                <Camera size={20} className="text-blue-700" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Person Detector</h3>
+                <p className="text-sm text-gray-600">Runs every 15 seconds</p>
+              </div>
+            </div>
+            <ul className="space-y-2 text-sm text-gray-700">
+              <li className="flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-blue-600 flex-shrink-0" />
+                <span>Watches your camera feed in real time</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-blue-600 flex-shrink-0" />
+                <span>Detects when a person is visible</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-blue-600 flex-shrink-0" />
+                <span>Celebrates with confetti when it finds you 🎉</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={handleDismiss}
+              className="flex-1 py-3 px-4 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium"
+            >
+              Skip for Now
+            </button>
+            <button
+              onClick={handleImport}
+              disabled={isImporting}
+              className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2 font-medium shadow-sm"
+            >
+              {isImporting ? (
+                <>
+                  <span className="h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={18} />
+                  Let's Go!
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
   }
 
-  // Calculate speech bubble position
+  // ── Upsell modal (final step) ──────────────────────────────────────────────
+  if (currentStepData.id === 'upsell') {
+    const isFreeUser = !tier || tier === 'free';
+    return createPortal(
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] backdrop-blur-sm p-2 md:p-4">
+        <div
+          className="relative bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-3xl max-h-[85vh] md:max-h-[90vh] overflow-y-auto"
+          onClick={e => e.stopPropagation()}
+        >
+          <button onClick={() => onComplete(agentId)} className="absolute top-3 right-3 md:top-4 md:right-4 text-gray-400 hover:text-gray-700 z-10 transition-colors">
+            <CloseIcon className="h-5 w-5 md:h-6 md:w-6" />
+          </button>
+
+          <div className="p-4 md:p-8">
+            {/* Welcome Section */}
+            <div className="text-center mb-4 pb-4 md:mb-6 md:pb-6 border-b-2 border-gray-200">
+              <div className="flex justify-center items-center mb-2 md:mb-3">
+                <img src="/eye-logo-black.svg" alt="Observer AI Logo" className="h-10 w-10 md:h-16 md:w-16 mr-2 md:mr-3" />
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-800 tracking-tight">🎉 You did it!</h1>
+              </div>
+              <p className="hidden md:block text-base text-gray-600 max-w-2xl mx-auto leading-relaxed">
+                Your first agent detected a person. Now build something of your own.
+              </p>
+            </div>
+
+            {/* Support Section */}
+            <div className="text-center mb-4 md:mb-6">
+              <p className="text-sm md:text-base text-gray-700 mb-1 flex items-center justify-center gap-2">
+                <Heart className="h-4 w-4 md:h-5 md:w-5 text-pink-500" />
+                <span className="font-semibold">Built by a solo developer</span>
+              </p>
+              <p className="text-xs md:text-sm text-gray-600 mb-4 md:mb-6">
+                Try Observer Pro - give feedback and help development
+              </p>
+
+              {/* Observer Pro Card */}
+              <div className="bg-gradient-to-br from-purple-50 to-blue-50 border-2 border-purple-300 rounded-xl p-4 md:p-6 max-w-md mx-auto mb-4 hover:shadow-xl transition-all duration-200 relative">
+                {!isAppleDevice && (
+                  <div className="absolute top-0 -translate-y-1/2 left-1/2 -translate-x-1/2">
+                    <div className="bg-gradient-to-r from-purple-500 to-blue-500 text-white text-xs font-bold uppercase tracking-wider rounded-full px-4 py-1 whitespace-nowrap shadow-lg">
+                      Free Trial
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-center gap-2 md:gap-3 mb-3 md:mb-4 mt-2">
+                  <Sparkles className="h-8 w-8 md:h-10 md:w-10 text-purple-500" />
+                  <div className="text-left">
+                    <h3 className="text-lg md:text-xl font-bold text-purple-900">Observer Pro</h3>
+                    <p className="text-sm text-purple-700">
+                      {isAppleDevice ? (
+                        <span className="text-xl md:text-2xl font-bold text-purple-900">$22.99/month</span>
+                      ) : (
+                        <>
+                          <span className="text-xl md:text-2xl font-bold text-purple-900">7 days free</span>
+                          <span className="text-xs ml-1">then $20/month</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 md:space-y-2 mb-3 md:mb-4 text-xs md:text-sm text-purple-900">
+                  <div className="flex items-start">
+                    <Sparkles className="h-3.5 w-3.5 md:h-4 md:w-4 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span><strong>Unlock AI Studio</strong> - multi-agent configs</span>
+                  </div>
+                  <div className="flex items-start">
+                    <Zap className="h-3.5 w-3.5 md:h-4 md:w-4 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>8 hours/day</strong> cloud monitoring
+                      <CreditInfoButton dailyCredits={480} tierName="Pro tier" className="ml-1 align-middle" />
+                    </span>
+                  </div>
+                  <div className="flex items-start">
+                    <Sparkles className="h-3.5 w-3.5 md:h-4 md:w-4 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span><strong>Premium AI models</strong> access</span>
+                  </div>
+                  <div className="flex items-start">
+                    <Heart className="h-3.5 w-3.5 md:h-4 md:w-4 text-pink-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span><strong>Support open source</strong> development</span>
+                  </div>
+                </div>
+
+                {isFreeUser && (
+                  <button
+                    onClick={isAppleDevice ? handleApplePurchasePro : handleProCheckout}
+                    disabled={isButtonLoading || isAppleLoading}
+                    className="w-full px-4 py-2.5 md:px-6 md:py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 focus:outline-none focus:ring-4 focus:ring-purple-300 transition-all duration-200 font-semibold text-sm md:text-base shadow-md hover:shadow-lg disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    {isButtonLoading || isAppleLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
+                    Start Free Trial
+                  </button>
+                )}
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  <a href="https://observer-ai.com/#/Terms" target="_blank" rel="noopener noreferrer" className="hover:underline">Terms</a>
+                  {' · '}
+                  <a href="https://observer-ai.com/#/Privacy" target="_blank" rel="noopener noreferrer" className="hover:underline">Privacy</a>
+                </p>
+              </div>
+
+              {/* Error Display */}
+              {(upsellError || appleError) && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-2 md:p-3 mb-3 md:mb-4 text-center max-w-md mx-auto">
+                  <p className="text-xs md:text-sm text-red-700">{upsellError || appleError}</p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
+                <button
+                  onClick={() => window.open('https://github.com/Roy3838/Observer', '_blank')}
+                  className="px-3 py-1.5 md:px-4 md:py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium flex items-center gap-2 group shadow-md text-sm md:text-base"
+                >
+                  <Star className="h-4 w-4 text-yellow-400 fill-yellow-400 group-hover:scale-110 transition-transform" />
+                  <span>Star on GitHub</span>
+                  <span className="text-xs opacity-80">(1.2k)</span>
+                </button>
+
+                <div className="hidden md:block text-gray-300">|</div>
+
+                <button
+                  onClick={() => { onComplete(agentId); onViewAllTiers(); }}
+                  className="text-xs md:text-sm text-purple-600 hover:text-purple-800 hover:underline transition-colors font-medium flex items-center gap-1"
+                >
+                  <Sparkles className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                  View all tiers →
+                </button>
+
+                <div className="hidden md:block text-gray-300">|</div>
+
+                <button
+                  onClick={() => onComplete(agentId)}
+                  className="text-xs md:text-sm text-gray-600 hover:text-gray-800 hover:underline transition-colors font-medium"
+                >
+                  Continue with free tier →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  // ── Spotlight / bubble steps (step 1+) ─────────────────────────────────────
   const getBubbleStyle = (): React.CSSProperties => {
     const padding = 20;
-    const bubbleWidth = 320;
+    const bubbleWidth = 300;
     const isMobile = window.innerWidth < 768;
     const position = currentStepData.position || 'right';
 
-    // Handle top-left positioning
     if (position === 'top-left') {
       return {
         top: `calc(${padding}px + var(--sat, 0px))`,
@@ -295,26 +464,7 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
       };
     }
 
-    // Center position for non-spotlight steps or center position
-    if (position === 'center' || (currentStepData.noSpotlight && !targetRect)) {
-      return {
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-      };
-    }
-
-    // For spotlight steps, position relative to target
-    if (!targetRect) {
-      return {
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-      };
-    }
-
-    // On mobile, position at the top with padding
-    if (isMobile) {
+    if (!targetRect || isMobile) {
       return {
         top: `calc(${padding}px + var(--sat, 0px))`,
         left: `calc(${padding}px + var(--sal, 0px))`,
@@ -322,266 +472,89 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
       };
     }
 
-    // Desktop positioning
-    switch (position) {
-      case 'right':
-        // Check if bubble would go off-screen on the right
-        if (targetRect.right + bubbleWidth + padding * 2 > window.innerWidth) {
-          // Position on left instead
-          return {
-            left: targetRect.left - bubbleWidth - padding,
-            top: targetRect.top + targetRect.height / 2,
-            transform: 'translateY(-50%)',
-          };
-        }
-        return {
-          left: targetRect.right + padding,
-          top: targetRect.top + targetRect.height / 2,
-          transform: 'translateY(-50%)',
-        };
-      case 'left':
-        // Check if bubble would go off-screen on the left
-        if (targetRect.left - bubbleWidth - padding < 0) {
-          // Position on right instead
-          return {
-            left: targetRect.right + padding,
-            top: targetRect.top + targetRect.height / 2,
-            transform: 'translateY(-50%)',
-          };
-        }
-        return {
-          left: targetRect.left - bubbleWidth - padding,
-          top: targetRect.top + targetRect.height / 2,
-          transform: 'translateY(-50%)',
-        };
-      case 'top':
-        return {
-          left: targetRect.left + targetRect.width / 2,
-          top: targetRect.top - padding,
-          transform: 'translate(-50%, -100%)',
-        };
-      case 'bottom':
-        return {
-          left: targetRect.left + targetRect.width / 2,
-          top: targetRect.bottom + padding,
-          transform: 'translateX(-50%)',
-        };
-      default:
-        return {
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-        };
+    if (position === 'right') {
+      if (targetRect.right + bubbleWidth + padding * 2 > window.innerWidth) {
+        return { left: targetRect.left - bubbleWidth - padding, top: targetRect.top + targetRect.height / 2, transform: 'translateY(-50%)' };
+      }
+      return { left: targetRect.right + padding, top: targetRect.top + targetRect.height / 2, transform: 'translateY(-50%)' };
     }
+
+    if (position === 'bottom') {
+      return { left: targetRect.left + targetRect.width / 2, top: targetRect.bottom + padding, transform: 'translateX(-50%)' };
+    }
+
+    return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
   };
 
   const getArrowClass = () => {
-    const isMobile = window.innerWidth < 768;
-
-    // No arrow for mobile, center, non-spotlight, or top-left steps
-    if (isMobile || currentStepData.noSpotlight || currentStepData.position === 'center' || currentStepData.position === 'top-left') {
-      return '';
-    }
-
+    if (window.innerWidth < 768 || currentStepData.noSpotlight || currentStepData.position === 'top-left') return '';
     const position = currentStepData.position || 'right';
-
-    // Check if we flipped the position due to screen bounds
     if (position === 'right' && targetRect) {
-      const bubbleWidth = 320;
+      const bubbleWidth = 300;
       const padding = 20;
-      if (targetRect.right + bubbleWidth + padding * 2 > window.innerWidth) {
-        return 'arrow-right'; // We flipped to left, so arrow points right
-      }
-      return 'arrow-left';
+      return targetRect.right + bubbleWidth + padding * 2 > window.innerWidth ? 'arrow-right' : 'arrow-left';
     }
-
-    if (position === 'left' && targetRect) {
-      const bubbleWidth = 320;
-      const padding = 20;
-      if (targetRect.left - bubbleWidth - padding < 0) {
-        return 'arrow-left'; // We flipped to right, so arrow points left
-      }
-      return 'arrow-right';
-    }
-
-    switch (position) {
-      case 'top':
-        return 'arrow-bottom';
-      case 'bottom':
-        return 'arrow-top';
-      default:
-        return '';
-    }
+    if (position === 'bottom') return 'arrow-top';
+    return '';
   };
 
   return (
     <>
-      {/* Secondary highlight for loop timer on welcome step */}
-      {currentStepData.id === 'welcome' && (
-        <style>{`
-          [data-tutorial-loop-timer] {
-            position: relative;
-            animation: timer-pulse 2s ease-in-out infinite;
-          }
-          @keyframes timer-pulse {
-            0%, 100% {
-              box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.6);
-              background-color: rgba(59, 130, 246, 0.1);
-              border-radius: 6px;
-            }
-            50% {
-              box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.3);
-              background-color: rgba(59, 130, 246, 0.2);
-              border-radius: 6px;
-            }
-          }
-        `}</style>
-      )}
-
-      {/* Overlay with spotlight effect - only render if not a no-spotlight step */}
+      {/* Spotlight overlay */}
       {targetRect && !currentStepData.noSpotlight && (
         <>
-          {/* Top bar */}
-          <div
-            className="fixed left-0 right-0 bg-black bg-opacity-5 z-[100] pointer-events-auto"
-            style={{
-              top: 0,
-              height: targetRect.top - 4,
-            }}
-            onClick={handleDismiss}
-          />
+          <div className="fixed left-0 right-0 bg-black/50 z-[100] pointer-events-auto" style={{ top: 0, height: targetRect.top - 4 }} />
 
-          {/* Bottom bar */}
-          <div
-            className="fixed left-0 right-0 bg-black bg-opacity-5 z-[100] pointer-events-auto"
-            style={{
-              top: targetRect.bottom + 4,
-              bottom: 0,
-            }}
-            onClick={handleDismiss}
-          />
+          <div className="fixed left-0 right-0 bg-black/50 z-[100] pointer-events-auto" style={{ top: targetRect.bottom + 4, bottom: 0 }} />
 
-          {/* Left bar */}
-          <div
-            className="fixed left-0 bg-black bg-opacity-5 z-[100] pointer-events-auto"
-            style={{
-              top: targetRect.top - 4,
-              bottom: window.innerHeight - (targetRect.bottom + 4),
-              width: targetRect.left - 4,
-            }}
-            onClick={handleDismiss}
-          />
+          <div className="fixed left-0 bg-black/50 z-[100] pointer-events-auto" style={{ top: targetRect.top - 4, bottom: window.innerHeight - (targetRect.bottom + 4), width: targetRect.left - 4 }} />
 
-          {/* Right bar */}
-          <div
-            className="fixed right-0 bg-black bg-opacity-5 z-[100] pointer-events-auto"
-            style={{
-              top: targetRect.top - 4,
-              bottom: window.innerHeight - (targetRect.bottom + 4),
-              left: targetRect.right + 4,
-            }}
-            onClick={handleDismiss}
-          />
+          <div className="fixed right-0 bg-black/50 z-[100] pointer-events-auto" style={{ top: targetRect.top - 4, bottom: window.innerHeight - (targetRect.bottom + 4), left: targetRect.right + 4 }} />
 
-          {/* Pulsing border around spotlight */}
           <div
             className="fixed pointer-events-none z-[101]"
             style={{
-              left: targetRect.left - 4,
-              top: targetRect.top - 4,
-              width: targetRect.width + 8,
-              height: targetRect.height + 8,
+              left: targetRect.left - 4, top: targetRect.top - 4,
+              width: targetRect.width + 8, height: targetRect.height + 8,
               borderRadius: '8px',
-              boxShadow: '0 0 0 4px rgba(59, 130, 246, 0.5)',
               animation: 'pulse 2s ease-in-out infinite',
             }}
           />
         </>
       )}
 
-      {/* Gentle overlay for no-spotlight steps (unless noOverlay is true) */}
-      {currentStepData.noSpotlight && !currentStepData.noOverlay && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-5 z-[100] pointer-events-auto"
-          onClick={handleDismiss}
-        />
-      )}
-
       {/* Speech bubble */}
       <div
-        className={`fixed z-[101] pointer-events-auto bg-white rounded-xl shadow-2xl p-6 ${getArrowClass()}`}
+        className={`fixed z-[101] pointer-events-auto bg-white rounded-xl shadow-2xl p-5 ${getArrowClass()}`}
         style={{
           ...getBubbleStyle(),
-          ...(window.innerWidth >= 768 && { width: '320px' }),
+          ...(window.innerWidth >= 768 && { width: '300px' }),
           maxWidth: 'calc(100vw - 40px)',
         }}
       >
-        {/* Close button */}
-        <button
-          onClick={handleDismiss}
-          className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 transition-colors"
-        >
-          <CloseIcon className="h-5 w-5" />
+        <button onClick={handleDismiss} className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 transition-colors">
+          <CloseIcon className="h-4 w-4" />
         </button>
 
-        {/* Content */}
-        <div className="mb-4">
-          <div className="flex items-center space-x-2 mb-2">
+        <div className="mb-3">
+          <div className="flex items-center gap-2 mb-1">
             {currentStepData.icon}
-            <h3 className="text-lg font-bold text-gray-900">
-              {currentStepData.title}
-            </h3>
+            <h3 className="text-base font-bold text-gray-900">{currentStepData.title}</h3>
           </div>
-          <p className="text-sm text-gray-700 leading-relaxed">
-            {currentStepData.message}
-          </p>
+          <p className="text-sm text-gray-700 leading-relaxed">{currentStepData.message}</p>
         </div>
 
-        {/* Progress indicator */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex space-x-2">
-            {steps.map((_, index) => (
-              <div
-                key={index}
-                className={`h-2 w-8 rounded-full transition-colors ${
-                  index === currentStep
-                    ? 'bg-blue-600'
-                    : index < currentStep
-                    ? 'bg-blue-300'
-                    : 'bg-gray-300'
-                }`}
-              />
-            ))}
-          </div>
-          <span className="text-xs text-gray-500">
-            {currentStep + 1} of {steps.length}
-          </span>
+        {/* Progress dots (steps 1–4) */}
+        <div className="flex items-center gap-1 mb-3">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div
+              key={i}
+              className={`h-1.5 w-6 rounded-full transition-colors ${
+                i === currentStep ? 'bg-blue-600' : i < currentStep ? 'bg-blue-300' : 'bg-gray-200'
+              }`}
+            />
+          ))}
         </div>
-
-        {/* Next button for auto-advance steps */}
-        {currentStepData.action === 'auto' && !currentStepData.waitForEvent && (
-          <button
-            onClick={advanceStep}
-            className="w-full mb-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-          >
-            Next
-          </button>
-        )}
-
-        {/* Don't show again checkbox (on first step, or last two steps) */}
-        {(currentStep === 0 || currentStep >= steps.length - 2) && (
-          <div className="pt-3 border-t border-gray-200">
-            <label className="flex items-center cursor-pointer text-xs text-gray-600 hover:text-gray-800 transition-colors">
-              <input
-                type="checkbox"
-                checked={dontShowAgain}
-                onChange={(e) => setDontShowAgain(e.target.checked)}
-                className="mr-2 h-3 w-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              Don't show this tutorial again
-            </label>
-          </div>
-        )}
       </div>
 
       <style>{`
@@ -590,66 +563,21 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
           --sal: env(safe-area-inset-left, 0px);
           --sar: env(safe-area-inset-right, 0px);
         }
-
         @keyframes pulse {
-          0%, 100% {
-            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5), 0 0 0 9999px rgba(0, 0, 0, 0.7);
-          }
-          50% {
-            box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.3), 0 0 0 9999px rgba(0, 0, 0, 0.7);
-          }
+          0%, 100% { box-shadow: 0 0 0 4px rgba(59,130,246,0.5), 0 0 0 9999px rgba(0,0,0,0.6); }
+          50%       { box-shadow: 0 0 0 8px rgba(59,130,246,0.3), 0 0 0 9999px rgba(0,0,0,0.6); }
         }
-
         .arrow-left::before {
-          content: '';
-          position: absolute;
-          left: -8px;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 0;
-          height: 0;
-          border-top: 8px solid transparent;
-          border-bottom: 8px solid transparent;
-          border-right: 8px solid white;
+          content: ''; position: absolute; left: -8px; top: 50%; transform: translateY(-50%);
+          width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-right: 8px solid white;
         }
-
         .arrow-right::before {
-          content: '';
-          position: absolute;
-          right: -8px;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 0;
-          height: 0;
-          border-top: 8px solid transparent;
-          border-bottom: 8px solid transparent;
-          border-left: 8px solid white;
+          content: ''; position: absolute; right: -8px; top: 50%; transform: translateY(-50%);
+          width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 8px solid white;
         }
-
         .arrow-top::before {
-          content: '';
-          position: absolute;
-          top: -8px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 0;
-          height: 0;
-          border-left: 8px solid transparent;
-          border-right: 8px solid transparent;
-          border-bottom: 8px solid white;
-        }
-
-        .arrow-bottom::before {
-          content: '';
-          position: absolute;
-          bottom: -8px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 0;
-          height: 0;
-          border-left: 8px solid transparent;
-          border-right: 8px solid transparent;
-          border-top: 8px solid white;
+          content: ''; position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+          width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 8px solid white;
         }
       `}</style>
     </>

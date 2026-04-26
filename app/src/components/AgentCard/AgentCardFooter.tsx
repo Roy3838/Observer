@@ -25,7 +25,7 @@ const AgentCardFooter: React.FC<AgentCardFooterProps> = ({
             {/* Left Side: Delete + Minimize */}
             <div className="flex items-center gap-2">
                 <button onClick={() => onDelete(agentId)} className="flex items-center justify-center p-2 text-red-600 hover:bg-red-100 rounded-md" title="Delete"><Trash2 className="w-4 h-4" /></button>
-                <button onClick={onMinimize} className="flex items-center justify-center p-2 text-gray-400 hover:bg-gray-200 hover:text-gray-600 rounded-md" title="Minimize to tray"><Minus className="w-4 h-4" /></button>
+                <button onClick={onMinimize} data-tutorial-minimize-button={agentId} className="flex items-center justify-center p-2 text-gray-400 hover:bg-gray-200 hover:text-gray-600 rounded-md" title="Minimize to tray"><Minus className="w-4 h-4" /></button>
             </div>
 
             {/* Center: Memory and Activity */}

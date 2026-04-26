@@ -10,10 +10,9 @@ interface AgentChipProps {
   isStarting: boolean;
   isMinimized: boolean;
   onRestore: () => void;
-  onToggle: (agentId: string, isRunning: boolean) => Promise<void>; // kept for API compat, unused
 }
 
-const AgentChip: React.FC<AgentChipProps> = ({ agent, isRunning, isStarting, isMinimized, onRestore, onToggle }) => {
+const AgentChip: React.FC<AgentChipProps> = ({ agent, isRunning, isStarting, isMinimized, onRestore }) => {
   const [liveStatus, setLiveStatus] = useState<AgentLiveStatus>('IDLE');
   const [loopProgress, setLoopProgress] = useState(0);
   const [loopDurationMs, setLoopDurationMs] = useState(0);

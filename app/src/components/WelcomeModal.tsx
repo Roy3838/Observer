@@ -14,9 +14,10 @@ interface WelcomeModalProps {
   onViewAllTiers: () => void;
   intent: 'local' | 'login' | null;
   tier?: string | null;
+  onPrivacyAccepted?: () => void; // if set, skip subscription screen and call this instead
 }
 
-export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onViewAllTiers, intent, tier }) => {
+export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onViewAllTiers, intent, tier, onPrivacyAccepted }) => {
   // Derive status from tier prop - no need for separate API call
   const status: 'loading' | 'plus' | 'pro' | 'max' | 'free' =
     tier === 'pro' ? 'pro' :
@@ -116,6 +117,11 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
   };
 
   const handleAcceptPrivacy = () => {
+    if (onPrivacyAccepted) {
+      onClose();
+      onPrivacyAccepted();
+      return;
+    }
     setHasAcceptedPrivacy(true);
   };
 

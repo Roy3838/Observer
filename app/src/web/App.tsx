@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Terminal, MessageSquare, ChevronUp } from 'lucide-react';
 import { Auth0Provider } from '@auth0/auth0-react';
 import { platform as getPlatform } from '@tauri-apps/plugin-os';
@@ -42,7 +42,7 @@ import MemoryStoreTab from '@components/MemoryStoreTab';
 import { UpgradeSuccessPage } from '../pages/UpgradeSuccessPage';
 import { ObServerTab } from '@components/ObServerTab';
 import { UpgradeModal } from '@components/UpgradeModal';
-import { WelcomeModal } from '@components/WelcomeModal';
+import { AcceptToS } from '@components/AcceptToS';
 import AgentActivityModal from '@components/AgentCard/AgentActivityModal';
 import LocalServerSetupDialog from '@components/LocalServerSetupDialog';
 import FeedbackDialog from '@components/FeedbackDialog';
@@ -51,6 +51,7 @@ import { ModelManager } from '@utils/ModelManager';
 import WhitelistModal from '@components/WhitelistModal';
 import InteractiveTutorial from '@components/InteractiveTutorial';
 import AgentChip from '@components/AgentChip';
+import { PERSON_DETECTOR_AGENT, PERSON_DETECTOR_CODE, PERSON_DETECTOR_ID } from '@utils/personDetectorAgent';
 
 // Main app content - uses the unified auth hook
 function AppContent() {
@@ -117,9 +118,8 @@ function AppContent() {
     channel?: WhitelistChannel;
   } | null>(null);
 
-  // Welcome modal state
-  const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
-  const [welcomeModalIntent, setWelcomeModalIntent] = useState<'local' | 'login' | null>(null);
+  // AcceptToS modal state
+  const [isAcceptToSOpen, setIsAcceptToSOpen] = useState(false);
 
   // Tutorial modal state
   const [tutorialModalInfo, setTutorialModalInfo] = useState<{
@@ -127,8 +127,6 @@ function AppContent() {
     agentId: string;
     hasPhoneTools: boolean;
   } | null>(null);
-
-  const hasAutoStartedTutorialRef = useRef(false);
 
   // Minimized agents — persisted to localStorage
   const [minimizedAgents, setMinimizedAgents] = useState<Set<string>>(() => {
@@ -356,13 +354,21 @@ function AppContent() {
     Logger.info('APP', `Opening AI Edit modal for agent ${agentId}`);
   };
 
-  const handleTutorialComplete = () => {
-    Logger.info('TUTORIAL', 'Tutorial completed');
+  const markOnboardingComplete = () => {
+    if (user && 'sub' in user && user.sub) {
+      localStorage.setItem(`observer_onboarding_complete_${user.sub}`, 'true');
+    }
+  };
+
+  const handleTutorialComplete = (_completedAgentId: string) => {
+    Logger.info('TUTORIAL', 'Onboarding completed');
+    markOnboardingComplete();
     setTutorialModalInfo(null);
   };
 
   const handleTutorialDismiss = () => {
-    Logger.info('TUTORIAL', 'Tutorial dismissed');
+    Logger.info('TUTORIAL', 'Onboarding dismissed');
+    markOnboardingComplete();
     setTutorialModalInfo(null);
   };
 
@@ -492,19 +498,7 @@ function AppContent() {
       Logger.info('APP', `Agent "${agent.name}" saved successfully`);
       await fetchAgents();
 
-      if (isNew && user && 'sub' in user && user.sub) {
-        const dismissed = localStorage.getItem(`observer_tutorial_dismissed_${user.sub}`);
-        if (!dismissed) {
-          const hasPhoneTools = code.includes('call(') ||
-                               code.includes('sendSms(') ||
-                               code.includes('sendWhatsapp(');
-          setTutorialModalInfo({
-            agentName: agent.name,
-            agentId: agent.id,
-            hasPhoneTools
-          });
-        }
-      }
+      // Onboarding is now triggered on first login, not on agent save
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMessage);
@@ -512,26 +506,7 @@ function AppContent() {
     }
   };
 
-  // Auto-start tutorial when first agent is created
-  useEffect(() => {
-    if (agents.length === 1 && user && 'sub' in user && user.sub && !hasAutoStartedTutorialRef.current) {
-      const dismissed = localStorage.getItem(`observer_tutorial_dismissed_${user.sub}`);
-
-      if (!dismissed && !tutorialModalInfo) {
-        const firstAgent = agents[0];
-
-        setTutorialModalInfo({
-          agentName: firstAgent.name,
-          agentId: firstAgent.id,
-          hasPhoneTools: false
-        });
-
-        hasAutoStartedTutorialRef.current = true;
-
-        Logger.info('TUTORIAL', `Auto-starting tutorial for first agent: ${firstAgent.name}`);
-      }
-    }
-  }, [agents, user, tutorialModalInfo]);
+  // (Onboarding is triggered from auth useEffect below)
 
   useEffect(() => {
     const handleMemoryUpdate = (event: CustomEvent) => {
@@ -617,53 +592,23 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Welcome modal - check for login intent after auth completes
+  // Onboarding / welcome logic after auth resolves
   useEffect(() => {
-    if (!isLoading && isAuthenticated && user && 'sub' in user) {
-      // Check if user just logged in (sessionStorage intent)
-      const loginIntent = sessionStorage.getItem('observer_login_intent');
-      if (loginIntent) {
-        sessionStorage.removeItem('observer_login_intent'); // Clear immediately
-        Logger.info('WELCOME', 'User just logged in, showing welcome modal with login intent');
-        setWelcomeModalIntent('login');
-        setIsWelcomeModalOpen(true);
+    if (!isLoading && isAuthenticated && user && 'sub' in user && user.sub) {
+      const sub = user.sub as string;
+      const onboardingComplete = localStorage.getItem(`observer_onboarding_complete_${sub}`);
+
+      if (!onboardingComplete) {
+        // New user: show Privacy/ToS first, then tutorial on accept
+        Logger.info('ONBOARDING', 'First-time user detected, showing Privacy/ToS then tutorial');
+        setIsAcceptToSOpen(true);
         return;
       }
 
-      // Otherwise, check if they've completed onboarding
-      const hasCompletedOnboarding = localStorage.getItem(`observer_onboarding_complete_${user.sub}`);
-      if (!hasCompletedOnboarding) {
-        const checkTierAndShowModal = async () => {
-          try {
-            const token = await getAccessToken();
-            if (!token) return;
-            const response = await fetch('https://api.observer-ai.com/quota', {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-              const data = await response.json();
-              if (data.tier === 'free' || !data.tier) {
-                Logger.info('WELCOME', 'User is on free tier, showing welcome modal');
-                setWelcomeModalIntent('login'); // They're already authenticated
-                setIsWelcomeModalOpen(true);
-              } else {
-                Logger.info('WELCOME', `User is on ${data.tier} tier, skipping welcome modal`);
-              }
-            } else {
-              Logger.info('WELCOME', 'Could not determine tier, showing welcome modal');
-              setWelcomeModalIntent('login');
-              setIsWelcomeModalOpen(true);
-            }
-          } catch (err) {
-            Logger.error('WELCOME', 'Error checking tier:', err);
-            setWelcomeModalIntent('login');
-            setIsWelcomeModalOpen(true);
-          }
-        };
-        checkTierAndShowModal();
-      }
+      // Returning user: clear any leftover login intent
+      sessionStorage.removeItem('observer_login_intent');
     }
-  }, [isLoading, isAuthenticated, user, getAccessToken]);
+  }, [isLoading, isAuthenticated, user]);
 
 
   // Reload agents when switching to My Agents tab
@@ -723,12 +668,12 @@ function AppContent() {
         quotaType={currentQuotaType}
       />
 
-      <WelcomeModal
-        isOpen={isWelcomeModalOpen}
-        onClose={() => setIsWelcomeModalOpen(false)}
-        onViewAllTiers={() => setActiveTab('obServer')}
-        intent={welcomeModalIntent}
-        tier={quotaInfo?.tier ?? null}
+      <AcceptToS
+        isOpen={isAcceptToSOpen}
+        onAccept={() => {
+          setIsAcceptToSOpen(false);
+          setTutorialModalInfo({ agentName: '', agentId: '', hasPhoneTools: false });
+        }}
       />
 
       <AppHeader
@@ -1035,7 +980,6 @@ function AppContent() {
                   isStarting={startingAgents.has(a.id)}
                   isMinimized={true}
                   onRestore={() => handleRestore(a.id)}
-                  onToggle={toggleAgent}
                 />
               ) : null)
             )}
@@ -1066,7 +1010,6 @@ function AppContent() {
                 isStarting={startingAgents.has(a.id)}
                 isMinimized={minimizedAgents.has(a.id)}
                 onRestore={() => handleRestore(a.id)}
-                onToggle={toggleAgent}
               />
             </div>
           ))}
@@ -1130,10 +1073,7 @@ function AppContent() {
       {showStartupDialog && (
         <StartupDialogs
           onDismiss={handleDismissStartupDialog}
-          onSkip={() => {
-            setWelcomeModalIntent('local');
-            setIsWelcomeModalOpen(true);
-          }}
+          onSkip={() => { /* local/offline mode — no modal needed */ }}
           onLogin={login}
           onToggleObServer={() => setIsUsingObServer(true)}
           isAuthenticated={isAuthenticated}
@@ -1196,7 +1136,13 @@ function AppContent() {
           onComplete={handleTutorialComplete}
           onDismiss={handleTutorialDismiss}
           agentId={tutorialModalInfo.agentId}
-          hasPhoneTools={tutorialModalInfo.hasPhoneTools}
+          onImportAgent={async () => {
+            await saveAgent(PERSON_DETECTOR_AGENT, PERSON_DETECTOR_CODE);
+            await fetchAgents();
+            setTutorialModalInfo(prev => prev ? { ...prev, agentId: PERSON_DETECTOR_ID } : prev);
+          }}
+          onViewAllTiers={() => setActiveTab('obServer')}
+          tier={quotaInfo?.tier ?? null}
         />
       )}
     </div>
