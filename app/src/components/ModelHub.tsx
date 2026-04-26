@@ -763,11 +763,16 @@ const ModelHub: React.FC<ModelHubProps> = ({
                             <span className="font-medium text-gray-900 truncate">{model.name}</span>
                             <span className="text-[10px] font-semibold text-yellow-800 bg-yellow-300 px-1.5 py-0.5 rounded">Transformers.js</span>
                           </div>
-                          {loadSettings && (
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {loadSettings.device} · {loadSettings.dtype} · {loadSettings.imageTokenBudget} tokens
-                            </p>
-                          )}
+                          <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                            {loadSettings ? (
+                              <>{loadSettings.device} · {loadSettings.dtype} · {loadSettings.imageTokenBudget} tokens · </>
+                            ) : null}
+                            {gemmaEnableThinking ? (
+                              <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">Thinking on</span>
+                            ) : (
+                              <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Thinking off</span>
+                            )}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -794,7 +799,10 @@ const ModelHub: React.FC<ModelHubProps> = ({
                         ) : (
                           <>
                             <button
-                              onClick={() => GemmaModelManager.getInstance().loadModel(model.id as GemmaModelId)}
+                              onClick={() => {
+                                const installedDtype = GemmaModelManager.getInstance().getSettingsForModel(model.id as GemmaModelId).dtype;
+                                GemmaModelManager.getInstance().loadModelWithSettings(model.id as GemmaModelId, gemmaDevice, installedDtype, gemmaTokenBudget, gemmaEnableThinking);
+                              }}
                               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-lg hover:bg-gray-900 font-medium shadow-sm"
                             >
                               <Sparkles size={12} /> Load

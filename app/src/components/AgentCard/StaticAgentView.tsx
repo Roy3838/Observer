@@ -337,8 +337,13 @@ const ModelLocationIndicator: React.FC<{
 
                             {/* Show engine settings (transformers.js) */}
                             {localState?.engineInfo?.type === 'transformers.js' && localState?.engineInfo?.device && (
-                                <div className="text-xs text-gray-500 text-center">
-                                    {localState.engineInfo.device} · {localState.engineInfo.dtype}
+                                <div className="text-xs text-gray-500 text-center flex items-center justify-center gap-1.5 flex-wrap">
+                                    <span>{localState.engineInfo.device} · {localState.engineInfo.dtype}</span>
+                                    {localState.engineInfo.enableThinking ? (
+                                        <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">Thinking on</span>
+                                    ) : (
+                                        <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Thinking off</span>
+                                    )}
                                 </div>
                             )}
 
@@ -377,6 +382,14 @@ const ModelLocationIndicator: React.FC<{
                                             <span className="font-medium text-gray-700">{localState.engineInfo.dtype}</span>
                                         </div>
                                     )}
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-gray-500">Thinking:</span>
+                                        {localState.engineInfo.enableThinking ? (
+                                            <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">on</span>
+                                        ) : (
+                                            <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">off</span>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                             <button

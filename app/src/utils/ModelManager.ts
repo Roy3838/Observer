@@ -51,8 +51,9 @@ export interface LocalModelState {
   // Engine-specific settings (only for transformers.js)
   engineInfo?: {
     type: 'transformers.js' | 'llama.cpp';
-    device?: string;  // 'webgpu' | 'wasm' for transformers.js
-    dtype?: string;   // quantization type
+    device?: string;       // 'webgpu' | 'wasm' for transformers.js
+    dtype?: string;        // quantization type
+    enableThinking?: boolean;
   };
 }
 
@@ -421,6 +422,7 @@ export class ModelManager {
           type: 'transformers.js',
           device: gemmaState.loadSettings.device,
           dtype: gemmaState.loadSettings.dtype,
+          enableThinking: gemmaState.loadSettings.enableThinking ?? false,
         } : { type: 'transformers.js' },
       };
     }
