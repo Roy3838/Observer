@@ -63,6 +63,7 @@ export interface NativeModelState {
   downloadedBytes: number;
   totalBytes: number;
   error: string | null;
+  enableThinking: boolean;
 }
 
 export interface NativeProgressEvent {

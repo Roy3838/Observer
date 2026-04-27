@@ -1298,6 +1298,27 @@ const ModelHub: React.FC<ModelHubProps> = ({
                           </div>
                         )}
 
+                        {/* Thinking mode toggle */}
+                        <div className="flex items-center justify-between gap-3 p-3 border border-gray-200 rounded-xl bg-white">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-800">Thinking Mode</p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Model reasons step-by-step before answering (requires a reasoning model).
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => NativeLlmManager.getInstance().setEnableThinking(!nativeState.enableThinking)}
+                            className={`relative inline-flex h-6 w-10 flex-shrink-0 items-center rounded-full transition-colors ${
+                              nativeState.enableThinking ? 'bg-purple-600' : 'bg-gray-300'
+                            }`}
+                            aria-label={nativeState.enableThinking ? 'Disable thinking' : 'Enable thinking'}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                              nativeState.enableThinking ? 'translate-x-5' : 'translate-x-1'
+                            }`} />
+                          </button>
+                        </div>
+
                         {/* Sampler settings */}
                         <div className="border border-gray-200 rounded-xl overflow-hidden">
                           <button

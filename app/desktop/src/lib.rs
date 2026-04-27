@@ -454,6 +454,7 @@ async fn llm_load_model(
 #[tauri::command]
 async fn llm_generate(
     messages: Vec<serde_json::Value>,
+    enable_thinking: bool,
     on_token: Channel<String>,
 ) -> Result<serde_json::Value, String> {
     use tauri_plugin_llm_engine::{with_engine, ChatMessage, ChatContent, ChatContentPart, LLM_ENGINE};
@@ -513,7 +514,7 @@ async fn llm_generate(
     let on_token_clone = on_token.clone();
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         with_engine(|engine| {
-            let response = engine.generate(chat_messages, |token| {
+            let response = engine.generate(chat_messages, enable_thinking, |token| {
                 if GENERATION_CANCELLED.load(Ordering::SeqCst) {
                     return false;
                 }

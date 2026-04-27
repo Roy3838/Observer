@@ -21,7 +21,8 @@ const NATIVE_LLM_GGUF_CACHE_KEY = 'observer-native-llm-gguf-cache';
 const NATIVE_LLM_MMPROJ_ASSIGNMENTS_KEY = 'observer-native-llm-mmproj-assignments';
 
 interface PersistedNativeSettings {
-  filename: string;  // Filename of the loaded model
+  filename: string;
+  enableThinking: boolean;
 }
 
 export class NativeLlmManager {
@@ -33,6 +34,7 @@ export class NativeLlmManager {
     downloadedBytes: 0,
     totalBytes: 0,
     error: null,
+    enableThinking: true,
   };
   private stateChangeListeners: Array<(state: NativeModelState) => void> = [];
   private autoLoadTriggered = false;
@@ -417,9 +419,18 @@ export class NativeLlmManager {
    * - An array of content parts for multimodal messages:
    *   [{ type: 'text', text: '...' }, { type: 'image', image: 'base64...' }]
    */
+  public setEnableThinking(value: boolean): void {
+    this.setState({ enableThinking: value });
+    const settings = this.getPersistedSettings();
+    if (settings) {
+      this.persistSettings(settings.filename);
+    }
+  }
+
   public async generate(
     messages: LocalLlmMessage[],
-    onToken?: (token: string) => void
+    onToken?: (token: string) => void,
+    _onReasoningToken?: (token: string) => void,
   ): Promise<string> {
     if (this.state.status !== 'loaded') {
       throw new Error('Native model not loaded');
@@ -436,6 +447,7 @@ export class NativeLlmManager {
 
       const result = await invoke<{ response: string; metrics: GenerationMetrics | null }>('llm_generate', {
         messages,
+        enableThinking: this.state.enableThinking,
         onToken: tokenChannel,
       });
 
@@ -493,7 +505,7 @@ export class NativeLlmManager {
   // Persistence methods
   private persistSettings(filename: string): void {
     try {
-      const settings: PersistedNativeSettings = { filename };
+      const settings: PersistedNativeSettings = { filename, enableThinking: this.state.enableThinking };
       localStorage.setItem(NATIVE_LLM_STORAGE_KEY, JSON.stringify(settings));
       Logger.info('NativeLlmManager', 'Persisted model settings');
     } catch (error) {
@@ -534,6 +546,9 @@ export class NativeLlmManager {
     const settings = this.getPersistedSettings();
     if (settings) {
       Logger.info('NativeLlmManager', `Auto-loading persisted model: ${settings.filename}`);
+      if (settings.enableThinking) {
+        this.setState({ enableThinking: settings.enableThinking });
+      }
       try {
         const exists = files.some(f => f.filename === settings.filename);
         if (exists) {
@@ -686,6 +701,7 @@ export class NativeLlmManager {
       const messages = [{ role: 'user', content: prompt }];
       const result = await invoke<{ response: string; metrics: GenerationMetrics | null }>('llm_generate', {
         messages,
+        enableThinking: this.state.enableThinking,
         onToken: tokenChannel,
       });
 

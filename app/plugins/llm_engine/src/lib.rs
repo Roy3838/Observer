@@ -44,6 +44,7 @@ use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::{AddBos, LlamaModel, Special};
+use llama_cpp_2::openai::OpenAIChatTemplateParams;
 use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::mtmd::{MtmdContext, MtmdContextParams, MtmdBitmap, MtmdInputText, mtmd_default_marker};
 
@@ -278,11 +279,13 @@ impl LlmEngine {
         self.mmproj_path.as_ref()
     }
 
-    /// Generate a response from chat messages with streaming callback
-    /// Supports both text-only and multimodal (image + text) messages
+    /// Generate a response from chat messages with streaming callback.
+    /// Supports both text-only and multimodal (image + text) messages.
+    /// Context setup branches on whether images are present; the token loop is shared.
     pub fn generate<F>(
         &mut self,
         messages: Vec<ChatMessage>,
+        enable_thinking: bool,
         mut on_token: F,
     ) -> Result<String, String>
     where
@@ -290,191 +293,84 @@ impl LlmEngine {
     {
         let model = self.model.as_ref().ok_or("No model loaded")?;
 
-        // Extract images from messages for multimodal processing
         let images = self.extract_images(&messages);
-        let has_images = !images.is_empty();
+        let use_multimodal = !images.is_empty() && self.mtmd_ctx.is_some();
 
-        if has_images && self.mtmd_ctx.is_none() {
-            llm_log!(warn, "Images provided but no mmproj loaded");
+        if !images.is_empty() && self.mtmd_ctx.is_none() {
+            llm_log!(warn, "Images provided but no mmproj loaded — falling back to text-only");
         }
 
-        // If we have images and multimodal context, use mtmd pipeline
-        if has_images && self.mtmd_ctx.is_some() {
-            return self.generate_multimodal(messages, images, on_token);
-        }
+        llm_log!("generate: multimodal={} enable_thinking={}", use_multimodal, enable_thinking);
 
-        // Text-only generation path
-        let prompt = self.build_chat_prompt(&messages)?;
+        let prompt = self.build_prompt_with_template(model, &messages, enable_thinking)
+            .unwrap_or_else(|e| {
+                llm_log!(warn, "Chat template failed ({}), falling back to simple template", e);
+                self.build_chat_prompt(&messages).unwrap_or_default()
+            });
 
-        // Start timing
         let generation_start = Instant::now();
         let mut first_token_time: Option<Instant> = None;
 
-        // Create context for inference
+        // Multimodal needs more context to hold image embeddings
+        let n_ctx = if use_multimodal { 8192 } else { 4096 };
         let ctx_params = LlamaContextParams::default()
-            .with_n_ctx(std::num::NonZeroU32::new(4096))
+            .with_n_ctx(std::num::NonZeroU32::new(n_ctx))
             .with_n_batch(512);
 
         let mut ctx = model
             .new_context(&self.backend, ctx_params)
             .map_err(|e| format!("Failed to create context: {}", e))?;
 
-        // Tokenize the prompt
-        let tokens = model
-            .str_to_token(&prompt, AddBos::Always)
-            .map_err(|e| format!("Failed to tokenize: {}", e))?;
+        // ── Context setup ────────────────────────────────────────────────────
+        // After this block: context is fully populated, batch is empty, n_cur is set.
+        // Sampling starts at logit index -1 (last populated position in context).
 
-        let prompt_tokens = tokens.len() as u32;
-
-        // Create batch and add tokens
         let mut batch = LlamaBatch::new(512, 1);
-        let last_idx = tokens.len() - 1;
-        for (i, token) in tokens.iter().enumerate() {
-            batch
-                .add(*token, i as i32, &[0], i == last_idx)
-                .map_err(|e| format!("Failed to add token to batch: {}", e))?;
-        }
+        let prompt_tokens: u32;
+        let mut n_cur: usize;
 
-        // Evaluate initial prompt
-        ctx.decode(&mut batch)
-            .map_err(|e| format!("Failed to decode prompt: {}", e))?;
+        if use_multimodal {
+            let mtmd_ctx = self.mtmd_ctx.as_ref().unwrap();
 
-        // Set up sampler using configurable parameters
-        let params = &self.sampler_params;
-        let mut sampler = LlamaSampler::chain_simple([
-            LlamaSampler::temp(params.temperature),
-            LlamaSampler::top_p(params.top_p, params.top_k.max(1) as usize),
-            LlamaSampler::dist(params.seed),
-        ]);
-
-        // Generate tokens
-        let mut full_response = String::new();
-        let mut n_cur = tokens.len();
-        let mut tokens_generated: u32 = 0;
-
-        loop {
-            // Sample next token
-            let new_token = sampler.sample(&ctx, batch.n_tokens() - 1);
-
-            // Check for end of generation
-            if model.is_eog_token(new_token) {
-                break;
+            let mut bitmaps: Vec<MtmdBitmap> = Vec::new();
+            for (i, img_data) in images.iter().enumerate() {
+                let bitmap = MtmdBitmap::from_buffer(mtmd_ctx, img_data)
+                    .map_err(|e| format!("Failed to decode image {}: {:?}", i, e))?;
+                bitmaps.push(bitmap);
             }
 
-            // Record first token time
-            if first_token_time.is_none() {
-                first_token_time = Some(Instant::now());
-            }
-            tokens_generated += 1;
+            let input_text = MtmdInputText { text: prompt.clone(), add_special: true, parse_special: true };
+            let bitmap_refs: Vec<&MtmdBitmap> = bitmaps.iter().collect();
+            let input_chunks = mtmd_ctx
+                .tokenize(input_text, &bitmap_refs)
+                .map_err(|e| format!("Failed to tokenize multimodal input: {:?}", e))?;
 
-            // Decode token to text
-            let token_str = model
-                .token_to_str(new_token, Special::Tokenize)
-                .map_err(|e| format!("Failed to decode token: {}", e))?;
+            let n_past = input_chunks
+                .eval_chunks(mtmd_ctx, &ctx, 0, 0, 512, true)
+                .map_err(|e| format!("Failed to evaluate multimodal input: {:?}", e))?;
 
-            // Stream the token; callback returns false to cancel
-            if !on_token(&token_str) {
-                break;
-            }
-            full_response.push_str(&token_str);
-
-            // Prepare next batch
-            batch.clear();
-            batch
-                .add(new_token, n_cur as i32, &[0], true)
-                .map_err(|e| format!("Failed to add generated token: {}", e))?;
-
-            n_cur += 1;
-
-            // Decode
-            ctx.decode(&mut batch)
-                .map_err(|e| format!("Failed to decode: {}", e))?;
-        }
-
-        // Calculate and store metrics
-        let total_generation_time_ms = generation_start.elapsed().as_secs_f64() * 1000.0;
-        let time_to_first_token_ms = first_token_time
-            .map(|t| (t - generation_start).as_secs_f64() * 1000.0)
-            .unwrap_or(0.0);
-        let tokens_per_second = if total_generation_time_ms > 0.0 {
-            (tokens_generated as f64) / (total_generation_time_ms / 1000.0)
+            prompt_tokens = n_past as u32;
+            n_cur = n_past as usize;
         } else {
-            0.0
-        };
+            let tokens = model
+                .str_to_token(&prompt, AddBos::Always)
+                .map_err(|e| format!("Failed to tokenize: {}", e))?;
 
-        self.last_metrics = Some(GenerationMetrics {
-            tokens_generated,
-            prompt_tokens,
-            time_to_first_token_ms,
-            total_generation_time_ms,
-            tokens_per_second,
-        });
+            let last_idx = tokens.len() - 1;
+            for (i, token) in tokens.iter().enumerate() {
+                batch
+                    .add(*token, i as i32, &[0], i == last_idx)
+                    .map_err(|e| format!("Failed to add token to batch: {}", e))?;
+            }
+            ctx.decode(&mut batch)
+                .map_err(|e| format!("Failed to decode prompt: {}", e))?;
 
-        llm_log!("Generated {} tokens in {:.1}ms ({:.1} tok/s)",
-            tokens_generated, total_generation_time_ms, tokens_per_second);
-        Ok(full_response)
-    }
-
-    /// Generate response using multimodal (vision) pipeline
-    fn generate_multimodal<F>(
-        &mut self,
-        messages: Vec<ChatMessage>,
-        images: Vec<Vec<u8>>,
-        mut on_token: F,
-    ) -> Result<String, String>
-    where
-        F: FnMut(&str) -> bool,
-    {
-        let model = self.model.as_ref().ok_or("No model loaded")?;
-        let mtmd_ctx = self.mtmd_ctx.as_ref().ok_or("No multimodal context loaded")?;
-
-        llm_log!("Multimodal generation with {} images", images.len());
-
-        // Start timing
-        let generation_start = Instant::now();
-        let mut first_token_time: Option<Instant> = None;
-
-        // Build text prompt from messages
-        let prompt = self.build_chat_prompt(&messages)?;
-
-        // Create context for inference with larger context for images
-        let ctx_params = LlamaContextParams::default()
-            .with_n_ctx(std::num::NonZeroU32::new(8192))
-            .with_n_batch(512);
-
-        let mut ctx = model
-            .new_context(&self.backend, ctx_params)
-            .map_err(|e| format!("Failed to create context: {}", e))?;
-
-        // Convert images to MtmdBitmaps using the mtmd context
-        let mut bitmaps: Vec<MtmdBitmap> = Vec::new();
-        for (i, img_data) in images.iter().enumerate() {
-            let bitmap = MtmdBitmap::from_buffer(mtmd_ctx, img_data)
-                .map_err(|e| format!("Failed to decode image {}: {:?}", i, e))?;
-            bitmaps.push(bitmap);
+            prompt_tokens = tokens.len() as u32;
+            n_cur = tokens.len();
+            batch.clear();
         }
 
-        // Create input text for tokenization
-        let input_text = MtmdInputText {
-            text: prompt.clone(),
-            add_special: true,
-            parse_special: true,
-        };
-
-        // Create input chunks from prompt and images
-        let bitmap_refs: Vec<&MtmdBitmap> = bitmaps.iter().collect();
-        let input_chunks = mtmd_ctx
-            .tokenize(input_text, &bitmap_refs)
-            .map_err(|e| format!("Failed to tokenize multimodal input: {:?}", e))?;
-
-        // Evaluate all chunks to populate the context
-        let n_past = input_chunks
-            .eval_chunks(mtmd_ctx, &ctx, 0, 0, 512, true)
-            .map_err(|e| format!("Failed to evaluate multimodal input: {:?}", e))?;
-
-        let prompt_tokens = n_past as u32;
-
-        // Set up sampler using configurable parameters
+        // ── Shared token generation loop ─────────────────────────────────────
         let params = &self.sampler_params;
         let mut sampler = LlamaSampler::chain_simple([
             LlamaSampler::temp(params.temperature),
@@ -482,54 +378,36 @@ impl LlmEngine {
             LlamaSampler::dist(params.seed),
         ]);
 
-        // Generate tokens
         let mut full_response = String::new();
-        let mut n_cur = n_past as usize;
         let mut tokens_generated: u32 = 0;
 
-        // Create batch for generation
-        let mut batch = LlamaBatch::new(512, 1);
-
         loop {
-            // For first token, we sample from the last position after eval
-            // For subsequent tokens, we decode the batch first
+            // Decode the previous generated token (batch is empty on the first iteration)
             if batch.n_tokens() > 0 {
                 ctx.decode(&mut batch)
                     .map_err(|e| format!("Failed to decode: {}", e))?;
             }
 
-            // Sample next token
-            let logit_idx = if batch.n_tokens() > 0 {
-                batch.n_tokens() - 1
-            } else {
-                -1
-            };
+            let new_token = sampler.sample(&ctx, -1);
 
-            let new_token = sampler.sample(&ctx, logit_idx);
-
-            // Check for end of generation
             if model.is_eog_token(new_token) {
                 break;
             }
 
-            // Record first token time
             if first_token_time.is_none() {
                 first_token_time = Some(Instant::now());
             }
             tokens_generated += 1;
 
-            // Decode token to text
             let token_str = model
                 .token_to_str(new_token, Special::Tokenize)
                 .map_err(|e| format!("Failed to decode token: {}", e))?;
 
-            // Stream the token; callback returns false to cancel
             if !on_token(&token_str) {
                 break;
             }
             full_response.push_str(&token_str);
 
-            // Prepare next batch
             batch.clear();
             batch
                 .add(new_token, n_cur as i32, &[0], true)
@@ -538,7 +416,7 @@ impl LlmEngine {
             n_cur += 1;
         }
 
-        // Calculate and store metrics
+        // ── Metrics ──────────────────────────────────────────────────────────
         let total_generation_time_ms = generation_start.elapsed().as_secs_f64() * 1000.0;
         let time_to_first_token_ms = first_token_time
             .map(|t| (t - generation_start).as_secs_f64() * 1000.0)
@@ -559,6 +437,7 @@ impl LlmEngine {
 
         llm_log!("Generated {} tokens in {:.1}ms ({:.1} tok/s)",
             tokens_generated, total_generation_time_ms, tokens_per_second);
+        llm_log!("Response tail: {:?}", &full_response[..full_response.len().min(300)]);
         Ok(full_response)
     }
 
@@ -608,6 +487,63 @@ impl LlmEngine {
                 result
             }
         }
+    }
+
+    /// Build a prompt using the model's own Jinja chat template via the llama-cpp-2 API.
+    /// Falls back to `build_chat_prompt` if the model has no embedded template.
+    fn build_prompt_with_template(
+        &self,
+        model: &LlamaModel,
+        messages: &[ChatMessage],
+        enable_thinking: bool,
+    ) -> Result<String, String> {
+        // Serialise messages to OpenAI JSON format
+        let messages_json: Vec<serde_json::Value> = messages.iter().map(|m| {
+            let content = match &m.content {
+                ChatContent::Text(t) => serde_json::Value::String(t.clone()),
+                ChatContent::Parts(parts) => {
+                    let arr: Vec<serde_json::Value> = parts.iter().map(|p| match p {
+                        ChatContentPart::Text { text } => serde_json::json!({ "type": "text", "text": text }),
+                        // Strip actual base64 data — pass a placeholder URL so the template
+                        // emits the <|image> marker without choking on a multi-MB payload.
+                        // The real image bytes are handled by the mtmd pipeline separately.
+                        ChatContentPart::Image { .. } => serde_json::json!({ "type": "image_url", "image_url": { "url": "placeholder" } }),
+                    }).collect();
+                    serde_json::Value::Array(arr)
+                }
+            };
+            serde_json::json!({ "role": m.role, "content": content })
+        }).collect();
+
+        let messages_json_str = serde_json::to_string(&messages_json)
+            .map_err(|e| format!("Failed to serialise messages: {}", e))?;
+
+        let tmpl = model.chat_template(None)
+            .map_err(|e| format!("Model has no chat template: {:?}", e))?;
+
+        let params = OpenAIChatTemplateParams {
+            messages_json: &messages_json_str,
+            tools_json: None,
+            tool_choice: None,
+            json_schema: None,
+            grammar: None,
+            reasoning_format: None,
+            chat_template_kwargs: None,
+            add_generation_prompt: true,
+            use_jinja: true,
+            parallel_tool_calls: false,
+            enable_thinking,
+            add_bos: false,
+            add_eos: false,
+            parse_tool_calls: false,
+        };
+
+        let result = model.apply_chat_template_oaicompat(&tmpl, &params)
+            .map_err(|e| format!("apply_chat_template_oaicompat failed: {:?}", e))?;
+
+        llm_log!("Prompt built via model chat template (enable_thinking={}), len={}", enable_thinking, result.prompt.len());
+        llm_log!("Prompt tail (last 200): {:?}", &result.prompt[result.prompt.len().saturating_sub(200)..]);
+        Ok(result.prompt)
     }
 
     /// Build a chat prompt from messages using a simple template

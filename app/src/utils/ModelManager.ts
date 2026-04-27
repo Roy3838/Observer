@@ -81,6 +81,61 @@ const MODEL_PARAMS_PREFIX = 'observer-ai:inference:model:';
  * - Remote models from inference server addresses
  * - Local models via LocalModelManager (GemmaModelManager or NativeLlmManager)
  */
+// Gemma 4 GGUF thinking delimiters (observed from llama.cpp token stream)
+const LLAMA_THINK_START = '<|channel>thought\n';
+const LLAMA_THINK_END   = '<channel|>';
+
+/**
+ * Returns a single onToken callback that splits the raw llama.cpp token stream
+ * into reasoning tokens and answer tokens based on Gemma 4's thinking delimiters.
+ */
+function makeLlamaCppThinkingRouter(
+  onToken?: (t: string) => void,
+  onReasoningToken?: (t: string) => void,
+): (token: string) => void {
+  type State = 'scanning' | 'thinking' | 'answering';
+  let state: State = 'scanning';
+  let buf = '';
+  const MAX_MARKER = Math.max(LLAMA_THINK_START.length, LLAMA_THINK_END.length);
+
+  return (token: string) => {
+    buf += token;
+
+    while (buf.length > 0) {
+      if (state === 'scanning' || state === 'answering') {
+        const idx = buf.indexOf(LLAMA_THINK_START);
+        if (idx !== -1) {
+          // Emit everything before the marker as answer text
+          const before = buf.slice(0, idx);
+          if (before) onToken?.(before);
+          buf = buf.slice(idx + LLAMA_THINK_START.length);
+          state = 'thinking';
+        } else {
+          // No marker yet — keep a tail in case the marker is split across tokens
+          const safe = buf.length > MAX_MARKER ? buf.slice(0, buf.length - MAX_MARKER) : '';
+          if (safe) onToken?.(safe);
+          buf = buf.slice(safe.length);
+          break;
+        }
+      } else {
+        // state === 'thinking'
+        const idx = buf.indexOf(LLAMA_THINK_END);
+        if (idx !== -1) {
+          const reasoning = buf.slice(0, idx);
+          if (reasoning) onReasoningToken?.(reasoning);
+          buf = buf.slice(idx + LLAMA_THINK_END.length);
+          state = 'answering';
+        } else {
+          const safe = buf.length > MAX_MARKER ? buf.slice(0, buf.length - MAX_MARKER) : '';
+          if (safe) onReasoningToken?.(safe);
+          buf = buf.slice(safe.length);
+          break;
+        }
+      }
+    }
+  };
+}
+
 export class ModelManager {
   private static instance: ModelManager | null = null;
 
@@ -509,7 +564,12 @@ export class ModelManager {
       if (!manager.isReady()) {
         throw new Error('llama.cpp model not loaded');
       }
-      return manager.generate(messages, onToken);
+      const enableThinking = manager.getState().enableThinking;
+      if (!enableThinking || !onReasoningToken) {
+        return manager.generate(messages, onToken);
+      }
+      // Route thinking tokens to onReasoningToken, answer tokens to onToken
+      return manager.generate(messages, makeLlamaCppThinkingRouter(onToken, onReasoningToken));
     }
 
     throw new Error(`Cannot generate: unsupported server type "${server}"`);
