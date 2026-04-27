@@ -730,26 +730,6 @@ export class ModelManager {
     return fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, params, onReasoningChunk);
   }
 
-  /**
-   * Send messages to a known server address directly (bypasses model lookup).
-   */
-  public async sendMessagesToServer(
-    serverAddress: string,
-    messages: Array<{ role: string; content: any }>,
-    modelName: string,
-    token?: string,
-    enableStreaming: boolean = false,
-    onStreamChunk?: (chunk: string) => void,
-    inferenceParams?: InferenceParams,
-    onReasoningChunk?: (chunk: string) => void
-  ): Promise<string> {
-    if (serverAddress.includes('api.observer-ai.com') && token) {
-      this.optimisticUpdateQuota();
-    }
-    const { fetchResponse } = await import('./sendApi');
-    return fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, inferenceParams, onReasoningChunk);
-  }
-
   private optimisticUpdateQuota(): void {
     try {
       const key = 'observer-quota-remaining';

@@ -71,10 +71,9 @@ async function testImage(
     }
   ];
 
-  const response = await ModelManager.getInstance().sendMessagesToServer(
-    config.serverAddress,
-    messages,
+  const response = await ModelManager.getInstance().sendMessages(
     config.testModel,
+    messages,
     config.token,
     false
   );
@@ -288,10 +287,9 @@ CRITICAL RULES:
     { role: 'user', content: userContent }
   ];
 
-  const response = await ModelManager.getInstance().sendMessagesToServer(
-    config.serverAddress,
-    messages,
+  const response = await ModelManager.getInstance().sendMessages(
     config.finetunerModel,
+    messages,
     config.token,
     false
   );
