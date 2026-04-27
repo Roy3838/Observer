@@ -14,7 +14,33 @@ on:
         type: string
 
 jobs:
+  create-release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create-release.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create draft release
+        id: create-release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: '${{ inputs.tag || github.ref_name }}',
+              name: 'Observer AI ${{ inputs.tag || github.ref_name }}',
+              body: 'This is an automated release.\nSee the assets below to download the application for your operating system.',
+              draft: true,
+              prerelease: false,
+            });
+            return data.id;
+          result-encoding: string
+
   build-tauri:
+    needs: create-release
     # Use a strategy matrix to build on both windows and macos
     permissions:
       contents: write
@@ -119,19 +145,8 @@ jobs:
           # Desktop Tauri project location
           projectPath: ./app/desktop
 
-          # Config for the GitHub Release
-          tagName: ${{ inputs.tag || github.ref_name }} # Uses input tag (manual) or pushed tag (auto)
-          releaseName: 'Observer AI ${{ inputs.tag || github.ref_name }}'
-          releaseBody: |
-            This is an automated release.
-            See the assets below to download the application for your operating system.
-
-          # Creates a draft release. You must manually publish it after the workflow is done.
-          # This is safer as it allows you to review and add changelogs.
-          releaseDraft: true
-
-          # Set to true if your tag is a pre-release like v1.0.0-beta.1
-          prerelease: false
+          # Upload to the pre-created release (avoids race condition with parallel matrix jobs)
+          releaseId: ${{ needs.create-release.outputs.release_id }}
 
       # Windows code signing is handled in a separate workflow (sign-windows.yml)
       # This allows for manual approval in SignPath UI before signing completes
