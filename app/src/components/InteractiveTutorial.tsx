@@ -29,7 +29,6 @@ interface InteractiveTutorialProps {
   agentId: string;
   onImportAgent: () => Promise<void>;
   onViewAllTiers: () => void;
-  tier?: string | null;
 }
 
 export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
@@ -39,7 +38,6 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
   agentId,
   onImportAgent,
   onViewAllTiers,
-  tier,
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
@@ -305,7 +303,6 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
 
   // ── Upsell modal (final step) ──────────────────────────────────────────────
   if (currentStepData.id === 'upsell') {
-    const isFreeUser = !tier || tier === 'free';
     return createPortal(
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] backdrop-blur-sm p-2 md:p-4">
         <div
@@ -387,16 +384,14 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
                   </div>
                 </div>
 
-                {isFreeUser && (
-                  <button
-                    onClick={isAppleDevice ? handleApplePurchasePro : handleProCheckout}
-                    disabled={isButtonLoading || isAppleLoading}
-                    className="w-full px-4 py-2.5 md:px-6 md:py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 focus:outline-none focus:ring-4 focus:ring-purple-300 transition-all duration-200 font-semibold text-sm md:text-base shadow-md hover:shadow-lg disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center"
-                  >
-                    {isButtonLoading || isAppleLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
-                    Start Free Trial
-                  </button>
-                )}
+                <button
+                  onClick={isAppleDevice ? handleApplePurchasePro : handleProCheckout}
+                  disabled={isButtonLoading || isAppleLoading}
+                  className="w-full px-4 py-2.5 md:px-6 md:py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 focus:outline-none focus:ring-4 focus:ring-purple-300 transition-all duration-200 font-semibold text-sm md:text-base shadow-md hover:shadow-lg disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {isButtonLoading || isAppleLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
+                  Start Free Trial
+                </button>
                 <p className="text-xs text-gray-500 mt-2 text-center">
                   <a href="https://observer-ai.com/#/Terms" target="_blank" rel="noopener noreferrer" className="hover:underline">Terms</a>
                   {' · '}

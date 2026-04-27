@@ -1121,7 +1121,6 @@ function AppContent() {
             setTutorialModalInfo(prev => prev ? { ...prev, agentId: PERSON_DETECTOR_ID } : prev);
           }}
           onViewAllTiers={() => setActiveTab('obServer')}
-          tier={quotaInfo?.tier ?? null}
         />
       )}
     </div>
