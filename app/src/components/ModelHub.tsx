@@ -500,9 +500,11 @@ const ModelHub: React.FC<ModelHubProps> = ({
     .map(s => s.address);
   const allOllamaServers = [...new Set([...availableServers, ...ollamaServersFromCustom])];
 
-  const ggufModels = ggufFiles.filter(f => !f.filename.toLowerCase().includes('mmproj'));
-  const ggufProjectors = ggufFiles.filter(f => f.filename.toLowerCase().includes('mmproj'));
-  const installedCount = ggufFiles.length + transformersModels.length;
+  const ggufComplete = ggufFiles.filter(f => !f.incomplete);
+  const ggufIncomplete = ggufFiles.filter(f => f.incomplete);
+  const ggufModels = ggufComplete.filter(f => !f.filename.toLowerCase().includes('mmproj'));
+  const ggufProjectors = ggufComplete.filter(f => f.filename.toLowerCase().includes('mmproj'));
+  const installedCount = ggufComplete.length + transformersModels.length;
 
   const isPresetInstalled = (preset: ModelPreset) => {
     if (preset.engine === 'llamacpp') {
@@ -752,6 +754,41 @@ const ModelHub: React.FC<ModelHubProps> = ({
                 );
               })}
 
+              {/* Incomplete / interrupted downloads */}
+              {ggufIncomplete.map((file) => {
+                const displayName = file.filename.replace(/\.part$/i, '');
+                return (
+                  <div
+                    key={file.filename}
+                    className="border border-dashed border-amber-300 bg-amber-50 rounded-xl p-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-amber-100">
+                          <FileDown size={18} className="text-amber-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-medium text-gray-700 truncate">{displayName}</span>
+                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">incomplete</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">{formatBytes(file.sizeBytes)} downloaded</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          setGgufFiles(prev => prev.filter(f => f.filename !== file.filename));
+                          await NativeLlmManager.getInstance().deleteModel(file.filename);
+                        }}
+                        className="p-1.5 text-amber-400 hover:text-red-600 rounded transition-colors"
+                        title="Delete incomplete download"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
 
               {/* Transformers.js installed models */}
               {transformersModels.map((model) => {

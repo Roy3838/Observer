@@ -52,6 +52,7 @@ export interface GemmaModelState {
 export interface GgufFileInfo {
   filename: string;   // Full filename on disk (e.g. "gemma-4-E2B-Q4.gguf")
   sizeBytes: number;
+  incomplete?: boolean; // true for .part files from interrupted downloads
 }
 
 export type NativeModelStatus = 'unloaded' | 'loading' | 'loaded' | 'downloading' | 'unloading' | 'error';

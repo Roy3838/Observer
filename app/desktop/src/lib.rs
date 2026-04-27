@@ -233,7 +233,7 @@ async fn hide_overlay(app_handle: tauri::AppHandle) -> Result<(), String> {
 use tauri::ipc::Channel;
 
 /// List all GGUF files in the models directory (models and projectors alike).
-/// No filtering or auto-detection — the frontend decides how to use each file.
+/// Also includes incomplete .part files so the frontend can show and delete them.
 #[tauri::command]
 async fn llm_list_gguf(app_handle: AppHandle) -> Result<Vec<serde_json::Value>, String> {
     let models_dir = app_handle.path().app_data_dir()
@@ -246,19 +246,24 @@ async fn llm_list_gguf(app_handle: AppHandle) -> Result<Vec<serde_json::Value>, 
         if let Ok(entries) = std::fs::read_dir(&models_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if let Some(ext) = path.extension() {
-                    if ext == "gguf" || ext == "GGUF" {
-                        if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                            let size_bytes = std::fs::metadata(&path)
-                                .map(|m| m.len())
-                                .unwrap_or(0);
+                let name = match path.file_name().and_then(|n| n.to_str()) {
+                    Some(n) => n.to_string(),
+                    None => continue,
+                };
+                let size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
 
-                            files.push(serde_json::json!({
-                                "filename": filename,
-                                "sizeBytes": size_bytes,
-                            }));
-                        }
-                    }
+                if name.ends_with(".gguf") || name.ends_with(".GGUF") {
+                    files.push(serde_json::json!({
+                        "filename": name,
+                        "sizeBytes": size_bytes,
+                        "incomplete": false,
+                    }));
+                } else if name.ends_with(".gguf.part") || name.ends_with(".GGUF.part") {
+                    files.push(serde_json::json!({
+                        "filename": name,
+                        "sizeBytes": size_bytes,
+                        "incomplete": true,
+                    }));
                 }
             }
         }
@@ -267,7 +272,8 @@ async fn llm_list_gguf(app_handle: AppHandle) -> Result<Vec<serde_json::Value>, 
     Ok(files)
 }
 
-/// Download a GGUF model from a HuggingFace URL with progress reporting
+/// Download a GGUF model from a HuggingFace URL with progress reporting.
+/// Resumes automatically if a .part file exists from a previous interrupted download.
 #[tauri::command]
 async fn llm_download_model(
     app_handle: AppHandle,
@@ -294,43 +300,66 @@ async fn llm_download_model(
     std::fs::create_dir_all(&models_dir)
         .map_err(|e| format!("Failed to create models dir: {}", e))?;
 
-    let output_path = models_dir.join(&filename);
+    let part_path = models_dir.join(format!("{}.part", filename));
+    let final_path = models_dir.join(&filename);
+
+    // Check for an existing .part file to resume from
+    let resume_from = if part_path.exists() {
+        std::fs::metadata(&part_path).map(|m| m.len()).unwrap_or(0)
+    } else {
+        0
+    };
+
+    let client = reqwest::Client::new();
+    let mut request = client.get(&url);
+    if resume_from > 0 {
+        log::info!("Resuming download of {} from byte {}", filename, resume_from);
+        request = request.header("Range", format!("bytes={}-", resume_from));
+    }
 
     let _ = on_progress.send(serde_json::json!({
         "status": "downloading",
         "progress": 0,
-        "downloadedBytes": 0,
+        "downloadedBytes": resume_from,
         "totalBytes": 0,
         "filename": filename
     }));
 
-    let client = reqwest::Client::new();
-    let response = client.get(&url)
+    let response = request
         .send()
         .await
         .map_err(|e| format!("Download failed: {}", e))?;
 
-    if !response.status().is_success() {
+    // 206 Partial Content = server supports resume; 200 = no resume, start fresh
+    if response.status() == reqwest::StatusCode::OK && resume_from > 0 {
+        log::warn!("Server does not support range requests, restarting download from scratch");
+        let _ = std::fs::remove_file(&part_path);
+    } else if !response.status().is_success() {
         return Err(format!("Download failed with status: {}", response.status()));
     }
 
-    let total_size = response.content_length().unwrap_or(0);
-    let mut downloaded: u64 = 0;
-
-    let mut file = std::fs::File::create(&output_path)
-        .map_err(|e| format!("Failed to create file: {}", e))?;
+    let content_length = response.content_length().unwrap_or(0);
+    let total_size = content_length + resume_from;
+    let mut downloaded = resume_from;
 
     use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(resume_from > 0)
+        .write(true)
+        .open(&part_path)
+        .map_err(|e| format!("Failed to open part file: {}", e))?;
+
     let mut stream = response.bytes_stream();
 
     while let Some(chunk) = stream.next().await {
-        // Check if download was cancelled
         if DOWNLOAD_CANCELLED.load(Ordering::SeqCst) {
-            log::info!("Download cancelled by user: {}", filename);
-            drop(file); // Close file handle before deleting
-            let _ = std::fs::remove_file(&output_path); // Delete partial file
+            log::info!("Download cancelled by user: {} (partial file kept for resume)", filename);
+            drop(file);
             let _ = on_progress.send(serde_json::json!({
                 "status": "cancelled",
+                "downloadedBytes": downloaded,
+                "totalBytes": total_size,
                 "filename": filename
             }));
             return Err("Download cancelled".to_string());
@@ -356,6 +385,10 @@ async fn llm_download_model(
         }));
     }
 
+    drop(file);
+    std::fs::rename(&part_path, &final_path)
+        .map_err(|e| format!("Failed to finalize download: {}", e))?;
+
     let _ = on_progress.send(serde_json::json!({
         "status": "complete",
         "progress": 100,
@@ -365,6 +398,35 @@ async fn llm_download_model(
     }));
 
     Ok(filename)
+}
+
+/// Returns any .part files in the models directory so the frontend can show resumable downloads
+#[tauri::command]
+async fn llm_get_download_state(app_handle: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    let models_dir = app_handle.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("models");
+
+    let mut parts: Vec<serde_json::Value> = Vec::new();
+
+    if models_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&models_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                if name.ends_with(".part") {
+                    let downloaded_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                    let filename = name.trim_end_matches(".part").to_string();
+                    parts.push(serde_json::json!({
+                        "filename": filename,
+                        "downloadedBytes": downloaded_bytes,
+                    }));
+                }
+            }
+        }
+    }
+
+    Ok(parts)
 }
 
 /// Cancel an ongoing download
@@ -1314,6 +1376,7 @@ pub fn run() {
             // LLM commands
             llm_list_gguf,
             llm_download_model,
+            llm_get_download_state,
             llm_cancel_download,
             llm_cancel_generation,
             llm_delete_model,
