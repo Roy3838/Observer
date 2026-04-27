@@ -61,3 +61,9 @@ rubato = "0.15"  # Audio resampling for PCM pipeline (44.1kHz -> 16kHz)
 # llama-cpp-2 for tests on non-mobile (Linux/macOS dev machines): CPU-only
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dev-dependencies]
 tauri-plugin-llm-engine = { path = "../plugins/llm_engine" }
+
+# Temporary patch until https://github.com/utilityai/llama-cpp-rs PR is merged.
+# Adds image_min_tokens / image_max_tokens to MtmdContextParams.
+[patch.crates-io]
+llama-cpp-2     = { path = "/Users/jay/repos/llama-cpp-rs/llama-cpp-2" }
+llama-cpp-sys-2 = { path = "/Users/jay/repos/llama-cpp-rs/llama-cpp-sys-2" }
