@@ -474,6 +474,10 @@ main {
   color: #dbeafe !important;
 }
 
+.dark .border-blue-200 {
+  border-color: #1e40af !important;
+}
+
 .dark .border-blue-500 {
   border-color: #3b82f6 !important;
 }
@@ -613,4 +617,58 @@ main {
 
 .dark .ring-amber-600 {
   --tw-ring-color: #d97706 !important;
+}
+
+/* White opacity variants (used in footer, chips, modals) */
+.dark .bg-white\/95 {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+}
+
+.dark .bg-white\/90 {
+  background-color: rgba(30, 41, 59, 0.9) !important;
+}
+
+.dark .bg-white\/85 {
+  background-color: rgba(30, 41, 59, 0.85) !important;
+}
+
+.dark .bg-white\/80 {
+  background-color: rgba(30, 41, 59, 0.8) !important;
+}
+
+.dark .bg-white\/70 {
+  background-color: rgba(30, 41, 59, 0.7) !important;
+}
+
+.dark .bg-white\/50 {
+  background-color: rgba(30, 41, 59, 0.5) !important;
+}
+
+.dark .border-gray-100 {
+  border-color: #334155 !important;
+}
+
+.dark .border-gray-100\/80 {
+  border-color: rgba(51, 65, 85, 0.8) !important;
+}
+
+/* Gradient from-* classes missing from overrides */
+.dark .from-blue-50 {
+  --tw-gradient-from: #1e293b !important;
+  --tw-gradient-to: rgb(30 41 59 / 0) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+.dark .from-indigo-50 {
+  --tw-gradient-from: #1e293b !important;
+  --tw-gradient-to: rgb(30 41 59 / 0) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+.dark .to-purple-50 {
+  --tw-gradient-to: #334155 !important;
+}
+
+.dark .to-blue-100 {
+  --tw-gradient-to: #334155 !important;
 }
