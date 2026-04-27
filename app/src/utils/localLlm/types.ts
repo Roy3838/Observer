@@ -106,6 +106,28 @@ export interface SamplerParams {
   repeatPenalty: number;
 }
 
+export interface ContextParams {
+  nCtx: number;
+  nCtxMultimodal: number;
+  nBatch: number;
+  nBatchMultimodal: number;
+  nThreads: number;
+  nGpuLayers: number;
+  imageMinTokens: number;
+  imageMaxTokens: number;
+}
+
+export const DEFAULT_CONTEXT_PARAMS: ContextParams = {
+  nCtx: 4096,
+  nCtxMultimodal: 2048,
+  nBatch: 512,
+  nBatchMultimodal: 512,
+  nThreads: 0,
+  nGpuLayers: -1,
+  imageMinTokens: 70,
+  imageMaxTokens: 70,
+};
+
 export interface LlmDebugInfo {
   modelsDir: string;
   engine: {
@@ -116,6 +138,7 @@ export interface LlmDebugInfo {
     modelPath: string | null;
     mmprojPath: string | null;
     samplerParams: SamplerParams | null;
+    contextParams: ContextParams | null;
     lastMetrics: GenerationMetrics | null;
   };
 }

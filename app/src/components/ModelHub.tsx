@@ -28,6 +28,8 @@ import {
   NativeModelState,
   SamplerParams,
   DEFAULT_SAMPLER_PARAMS,
+  ContextParams,
+  DEFAULT_CONTEXT_PARAMS,
 } from '@utils/localLlm/types';
 import { MODEL_PRESETS, type ModelPreset } from '@utils/modelPresets';
 import LocalServerSetupDialog from '@components/LocalServerSetupDialog';
@@ -188,6 +190,8 @@ const ModelHub: React.FC<ModelHubProps> = ({
   const [ggufUrl, setGgufUrl] = useState('');
   const [samplerParams, setSamplerParams] = useState<SamplerParams>({ ...DEFAULT_SAMPLER_PARAMS });
   const [showSamplerSettings, setShowSamplerSettings] = useState(false);
+  const [contextParams, setContextParams] = useState<ContextParams>({ ...DEFAULT_CONTEXT_PARAMS });
+  const [showContextSettings, setShowContextSettings] = useState(false);
   const [useGpu, setUseGpu] = useState<boolean>(() => {
     if (isWeb()) return true;
     return NativeLlmManager.getInstance().getPersistedUseGpu();
@@ -306,6 +310,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
     } else if (nativeState.status === 'loaded') {
       NativeLlmManager.getInstance().getDebugInfo().then(info => {
         if (info.engine.samplerParams) setSamplerParams(info.engine.samplerParams);
+        if (info.engine.contextParams) setContextParams(info.engine.contextParams);
       }).catch(() => {});
     }
   }, [isOpen, isTauriApp, nativeState.status]);
@@ -404,6 +409,16 @@ const ModelHub: React.FC<ModelHubProps> = ({
     if (nativeState.status === 'loaded') {
       try { await NativeLlmManager.getInstance().setSamplerParams(DEFAULT_SAMPLER_PARAMS); } catch {}
     }
+  };
+
+  const handleContextParamChange = async (key: keyof ContextParams, value: number) => {
+    setContextParams(prev => ({ ...prev, [key]: value }));
+    try { await NativeLlmManager.getInstance().setContextParams({ [key]: value }); } catch {}
+  };
+
+  const handleResetContextParams = async () => {
+    setContextParams({ ...DEFAULT_CONTEXT_PARAMS });
+    try { await NativeLlmManager.getInstance().setContextParams(DEFAULT_CONTEXT_PARAMS); } catch {}
   };
 
   const handleToggleUnifiedGpu = async (enabled: boolean) => {
@@ -1387,6 +1402,133 @@ const ModelHub: React.FC<ModelHubProps> = ({
                                 onClick={handleResetSamplerParams}
                                 disabled={nativeState.status !== 'loaded'}
                                 className="text-xs text-gray-500 hover:text-gray-700 underline disabled:opacity-50 disabled:no-underline"
+                              >
+                                Reset to defaults
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Context / inference parameters */}
+                        <div className="border border-gray-200 rounded-xl overflow-hidden">
+                          <button
+                            onClick={() => setShowContextSettings(!showContextSettings)}
+                            className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+                          >
+                            <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                              <Cpu size={14} /> Context &amp; Memory
+                            </span>
+                            <span className={`text-gray-400 text-xs transition-transform ${showContextSettings ? 'rotate-180' : ''}`}>▼</span>
+                          </button>
+                          {showContextSettings && (
+                            <div className="p-4 space-y-4 border-t border-gray-200">
+                              <p className="text-xs text-gray-500">
+                                Changes take effect on the next generation. <span className="font-medium text-amber-700">GPU Layers</span> requires reloading the model.
+                              </p>
+
+                              {/* Context window */}
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-xs font-medium text-gray-600">Context (text)</label>
+                                  <p className="text-[10px] text-gray-400 mb-1">Max tokens in memory</p>
+                                  <input
+                                    type="number"
+                                    value={contextParams.nCtx}
+                                    min={512} max={32768} step={512}
+                                    onChange={(e) => handleContextParamChange('nCtx', parseInt(e.target.value) || DEFAULT_CONTEXT_PARAMS.nCtx)}
+                                    className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-green-500 font-mono"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs font-medium text-gray-600">Context (multimodal)</label>
+                                  <p className="text-[10px] text-gray-400 mb-1">When images are present</p>
+                                  <input
+                                    type="number"
+                                    value={contextParams.nCtxMultimodal}
+                                    min={512} max={32768} step={512}
+                                    onChange={(e) => handleContextParamChange('nCtxMultimodal', parseInt(e.target.value) || DEFAULT_CONTEXT_PARAMS.nCtxMultimodal)}
+                                    className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-green-500 font-mono"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Batch sizes */}
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-xs font-medium text-gray-600">Batch size (text)</label>
+                                  <p className="text-[10px] text-gray-400 mb-1">Prompt eval chunk size</p>
+                                  <input
+                                    type="number"
+                                    value={contextParams.nBatch}
+                                    min={64} max={2048} step={64}
+                                    onChange={(e) => handleContextParamChange('nBatch', parseInt(e.target.value) || DEFAULT_CONTEXT_PARAMS.nBatch)}
+                                    className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-green-500 font-mono"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs font-medium text-gray-600">Batch size (multimodal)</label>
+                                  <p className="text-[10px] text-gray-400 mb-1">Smaller = less Metal memory</p>
+                                  <input
+                                    type="number"
+                                    value={contextParams.nBatchMultimodal}
+                                    min={64} max={2048} step={64}
+                                    onChange={(e) => handleContextParamChange('nBatchMultimodal', parseInt(e.target.value) || DEFAULT_CONTEXT_PARAMS.nBatchMultimodal)}
+                                    className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-green-500 font-mono"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Image token budget */}
+                              <div>
+                                <label className="text-xs font-medium text-gray-600">Image Token Budget</label>
+                                <p className="text-[10px] text-gray-400 mb-1">Visual tokens per image — lower = faster, less memory (Gemma 4)</p>
+                                <select
+                                  value={contextParams.imageMaxTokens}
+                                  onChange={(e) => {
+                                    const v = parseInt(e.target.value);
+                                    setContextParams(prev => ({ ...prev, imageMinTokens: v, imageMaxTokens: v }));
+                                    NativeLlmManager.getInstance().setContextParams({ imageMinTokens: v, imageMaxTokens: v }).catch(() => {});
+                                  }}
+                                  className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-green-500 font-mono"
+                                >
+                                  <option value={-1}>Default (model decides)</option>
+                                  <option value={70}>70 — fastest, low detail</option>
+                                  <option value={140}>140 — fast</option>
+                                  <option value={280}>280 — balanced</option>
+                                  <option value={560}>560 — detailed</option>
+                                  <option value={1120}>1120 — max detail (OCR/documents)</option>
+                                </select>
+                              </div>
+
+                              {/* Threads + GPU layers */}
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-xs font-medium text-gray-600">CPU Threads</label>
+                                  <p className="text-[10px] text-gray-400 mb-1">0 = auto-detect</p>
+                                  <input
+                                    type="number"
+                                    value={contextParams.nThreads}
+                                    min={0} max={32} step={1}
+                                    onChange={(e) => handleContextParamChange('nThreads', parseInt(e.target.value) || 0)}
+                                    className="w-full p-2 text-sm border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-green-500 font-mono"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs font-medium text-gray-600 text-amber-700">GPU Layers</label>
+                                  <p className="text-[10px] text-gray-400 mb-1">-1 = follow GPU toggle; 0 = CPU; 99 = all</p>
+                                  <input
+                                    type="number"
+                                    value={contextParams.nGpuLayers}
+                                    min={-1} max={999} step={1}
+                                    onChange={(e) => handleContextParamChange('nGpuLayers', parseInt(e.target.value) ?? -1)}
+                                    className="w-full p-2 text-sm border border-amber-200 rounded-md bg-amber-50 focus:ring-2 focus:ring-amber-400 font-mono"
+                                  />
+                                </div>
+                              </div>
+
+                              <button
+                                onClick={handleResetContextParams}
+                                className="text-xs text-gray-500 hover:text-gray-700 underline"
                               >
                                 Reset to defaults
                               </button>

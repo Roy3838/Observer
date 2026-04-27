@@ -680,6 +680,7 @@ async fn llm_get_debug_info(app_handle: AppHandle) -> Result<serde_json::Value, 
                     let mmproj_path = engine.get_mmproj_path()
                         .map(|p| p.to_string_lossy().to_string());
 
+                    let context_params = engine.get_context_params();
                     serde_json::json!({
                         "initialized": true,
                         "isLoaded": engine.is_loaded(),
@@ -693,6 +694,14 @@ async fn llm_get_debug_info(app_handle: AppHandle) -> Result<serde_json::Value, 
                             "topK": sampler_params.top_k,
                             "seed": sampler_params.seed,
                             "repeatPenalty": sampler_params.repeat_penalty,
+                        },
+                        "contextParams": {
+                            "nCtx": context_params.n_ctx,
+                            "nCtxMultimodal": context_params.n_ctx_multimodal,
+                            "nBatch": context_params.n_batch,
+                            "nBatchMultimodal": context_params.n_batch_multimodal,
+                            "nThreads": context_params.n_threads,
+                            "nGpuLayers": context_params.n_gpu_layers,
                         },
                         "lastMetrics": last_metrics.map(|m| serde_json::json!({
                             "tokensGenerated": m.tokens_generated,
@@ -747,6 +756,57 @@ async fn llm_set_sampler_params(
             repeat_penalty: repeat_penalty.unwrap_or(current.repeat_penalty),
         };
         engine.set_sampler_params(new_params);
+        Ok(())
+    })
+}
+
+/// Get current context/inference parameters
+#[tauri::command]
+async fn llm_get_context_params() -> Result<serde_json::Value, String> {
+    use tauri_plugin_llm_engine::with_engine;
+
+    with_engine(|engine| {
+        let p = engine.get_context_params();
+        Ok(serde_json::json!({
+            "nCtx": p.n_ctx,
+            "nCtxMultimodal": p.n_ctx_multimodal,
+            "nBatch": p.n_batch,
+            "nBatchMultimodal": p.n_batch_multimodal,
+            "nThreads": p.n_threads,
+            "nGpuLayers": p.n_gpu_layers,
+            "imageMinTokens": p.image_min_tokens,
+            "imageMaxTokens": p.image_max_tokens,
+        }))
+    })
+}
+
+/// Set context/inference parameters (takes effect on next generate() call;
+/// n_gpu_layers takes effect on next load_model() call)
+#[tauri::command]
+async fn llm_set_context_params(
+    n_ctx: Option<u32>,
+    n_ctx_multimodal: Option<u32>,
+    n_batch: Option<u32>,
+    n_batch_multimodal: Option<u32>,
+    n_threads: Option<i32>,
+    n_gpu_layers: Option<i32>,
+    image_min_tokens: Option<i32>,
+    image_max_tokens: Option<i32>,
+) -> Result<(), String> {
+    use tauri_plugin_llm_engine::{with_engine, ContextParams};
+
+    with_engine(|engine| {
+        let current = engine.get_context_params().clone();
+        engine.set_context_params(ContextParams {
+            n_ctx:              n_ctx.unwrap_or(current.n_ctx),
+            n_ctx_multimodal:   n_ctx_multimodal.unwrap_or(current.n_ctx_multimodal),
+            n_batch:            n_batch.unwrap_or(current.n_batch),
+            n_batch_multimodal: n_batch_multimodal.unwrap_or(current.n_batch_multimodal),
+            n_threads:          n_threads.unwrap_or(current.n_threads),
+            n_gpu_layers:       n_gpu_layers.unwrap_or(current.n_gpu_layers),
+            image_min_tokens:   image_min_tokens.unwrap_or(current.image_min_tokens),
+            image_max_tokens:   image_max_tokens.unwrap_or(current.image_max_tokens),
+        });
         Ok(())
     })
 }
@@ -1255,6 +1315,8 @@ pub fn run() {
             llm_set_sampler_params,
             llm_set_use_gpu,
             llm_get_use_gpu,
+            llm_get_context_params,
+            llm_set_context_params,
             get_memory_info,
         ])
         .run(tauri::generate_context!())

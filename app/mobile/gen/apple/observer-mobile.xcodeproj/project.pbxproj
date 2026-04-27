@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		173D634B745449B21D81F685 /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D1C3503EBE21848D7B1BBAE7 /* libapp.a */; };
-		ACCE1E7A7E8F12C059EA94B2 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ACCE1E7A7E8F12C059EA94B1 /* Accelerate.framework */; };
 		3076197E0C83DD294C245946 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 38A0DD97A1AFE4A9A1BFB4A6 /* LaunchScreen.storyboard */; };
 		44BDE93E169C3ACF4A2D05E8 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8EA609F761A7095FBB3645C /* UIKit.framework */; };
 		585EB46477D170C8C04B7141 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 51043A2EE84D2742D6FA8F55 /* CoreGraphics.framework */; };
@@ -22,6 +21,7 @@
 		722FC0D9DFC22BC9F828D483 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0A297DE6CDD08733F09B61CB /* MetalKit.framework */; };
 		89AA6397BC56F8802D7CC8D1 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7A7569084F2E227B06FD9135 /* Security.framework */; };
 		8CD3C39303CC682D9E6A98EB /* assets in Resources */ = {isa = PBXBuildFile; fileRef = 35B8ED5DC5E081EB234BFB24 /* assets */; };
+		ACCE1E7A7E8F12C059EA94B2 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ACCE1E7A7E8F12C059EA94B1 /* Accelerate.framework */; };
 		B9A279E9109CE9E71A11F18B /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = A6631772DF24EE92AF43FB5F /* main.mm */; };
 		BD668C9BB3E9294BF954097D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CDFAC5802A80D029C7418C06 /* Assets.xcassets */; };
 		BD6EA6B3A20C07DFCBDEBB96 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3C339F777C7FC7586E0791E5 /* QuartzCore.framework */; };
@@ -64,7 +64,6 @@
 /* Begin PBXFileReference section */
 		0534995E466E80C4043306E8 /* lib.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = lib.rs; sourceTree = "<group>"; };
 		0A297DE6CDD08733F09B61CB /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
-		ACCE1E7A7E8F12C059EA94B1 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 		35B8ED5DC5E081EB234BFB24 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
 		38A0DD97A1AFE4A9A1BFB4A6 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		3C339F777C7FC7586E0791E5 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
@@ -80,6 +79,7 @@
 		A6631772DF24EE92AF43FB5F /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		A8EA609F761A7095FBB3645C /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		AC1F13684ECEC47215FE6F6C /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		ACCE1E7A7E8F12C059EA94B1 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 		CA2DC14A3BF5C6691704C26A /* main.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = main.rs; sourceTree = "<group>"; };
 		CDFAC5802A80D029C7418C06 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D1C3503EBE21848D7B1BBAE7 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };

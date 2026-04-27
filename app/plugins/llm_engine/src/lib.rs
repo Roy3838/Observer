@@ -43,7 +43,7 @@ use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::{AddBos, LlamaModel, Special};
+use llama_cpp_2::model::{AddBos, LlamaModel};
 use llama_cpp_2::openai::OpenAIChatTemplateParams;
 use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::mtmd::{MtmdContext, MtmdContextParams, MtmdBitmap, MtmdInputText, mtmd_default_marker};
@@ -57,6 +57,35 @@ pub struct GenerationMetrics {
     pub time_to_first_token_ms: f64,
     pub total_generation_time_ms: f64,
     pub tokens_per_second: f64,
+}
+
+/// Configurable context/inference parameters
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextParams {
+    pub n_ctx: u32,             // text context window size, default 4096
+    pub n_ctx_multimodal: u32,  // context size when images are present, default 4096
+    pub n_batch: u32,           // prompt eval batch size, default 512
+    pub n_batch_multimodal: u32,// batch size when images are present, default 256
+    pub n_threads: i32,         // CPU threads for generation, 0 = auto
+    pub n_gpu_layers: i32,      // layers to offload to GPU; -1 = driven by use_gpu flag (0 or 99)
+    pub image_min_tokens: i32,  // min visual tokens per image; -1 = model default (Gemma 4: 70/140/280/560/1120)
+    pub image_max_tokens: i32,  // max visual tokens per image; -1 = model default
+}
+
+impl Default for ContextParams {
+    fn default() -> Self {
+        Self {
+            n_ctx: 4096,
+            n_ctx_multimodal: 2048,
+            n_batch: 512,
+            n_batch_multimodal: 512,
+            n_threads: 0,
+            n_gpu_layers: -1,
+            image_min_tokens: 70,
+            image_max_tokens: 70,
+        }
+    }
 }
 
 /// Configurable sampler parameters for text generation
@@ -129,6 +158,7 @@ pub struct LlmEngine {
     mtmd_ctx: Option<MtmdContext>, // Multimodal context (if mmproj loaded)
     mmproj_path: Option<PathBuf>,  // Path to loaded mmproj file
     sampler_params: SamplerParams, // Configurable sampler parameters
+    context_params: ContextParams, // Configurable context/inference parameters
     last_metrics: Option<GenerationMetrics>, // Metrics from last generation
     use_gpu: bool, // Whether to use GPU acceleration (Metal). Default false for compatibility.
 }
@@ -148,6 +178,7 @@ impl LlmEngine {
             mtmd_ctx: None,
             mmproj_path: None,
             sampler_params: SamplerParams::default(),
+            context_params: ContextParams::default(),
             last_metrics: None,
             use_gpu: false, // Default to CPU for maximum compatibility
         })
@@ -165,12 +196,15 @@ impl LlmEngine {
 
         self.unload();
 
-        // Use GPU layers based on setting: 99 for GPU (offload all), 0 for CPU only
-        let n_gpu_layers = if self.use_gpu { 99 } else { 0 };
+        // n_gpu_layers: explicit override takes priority; -1 falls back to use_gpu flag
+        let n_gpu_layers = match self.context_params.n_gpu_layers {
+            -1 => if self.use_gpu { 99 } else { 0 },
+            n  => n,
+        };
         llm_log!("GPU mode: {}, n_gpu_layers: {}", self.use_gpu, n_gpu_layers);
 
         let model_params = LlamaModelParams::default()
-            .with_n_gpu_layers(n_gpu_layers);
+            .with_n_gpu_layers(n_gpu_layers as u32);
 
         let model = LlamaModel::load_from_file(&self.backend, &model_path, &model_params)
             .map_err(|e| format!("Failed to load model: {}", e))?;
@@ -197,9 +231,10 @@ impl LlmEngine {
 
         let model = self.model.as_ref().ok_or("No model loaded")?;
 
-        // Create mtmd context params with GPU acceleration (Metal)
         let mut mtmd_params = MtmdContextParams::default();
         mtmd_params.use_gpu = self.use_gpu;
+        mtmd_params.image_min_tokens = self.context_params.image_min_tokens;
+        mtmd_params.image_max_tokens = self.context_params.image_max_tokens;
 
         let mmproj_str = mmproj_path.to_str()
             .ok_or_else(|| "Invalid mmproj path".to_string())?;
@@ -250,6 +285,21 @@ impl LlmEngine {
     /// Set the sampler parameters
     pub fn set_sampler_params(&mut self, params: SamplerParams) {
         self.sampler_params = params;
+    }
+
+    /// Get the current context parameters
+    pub fn get_context_params(&self) -> &ContextParams {
+        &self.context_params
+    }
+
+    /// Set context parameters (takes effect on the next generate() call)
+    pub fn set_context_params(&mut self, params: ContextParams) {
+        llm_log!("Context params updated: n_ctx={} n_ctx_mm={} n_batch={} n_batch_mm={} n_threads={} n_gpu_layers={} img_tokens={}/{}",
+            params.n_ctx, params.n_ctx_multimodal,
+            params.n_batch, params.n_batch_multimodal,
+            params.n_threads, params.n_gpu_layers,
+            params.image_min_tokens, params.image_max_tokens);
+        self.context_params = params;
     }
 
     /// Get whether GPU acceleration is enabled
@@ -311,11 +361,19 @@ impl LlmEngine {
         let generation_start = Instant::now();
         let mut first_token_time: Option<Instant> = None;
 
-        // Multimodal needs more context to hold image embeddings
-        let n_ctx = if use_multimodal { 8192 } else { 4096 };
+        let cp = &self.context_params;
+        let (n_ctx, n_batch) = if use_multimodal {
+            (cp.n_ctx_multimodal, cp.n_batch_multimodal)
+        } else {
+            (cp.n_ctx, cp.n_batch)
+        };
+        let n_threads = if cp.n_threads > 0 { cp.n_threads } else { -1 }; // -1 = llama.cpp auto
+        llm_log!("Context: n_ctx={} n_batch={} n_threads={}", n_ctx, n_batch, n_threads);
+
         let ctx_params = LlamaContextParams::default()
             .with_n_ctx(std::num::NonZeroU32::new(n_ctx))
-            .with_n_batch(512);
+            .with_n_batch(n_batch)
+            .with_n_threads(n_threads);
 
         let mut ctx = model
             .new_context(&self.backend, ctx_params)
@@ -325,7 +383,7 @@ impl LlmEngine {
         // After this block: context is fully populated, batch is empty, n_cur is set.
         // Sampling starts at logit index -1 (last populated position in context).
 
-        let mut batch = LlamaBatch::new(512, 1);
+        let mut batch = LlamaBatch::new(n_batch as usize, 1);
         let prompt_tokens: u32;
         let mut n_cur: usize;
 
@@ -380,6 +438,7 @@ impl LlmEngine {
 
         let mut full_response = String::new();
         let mut tokens_generated: u32 = 0;
+        let mut token_decoder = encoding_rs::UTF_8.new_decoder();
 
         loop {
             // Decode the previous generated token (batch is empty on the first iteration)
@@ -400,7 +459,7 @@ impl LlmEngine {
             tokens_generated += 1;
 
             let token_str = model
-                .token_to_str(new_token, Special::Tokenize)
+                .token_to_piece(new_token, &mut token_decoder, true, None)
                 .map_err(|e| format!("Failed to decode token: {}", e))?;
 
             if !on_token(&token_str) {

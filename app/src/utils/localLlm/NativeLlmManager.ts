@@ -12,6 +12,7 @@ import {
   LocalLlmMessage,
   LlmDebugInfo,
   SamplerParams,
+  ContextParams,
   GenerationMetrics,
   LocalModelEntry,
 } from './types';
@@ -676,6 +677,33 @@ export class NativeLlmManager {
   public async applyPersistedGpuSetting(): Promise<void> {
     const useGpu = this.getPersistedUseGpu();
     await this.setUseGpu(useGpu);
+  }
+
+  public async getContextParams(): Promise<ContextParams> {
+    try {
+      return await invoke<ContextParams>('llm_get_context_params');
+    } catch (error) {
+      Logger.error('NativeLlmManager', `Failed to get context params: ${error}`);
+      throw error;
+    }
+  }
+
+  public async setContextParams(params: Partial<ContextParams>): Promise<void> {
+    try {
+      await invoke('llm_set_context_params', {
+        nCtx: params.nCtx,
+        nCtxMultimodal: params.nCtxMultimodal,
+        nBatch: params.nBatch,
+        nBatchMultimodal: params.nBatchMultimodal,
+        nThreads: params.nThreads,
+        nGpuLayers: params.nGpuLayers,
+        imageMinTokens: params.imageMinTokens,
+        imageMaxTokens: params.imageMaxTokens,
+      });
+    } catch (error) {
+      Logger.error('NativeLlmManager', `Failed to set context params: ${error}`);
+      throw error;
+    }
   }
 
   /**
