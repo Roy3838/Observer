@@ -336,7 +336,7 @@ export class NativeLlmManager {
    * If mmprojFilename is omitted, the persisted assignment map is checked.
    * If neither is set, the model loads as text-only — no auto-detection.
    */
-  public async loadModel(filename: string, mmprojFilename?: string): Promise<void> {
+  public async loadModel(filename: string, mmprojFilename?: string, imageMinTokens?: number, imageMaxTokens?: number): Promise<void> {
     if (this.state.status === 'downloading') {
       throw new Error('Cannot load a model while a download is in progress');
     }
@@ -359,7 +359,12 @@ export class NativeLlmManager {
     try {
       await this.applyPersistedGpuSetting();
 
-      await invoke('llm_load_model', { filename, mmprojFilename: resolvedMmproj ?? null });
+      await invoke('llm_load_model', {
+        filename,
+        mmprojFilename: resolvedMmproj ?? null,
+        imageMinTokens: imageMinTokens ?? null,
+        imageMaxTokens: imageMaxTokens ?? null,
+      });
       Logger.info('NativeLlmManager', 'Model loaded successfully');
       this.loadedFilename = filename;
       this.loadedMmprojFilename = resolvedMmproj ?? null;

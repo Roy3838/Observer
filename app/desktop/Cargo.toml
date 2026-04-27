@@ -58,3 +58,7 @@ sysinfo = "0.33"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
+
+[patch.crates-io]
+llama-cpp-2     = { git = "https://github.com/Roy3838/llama-cpp-rs", branch = "feat/mtmd-image-token-budget" }
+llama-cpp-sys-2 = { git = "https://github.com/Roy3838/llama-cpp-rs", branch = "feat/mtmd-image-token-budget" }

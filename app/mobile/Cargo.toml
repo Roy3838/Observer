@@ -65,5 +65,5 @@ tauri-plugin-llm-engine = { path = "../plugins/llm_engine" }
 # Temporary patch until https://github.com/utilityai/llama-cpp-rs PR is merged.
 # Adds image_min_tokens / image_max_tokens to MtmdContextParams.
 [patch.crates-io]
-llama-cpp-2     = { path = "/Users/jay/repos/llama-cpp-rs/llama-cpp-2" }
-llama-cpp-sys-2 = { path = "/Users/jay/repos/llama-cpp-rs/llama-cpp-sys-2" }
+llama-cpp-2     = { git = "https://github.com/Roy3838/llama-cpp-rs", branch = "feat/mtmd-image-token-budget" }
+llama-cpp-sys-2 = { git = "https://github.com/Roy3838/llama-cpp-rs", branch = "feat/mtmd-image-token-budget" }

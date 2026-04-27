@@ -721,7 +721,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                           <>
                             <button
                               disabled={isAnyNativeBusy}
-                              onClick={() => NativeLlmManager.getInstance().loadModel(file.filename)}
+                              onClick={() => NativeLlmManager.getInstance().loadModel(file.filename, undefined, contextParams.imageMinTokens, contextParams.imageMaxTokens)}
                               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm"
                             >
                               <Cpu size={12} /> Load

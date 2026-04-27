@@ -406,8 +406,10 @@ async fn llm_load_model(
     app_handle: AppHandle,
     filename: String,
     mmproj_filename: Option<String>,
+    image_min_tokens: Option<i32>,
+    image_max_tokens: Option<i32>,
 ) -> Result<(), String> {
-    use tauri_plugin_llm_engine::{with_engine, model_id_from_filename};
+    use tauri_plugin_llm_engine::{with_engine, model_id_from_filename, ContextParams};
 
     let models_dir = app_handle.path().app_data_dir()
         .map_err(|e| e.to_string())?
@@ -426,6 +428,18 @@ async fn llm_load_model(
         if !p.exists() {
             return Err(format!("mmproj not found: {}", mmproj_filename.unwrap()));
         }
+    }
+
+    if image_min_tokens.is_some() || image_max_tokens.is_some() {
+        with_engine(|engine| {
+            let current = engine.get_context_params().clone();
+            engine.set_context_params(ContextParams {
+                image_min_tokens: image_min_tokens.unwrap_or(current.image_min_tokens),
+                image_max_tokens: image_max_tokens.unwrap_or(current.image_max_tokens),
+                ..current
+            });
+            Ok(())
+        })?;
     }
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
