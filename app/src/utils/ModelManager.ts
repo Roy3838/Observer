@@ -92,13 +92,13 @@ const LLAMA_THINK_END   = '<channel|>';
 function makeLlamaCppThinkingRouter(
   onToken?: (t: string) => void,
   onReasoningToken?: (t: string) => void,
-): (token: string) => void {
+): ((token: string) => void) & { flush: () => void } {
   type State = 'scanning' | 'thinking' | 'answering';
   let state: State = 'scanning';
   let buf = '';
   const MAX_MARKER = Math.max(LLAMA_THINK_START.length, LLAMA_THINK_END.length);
 
-  return (token: string) => {
+  const callback = (token: string) => {
     buf += token;
 
     while (buf.length > 0) {
@@ -134,6 +134,15 @@ function makeLlamaCppThinkingRouter(
       }
     }
   };
+
+  callback.flush = () => {
+    if (!buf) return;
+    if (state === 'thinking') onReasoningToken?.(buf);
+    else onToken?.(buf);
+    buf = '';
+  };
+
+  return callback;
 }
 
 export class ModelManager {
@@ -569,7 +578,10 @@ export class ModelManager {
         return manager.generate(messages, onToken);
       }
       // Route thinking tokens to onReasoningToken, answer tokens to onToken
-      return manager.generate(messages, makeLlamaCppThinkingRouter(onToken, onReasoningToken));
+      const router = makeLlamaCppThinkingRouter(onToken, onReasoningToken);
+      const result = await manager.generate(messages, router);
+      router.flush();
+      return result;
     }
 
     throw new Error(`Cannot generate: unsupported server type "${server}"`);
