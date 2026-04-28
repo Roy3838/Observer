@@ -201,7 +201,6 @@ const ModelHub: React.FC<ModelHubProps> = ({
   const [engineInitStatus, setEngineInitStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [engineInitError, setEngineInitError] = useState<string | null>(null);
   const [engineLogs, setEngineLogs] = useState<LogEntry[]>([]);
-  const engineLogsEndRef = useRef<HTMLDivElement>(null);
 
   // ── Preset download state
   const [downloadingPreset, setDownloadingPreset] = useState<ModelPreset | null>(null);
@@ -241,9 +240,6 @@ const ModelHub: React.FC<ModelHubProps> = ({
     return () => Logger.removeListener(listener);
   }, [isOpen, showAdvanced, activeTab]);
 
-  useEffect(() => {
-    engineLogsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [engineLogs]);
 
   useEffect(() => {
     if (!isOpen || ollamaServers) return;
@@ -377,6 +373,12 @@ const ModelHub: React.FC<ModelHubProps> = ({
 
   const handleCancelPull = () => pullModelManager.cancelPull();
 
+  const handleCancelNativeDownload = () => {
+    NativeLlmManager.getInstance().cancelDownload();
+    setDownloadingPreset(null);
+    setPresetDownloadStep(null);
+  };
+
   const handleDone = () => {
     if (downloadState.status === 'success' || downloadState.status === 'error') {
       pullModelManager.resetState();
@@ -500,11 +502,10 @@ const ModelHub: React.FC<ModelHubProps> = ({
     .map(s => s.address);
   const allOllamaServers = [...new Set([...availableServers, ...ollamaServersFromCustom])];
 
-  const ggufComplete = ggufFiles.filter(f => !f.incomplete);
-  const ggufIncomplete = ggufFiles.filter(f => f.incomplete);
-  const ggufModels = ggufComplete.filter(f => !f.filename.toLowerCase().includes('mmproj'));
-  const ggufProjectors = ggufComplete.filter(f => f.filename.toLowerCase().includes('mmproj'));
-  const installedCount = ggufComplete.length + transformersModels.length;
+  const ggufModels = ggufFiles.filter(f => !f.filename.toLowerCase().includes('mmproj'));
+  const ggufProjectors = ggufFiles.filter(f => f.filename.toLowerCase().includes('mmproj'));
+  const isDownloadingAny = downloadingPreset !== null || (isNativeDownloading && !downloadingPreset);
+  const installedCount = ggufFiles.length + transformersModels.length + (isDownloadingAny ? 1 : 0);
 
   const isPresetInstalled = (preset: ModelPreset) => {
     if (preset.engine === 'llamacpp') {
@@ -646,6 +647,171 @@ const ModelHub: React.FC<ModelHubProps> = ({
             </div>
           ) : (
             <div className="space-y-2">
+
+              {/* In-flight preset download (llamacpp) */}
+              {downloadingPreset && downloadingPreset.engine === 'llamacpp' && (
+                <div className="border border-blue-300 bg-blue-50 rounded-xl p-3">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-blue-100">
+                        <FileDown size={18} className="text-blue-500 animate-bounce" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-gray-900 truncate">{downloadingPreset.name}</span>
+                          <span className="text-[10px] font-semibold bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded">llama.cpp</span>
+                        </div>
+                        <p className="text-xs text-blue-600 mt-0.5">
+                          {presetDownloadStep === 'gguf' ? 'Downloading model…' : 'Downloading vision projector…'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleCancelNativeDownload}
+                      className="flex items-center gap-1 px-2 py-1 text-xs bg-red-100 text-red-600 hover:bg-red-200 rounded-lg font-medium flex-shrink-0"
+                      title="Cancel download"
+                    >
+                      <StopCircle size={11} /> Cancel
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    <div>
+                      <div className="flex justify-between text-[11px] mb-1">
+                        <span className="text-gray-500 flex items-center gap-1.5">
+                          {presetDownloadStep === 'mmproj'
+                            ? <CheckCircle className="h-3 w-3 text-green-500" />
+                            : <FileDown className="h-3 w-3 text-blue-400" />
+                          }
+                          Model (.gguf)
+                        </span>
+                        <span className="font-mono text-gray-500">
+                          {presetDownloadStep === 'mmproj'
+                            ? 'Done'
+                            : nativeState.totalBytes > 0
+                              ? `${formatBytes(nativeState.downloadedBytes)} / ${formatBytes(nativeState.totalBytes)}`
+                              : `${nativeState.downloadProgress}%`
+                          }
+                        </span>
+                      </div>
+                      <div className="w-full bg-blue-200 rounded-full h-1.5">
+                        <div
+                          className={`h-1.5 rounded-full transition-all duration-300 ${presetDownloadStep === 'mmproj' ? 'bg-green-500' : 'bg-blue-600'}`}
+                          style={{ width: presetDownloadStep === 'mmproj' ? '100%' : `${nativeState.downloadProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                    {downloadingPreset.mmprojUrl && (
+                      <div>
+                        <div className="flex justify-between text-[11px] mb-1">
+                          <span className="text-gray-500 flex items-center gap-1.5">
+                            <FileDown className={`h-3 w-3 ${presetDownloadStep === 'mmproj' ? 'text-purple-400' : 'text-gray-300'}`} />
+                            Vision projector (.gguf)
+                          </span>
+                          <span className="font-mono text-gray-500">
+                            {presetDownloadStep === 'mmproj'
+                              ? nativeState.totalBytes > 0
+                                ? `${formatBytes(nativeState.downloadedBytes)} / ${formatBytes(nativeState.totalBytes)}`
+                                : `${nativeState.downloadProgress}%`
+                              : 'Pending'
+                            }
+                          </span>
+                        </div>
+                        <div className="w-full bg-blue-200 rounded-full h-1.5">
+                          <div
+                            className="h-1.5 rounded-full bg-purple-500 transition-all duration-300"
+                            style={{ width: presetDownloadStep === 'mmproj' ? `${nativeState.downloadProgress}%` : '0%' }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* In-flight preset download (Transformers.js) */}
+              {downloadingPreset && downloadingPreset.engine === 'transformers' && (
+                <div className="border border-yellow-300 bg-yellow-50 rounded-xl p-3">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-yellow-100">
+                        <FileDown size={18} className="text-yellow-600 animate-bounce" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-gray-900 truncate">{downloadingPreset.name}</span>
+                          <span className="text-[10px] font-semibold bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded">Transformers.js</span>
+                        </div>
+                        <p className="text-xs text-yellow-700 mt-0.5">Downloading…</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => GemmaModelManager.getInstance().unloadModel()}
+                      className="flex items-center gap-1 px-2 py-1 text-xs bg-red-100 text-red-600 hover:bg-red-200 rounded-lg font-medium flex-shrink-0"
+                      title="Cancel download"
+                    >
+                      <StopCircle size={11} /> Cancel
+                    </button>
+                  </div>
+                  {gemmaState.progress.length > 0 && (
+                    <div className="space-y-1.5">
+                      {gemmaState.progress.map((item) => (
+                        <div key={item.file}>
+                          <div className="flex justify-between items-center text-[11px] mb-1">
+                            <span className="text-gray-600 flex items-center gap-1.5 truncate max-w-[55%]">
+                              {item.status === 'done'
+                                ? <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                : <FileDown className="h-3 w-3 text-purple-400 flex-shrink-0" />
+                              }
+                              {item.file}
+                            </span>
+                            <span className="font-medium text-gray-500 flex-shrink-0">
+                              {item.status === 'done'
+                                ? 'Done'
+                                : item.total > 0
+                                  ? `${formatBytes(item.loaded)} / ${formatBytes(item.total)}`
+                                  : `${Math.round(item.progress)}%`
+                              }
+                            </span>
+                          </div>
+                          <div className="w-full bg-yellow-200 rounded-full h-1.5">
+                            <div
+                              className={`h-1.5 rounded-full transition-all duration-300 ${item.status === 'done' ? 'bg-green-500' : 'bg-purple-600'}`}
+                              style={{ width: `${item.progress}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* In-flight ad-hoc URL-bar download (non-preset) */}
+              {isNativeDownloading && !downloadingPreset && (
+                <div className="border border-blue-300 bg-blue-50 rounded-xl p-3">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-blue-100">
+                        <FileDown size={18} className="text-blue-500 animate-bounce" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-semibold text-gray-700 truncate block">{nativeState.modelId}</span>
+                        <p className="text-xs text-blue-600 mt-0.5">Downloading…</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleCancelNativeDownload}
+                      className="flex items-center gap-1 px-2 py-1 text-xs bg-red-100 text-red-600 hover:bg-red-200 rounded-lg font-medium flex-shrink-0"
+                    >
+                      <StopCircle size={11} /> Cancel
+                    </button>
+                  </div>
+                  <div className="w-full bg-blue-200 rounded-full h-1.5">
+                    <div className="h-1.5 rounded-full bg-blue-600 transition-all" style={{ width: `${nativeState.downloadProgress}%` }} />
+                  </div>
+                </div>
+              )}
+
               {/* llama.cpp model files */}
               {ggufModels.map((file) => {
                 const modelId = file.filename.replace(/\.gguf$/i, '');
@@ -749,42 +915,6 @@ const ModelHub: React.FC<ModelHubProps> = ({
                           </>
                         )}
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Incomplete / interrupted downloads */}
-              {ggufIncomplete.map((file) => {
-                const displayName = file.filename.replace(/\.part$/i, '');
-                return (
-                  <div
-                    key={file.filename}
-                    className="border border-dashed border-amber-300 bg-amber-50 rounded-xl p-3"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-amber-100">
-                          <FileDown size={18} className="text-amber-500" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-medium text-gray-700 truncate">{displayName}</span>
-                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">incomplete</span>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">{formatBytes(file.sizeBytes)} downloaded</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          setGgufFiles(prev => prev.filter(f => f.filename !== file.filename));
-                          await NativeLlmManager.getInstance().deleteModel(file.filename);
-                        }}
-                        className="p-1.5 text-amber-400 hover:text-red-600 rounded transition-colors"
-                        title="Delete incomplete download"
-                      >
-                        <Trash2 size={14} />
-                      </button>
                     </div>
                   </div>
                 );
@@ -1021,7 +1151,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                           }
                           <button
                             onClick={isLlamaCpp
-                              ? () => { NativeLlmManager.getInstance().cancelDownload(); setDownloadingPreset(null); setPresetDownloadStep(null); }
+                              ? handleCancelNativeDownload
                               : () => GemmaModelManager.getInstance().unloadModel()
                             }
                             className="ml-1 p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
@@ -1043,118 +1173,10 @@ const ModelHub: React.FC<ModelHubProps> = ({
                     </div>
                   </div>
 
-                  {/* Inline progress for llamacpp preset download */}
-                  {thisDownloading && isLlamaCpp && (
-                    <div className="mt-3 space-y-2">
-                      {/* Model (gguf) bar */}
-                      <div>
-                        <div className="flex justify-between text-[11px] mb-1">
-                          <span className="text-gray-500 flex items-center gap-1.5">
-                            {presetDownloadStep === 'mmproj'
-                              ? <CheckCircle className="h-3 w-3 text-green-500" />
-                              : <FileDown className="h-3 w-3 text-blue-400" />
-                            }
-                            Model (.gguf)
-                          </span>
-                          <span className="font-mono text-gray-500">
-                            {presetDownloadStep === 'mmproj'
-                              ? 'Done'
-                              : nativeState.totalBytes > 0
-                                ? `${formatBytes(nativeState.downloadedBytes)} / ${formatBytes(nativeState.totalBytes)}`
-                                : `${nativeState.downloadProgress}%`
-                            }
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-1.5">
-                          <div
-                            className={`h-1.5 rounded-full transition-all duration-300 ${presetDownloadStep === 'mmproj' ? 'bg-green-500' : 'bg-blue-600'}`}
-                            style={{ width: presetDownloadStep === 'mmproj' ? '100%' : `${nativeState.downloadProgress}%` }}
-                          />
-                        </div>
-                      </div>
-                      {/* Vision projector (mmproj) bar — only shown if preset has one */}
-                      {preset.mmprojUrl && (
-                        <div>
-                          <div className="flex justify-between text-[11px] mb-1">
-                            <span className="text-gray-500 flex items-center gap-1.5">
-                              <FileDown className={`h-3 w-3 ${presetDownloadStep === 'mmproj' ? 'text-purple-400' : 'text-gray-300'}`} />
-                              Vision projector (.gguf)
-                            </span>
-                            <span className="font-mono text-gray-500">
-                              {presetDownloadStep === 'mmproj'
-                                ? nativeState.totalBytes > 0
-                                  ? `${formatBytes(nativeState.downloadedBytes)} / ${formatBytes(nativeState.totalBytes)}`
-                                  : `${nativeState.downloadProgress}%`
-                                : 'Pending'
-                              }
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-1.5">
-                            <div
-                              className="h-1.5 rounded-full bg-purple-500 transition-all duration-300"
-                              style={{ width: presetDownloadStep === 'mmproj' ? `${nativeState.downloadProgress}%` : '0%' }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Inline progress for transformers preset */}
-                  {thisDownloading && !isLlamaCpp && gemmaState.progress.length > 0 && (
-                    <div className="space-y-1.5 mt-3">
-                      {gemmaState.progress.map((item) => (
-                        <div key={item.file}>
-                          <div className="flex justify-between items-center text-[11px] mb-1">
-                            <span className="text-gray-600 flex items-center gap-1.5 truncate max-w-[55%]">
-                              {item.status === 'done'
-                                ? <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
-                                : <FileDown className="h-3 w-3 text-purple-400 flex-shrink-0" />
-                              }
-                              {item.file}
-                            </span>
-                            <span className="font-medium text-gray-500 flex-shrink-0">
-                              {item.status === 'done'
-                                ? 'Done'
-                                : item.total > 0
-                                  ? `${formatBytes(item.loaded)} / ${formatBytes(item.total)}`
-                                  : `${Math.round(item.progress)}%`
-                              }
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-1.5">
-                            <div
-                              className={`h-1.5 rounded-full transition-all duration-300 ${item.status === 'done' ? 'bg-green-500' : 'bg-purple-600'}`}
-                              style={{ width: `${item.progress}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               );
             })}
           </div>
-
-          {isNativeDownloading && !downloadingPreset && (
-            <div className="mt-3 border border-blue-200 bg-blue-50 rounded-xl p-3">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-semibold text-gray-700 flex items-center gap-1.5 truncate">
-                  <FileDown size={13} className="text-blue-500" /> {nativeState.modelId}
-                </span>
-                <button
-                  onClick={() => NativeLlmManager.getInstance().cancelDownload()}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-red-100 text-red-600 hover:bg-red-200 rounded-lg font-medium"
-                >
-                  <StopCircle size={11} /> Cancel
-                </button>
-              </div>
-              <div className="w-full bg-blue-200 rounded-full h-1.5">
-                <div className="h-1.5 rounded-full bg-blue-600 transition-all" style={{ width: `${nativeState.downloadProgress}%` }} />
-              </div>
-            </div>
-          )}
 
           {nativeState.status === 'error' && (
             <div className="mt-3 border border-red-200 bg-red-50 rounded-lg p-3">
@@ -1285,7 +1307,6 @@ const ModelHub: React.FC<ModelHubProps> = ({
                                   </div>
                                 ))
                               )}
-                              <div ref={engineLogsEndRef} />
                             </div>
                           </div>
                         </div>
@@ -1321,7 +1342,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                                 <FileDown size={13} className="text-blue-500" /> {nativeState.modelId}
                               </span>
                               <button
-                                onClick={() => NativeLlmManager.getInstance().cancelDownload()}
+                                onClick={handleCancelNativeDownload}
                                 className="flex items-center gap-1 px-2 py-1 text-xs bg-red-100 text-red-600 hover:bg-red-200 rounded-lg font-medium"
                               >
                                 <StopCircle size={11} /> Cancel

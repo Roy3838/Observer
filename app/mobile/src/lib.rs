@@ -303,7 +303,7 @@ async fn stop_audio_stream_cmd(
 // ============================================================================
 
 /// List all GGUF files in the models directory (models and projectors alike).
-/// Also includes incomplete .part files so the frontend can show and delete them.
+/// No filtering or auto-detection — the frontend decides how to use each file.
 #[tauri::command]
 async fn llm_list_gguf(
     app_handle: AppHandle,
@@ -318,24 +318,18 @@ async fn llm_list_gguf(
         if let Ok(entries) = std::fs::read_dir(&models_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                let name = match path.file_name().and_then(|n| n.to_str()) {
-                    Some(n) => n.to_string(),
-                    None => continue,
-                };
-                let size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-
-                if name.ends_with(".gguf") || name.ends_with(".GGUF") {
-                    files.push(serde_json::json!({
-                        "filename": name,
-                        "sizeBytes": size_bytes,
-                        "incomplete": false,
-                    }));
-                } else if name.ends_with(".gguf.part") || name.ends_with(".GGUF.part") {
-                    files.push(serde_json::json!({
-                        "filename": name,
-                        "sizeBytes": size_bytes,
-                        "incomplete": true,
-                    }));
+                if let Some(ext) = path.extension() {
+                    if ext == "gguf" || ext == "GGUF" {
+                        if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                            let size_bytes = std::fs::metadata(&path)
+                                .map(|m| m.len())
+                                .unwrap_or(0);
+                            files.push(serde_json::json!({
+                                "filename": filename,
+                                "sizeBytes": size_bytes,
+                            }));
+                        }
+                    }
                 }
             }
         }
@@ -477,34 +471,6 @@ async fn llm_download_model(
     Ok(filename)
 }
 
-/// Returns any .part files in the models directory so the frontend can show resumable downloads
-#[tauri::command]
-async fn llm_get_download_state(app_handle: AppHandle) -> Result<Vec<serde_json::Value>, String> {
-    let models_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("models");
-
-    let mut parts: Vec<serde_json::Value> = Vec::new();
-
-    if models_dir.exists() {
-        if let Ok(entries) = std::fs::read_dir(&models_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-                if name.ends_with(".part") {
-                    let downloaded_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-                    let filename = name.trim_end_matches(".part").to_string();
-                    parts.push(serde_json::json!({
-                        "filename": filename,
-                        "downloadedBytes": downloaded_bytes,
-                    }));
-                }
-            }
-        }
-    }
-
-    Ok(parts)
-}
 
 /// Cancel an ongoing download
 #[tauri::command]
@@ -1169,7 +1135,6 @@ pub fn run() {
             // LLM commands 
             llm_list_gguf,
             llm_download_model,
-            llm_get_download_state,
             llm_cancel_download,
             llm_cancel_generation,
             llm_delete_model,

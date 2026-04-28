@@ -272,10 +272,14 @@ export class NativeLlmManager {
       return resultFilename;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      const isCancelled = msg.includes('cancelled') || msg.includes('Cancel');
       Logger.error('NativeLlmManager', `Download failed: ${msg}`);
       this.currentDownloadFilename = null;
-      this.setState({ status: 'error', error: msg });
-      throw error;
+      this.setState({ status: isCancelled ? 'unloaded' : 'error', error: isCancelled ? null : msg });
+      // Refresh so any .part file appears in the file list
+      this.refreshGgufCache();
+      if (!isCancelled) throw error;
+      return '';
     }
   }
 
@@ -287,7 +291,7 @@ export class NativeLlmManager {
       Logger.info('NativeLlmManager', `Cancelling download: ${this.currentDownloadFilename}`);
 
       try {
-        // Signal Rust to cancel the download (it will delete the partial file)
+        // Signal Rust to cancel the download (partial .part file is kept for resume)
         await invoke('llm_cancel_download');
         Logger.info('NativeLlmManager', 'Cancel signal sent to backend');
       } catch (error) {
