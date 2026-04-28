@@ -3,7 +3,7 @@
 // Acquisition + hardware config panel for local AI models, custom servers, and Ob-Server cloud.
 // Primary path: curated model catalog. Advanced: raw GGUF download, custom servers, sampler settings.
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Modal from '@components/EditAgent/Modal';
 import {
   Download, CheckCircle, AlertTriangle, X, StopCircle, FileDown, Cpu, Trash2,
@@ -31,7 +31,7 @@ import {
   ContextParams,
   DEFAULT_CONTEXT_PARAMS,
 } from '@utils/localLlm/types';
-import { MODEL_PRESETS, type ModelPreset } from '@utils/modelPresets';
+import { MODEL_PRESETS, EXTENDED_PRESETS, type ModelPreset } from '@utils/modelPresets';
 import LocalServerSetupDialog from '@components/LocalServerSetupDialog';
 
 type QuotaInfo = {
@@ -173,6 +173,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
   // ── Tabs + Advanced panel
   const [activeTab, setActiveTab] = useState<TabId>(isTauriApp ? 'llamacpp' : 'transformers');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showMoreModels, setShowMoreModels] = useState(false);
 
   // ── Transformers.js (Gemma) state
   const [gemmaState, setGemmaState] = useState<GemmaModelState>(GemmaModelManager.getInstance().getState());
@@ -1176,6 +1177,74 @@ const ModelHub: React.FC<ModelHubProps> = ({
                 </div>
               );
             })}
+          </div>
+
+          {/* More models — full Unsloth E2B quant ladder for testing */}
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setShowMoreModels(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+            >
+              <span className="text-sm font-medium text-gray-600">More models (quant testing)</span>
+              <ChevronDown size={16} className={`text-gray-400 transition-transform ${showMoreModels ? 'rotate-180' : ''}`} />
+            </button>
+            {showMoreModels && (
+              <div className="border-t border-gray-200 p-3 space-y-2">
+                <p className="text-xs text-gray-400 mb-3">All Unsloth Gemma-4-E2B-it quantizations, sorted lightest → heaviest. Good for finding the quality/size sweet spot on a specific device.</p>
+                {EXTENDED_PRESETS.map(preset => {
+                  const filename = preset.ggufUrl?.split('/').pop();
+                  const installed = filename ? ggufFiles.some(f => f.filename === filename) : false;
+                  const thisDownloading = downloadingPreset?.name === preset.name;
+                  const downloadBlocked = isAnyNativeBusy && !thisDownloading;
+
+                  return (
+                    <div
+                      key={preset.name}
+                      className={`border rounded-xl p-3 transition-all ${
+                        installed ? 'border-gray-400 bg-gray-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium text-gray-900 text-sm">{preset.name}</span>
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 flex items-center gap-0.5"><Eye size={9} /></span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">{preset.sizeLabel}</p>
+                        </div>
+                        <div className="flex-shrink-0">
+                          {installed ? (
+                            <span className="flex items-center gap-1 text-xs text-green-700 font-medium">
+                              <CheckCircle size={12} /> Installed
+                            </span>
+                          ) : thisDownloading ? (
+                            <span className="flex items-center gap-1.5 text-xs text-blue-600 font-medium">
+                              <Download size={12} className="animate-bounce" />
+                              {presetDownloadStep === 'gguf' ? 'Model…' : 'Vision…'}
+                              <button
+                                onClick={handleCancelNativeDownload}
+                                className="ml-1 p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                title="Cancel"
+                              >
+                                <StopCircle size={12} />
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleDownloadPreset(preset)}
+                              disabled={downloadBlocked}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm"
+                            >
+                              <Download size={12} /> Download
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {nativeState.status === 'error' && (
