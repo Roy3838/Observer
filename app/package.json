@@ -1,7 +1,7 @@
 {
   "name": "@observer/webapp",
   "private": true,
-  "version": "2.3.3",
+  "version": "2.3.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
