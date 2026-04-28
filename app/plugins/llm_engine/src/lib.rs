@@ -76,10 +76,10 @@ pub struct ContextParams {
 impl Default for ContextParams {
     fn default() -> Self {
         Self {
-            n_ctx: 4096,
-            n_ctx_multimodal: 2048,
-            n_batch: 512,
-            n_batch_multimodal: 512,
+            n_ctx: 1024,
+            n_ctx_multimodal: 1024,
+            n_batch: 256,
+            n_batch_multimodal: 256,
             n_threads: 0,
             n_gpu_layers: -1,
             image_min_tokens: 70,

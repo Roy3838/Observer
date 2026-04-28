@@ -52,7 +52,6 @@ export interface GemmaModelState {
 export interface GgufFileInfo {
   filename: string;   // Full filename on disk (e.g. "gemma-4-E2B-Q4.gguf")
   sizeBytes: number;
-  incomplete?: boolean; // true for .part files from interrupted downloads
 }
 
 export type NativeModelStatus = 'unloaded' | 'loading' | 'loaded' | 'downloading' | 'unloading' | 'error';
@@ -119,10 +118,10 @@ export interface ContextParams {
 }
 
 export const DEFAULT_CONTEXT_PARAMS: ContextParams = {
-  nCtx: 4096,
-  nCtxMultimodal: 2048,
-  nBatch: 512,
-  nBatchMultimodal: 512,
+  nCtx: 1024,
+  nCtxMultimodal: 1024,
+  nBatch: 256,
+  nBatchMultimodal: 256,
   nThreads: 0,
   nGpuLayers: -1,
   imageMinTokens: 70,
