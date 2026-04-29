@@ -231,26 +231,33 @@ if(response.includes("word")){
 
 There are a few ways to get Observer up and running with local inference. I recommend the Observer App. 
 
-## Option 1: Just Install the Desktop App with any OpenAI compatible endpoint (Ollama, llama.cpp, vLLM)
+## Option 1 (Easiest): Pull models using Transformers.js on WebApp
+
+If you go to the ModelHub you can download Gemma 4 e2b and Gemma4 e4b directly on the browser with no install. This is a bit unstable and crashes mobile devices, but no install is required at all! 
+
+## Option 2 (Easy and Stable): Download the Observer App and use bundled llama.cpp models 
 
 Download the Official App:
 
 [![Download App](https://img.shields.io/badge/⬇️_Download-Latest_Release-blue?style=for-the-badge&color=2196F3)](https://github.com/Roy3838/Observer/releases/latest/)
 
+The Observer App comes bundled with llama.cpp under the hood, so you can run any GGUF model! Be sure to load an mmproj file if using multimodality.
+
+## Option 3 (Most stable): Use Desktop App with any OpenAI compatible endpoint (Ollama, llama.cpp, vLLM)
+
 Download Ollama for the best compatibility. Observer can connect directly to any server that provides a `v1/chat/completions` endpoint.
 
-### vLLM, llama.cpp, LMStudio etc: 
-Set the `Custom Model Server URL` on the App to any OpenAI compatible endpoint if not using Ollama.
+Set the `Custom Model Server URL` on the App to any OpenAI compatible endpoint.
 
 NOTE: Your browser app sends the request to `localhost:3838` which the ObserverApp proxies to your `Custom Model Server URL`, this is because of CORS. 
 
 
-## Option 2: Full Docker Setup (Deprecated)
+## Option 4: Full Docker Setup (Deprecated)
 
 For Docker setup instructions, see [docker/DOCKER.md](docker/DOCKER.md).
 
 
-### Setting Up Python (Jupyter Server) 
+### Setting Up Python (Jupyter Server) (Deprecated)
 
 For Jupyter server setup instructions, see [app/JUPYTER.md](app/JUPYTER.md).
 
