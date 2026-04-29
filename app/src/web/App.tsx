@@ -5,7 +5,7 @@ import { platform as getPlatform } from '@tauri-apps/plugin-os';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@contexts/AuthContext';
 import { useIOSKeyboard } from '@hooks/useIOSKeyboard';
-import { isMobile, confirm } from '@utils/platform';
+import { isMobile, confirm, isDesktop } from '@utils/platform';
 import {
   listAgents,
   getAgentCode,
@@ -551,7 +551,7 @@ function AppContent() {
 
   // Start command SSE for hotkey support (desktop only)
   useEffect(() => {
-    if (hostingContext === 'self-hosted' && !isMobileDevice) {
+    if (isDesktop()) {
       startCommandSSE(getToken);
     }
   }, [hostingContext, isMobileDevice]);
