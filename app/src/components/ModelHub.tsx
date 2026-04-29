@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import Modal from '@components/EditAgent/Modal';
 import {
   Download, CheckCircle, AlertTriangle, X, StopCircle, FileDown, Cpu, Trash2,
-  AlertCircle, Settings2, RefreshCw, Plus, Cloud, Server, Zap,
+  AlertCircle, RefreshCw, Plus, Cloud, Server, Zap,
   Sparkles, Package, ChevronDown, Terminal, Play, Eye,
 } from 'lucide-react';
 import { Logger, LogEntry, LogLevel } from '@utils/logging';
