@@ -81,9 +81,10 @@ interface SensorDataType {
 }
 
 const SENSOR_DATA_MAP: SensorDataType[] = [
-  { sensor: '$SCREEN_64', label: 'Screen captures (images)' },
-  { sensor: '$CAMERA', label: 'Camera images' },
+  { sensor: '$SCREEN', label: 'Screen captures (images)' },
   { sensor: '$SCREEN_OCR', label: 'Text extracted from your screen' },
+  { sensor: '$CAMERA', label: 'Camera images' },
+  { sensor: '$CAMERA_OCR', label: 'Text extracted from camera' },
   { sensor: '$CLIPBOARD_TEXT', label: 'Clipboard content' },
   { sensor: '$MICROPHONE', label: 'Microphone audio transcription' },
   { sensor: '$SCREEN_AUDIO', label: 'Screen audio transcription' },
@@ -91,7 +92,10 @@ const SENSOR_DATA_MAP: SensorDataType[] = [
 ];
 
 function getDetectedSensorData(prompt: string): SensorDataType[] {
-  return SENSOR_DATA_MAP.filter(item => prompt.includes(item.sensor));
+  return SENSOR_DATA_MAP.filter(item => {
+    const key = item.sensor.slice(1); // strip leading $
+    return new RegExp(`\\$${key}(?![A-Z_])`).test(prompt);
+  });
 }
 
 function isCloudModel(model: Model | undefined): boolean {
@@ -237,7 +241,7 @@ const SimpleCreatorModal: React.FC<SimpleCreatorModalProps> = ({ isOpen, onClose
 
   useEffect(() => {
     // Vision validation
-    const hasVisionSensor = /\$SCREEN_64|\$CAMERA/.test(systemPrompt);
+    const hasVisionSensor = /\$SCREEN(?![A-Z_])|\$CAMERA(?![A-Z_])/.test(systemPrompt);
     const selectedModelInfo = availableModels.find(m => m.name === model);
     const isLocalModel = selectedModelInfo && !selectedModelInfo.server.includes('api.observer-ai.com');
 
@@ -381,17 +385,19 @@ const SimpleCreatorModal: React.FC<SimpleCreatorModalProps> = ({ isOpen, onClose
             />
             <div className="flex flex-wrap gap-2 mt-4">
               <SensorButton icon={ScanText} label="Screen Text" onClick={() => insertSensor('$SCREEN_OCR')} colorClass="text-blue-600" />
-              <SensorButton icon={Monitor} label="Screen Image" onClick={() => insertSensor('$SCREEN_64')} colorClass="text-purple-600" />
+              <SensorButton icon={Monitor} label="Screen Image" onClick={() => insertSensor('$SCREEN')} colorClass="text-purple-600" />
               <SensorButton icon={Camera} label="Camera" onClick={() => insertSensor('$CAMERA')} colorClass="text-purple-600" />
+              <SensorButton icon={ScanText} label="Camera Text" onClick={() => insertSensor('$CAMERA_OCR')} colorClass="text-blue-600" />
               <SensorButton icon={Clipboard} label="Clipboard" onClick={() => insertSensor('$CLIPBOARD_TEXT')} colorClass="text-sky-600" />
               <SensorButton icon={Mic} label="Microphone" onClick={() => insertSensor('$MICROPHONE')} colorClass="text-amber-600" />
               <SensorButton icon={Volume2} label="Screen Audio" onClick={() => insertSensor('$SCREEN_AUDIO')} colorClass="text-amber-600" />
               <SensorButton icon={Blend} label="All Audio" onClick={() => insertSensor('$ALL_AUDIO')} colorClass="text-orange-600" />
               <SensorButton icon={Save} label="Memory" onClick={() => insertSensor('$MEMORY@agent_id')} colorClass="text-emerald-600" />
               <SensorButton icon={Images} label="Image Memory" onClick={() => insertSensor('$IMEMORY@agent_id')} colorClass="text-purple-600" />
+              <SensorButton icon={ScanText} label="Image Memory Text" onClick={() => insertSensor('$IMEMORY_OCR@agent_id')} colorClass="text-blue-600" />
             </div>
             {visionValidationError && <div className="mt-2 p-2 bg-yellow-50 rounded-md flex items-center text-xs text-yellow-800"><AlertTriangle className="h-4 w-4 mr-2 flex-shrink-0" />{visionValidationError}</div>}
-            {systemPrompt.includes('$SCREEN_OCR') && <div className="mt-2 p-2 bg-blue-50 rounded-md flex items-center text-xs text-blue-800"><Info className="h-4 w-4 mr-2 flex-shrink-0" />OCR adds ~15s to each agent loop.</div>}
+            {/\$SCREEN_OCR|\$CAMERA_OCR|\$IMEMORY_OCR/.test(systemPrompt) && <div className="mt-2 p-2 bg-blue-50 rounded-md flex items-center text-xs text-blue-800"><Info className="h-4 w-4 mr-2 flex-shrink-0" />OCR adds ~15s to each agent loop.</div>}
             {showWhisperWarning && <div className="mt-2 p-2 bg-slate-100 rounded-md flex items-center text-xs text-slate-800"><AlertTriangle className="h-4 w-4 mr-2 flex-shrink-0" />Uses whisper model, may increase CPU/memory usage.</div>}
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Change Model</label>

@@ -29,6 +29,10 @@ export async function captureFrameAndOCR(_stream: MediaStream, agentId?: string,
   return performOCR(imageData);
 }
 
+export async function performOCROnBase64(imageData: string): Promise<OCRResult> {
+  return performOCR(imageData);
+}
+
 // Function to perform OCR on image data
 async function performOCR(imageData: string): Promise<OCRResult> {
   console.log('Starting OCR processing...');

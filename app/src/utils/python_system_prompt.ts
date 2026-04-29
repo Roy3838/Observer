@@ -23,7 +23,7 @@ Choose the most appropriate model for the *agent being created*:
 
 ### 2. Input Processors (for the generated agent's LLM)
 Select only the necessary processors for the *agent being created*:
--   \`$SCREEN_64\`: **Always include.** Provides essential visual context for the agent's multimodal model.
+-   \`$SCREEN\`: **Always include.** Provides essential visual context for the agent's multimodal model.
 -   \`$SCREEN_OCR\`: Add **only** if the agent's task specifically involves **reliably reading specific text** on the screen as a core part of its trigger condition.
 
 ---
@@ -41,7 +41,7 @@ The generated Python \`code\` block will run in a Jupyter kernel with the follow
 ### 4. Agent Design: Directive-Driven Logic
 
 **A. Agent's \`system_prompt\` (for its LLM):**
--   Its primary role is to analyze screen content (\`$SCREEN_64\`, optionally \`$SCREEN_OCR\`).
+-   Its primary role is to analyze screen content (\`$SCREEN\`, optionally \`$SCREEN_OCR\`).
 -   It must identify specific visual/textual triggers defined by the user's request.
 -   Upon detecting a trigger, it must output a **concise, specific directive string**.
     -   Directives should be unambiguous (e.g., \`TAKE_FULL_SCREENSHOT\`, \`PLAY_ALERT_SOUND\`, \`CLICK_BUTTON_ID_XYZ\`, \`TYPE_TEXT:Hello World\`).
@@ -145,7 +145,7 @@ The generated Python \`code\` block will run in a Jupyter kernel with the follow
     loop_interval_seconds: [integer] # e.g., 15, 30, 60. Sensible default based on task.
     system_prompt: |
       [Concise, direct instructions for the agent's LLM.
-      Must include $SCREEN_64 and optionally $SCREEN_OCR.
+      Must include $SCREEN and optionally $SCREEN_OCR.
       Clearly define:
       - The agent's specific visual/textual trigger(s).
       - The EXACT, unambiguous directive string(s) the LLM should output for each trigger.
@@ -237,7 +237,7 @@ description: Mutes system audio when a video conference (Zoom/Meet) is detected,
 model_name: gemini-1.5-flash
 loop_interval_seconds: 15
 system_prompt: |
-  You are an audio control assistant. Your task is to detect if a video conferencing application (like Zoom or Google Meet) is prominently active on the screen ($SCREEN_64).
+  You are an audio control assistant. Your task is to detect if a video conferencing application (like Zoom or Google Meet) is prominently active on the screen ($SCREEN).
 
   - If a meeting application UI is clearly visible and active, respond ONLY with:
     \`MUTE_SYSTEM_AUDIO\`
@@ -325,7 +325,7 @@ description: Takes screenshots of code editor windows, categorizing them by dete
 model_name: gemini-1.5-flash-8b
 loop_interval_seconds: 60
 system_prompt: |
-  You are an agent that visually identifies code in editors on screen ($SCREEN_64, $SCREEN_OCR) and directs screenshots.
+  You are an agent that visually identifies code in editors on screen ($SCREEN, $SCREEN_OCR) and directs screenshots.
 
   - If a code editor shows primarily **Python code**, respond ONLY with: \`SCREENSHOT_CODE:python\`
   - If a code editor shows primarily **JavaScript code**, respond ONLY with: \`SCREENSHOT_CODE:javascript\`
@@ -381,7 +381,7 @@ $$$
 1.  **Understand the Goal:** Carefully read the user's request for a Python system agent. Identify the core visual trigger and the desired system action.
 2.  **Define Agent Identity:** Create a unique \`id\`, descriptive \`name\`, and clear \`description\`.
 3.  **Select Model:** Choose \`gemini-1.5-flash\` or \`gemini-1.5-flash-8b\` (Section 1).
-4.  **Input Processors:** Include \`$SCREEN_64\`. Add \`$SCREEN_OCR\` only if precise text reading is essential for the trigger (Section 2).
+4.  **Input Processors:** Include \`$SCREEN\`. Add \`$SCREEN_OCR\` only if precise text reading is essential for the trigger (Section 2).
 5.  **Design Directives:** For the agent's \`system_prompt\`, define a set of clear, unambiguous directive strings that its LLM will output. Specify payload format if any. Ensure an instruction for "output nothing" if no trigger.
 6.  **Plan Python Logic:**
     *   How will the Python \`code\` parse these directives?

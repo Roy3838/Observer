@@ -3,13 +3,15 @@ import React from 'react';
 const SENSOR_COLORS: Record<string, string> = {
   // Vision/Multimodal Sensors (Purple Spectrum)
   CAMERA: 'text-purple-700 bg-purple-100',
-  SCREEN_64: 'text-purple-700 bg-purple-100',
+  SCREEN: 'text-purple-700 bg-purple-100',
 
   // Visual Memory Hybrid (Purple-Teal)
   IMEMORY: 'text-purple-700 bg-teal-50',
 
   // Text Extraction/Data (Blue Spectrum)
   SCREEN_OCR: 'text-blue-700 bg-blue-100',
+  CAMERA_OCR: 'text-blue-700 bg-blue-100',
+  IMEMORY_OCR: 'text-blue-700 bg-teal-50',
 
   // Audio Sensors (Amber Spectrum)
   MICROPHONE: 'text-amber-700 bg-amber-100',

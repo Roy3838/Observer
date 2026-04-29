@@ -4,12 +4,14 @@ import { PseudoStreamType } from './streamManager';
 // This mapping defines which streams are required for each sensor placeholder
 // Used by both main_loop.ts (for agents) and SharingPermissionsModal (for UI)
 
-export type SensorPlaceholder = '$SCREEN_64' | '$SCREEN_OCR' | '$CAMERA' | '$SCREEN_AUDIO' | '$MICROPHONE' | '$ALL_AUDIO';
+export type SensorPlaceholder = '$SCREEN' | '$SCREEN_64' | '$SCREEN_OCR' | '$CAMERA' | '$CAMERA_OCR' | '$SCREEN_AUDIO' | '$MICROPHONE' | '$ALL_AUDIO';
 
 export const SENSOR_STREAM_MAP: Record<SensorPlaceholder, PseudoStreamType> = {
+  '$SCREEN': 'screenVideo',
   '$SCREEN_64': 'screenVideo',
-  '$SCREEN_OCR': 'screenVideo', 
+  '$SCREEN_OCR': 'screenVideo',
   '$CAMERA': 'camera',
+  '$CAMERA_OCR': 'camera',
   '$SCREEN_AUDIO': 'screenAudio',
   '$MICROPHONE': 'microphone',
   '$ALL_AUDIO': 'allAudio'
@@ -17,9 +19,14 @@ export const SENSOR_STREAM_MAP: Record<SensorPlaceholder, PseudoStreamType> = {
 
 // Human-readable descriptions for UI
 export const SENSOR_DESCRIPTIONS: Record<SensorPlaceholder, { name: string; description: string; icon: string }> = {
+  '$SCREEN': {
+    name: 'Screen Capture',
+    description: 'Captures screenshots as images for multimodal models',
+    icon: 'Monitor'
+  },
   '$SCREEN_64': {
     name: 'Screen Capture',
-    description: 'Captures screenshots as base64 images for analysis',
+    description: 'Captures screenshots as images for multimodal models (legacy name)',
     icon: 'Monitor'
   },
   '$SCREEN_OCR': {
@@ -31,6 +38,11 @@ export const SENSOR_DESCRIPTIONS: Record<SensorPlaceholder, { name: string; desc
     name: 'Camera',
     description: 'Captures video from your camera/webcam',
     icon: 'Camera'
+  },
+  '$CAMERA_OCR': {
+    name: 'Camera Text (OCR)',
+    description: 'Extracts text from camera feed using optical character recognition',
+    icon: 'ScanText'
   },
   '$SCREEN_AUDIO': {
     name: 'System Audio',
@@ -63,5 +75,5 @@ export function getRequiredStreamsFromSensors(sensors: SensorPlaceholder[]): Pse
  */
 export function extractSensorsFromPrompt(systemPrompt: string): SensorPlaceholder[] {
   return Object.keys(SENSOR_STREAM_MAP)
-    .filter(placeholder => systemPrompt.includes(placeholder)) as SensorPlaceholder[];
+    .filter(placeholder => new RegExp(`\\${placeholder}(?![A-Z_])`).test(systemPrompt)) as SensorPlaceholder[];
 }

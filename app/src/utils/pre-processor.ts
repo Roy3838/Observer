@@ -12,7 +12,7 @@ export interface PreProcessorResult {
   modifiedPrompt: string;  // The text prompt with placeholders removed
   images?: string[];       // Base64 encoded images for the API
   imageSources?: {
-    screen?: string;       // Single base64 from $SCREEN_64
+    screen?: string;       // Single base64 from $SCREEN
     camera?: string;       // Single base64 from $CAMERA
     imemory?: string[];    // Array from $IMEMORY@agentid
   };
@@ -77,8 +77,8 @@ const processors: Record<string, { regex: RegExp, handler: ProcessorFunction }> 
     }
   },
 
-  'SCREEN_64': {
-    regex: /\$SCREEN_64/g,
+  'SCREEN': {
+    regex: /\$SCREEN(?!_OCR|_AUDIO)/g,
     handler: async (agentId: string, _prompt: string, _match: RegExpExecArray, iterationId?: string) => {
       try {
         const { screenVideoStream } = StreamManager.getCurrentState();
@@ -165,6 +165,34 @@ const processors: Record<string, { regex: RegExp, handler: ProcessorFunction }> 
   },
 
 
+  'CAMERA_OCR': {
+    regex: /\$CAMERA_OCR/g,
+    handler: async (agentId: string, _prompt: string, _match: RegExpExecArray, iterationId?: string) => {
+      try {
+        const { captureFrameAndOCR } = await import('./screenOCR');
+        const { cameraStream } = StreamManager.getCurrentState();
+        if (!cameraStream) throw new Error('Camera stream not available for OCR.');
+
+        const ocrResult = await captureFrameAndOCR(cameraStream, agentId, 'camera');
+
+        if (ocrResult.success && ocrResult.text) {
+          Logger.debug(agentId, `Camera OCR successful, text injected into prompt`);
+          Logger.info(agentId, `Camera OCR detected: ${ocrResult.text.length} characters`, {
+            logType: 'sensor-ocr',
+            iterationId,
+            content: ocrResult.text
+          });
+          return { replacementText: ocrResult.text };
+        }
+        Logger.error(agentId, `Camera OCR failed: ${ocrResult.error || 'Unknown error'}`);
+        return { replacementText: '[Error performing camera OCR]' };
+      } catch (error) {
+        Logger.error(agentId, `Error with camera capture for OCR: ${error instanceof Error ? error.message : String(error)}`);
+        return { replacementText: '[Error with camera capture]' };
+      }
+    }
+  },
+
   'CAMERA': {
     regex: /\$CAMERA/g,
     handler: async (agentId: string, _prompt: string, _match: RegExpExecArray, iterationId?: string) => {
@@ -176,7 +204,7 @@ const processors: Record<string, { regex: RegExp, handler: ProcessorFunction }> 
         const base64Image = await captureCameraImage(cameraStream, agentId);
 
         if (base64Image) {
-          // You can add the same base64 validation as SCREEN_64 if you like
+          // You can add the same base64 validation as SCREEN if you like
           Logger.debug(agentId, `Base64 camera image captured (length: ${base64Image.length})`);
           // Enhanced logging: Log camera capture separately
           Logger.info(agentId, `Camera image captured (${Math.round(base64Image.length/1024)}KB)`, { 
@@ -239,6 +267,29 @@ const processors: Record<string, { regex: RegExp, handler: ProcessorFunction }> 
       } catch (error: any) {
         Logger.error(agentId, `Error retrieving combined audio transcript: ${error.message}`);
         return { replacementText: `[Error processing combined audio: ${error.message}]` };
+      }
+    }
+  },
+
+  'IMEMORY_OCR': {
+    regex: /\$IMEMORY_OCR(?:@([a-zA-Z0-9_]+))?/g,
+    handler: async (agentId: string, _prompt: string, match: RegExpExecArray, iterationId?: string) => {
+      try {
+        const { performOCROnBase64 } = await import('./screenOCR');
+        const referencedAgentId = match[1] || agentId;
+        const images = await getAgentImageMemory(referencedAgentId);
+        Logger.debug(agentId, `Running OCR on ${images.length} images from memory of agent ${referencedAgentId}`);
+        const results = await Promise.all(images.map(img => performOCROnBase64(img)));
+        const text = results.map(r => r.text || '').join('\n');
+        Logger.info(agentId, `Image memory OCR complete (${images.length} images, ${text.length} chars)`, {
+          logType: 'sensor-ocr',
+          iterationId,
+          content: text
+        });
+        return { replacementText: text };
+      } catch (error) {
+        Logger.error(agentId, `Error with image memory OCR: ${error instanceof Error ? error.message : String(error)}`);
+        return { replacementText: '[Error with image memory OCR]' };
       }
     }
   },
@@ -327,7 +378,7 @@ export async function preProcess(agentId: string, systemPrompt: string, iteratio
           result.images = [...(result.images || []), ...processorResult.images];
           
           // Track image sources for agent context
-          if (key === 'SCREEN_64' && processorResult.images[0]) {
+          if (key === 'SCREEN' && processorResult.images[0]) {
             result.imageSources!.screen = processorResult.images[0];
           } else if (key === 'CAMERA' && processorResult.images[0]) {
             result.imageSources!.camera = processorResult.images[0];

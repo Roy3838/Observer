@@ -209,7 +209,7 @@ const SharingPermissionsModal: React.FC<SharingPermissionsModalProps> = ({ isOpe
   const AGENT_ID = 'system-sensor-ui';
 
   // Available sensors for the modal (per user request)
-  const AVAILABLE_SENSORS: SensorPlaceholder[] = ['$SCREEN_64', '$CAMERA', '$SCREEN_AUDIO', '$MICROPHONE', '$ALL_AUDIO'];
+  const AVAILABLE_SENSORS: SensorPlaceholder[] = ['$SCREEN', '$CAMERA', '$SCREEN_AUDIO', '$MICROPHONE', '$ALL_AUDIO'];
 
   // Listen to stream state changes
   useEffect(() => {

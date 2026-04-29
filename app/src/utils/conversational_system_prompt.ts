@@ -55,7 +55,7 @@ description: Visual Activity Logger
 model_name: gemma-3-4b-it
 loop_interval_seconds: 120
 system_prompt: |
-You are a visual observation agent. Look at the screen and respond with ONE concise sentence describing what the user is currently doing. \$SCREEN_64
+You are a visual observation agent. Look at the screen and respond with ONE concise sentence describing what the user is currently doing. \$SCREEN
 code: |
 appendMemory(agentId, response);
 memory: ""
@@ -75,7 +75,7 @@ You are a notification agent watching for a process to complete.
 1.  **Describe:** In one sentence, briefly describe the image.
 2.  **Decide:** On a new line, check if the image shows a "Render Complete", "Export Successful" or similar message. If it does, output the keyword \`NOTIFY_USER\`. Otherwise, output \`CONTINUE\`.
 
-$SCREEN_64
+$SCREEN
 code: |
 if (response.includes("NOTIFY_USER")) {
   sendTelegram("chat_id", "Your render is complete!", screen);
@@ -121,7 +121,7 @@ $$$
 #### 2. SENSORS (Your Agent's Eyes and Memory)
 | User Term       | Technical Sensor    | Description                                       |
 | --------------- | ------------------- | ------------------------------------------------- |
-| **Screen Image**    | \`$SCREEN_64\`        | Captures the screen as an image. **Use this as the general default.** |
+| **Screen Image**    | \`$SCREEN\`        | Captures the screen as an image. **Use this as the general default.** |
 | **Camera**        | \`$CAMERA\`           | Captures an image from the webcam.                |
 | **Text Memory**   | \`$MEMORY\` | Provides the agent's past text logs as context.    |
 | **Image Memory**  | \`$IMEMORY\`| Provides the agent's stored reference images.      |

@@ -226,8 +226,9 @@ const SensorModal: React.FC<SensorModalProps> = ({ isOpen, onClose, systemPrompt
                 <label className="block text-xs text-gray-500 mb-2 font-medium">INSERT SENSOR:</label>
                 <div className="flex flex-wrap gap-2">
                   <SensorButton icon={ScanText} label="Screen Text" onClick={() => insertSystemPromptText('$SCREEN_OCR')} colorClass="text-blue-600" />
-                  <SensorButton icon={Monitor} label="Screen Image" onClick={() => insertSystemPromptText('$SCREEN_64')} colorClass="text-purple-600" />
+                  <SensorButton icon={Monitor} label="Screen Image" onClick={() => insertSystemPromptText('$SCREEN')} colorClass="text-purple-600" />
                   <SensorButton icon={Camera} label="Camera" onClick={() => insertSystemPromptText('$CAMERA')} colorClass="text-purple-600" />
+                  <SensorButton icon={ScanText} label="Camera Text" onClick={() => insertSystemPromptText('$CAMERA_OCR')} colorClass="text-blue-600" />
                   <SensorButton icon={Clipboard} label="Clipboard" onClick={() => insertSystemPromptText('$CLIPBOARD_TEXT')} colorClass="text-sky-600" />
                   <SensorButton icon={Mic} label="Microphone" onClick={() => insertSystemPromptText('$MICROPHONE')} colorClass="text-amber-600" />
                   <SensorButton icon={Volume2} label="Screen Audio" onClick={() => insertSystemPromptText('$SCREEN_AUDIO')} colorClass="text-amber-600" />
@@ -247,6 +248,14 @@ const SensorModal: React.FC<SensorModalProps> = ({ isOpen, onClose, systemPrompt
                     colorClass="text-purple-600"
                     agents={availableAgents}
                     onSelect={(agentId) => insertSystemPromptText(`$IMEMORY@${agentId}`)}
+                  />
+
+                  <SensorDropdownButton
+                    icon={ScanText}
+                    label="Image Memory Text"
+                    colorClass="text-blue-600"
+                    agents={availableAgents}
+                    onSelect={(agentId) => insertSystemPromptText(`$IMEMORY_OCR@${agentId}`)}
                   />
                 </div>
               </div>

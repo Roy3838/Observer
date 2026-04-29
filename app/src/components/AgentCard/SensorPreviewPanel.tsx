@@ -883,7 +883,7 @@ const SensorPreviewPanel: React.FC<SensorPreviewPanelProps> = ({
   const hasScreenSensor = useMemo(() => agentHasScreenSensor(systemPrompt), [systemPrompt]);
   const hasCameraSensor = useMemo(() => agentHasCameraSensor(systemPrompt), [systemPrompt]);
   const hasMemorySensor = useMemo(() => agentHasSensor(systemPrompt, 'MEMORY'), [systemPrompt]);
-  const hasImageMemorySensor = useMemo(() => agentHasSensor(systemPrompt, 'IMEMORY'), [systemPrompt]);
+  const hasImageMemorySensor = useMemo(() => agentHasSensor(systemPrompt, 'IMEMORY') || agentHasSensor(systemPrompt, 'IMEMORY_OCR'), [systemPrompt]);
   const hasClipboardSensor = useMemo(() => agentHasSensor(systemPrompt, 'CLIPBOARD'), [systemPrompt]);
   const hasMicrophoneSensor = useMemo(() => agentHasSensor(systemPrompt, 'MICROPHONE'), [systemPrompt]);
   const hasScreenAudioSensor = useMemo(() => agentHasSensor(systemPrompt, 'SCREEN_AUDIO'), [systemPrompt]);

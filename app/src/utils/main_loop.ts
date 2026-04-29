@@ -14,6 +14,18 @@ import { checkPhoneWhitelist } from './pre-flight';
 
 export type TokenProvider = () => Promise<string | undefined>;
 
+const STREAM_REQUIREMENTS_MAP: Record<string, PseudoStreamType> = {
+  '$SCREEN': 'screenVideo', '$SCREEN_64': 'screenVideo', '$SCREEN_OCR': 'screenVideo',
+  '$CAMERA': 'camera', '$CAMERA_OCR': 'camera',
+  '$SCREEN_AUDIO': 'screenAudio', '$MICROPHONE': 'microphone', '$ALL_AUDIO': 'allAudio'
+};
+
+export function getRequiredStreamsForPrompt(systemPrompt: string): PseudoStreamType[] {
+  return Object.entries(STREAM_REQUIREMENTS_MAP)
+    .filter(([placeholder]) => new RegExp(`\\${placeholder}(?![A-Z_])`).test(systemPrompt))
+    .map(([_, streamType]) => streamType);
+}
+
 const activeLoops: Record<string, {
   intervalId: number | null,
   isRunning: boolean,
@@ -89,14 +101,7 @@ export async function startAgentLoop(agentId: string, getToken?: TokenProvider, 
       }
     }
 
-    const streamRequirementsMap = {
-      '$SCREEN_64': 'screenVideo', '$SCREEN_OCR': 'screenVideo', '$CAMERA': 'camera', '$SCREEN_AUDIO': 'screenAudio',
-      '$MICROPHONE': 'microphone', '$ALL_AUDIO': 'allAudio'
-    };
-    
-    const requiredStreams = Object.entries(streamRequirementsMap)
-      .filter(([placeholder, _]) => agent.system_prompt.includes(placeholder))
-      .map(([_, streamType]) => streamType as PseudoStreamType);
+    const requiredStreams = getRequiredStreamsForPrompt(agent.system_prompt);
     
     if (requiredStreams.length > 0) {
       // A single, transactional call to the StreamManager.

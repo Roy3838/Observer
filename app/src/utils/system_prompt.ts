@@ -25,7 +25,7 @@ Choose the most cost-effective model that meets the agent's needs:
 
 ### 2. Input Processors
 
-* **\`$SCREEN_64\`** – **Always include.** Provides essential visual context for the multimodal model.
+* **\`$SCREEN\`** – **Always include.** Provides essential visual context for the multimodal model.
 
 ---
 
@@ -51,7 +51,7 @@ The generated JavaScript \`code\` block MUST ONLY use these functions:
     appendMemory(\`[\${time()}] \${response.trim()}\`); // ESCAPED \\\${}
   }
   \`\`\`
-* **Inputs:** \`$SCREEN_64\`.
+* **Inputs:** \`$SCREEN\`.
 
 #### Strategy B – Change Detection / Conditional Action
 * **Goal:** Log **only new/changed** information **or** trigger an action when a condition is met.
@@ -87,7 +87,7 @@ The generated JavaScript \`code\` block MUST ONLY use these functions:
     }
     \`\`\`
 
-* **Inputs:** \`$SCREEN_64\` (no memory needed unless the prompt explicitly requires comparing past logs).
+* **Inputs:** \`$SCREEN\` (no memory needed unless the prompt explicitly requires comparing past logs).
 
 ---
 
@@ -103,7 +103,7 @@ model_name: "[gemini-1.5-flash-8b or gemini-1.5-pro]"
 loop_interval_seconds: [integer]                  # e.g., 60 (default) or task-specific
 system_prompt: |
   [Concise instructions for the agent model.
-  Must include $SCREEN_64.
+  Must include $SCREEN.
   For Strategy B: explain reasoning-first output, actionable line format, and empty output if no trigger.]
 code: |
   [Minimal JS code matching Strategy A, B1, or B2.]
@@ -133,7 +133,7 @@ system_prompt: |
   2. Then, on the same or next line: \`COMMAND: <exact command>\`.  
   **If no new command is visible, output nothing.**  
   <Screen>  
-  $SCREEN_64  
+  $SCREEN  
   </Screen>
 code: |
   // Log new commands (Prefix Method B1, using includes)
@@ -170,7 +170,7 @@ system_prompt: |
   </Logged Pairs>  
   If no new noun is found, output nothing.  
   <Screen>  
-  $SCREEN_64  
+  $SCREEN  
   </Screen>
 code: |
   // Non-Empty Method B2: take last line after reasoning
@@ -204,7 +204,7 @@ system_prompt: |
   $MEMORY@focus_assistant  
   </Distracting Patterns>  
   <Screen>  
-  $SCREEN_64  
+  $SCREEN  
   </Screen>
 code: |
   // Notify only when NOTIFY: appears (Prefix Method B1)
@@ -234,7 +234,7 @@ $$$
 2. Determine the agent's core purpose.
 3. Create unique \`id\`, \`name\`, and \`description\`.
 4. Choose **model** (flash-8b vs pro).
-5. Include **$SCREEN_64** 
+5. Include **$SCREEN** 
 6. Pick Strategy A or B.  
    *For Strategy B, instruct reasoning-first output and actionable line.*
 7. Write a clear **system_prompt** following these rules.

@@ -258,7 +258,7 @@ export const useEditAgentModalLogic = ({
 
   /* Vision model validation */
   useEffect(() => {
-    const hasVisionSensor = /\$SCREEN_64|\$CAMERA/.test(systemPrompt);
+    const hasVisionSensor = /\$SCREEN(?![A-Z_])|\$CAMERA(?![A-Z_])/.test(systemPrompt);
 
     if (!hasVisionSensor) {
       setVisionValidationError(null);
@@ -269,7 +269,7 @@ export const useEditAgentModalLogic = ({
 
     if (selectedModel && !selectedModel.multimodal) {
       setVisionValidationError(
-        "Warning: The selected model may not support images. Use a vision model (marked with an eye icon) for $SCREEN_64 or $CAMERA sensors."
+        "Warning: The selected model may not support images. Use a vision model (marked with an eye icon) for $SCREEN or $CAMERA sensors."
       );
     } else {
       setVisionValidationError(null);

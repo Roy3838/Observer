@@ -37,10 +37,13 @@ const loadCustomIcon = async (iconName: string) => {
 
 export const SENSOR_CONFIG = {
     SCREEN_OCR: { label: 'Screen OCR', iconName: 'ScanText' },
+    SCREEN: { label: 'Screen', iconName: 'Monitor' },
     SCREEN_64: { label: 'Screen', iconName: 'Monitor' },
     CAMERA: { label: 'Camera', iconName: 'Camera' },
+    CAMERA_OCR: { label: 'Camera OCR', iconName: 'ScanText' },
     MEMORY: { label: 'Memory', iconName: 'Save' },
     IMEMORY: { label: 'Memory', iconName: 'Images' },
+    IMEMORY_OCR: { label: 'Memory OCR', iconName: 'ScanText' },
     CLIPBOARD: { label: 'Clipboard', iconName: 'Clipboard' },
     MICROPHONE: { label: 'Microphone', iconName: 'Mic' },
     SCREEN_AUDIO: { label: 'Screen Audio', iconName: 'Volume2' },
@@ -121,7 +124,7 @@ export async function detectAgentSensors(systemPrompt: string): Promise<Detected
     const foundSensors: DetectedSensor[] = [];
 
     for (const [key, config] of Object.entries(SENSOR_CONFIG)) {
-        if (systemPrompt.includes(`$${key}`)) {
+        if (new RegExp(`\\$${key}(?![A-Z_])`).test(systemPrompt)) {
             const icon = await loadSensorIcon(key);
             foundSensors.push({
                 key,
@@ -187,21 +190,21 @@ export async function detectAgentCapabilities(systemPrompt: string, code: string
  * Checks if agent has a specific sensor capability
  */
 export function agentHasSensor(systemPrompt: string, sensorKey: string): boolean {
-    return systemPrompt.includes(`$${sensorKey}`);
+    return new RegExp(`\\$${sensorKey}(?![A-Z_])`).test(systemPrompt);
 }
 
 /**
- * Checks if agent has any screen-related sensors (SCREEN_OCR or SCREEN_64)
+ * Checks if agent has any screen-related sensors (SCREEN_OCR or SCREEN)
  */
 export function agentHasScreenSensor(systemPrompt: string): boolean {
-    return agentHasSensor(systemPrompt, 'SCREEN_OCR') || agentHasSensor(systemPrompt, 'SCREEN_64');
+    return agentHasSensor(systemPrompt, 'SCREEN_OCR') || agentHasSensor(systemPrompt, 'SCREEN') || agentHasSensor(systemPrompt, 'SCREEN_64');
 }
 
 /**
- * Checks if agent has camera sensor
+ * Checks if agent has any camera-related sensors (CAMERA or CAMERA_OCR)
  */
 export function agentHasCameraSensor(systemPrompt: string): boolean {
-    return agentHasSensor(systemPrompt, 'CAMERA');
+    return agentHasSensor(systemPrompt, 'CAMERA') || agentHasSensor(systemPrompt, 'CAMERA_OCR');
 }
 
 /**
