@@ -111,6 +111,7 @@ export interface ContextParams {
   nCtxMultimodal: number;
   nBatch: number;
   nBatchMultimodal: number;
+  nUbatch: number;
   nThreads: number;
   nGpuLayers: number;
   imageMinTokens: number;
@@ -122,6 +123,7 @@ export const DEFAULT_CONTEXT_PARAMS: ContextParams = {
   nCtxMultimodal: 1024,
   nBatch: 256,
   nBatchMultimodal: 256,
+  nUbatch: 0, // 0 = match n_batch
   nThreads: 0,
   nGpuLayers: -1,
   imageMinTokens: 70,

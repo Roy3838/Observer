@@ -704,6 +704,7 @@ export class NativeLlmManager {
         nCtxMultimodal: params.nCtxMultimodal,
         nBatch: params.nBatch,
         nBatchMultimodal: params.nBatchMultimodal,
+        nUbatch: params.nUbatch,
         nThreads: params.nThreads,
         nGpuLayers: params.nGpuLayers,
         imageMinTokens: params.imageMinTokens,

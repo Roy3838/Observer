@@ -67,6 +67,7 @@ pub struct ContextParams {
     pub n_ctx_multimodal: u32,  // context size when images are present, default 4096
     pub n_batch: u32,           // prompt eval batch size, default 512
     pub n_batch_multimodal: u32,// batch size when images are present, default 256
+    pub n_ubatch: u32,          // physical micro-batch size; 0 = match n_batch (disables ubatch splitting)
     pub n_threads: i32,         // CPU threads for generation, 0 = auto
     pub n_gpu_layers: i32,      // layers to offload to GPU; -1 = driven by use_gpu flag (0 or 99)
     pub image_min_tokens: i32,  // min visual tokens per image; -1 = model default (Gemma 4: 70/140/280/560/1120)
@@ -80,6 +81,7 @@ impl Default for ContextParams {
             n_ctx_multimodal: 1024,
             n_batch: 256,
             n_batch_multimodal: 256,
+            n_ubatch: 0, // 0 = match n_batch (safe default; set explicitly to experiment)
             n_threads: 0,
             n_gpu_layers: -1,
             image_min_tokens: 70,
@@ -294,9 +296,9 @@ impl LlmEngine {
 
     /// Set context parameters (takes effect on the next generate() call)
     pub fn set_context_params(&mut self, params: ContextParams) {
-        llm_log!("Context params updated: n_ctx={} n_ctx_mm={} n_batch={} n_batch_mm={} n_threads={} n_gpu_layers={} img_tokens={}/{}",
+        llm_log!("Context params updated: n_ctx={} n_ctx_mm={} n_batch={} n_batch_mm={} n_ubatch={} n_threads={} n_gpu_layers={} img_tokens={}/{}",
             params.n_ctx, params.n_ctx_multimodal,
-            params.n_batch, params.n_batch_multimodal,
+            params.n_batch, params.n_batch_multimodal, params.n_ubatch,
             params.n_threads, params.n_gpu_layers,
             params.image_min_tokens, params.image_max_tokens);
         self.context_params = params;
@@ -368,11 +370,23 @@ impl LlmEngine {
             (cp.n_ctx, cp.n_batch)
         };
         let n_threads = if cp.n_threads > 0 { cp.n_threads } else { -1 }; // -1 = llama.cpp auto
-        llm_log!("Context: n_ctx={} n_batch={} n_threads={}", n_ctx, n_batch, n_threads);
+
+        // n_ubatch=0 means match n_batch (no micro-batch splitting).
+        // Required for multimodal+thinking: non-causal vision attention needs
+        // all image tokens in one physical batch (see llama.cpp issue #21338).
+        let n_ubatch = if cp.n_ubatch == 0 { n_batch } else { cp.n_ubatch };
+
+        if use_multimodal && n_ubatch < cp.image_max_tokens as u32 {
+            llm_log!(warn, "n_ubatch ({}) < image_max_tokens ({}) — will crash during vision encoding; increase n_batch_multimodal or lower image_max_tokens",
+                n_ubatch, cp.image_max_tokens);
+        }
+
+        llm_log!("Context: n_ctx={} n_batch={} n_ubatch={} n_threads={}", n_ctx, n_batch, n_ubatch, n_threads);
 
         let ctx_params = LlamaContextParams::default()
             .with_n_ctx(std::num::NonZeroU32::new(n_ctx))
             .with_n_batch(n_batch)
+            .with_n_ubatch(n_ubatch)
             .with_n_threads(n_threads);
 
         let mut ctx = model
@@ -439,6 +453,13 @@ impl LlmEngine {
         let mut full_response = String::new();
         let mut tokens_generated: u32 = 0;
         let mut token_decoder = encoding_rs::UTF_8.new_decoder();
+
+        // The thinking opener was prefilled into the prompt so the model won't re-emit it.
+        // Emit it synthetically so the frontend sees a consistent stream.
+        if enable_thinking {
+            on_token("<|channel>thought\n");
+            full_response.push_str("<|channel>thought\n");
+        }
 
         loop {
             // Decode the previous generated token (batch is empty on the first iteration)
@@ -557,21 +578,13 @@ impl LlmEngine {
         enable_thinking: bool,
     ) -> Result<String, String> {
         // Serialise messages to OpenAI JSON format
+        // For the Jinja template we pass text-only content: images are replaced by
+        // their mtmd marker (e.g. "<image>"). The actual image bytes are handled by
+        // the mtmd pipeline separately. Passing image_url parts causes FfiError(-3)
+        // because Gemma 4's embedded template doesn't understand that content type.
         let messages_json: Vec<serde_json::Value> = messages.iter().map(|m| {
-            let content = match &m.content {
-                ChatContent::Text(t) => serde_json::Value::String(t.clone()),
-                ChatContent::Parts(parts) => {
-                    let arr: Vec<serde_json::Value> = parts.iter().map(|p| match p {
-                        ChatContentPart::Text { text } => serde_json::json!({ "type": "text", "text": text }),
-                        // Strip actual base64 data — pass a placeholder URL so the template
-                        // emits the <|image> marker without choking on a multi-MB payload.
-                        // The real image bytes are handled by the mtmd pipeline separately.
-                        ChatContentPart::Image { .. } => serde_json::json!({ "type": "image_url", "image_url": { "url": "placeholder" } }),
-                    }).collect();
-                    serde_json::Value::Array(arr)
-                }
-            };
-            serde_json::json!({ "role": m.role, "content": content })
+            let text = Self::extract_text_content_with_markers(&m.content);
+            serde_json::json!({ "role": m.role, "content": text })
         }).collect();
 
         let messages_json_str = serde_json::to_string(&messages_json)
@@ -600,9 +613,19 @@ impl LlmEngine {
         let result = model.apply_chat_template_oaicompat(&tmpl, &params)
             .map_err(|e| format!("apply_chat_template_oaicompat failed: {:?}", e))?;
 
-        llm_log!("Prompt built via model chat template (enable_thinking={}), len={}", enable_thinking, result.prompt.len());
-        llm_log!("Prompt tail (last 200): {:?}", &result.prompt[result.prompt.len().saturating_sub(200)..]);
-        Ok(result.prompt)
+        // Prefill the assistant turn with the thinking opener so the model is
+        // forced to complete the thinking block before giving its response.
+        // Without this, short prompts skip thinking entirely even with enable_thinking=true.
+        let prompt = if enable_thinking {
+            format!("{}<|channel>thought\n", result.prompt)
+        } else {
+            result.prompt
+        };
+
+        llm_log!("Prompt built via model chat template (enable_thinking={}), len={}", enable_thinking, prompt.len());
+        llm_log!("=== FULL PROMPT START ===\n{}", prompt);
+        llm_log!("=== FULL PROMPT END ===");
+        Ok(prompt)
     }
 
     /// Build a chat prompt from messages using a simple template
@@ -793,6 +816,11 @@ pub fn model_has_mmproj(model_path: &PathBuf) -> bool {
 // ============================================================================
 // Tests
 // ============================================================================
+#[cfg(test)]
+mod multimodal_thinking_repro;
+#[cfg(test)]
+mod multimodal_thinking_confirm;
+
 #[cfg(test)]
 mod tests {
     use super::*;
