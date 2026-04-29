@@ -40,21 +40,14 @@ const SettingsCard: React.FC<{ title: string; children: React.ReactNode }> = ({ 
 
 const SettingsTab = () => {
 
-  // --- OCR State Management (Existing) ---
+  // --- OCR State Management ---
   const [ocrLang, setOcrLang] = useState(SensorSettings.getOcrLanguage());
-  const [ocrConfidence, setOcrConfidence] = useState(SensorSettings.getOcrConfidenceThreshold());
 
-  // --- OCR Handler Functions (Existing) ---
+  // --- OCR Handler Functions ---
   const handleOcrLangChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newLang = e.target.value;
     setOcrLang(newLang);
     SensorSettings.setOcrLanguage(newLang);
-  };
-
-  const handleOcrConfidenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newConfidence = parseInt(e.target.value, 10);
-    setOcrConfidence(newConfidence);
-    SensorSettings.setOcrConfidenceThreshold(newConfidence);
   };
 
 
@@ -874,10 +867,6 @@ const SettingsTab = () => {
             <select id="ocr-lang" value={ocrLang} onChange={handleOcrLangChange} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
             {AVAILABLE_OCR_LANGUAGES.map(lang => <option key={lang.code} value={lang.code}>{lang.label}</option>)}
             </select>
-          </div>
-          <div>
-            <label htmlFor="ocr-confidence" className="block text-sm font-medium text-gray-700">Minimum Confidence ({ocrConfidence}%)</label>
-            <input type="range" id="ocr-confidence" min="0" max="100" value={ocrConfidence} onChange={handleOcrConfidenceChange} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" />
           </div>
         </div>
       </SettingsCard>

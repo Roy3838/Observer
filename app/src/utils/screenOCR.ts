@@ -55,13 +55,10 @@ async function performOCR(imageData: string): Promise<OCRResult> {
     // Terminate worker
     await worker.terminate();
 
-    const confidenceThreshold = SensorSettings.getOcrConfidenceThreshold();
-    const isConfident = result.data.confidence >= confidenceThreshold;
-
     console.log(`OCR processing complete. Confidence: ${result.data.confidence}`);
     return {
-      success: isConfident,
-      text: isConfident ? result.data.text : '', // Return empty text if below threshold
+      success: true,
+      text: result.data.text,
       confidence: result.data.confidence
     };
 

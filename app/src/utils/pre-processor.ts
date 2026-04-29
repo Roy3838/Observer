@@ -40,20 +40,19 @@ const processors: Record<string, { regex: RegExp, handler: ProcessorFunction }> 
         const { screenVideoStream } = StreamManager.getCurrentState();
         if (!screenVideoStream) throw new Error('Screen stream not available for OCR.');
 
-        const ocrResult = await captureFrameAndOCR(screenVideoStream, agentId, 'screen'); 
+        const ocrResult = await captureFrameAndOCR(screenVideoStream, agentId, 'screen');
 
-        if (ocrResult.success && ocrResult.text) {
-          Logger.debug(agentId, `OCR successful, text injected into prompt`);
-          // Enhanced logging: Log the OCR text separately for better debugging
-          Logger.info(agentId, `Screen OCR detected: ${ocrResult.text.length} characters`, { 
-            logType: 'sensor-ocr', 
-            iterationId,
-            content: ocrResult.text 
-          });
-          return { replacementText: ocrResult.text };
+        if (ocrResult.error) {
+          Logger.error(agentId, `OCR failed: ${ocrResult.error}`);
+          return { replacementText: '[Error performing OCR]' };
         }
-        Logger.error(agentId, `OCR failed: ${ocrResult.error || 'Unknown error'}`);
-        return { replacementText: '[Error performing OCR]' };
+        Logger.debug(agentId, `OCR successful, text injected into prompt`);
+        Logger.info(agentId, `Screen OCR detected: ${ocrResult.text?.length ?? 0} characters (confidence: ${ocrResult.confidence})`, {
+          logType: 'sensor-ocr',
+          iterationId,
+          content: ocrResult.text
+        });
+        return { replacementText: ocrResult.text ?? '' };
       } catch (error) {
         Logger.error(agentId, `Error with screen capture for OCR: ${error instanceof Error ? error.message : String(error)}`);
         return { replacementText: '[Error with screen capture]' };
@@ -175,17 +174,17 @@ const processors: Record<string, { regex: RegExp, handler: ProcessorFunction }> 
 
         const ocrResult = await captureFrameAndOCR(cameraStream, agentId, 'camera');
 
-        if (ocrResult.success && ocrResult.text) {
-          Logger.debug(agentId, `Camera OCR successful, text injected into prompt`);
-          Logger.info(agentId, `Camera OCR detected: ${ocrResult.text.length} characters`, {
-            logType: 'sensor-ocr',
-            iterationId,
-            content: ocrResult.text
-          });
-          return { replacementText: ocrResult.text };
+        if (ocrResult.error) {
+          Logger.error(agentId, `Camera OCR failed: ${ocrResult.error}`);
+          return { replacementText: '[Error performing camera OCR]' };
         }
-        Logger.error(agentId, `Camera OCR failed: ${ocrResult.error || 'Unknown error'}`);
-        return { replacementText: '[Error performing camera OCR]' };
+        Logger.debug(agentId, `Camera OCR successful, text injected into prompt`);
+        Logger.info(agentId, `Camera OCR detected: ${ocrResult.text?.length ?? 0} characters (confidence: ${ocrResult.confidence})`, {
+          logType: 'sensor-ocr',
+          iterationId,
+          content: ocrResult.text
+        });
+        return { replacementText: ocrResult.text ?? '' };
       } catch (error) {
         Logger.error(agentId, `Error with camera capture for OCR: ${error instanceof Error ? error.message : String(error)}`);
         return { replacementText: '[Error with camera capture]' };
