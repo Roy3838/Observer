@@ -190,9 +190,8 @@ const ModelHub: React.FC<ModelHubProps> = ({
   const [mmprojAssignments, setMmprojAssignments] = useState<Record<string, string>>(() => NativeLlmManager.getInstance().getMmprojAssignments());
   const [ggufUrl, setGgufUrl] = useState('');
   const [samplerParams, setSamplerParams] = useState<SamplerParams>({ ...DEFAULT_SAMPLER_PARAMS });
-  const [showSamplerSettings, setShowSamplerSettings] = useState(false);
+  const [llamaSubTab, setLlamaSubTab] = useState<'generation' | 'context' | 'debug'>('generation');
   const [contextParams, setContextParams] = useState<ContextParams>({ ...DEFAULT_CONTEXT_PARAMS });
-  const [showContextSettings, setShowContextSettings] = useState(false);
   const [useGpu, setUseGpu] = useState<boolean>(() => {
     if (isWeb()) return true;
     return NativeLlmManager.getInstance().getPersistedUseGpu();
@@ -1307,79 +1306,6 @@ const ModelHub: React.FC<ModelHubProps> = ({
                       </div>
                     ) : (
                       <>
-                        {/* Engine initialization */}
-                        <div className="border border-gray-200 rounded-xl overflow-hidden">
-                          <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
-                            <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                              <Play size={14} className="text-green-500" /> Engine
-                            </span>
-                            <div className="flex items-center gap-2">
-                              {engineInitStatus === 'ok' && (
-                                <span className="text-xs text-green-600 font-medium">Initialized</span>
-                              )}
-                              {engineInitStatus === 'error' && (
-                                <span className="text-xs text-red-600 font-medium">Error</span>
-                              )}
-                              <button
-                                onClick={async () => {
-                                  setEngineInitStatus('loading');
-                                  setEngineInitError(null);
-                                  try {
-                                    await NativeLlmManager.getInstance().initEngine();
-                                    setEngineInitStatus('ok');
-                                  } catch (e) {
-                                    setEngineInitStatus('error');
-                                    setEngineInitError(e instanceof Error ? e.message : String(e));
-                                  }
-                                }}
-                                disabled={engineInitStatus === 'loading'}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                              >
-                                <RefreshCw size={12} className={engineInitStatus === 'loading' ? 'animate-spin' : ''} />
-                                {engineInitStatus === 'loading' ? 'Initializing...' : 'Init Engine'}
-                              </button>
-                            </div>
-                          </div>
-                          {engineInitError && (
-                            <div className="px-4 py-2 text-xs text-red-700 bg-red-50 border-t border-red-200">
-                              {engineInitError}
-                            </div>
-                          )}
-                          {/* Live logs */}
-                          <div className="border-t border-gray-200">
-                            <div className="flex items-center justify-between px-4 py-2">
-                              <span className="flex items-center gap-1.5 text-xs font-medium text-gray-600">
-                                <Terminal size={12} /> Logs
-                              </span>
-                              <button
-                                onClick={() => setEngineLogs([])}
-                                className="text-xs text-gray-400 hover:text-red-500 transition-colors"
-                              >
-                                Clear
-                              </button>
-                            </div>
-                            <div className="h-36 overflow-y-auto bg-gray-900 mx-3 mb-3 rounded p-2 font-mono text-[10px] leading-tight">
-                              {engineLogs.length === 0 ? (
-                                <span className="text-gray-500">No logs yet — init the engine or load a model</span>
-                              ) : (
-                                engineLogs.map(log => (
-                                  <div
-                                    key={log.id}
-                                    className={
-                                      log.level === LogLevel.ERROR ? 'text-red-400' :
-                                      log.level === LogLevel.WARNING ? 'text-yellow-400' :
-                                      'text-gray-300'
-                                    }
-                                  >
-                                    <span className="text-gray-500">{log.timestamp.toLocaleTimeString()} </span>
-                                    {log.message}
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
                         {/* Custom GGUF download */}
                         <div>
                           <label className="block text-xs font-medium text-gray-600 mb-1">Download GGUF from URL</label>
@@ -1461,19 +1387,27 @@ const ModelHub: React.FC<ModelHubProps> = ({
                           </button>
                         </div>
 
-                        {/* Sampler settings */}
+                        {/* Sub-tabs */}
                         <div className="border border-gray-200 rounded-xl overflow-hidden">
-                          <button
-                            onClick={() => setShowSamplerSettings(!showSamplerSettings)}
-                            className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
-                          >
-                            <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                              <Settings2 size={14} /> Generation Settings
-                            </span>
-                            <span className={`text-gray-400 transition-transform text-xs ${showSamplerSettings ? 'rotate-180' : ''}`}>▼</span>
-                          </button>
-                          {showSamplerSettings && (
-                            <div className="p-4 space-y-4 border-t border-gray-200">
+                          <div className="flex border-b border-gray-200 bg-gray-50">
+                            {(['generation', 'context', 'debug'] as const).map((tab) => (
+                              <button
+                                key={tab}
+                                onClick={() => setLlamaSubTab(tab)}
+                                className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                                  llamaSubTab === tab
+                                    ? 'bg-white text-gray-800 border-b-2 border-gray-700'
+                                    : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                              >
+                                {tab === 'generation' ? 'Generation Settings' : tab === 'context' ? 'Context & Memory' : 'Debug'}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Generation Settings */}
+                          {llamaSubTab === 'generation' && (
+                            <div className="p-4 space-y-4">
                               {nativeState.status !== 'loaded' && (
                                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                                   Load a model to configure generation settings.
@@ -1534,26 +1468,13 @@ const ModelHub: React.FC<ModelHubProps> = ({
                               </button>
                             </div>
                           )}
-                        </div>
 
-                        {/* Context / inference parameters */}
-                        <div className="border border-gray-200 rounded-xl overflow-hidden">
-                          <button
-                            onClick={() => setShowContextSettings(!showContextSettings)}
-                            className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
-                          >
-                            <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                              <Cpu size={14} /> Context &amp; Memory
-                            </span>
-                            <span className={`text-gray-400 text-xs transition-transform ${showContextSettings ? 'rotate-180' : ''}`}>▼</span>
-                          </button>
-                          {showContextSettings && (
-                            <div className="p-4 space-y-4 border-t border-gray-200">
+                          {/* Context & Memory */}
+                          {llamaSubTab === 'context' && (
+                            <div className="p-4 space-y-4">
                               <p className="text-xs text-gray-500">
                                 Changes take effect on the next generation. <span className="font-medium text-amber-700">GPU Layers</span> requires reloading the model.
                               </p>
-
-                              {/* Context window */}
                               <div className="grid grid-cols-2 gap-3">
                                 <div>
                                   <label className="text-xs font-medium text-gray-600">Context (text)</label>
@@ -1578,8 +1499,6 @@ const ModelHub: React.FC<ModelHubProps> = ({
                                   />
                                 </div>
                               </div>
-
-                              {/* Batch sizes */}
                               <div className="grid grid-cols-2 gap-3">
                                 <div>
                                   <label className="text-xs font-medium text-gray-600">Batch size (text)</label>
@@ -1604,8 +1523,6 @@ const ModelHub: React.FC<ModelHubProps> = ({
                                   />
                                 </div>
                               </div>
-
-                              {/* Image token budget */}
                               <div>
                                 <label className="text-xs font-medium text-gray-600">Image Token Budget</label>
                                 <p className="text-[10px] text-gray-400 mb-1">Visual tokens per image — lower = faster, less memory (Gemma 4)</p>
@@ -1626,8 +1543,6 @@ const ModelHub: React.FC<ModelHubProps> = ({
                                   <option value={1120}>1120 — max detail (OCR/documents)</option>
                                 </select>
                               </div>
-
-                              {/* Threads + GPU layers */}
                               <div className="grid grid-cols-2 gap-3">
                                 <div>
                                   <label className="text-xs font-medium text-gray-600">CPU Threads</label>
@@ -1652,13 +1567,86 @@ const ModelHub: React.FC<ModelHubProps> = ({
                                   />
                                 </div>
                               </div>
-
                               <button
                                 onClick={handleResetContextParams}
                                 className="text-xs text-gray-500 hover:text-gray-700 underline"
                               >
                                 Reset to defaults
                               </button>
+                            </div>
+                          )}
+
+                          {/* Debug */}
+                          {llamaSubTab === 'debug' && (
+                            <div className="p-4 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="flex items-center gap-2 text-xs font-medium text-gray-700">
+                                  <Play size={12} className="text-green-500" /> Engine
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  {engineInitStatus === 'ok' && (
+                                    <span className="text-xs text-green-600 font-medium">Initialized</span>
+                                  )}
+                                  {engineInitStatus === 'error' && (
+                                    <span className="text-xs text-red-600 font-medium">Error</span>
+                                  )}
+                                  <button
+                                    onClick={async () => {
+                                      setEngineInitStatus('loading');
+                                      setEngineInitError(null);
+                                      try {
+                                        await NativeLlmManager.getInstance().initEngine();
+                                        setEngineInitStatus('ok');
+                                      } catch (e) {
+                                        setEngineInitStatus('error');
+                                        setEngineInitError(e instanceof Error ? e.message : String(e));
+                                      }
+                                    }}
+                                    disabled={engineInitStatus === 'loading'}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                                  >
+                                    <RefreshCw size={12} className={engineInitStatus === 'loading' ? 'animate-spin' : ''} />
+                                    {engineInitStatus === 'loading' ? 'Initializing...' : 'Init Engine'}
+                                  </button>
+                                </div>
+                              </div>
+                              {engineInitError && (
+                                <div className="px-3 py-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg">
+                                  {engineInitError}
+                                </div>
+                              )}
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="flex items-center gap-1.5 text-xs font-medium text-gray-600">
+                                    <Terminal size={12} /> Logs
+                                  </span>
+                                  <button
+                                    onClick={() => setEngineLogs([])}
+                                    className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                                  >
+                                    Clear
+                                  </button>
+                                </div>
+                                <div className="h-48 overflow-y-auto bg-gray-900 rounded p-2 font-mono text-[10px] leading-tight">
+                                  {engineLogs.length === 0 ? (
+                                    <span className="text-gray-500">No logs yet — init the engine or load a model</span>
+                                  ) : (
+                                    engineLogs.map(log => (
+                                      <div
+                                        key={log.id}
+                                        className={
+                                          log.level === LogLevel.ERROR ? 'text-red-400' :
+                                          log.level === LogLevel.WARNING ? 'text-yellow-400' :
+                                          'text-gray-300'
+                                        }
+                                      >
+                                        <span className="text-gray-500">{log.timestamp.toLocaleTimeString()} </span>
+                                        {log.message}
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>
