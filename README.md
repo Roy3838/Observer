@@ -85,10 +85,10 @@ Build powerful micro-agents that observe your digital world, remember what matte
 ## 🤖 Base Agent Example 
 Sends an email when the Observer logo is on screen
 
-System Prompt (uses $SCREEN_64 for screen input)
+System Prompt (uses $SCREEN for multimodal screen input)
 ```
 You are an Observer agent, watch the screen and if you see the Observer logo say OBSERVER, if you don't, say CONTINUE. 
-$SCREEN_64
+$SCREEN
 ```
 
 Code using Email Tool if model identified an Observer logo
