@@ -129,7 +129,7 @@ const processors: Record<string, { regex: RegExp, handler: ProcessorFunction }> 
           });
           return { replacementText: clipboardText };
         }
-        Logger.warn(agentId, `navigator.clipboard.readText is not available for CLIPBOARD_TEXT.`);
+        Logger.warn(agentId, `navigator.clipboard.readText is not available for $CLIPBOARD.`);
         return { replacementText: '[Error: Clipboard API not available or permission denied]' };
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);

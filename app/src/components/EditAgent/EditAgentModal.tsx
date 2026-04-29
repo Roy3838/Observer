@@ -328,7 +328,7 @@ const PromptContent: React.FC<PromptContentProps> = ({
             <SensorButton icon={Monitor} label="Screen Image" onClick={() => insertSystemPromptText('$SCREEN')} colorClass="text-purple-600" />
             <SensorButton icon={Camera} label="Camera" onClick={() => insertSystemPromptText('$CAMERA')} colorClass="text-purple-600" />
             <SensorButton icon={ScanText} label="Camera Text" onClick={() => insertSystemPromptText('$CAMERA_OCR')} colorClass="text-blue-600" />
-            <SensorButton icon={Clipboard} label="Clipboard" onClick={() => insertSystemPromptText('$CLIPBOARD_TEXT')} colorClass="text-sky-600" />
+            <SensorButton icon={Clipboard} label="Clipboard" onClick={() => insertSystemPromptText('$CLIPBOARD')} colorClass="text-sky-600" />
             <SensorButton icon={Mic} label="Microphone" onClick={() => insertSystemPromptText('$MICROPHONE')} colorClass="text-amber-600" />
             <SensorButton icon={Volume2} label="Screen Audio" onClick={() => insertSystemPromptText('$SCREEN_AUDIO')} colorClass="text-amber-600" />
             <SensorButton icon={Blend} label="All Audio" onClick={() => insertSystemPromptText('$ALL_AUDIO')} colorClass="text-orange-600" />

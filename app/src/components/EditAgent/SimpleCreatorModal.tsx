@@ -85,7 +85,7 @@ const SENSOR_DATA_MAP: SensorDataType[] = [
   { sensor: '$SCREEN_OCR', label: 'Text extracted from your screen' },
   { sensor: '$CAMERA', label: 'Camera images' },
   { sensor: '$CAMERA_OCR', label: 'Text extracted from camera' },
-  { sensor: '$CLIPBOARD_TEXT', label: 'Clipboard content' },
+  { sensor: '$CLIPBOARD', label: 'Clipboard content' },
   { sensor: '$MICROPHONE', label: 'Microphone audio transcription' },
   { sensor: '$SCREEN_AUDIO', label: 'Screen audio transcription' },
   { sensor: '$ALL_AUDIO', label: 'Microphone and screen audio transcription' },
@@ -388,7 +388,7 @@ const SimpleCreatorModal: React.FC<SimpleCreatorModalProps> = ({ isOpen, onClose
               <SensorButton icon={Monitor} label="Screen Image" onClick={() => insertSensor('$SCREEN')} colorClass="text-purple-600" />
               <SensorButton icon={Camera} label="Camera" onClick={() => insertSensor('$CAMERA')} colorClass="text-purple-600" />
               <SensorButton icon={ScanText} label="Camera Text" onClick={() => insertSensor('$CAMERA_OCR')} colorClass="text-blue-600" />
-              <SensorButton icon={Clipboard} label="Clipboard" onClick={() => insertSensor('$CLIPBOARD_TEXT')} colorClass="text-sky-600" />
+              <SensorButton icon={Clipboard} label="Clipboard" onClick={() => insertSensor('$CLIPBOARD')} colorClass="text-sky-600" />
               <SensorButton icon={Mic} label="Microphone" onClick={() => insertSensor('$MICROPHONE')} colorClass="text-amber-600" />
               <SensorButton icon={Volume2} label="Screen Audio" onClick={() => insertSensor('$SCREEN_AUDIO')} colorClass="text-amber-600" />
               <SensorButton icon={Blend} label="All Audio" onClick={() => insertSensor('$ALL_AUDIO')} colorClass="text-orange-600" />
