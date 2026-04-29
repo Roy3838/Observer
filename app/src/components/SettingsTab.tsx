@@ -860,7 +860,7 @@ const SettingsTab = () => {
       </SettingsCard>
 
       {/* --- Existing Screen OCR Settings Card --- */}
-      <SettingsCard title="Screen OCR Settings">
+      <SettingsCard title="OCR Settings">
         <div className="space-y-4">
           <div>
             <label htmlFor="ocr-lang" className="block text-sm font-medium text-gray-700">Recognition Language</label>
