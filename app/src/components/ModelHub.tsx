@@ -30,6 +30,7 @@ import {
   DEFAULT_SAMPLER_PARAMS,
   ContextParams,
   DEFAULT_CONTEXT_PARAMS,
+  GEMMA_DISPLAY_NAMES,
 } from '@utils/localLlm/types';
 import { MODEL_PRESETS, EXTENDED_PRESETS, type ModelPreset } from '@utils/modelPresets';
 import LocalServerSetupDialog from '@components/LocalServerSetupDialog';
@@ -505,7 +506,8 @@ const ModelHub: React.FC<ModelHubProps> = ({
 
   const ggufModels = ggufFiles.filter(f => !f.filename.toLowerCase().includes('mmproj'));
   const ggufProjectors = ggufFiles.filter(f => f.filename.toLowerCase().includes('mmproj'));
-  const isDownloadingAny = downloadingPreset !== null || (isNativeDownloading && !downloadingPreset);
+  const isTransformersLoading = gemmaState.status === 'loading';
+  const isDownloadingAny = downloadingPreset !== null || (isNativeDownloading && !downloadingPreset) || isTransformersLoading;
   const installedCount = ggufFiles.length + transformersModels.length + (isDownloadingAny ? 1 : 0);
 
   const isPresetInstalled = (preset: ModelPreset) => {
@@ -730,7 +732,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
               )}
 
               {/* In-flight preset download (Transformers.js) */}
-              {downloadingPreset && downloadingPreset.engine === 'transformers' && (
+              {isTransformersLoading && (
                 <div className="border border-yellow-300 bg-yellow-50 rounded-xl p-3">
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -739,7 +741,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-medium text-gray-900 truncate">{downloadingPreset.name}</span>
+                          <span className="font-medium text-gray-900 truncate">{GEMMA_DISPLAY_NAMES[gemmaState.modelId as GemmaModelId] ?? gemmaState.modelId}</span>
                           <span className="text-[10px] font-semibold bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded">Transformers.js</span>
                         </div>
                         <p className="text-xs text-yellow-700 mt-0.5">Downloading…</p>
