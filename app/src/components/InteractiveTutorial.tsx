@@ -8,6 +8,7 @@ import { useApplePayments } from '@hooks/useApplePayments';
 import { isIOS } from '@utils/platform';
 import { CreditInfoButton } from './CreditVisualization';
 import { Logger } from '@utils/logging';
+import { Analytics } from '@utils/analytics';
 
 export type TutorialStep = {
   id: string;
@@ -44,6 +45,7 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
   const [isImporting, setIsImporting] = useState(false);
   const [detected, setDetected] = useState(false);
   const detectedRef = useRef(false);
+  const [dismissedEarly, setDismissedEarly] = useState(false);
 
   // Upsell state
   const [upsellError, setUpsellError] = useState<string | null>(null);
@@ -112,18 +114,34 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
 
   const advanceStep = () => {
     if (currentStep < steps.length - 1) {
+      const next = steps[currentStep + 1];
+      if (next?.id === 'upsell') {
+        Analytics.upsellShown('tutorial_complete');
+      }
       setCurrentStep(s => s + 1);
     } else {
       onComplete(agentId);
     }
   };
 
-  const handleDismiss = () => onDismiss();
+  const handleDismiss = () => {
+    // Jump to upsell instead of fully closing — 100% of signed-in users see it
+    const upsellIndex = steps.findIndex(s => s.id === 'upsell');
+    if (upsellIndex !== -1 && currentStep < upsellIndex) {
+      Analytics.tutorialDismissed(steps[currentStep]?.id ?? String(currentStep));
+      Analytics.upsellShown('tutorial_dismissed');
+      setDismissedEarly(true);
+      setCurrentStep(upsellIndex);
+    } else {
+      onDismiss();
+    }
+  };
 
   const handleImport = async () => {
     setIsImporting(true);
     try {
       await onImportAgent();
+      Analytics.tutorialStarted();
       setCurrentStep(1);
     } finally {
       setIsImporting(false);
@@ -318,10 +336,14 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
             <div className="text-center mb-4 pb-4 md:mb-6 md:pb-6 border-b-2 border-gray-200">
               <div className="flex justify-center items-center mb-2 md:mb-3">
                 <img src="/eye-logo-black.svg" alt="Observer AI Logo" className="h-10 w-10 md:h-16 md:w-16 mr-2 md:mr-3" />
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-800 tracking-tight">🎉 You did it!</h1>
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-800 tracking-tight">
+                  {dismissedEarly ? 'Welcome to Observer!' : '🎉 You did it!'}
+                </h1>
               </div>
               <p className="hidden md:block text-base text-gray-600 max-w-2xl mx-auto leading-relaxed">
-                Your first agent detected a person. Now build something of your own.
+                {dismissedEarly
+                  ? 'Local micro-agents that watch, log, and react.'
+                  : 'Your first agent detected a person. Now build something of your own.'}
               </p>
             </div>
 
@@ -385,7 +407,10 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
                 </div>
 
                 <button
-                  onClick={isAppleDevice ? handleApplePurchasePro : handleProCheckout}
+                  onClick={() => {
+                    Analytics.upsellFreeTrial(dismissedEarly ? 'tutorial_dismissed' : 'tutorial_complete');
+                    if (isAppleDevice) handleApplePurchasePro(); else handleProCheckout();
+                  }}
                   disabled={isButtonLoading || isAppleLoading}
                   className="w-full px-4 py-2.5 md:px-6 md:py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 focus:outline-none focus:ring-4 focus:ring-purple-300 transition-all duration-200 font-semibold text-sm md:text-base shadow-md hover:shadow-lg disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center"
                 >
@@ -409,7 +434,7 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
               {/* Action Buttons */}
               <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
                 <button
-                  onClick={() => window.open('https://github.com/Roy3838/Observer', '_blank')}
+                  onClick={() => { Analytics.upsellGithub(dismissedEarly ? 'tutorial_dismissed' : 'tutorial_complete'); window.open('https://github.com/Roy3838/Observer', '_blank'); }}
                   className="px-3 py-1.5 md:px-4 md:py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium flex items-center gap-2 group shadow-md text-sm md:text-base"
                 >
                   <Star className="h-4 w-4 text-yellow-400 fill-yellow-400 group-hover:scale-110 transition-transform" />
@@ -420,7 +445,7 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
                 <div className="hidden md:block text-gray-300">|</div>
 
                 <button
-                  onClick={() => { onComplete(agentId); onViewAllTiers(); }}
+                  onClick={() => { Analytics.upsellViewTiers(dismissedEarly ? 'tutorial_dismissed' : 'tutorial_complete'); onComplete(agentId); onViewAllTiers(); }}
                   className="text-xs md:text-sm text-purple-600 hover:text-purple-800 hover:underline transition-colors font-medium flex items-center gap-1"
                 >
                   <Sparkles className="h-3.5 w-3.5 md:h-4 md:w-4" />
@@ -430,7 +455,7 @@ export const InteractiveTutorial: React.FC<InteractiveTutorialProps> = ({
                 <div className="hidden md:block text-gray-300">|</div>
 
                 <button
-                  onClick={() => onComplete(agentId)}
+                  onClick={() => { Analytics.upsellContinueFree(dismissedEarly ? 'tutorial_dismissed' : 'tutorial_complete'); onComplete(agentId); }}
                   className="text-xs md:text-sm text-gray-600 hover:text-gray-800 hover:underline transition-colors font-medium"
                 >
                   Continue with free tier →

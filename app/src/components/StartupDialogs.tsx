@@ -1,4 +1,5 @@
 import React from 'react';
+import { Analytics } from '@utils/analytics';
 
 interface StartupDialogProps {
   onDismiss: () => void;
@@ -16,7 +17,6 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
   onLogin,
   onToggleObServer,
   isAuthenticated,
-  hostingContext
 }) => {
 
   // Don't show dialog if user is already authenticated
@@ -27,6 +27,7 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
   const handleSignIn = () => {
     // Set login intent in sessionStorage (persists through auth redirect, clears on tab close)
     sessionStorage.setItem('observer_login_intent', 'true');
+    Analytics.startupSignIn();
 
     if (onLogin) {
       onLogin();
@@ -38,7 +39,7 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
   };
 
   const handleSkip = () => {
-    // Call parent's onSkip handler which will show welcome modal with 'local' intent
+    Analytics.startupSkip();
     if (onSkip) {
       onSkip();
     }
@@ -74,15 +75,12 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
             </button>
           </div>
 
-          {/* Skip button for Tauri and Self-hosted */}
-          {(hostingContext !== 'official-web') && (
-            <button
-              onClick={handleSkip}
-              className="mt-4 text-sm text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              Skip
-            </button>
-          )}
+          <button
+            onClick={handleSkip}
+            className="mt-4 text-xs text-gray-400 hover:text-gray-500 transition-colors"
+          >
+            Continue without signing in
+          </button>
         </div>
       </div>
     </div>

@@ -5,6 +5,7 @@ import { useAuth } from '@contexts/AuthContext';
 import { useApplePayments } from '@hooks/useApplePayments';
 import { X as CloseIcon, X, Loader2, Sparkles, Zap, Heart, Star, Shield, Check, Monitor, Camera, Mic, Clipboard, Server } from 'lucide-react';
 import { Logger } from '@utils/logging';
+import { Analytics } from '@utils/analytics';
 import { isIOS } from '../utils/platform';
 import { CreditInfoButton } from './CreditVisualization';
 
@@ -126,6 +127,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
   };
 
   const handleSignIn = () => {
+    if (intent === 'local') Analytics.localModeSignIn();
     login();
   };
 
@@ -210,7 +212,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
                 Sign In
               </button>
               <button
-                onClick={handleClose}
+                onClick={() => { Analytics.localModeContinue(); handleClose(); }}
                 className="w-full px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-4 focus:ring-gray-400 transition-all duration-200 font-semibold"
               >
                 Continue Without Sign In

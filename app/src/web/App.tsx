@@ -1,3 +1,6 @@
+import { datadogRum } from '@datadog/browser-rum';
+import { reactPlugin } from '@datadog/browser-rum-react';
+import { Analytics } from '@utils/analytics';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Terminal, MessageSquare, ChevronUp } from 'lucide-react';
 import { Auth0Provider } from '@auth0/auth0-react';
@@ -5,7 +8,7 @@ import { platform as getPlatform } from '@tauri-apps/plugin-os';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@contexts/AuthContext';
 import { useIOSKeyboard } from '@hooks/useIOSKeyboard';
-import { isMobile, confirm, isDesktop } from '@utils/platform';
+import { isMobile, confirm, isDesktop, isWeb, isIOS, isAndroid } from '@utils/platform';
 import {
   listAgents,
   getAgentCode,
@@ -43,6 +46,7 @@ import { UpgradeSuccessPage } from '../pages/UpgradeSuccessPage';
 import { ObServerTab } from '@components/ObServerTab';
 import { UpgradeModal } from '@components/UpgradeModal';
 import { AcceptToS } from '@components/AcceptToS';
+import { WelcomeModal } from '@components/WelcomeModal';
 import AgentActivityModal from '@components/AgentCard/AgentActivityModal';
 import FeedbackDialog from '@components/FeedbackDialog';
 import { startCommandSSE, updateCommandSSEToken } from '@utils/commandSSE';
@@ -50,6 +54,25 @@ import WhitelistModal from '@components/WhitelistModal';
 import InteractiveTutorial from '@components/InteractiveTutorial';
 import AgentChip from '@components/AgentChip';
 import { PERSON_DETECTOR_AGENT, PERSON_DETECTOR_CODE, PERSON_DETECTOR_ID } from '@utils/personDetectorAgent';
+
+datadogRum.init({
+  applicationId: 'ed504b99-0755-4aff-b155-06eeb559c705',
+  clientToken: 'pub2abb69c9ad9708fa859220211d5b26e5',
+  site: 'us5.datadoghq.com',
+  service: 'observer-web',
+  env: import.meta.env.MODE,
+  version: '2.3.4',
+  sessionSampleRate: 100,
+  sessionReplaySampleRate: 20,
+  trackResources: true,
+  trackUserInteractions: true,
+  trackLongTasks: true,
+  plugins: [reactPlugin({ router: false })],
+});
+
+datadogRum.setGlobalContextProperty('platform',
+  isIOS() ? 'ios' : isAndroid() ? 'android' : isDesktop() ? 'desktop' : 'web'
+);
 
 // Main app content - uses the unified auth hook
 function AppContent() {
@@ -115,6 +138,7 @@ function AppContent() {
 
   // AcceptToS modal state
   const [isAcceptToSOpen, setIsAcceptToSOpen] = useState(false);
+  const [showLocalModeWarning, setShowLocalModeWarning] = useState(false);
 
   // Tutorial modal state
   const [tutorialModalInfo, setTutorialModalInfo] = useState<{
@@ -357,6 +381,7 @@ function AppContent() {
 
   const handleTutorialComplete = (_completedAgentId: string) => {
     Logger.info('TUTORIAL', 'Onboarding completed');
+    Analytics.tutorialCompleted();
     markOnboardingComplete();
     setTutorialModalInfo(null);
   };
@@ -572,6 +597,7 @@ function AppContent() {
       }
       if (!isAuthenticated) {
         setShowStartupDialog(true);
+        Analytics.startupShown();
       }
     }
   }, [isLoading, isAuthenticated]);
@@ -1058,13 +1084,21 @@ function AppContent() {
       {showStartupDialog && (
         <StartupDialogs
           onDismiss={handleDismissStartupDialog}
-          onSkip={() => { /* local/offline mode — no modal needed */ }}
+          onSkip={() => { setShowLocalModeWarning(true); Analytics.localModeShown(); }}
           onLogin={login}
           onToggleObServer={() => setIsUsingObServer(true)}
           isAuthenticated={isAuthenticated}
           hostingContext={hostingContext}
         />
       )}
+
+      <WelcomeModal
+        isOpen={showLocalModeWarning}
+        onClose={() => setShowLocalModeWarning(false)}
+        onViewAllTiers={() => setActiveTab('obServer')}
+        intent="local"
+        tier={null}
+      />
 
       <FeedbackDialog
         isOpen={isFeedbackOpen}
