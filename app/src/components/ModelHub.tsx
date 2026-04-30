@@ -347,7 +347,8 @@ const ModelHub: React.FC<ModelHubProps> = ({
         // gguf done, kick off mmproj
         setPresetDownloadStep('mmproj');
         NativeLlmManager.getInstance().downloadModel(downloadingPreset.mmprojUrl)
-          .then(() => {
+          .then((resultFilename) => {
+            if (!resultFilename) return; // cancelled — downloadModel returns '' on cancel, skip assignment
             const ggufFilename = downloadingPreset.ggufUrl!.split('/').pop()!;
             const mmprojFilename = downloadingPreset.mmprojUrl!.split('/').pop()!;
             NativeLlmManager.getInstance().setMmprojAssignment(ggufFilename, mmprojFilename);
@@ -848,7 +849,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                           </div>
                           <div className="flex items-center gap-2 mt-1">
                             <p className="text-xs text-gray-500">{formatBytes(file.sizeBytes)}</p>
-                            {ggufProjectors.length > 0 && (
+                            {(ggufProjectors.length > 0 || assignedMmproj !== null) && (
                               <select
                                 value={assignedMmproj ?? ''}
                                 onChange={e => handleMmprojAssignment(file.filename, e.target.value || null)}
