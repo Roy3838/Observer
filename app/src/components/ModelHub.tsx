@@ -1180,7 +1180,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
           </div>
 
           {/* More models — full Unsloth E2B quant ladder for testing */}
-          <div className="border border-gray-200 rounded-xl overflow-hidden">
+          {isTauriApp && <div className="border border-gray-200 rounded-xl overflow-hidden">
             <button
               onClick={() => setShowMoreModels(v => !v)}
               className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
@@ -1245,7 +1245,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
                 })}
               </div>
             )}
-          </div>
+          </div>}
 
           {nativeState.status === 'error' && (
             <div className="mt-3 border border-red-200 bg-red-50 rounded-lg p-3">
