@@ -8,7 +8,7 @@ import { platform as getPlatform } from '@tauri-apps/plugin-os';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@contexts/AuthContext';
 import { useIOSKeyboard } from '@hooks/useIOSKeyboard';
-import { isMobile, confirm, isDesktop, isWeb, isIOS, isAndroid } from '@utils/platform';
+import { isMobile, confirm, isDesktop, isIOS, isAndroid } from '@utils/platform';
 import {
   listAgents,
   getAgentCode,
