@@ -82,7 +82,7 @@ const MODEL_PARAMS_PREFIX = 'observer-ai:inference:model:';
  * - Local models via LocalModelManager (GemmaModelManager or NativeLlmManager)
  */
 // Gemma 4 GGUF thinking delimiters (observed from llama.cpp token stream)
-const LLAMA_THINK_START = '<|channel>thought\n';
+const LLAMA_THINK_START = '<|channel>thought';
 const LLAMA_THINK_END   = '<channel|>';
 
 /**
@@ -577,11 +577,15 @@ export class ModelManager {
       if (!enableThinking || !onReasoningToken) {
         return manager.generate(messages, onToken);
       }
-      // Route thinking tokens to onReasoningToken, answer tokens to onToken
-      const router = makeLlamaCppThinkingRouter(onToken, onReasoningToken);
-      const result = await manager.generate(messages, router);
+      // Route thinking tokens to onReasoningToken, answer tokens to onToken.
+      // Accumulate answer tokens — manager.generate returns the raw backend string which
+      // still contains the thinking delimiters, so we can't use it directly.
+      let answer = '';
+      const collectAndForward = (t: string) => { answer += t; onToken?.(t); };
+      const router = makeLlamaCppThinkingRouter(collectAndForward, onReasoningToken);
+      await manager.generate(messages, router);
       router.flush();
-      return result;
+      return answer;
     }
 
     throw new Error(`Cannot generate: unsupported server type "${server}"`);
