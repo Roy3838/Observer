@@ -4,7 +4,7 @@ import {
     Brain, Clock, Eye, ChevronDown, AlertTriangle, Server, Wrench, ChevronRight, Zap, Settings, Cloud, Download, Cpu, CheckCircle, FileDown, StopCircle
 } from 'lucide-react';
 import { CompleteAgent } from '@utils/agent_database';
-import { listModels, fetchModels, getInferenceAddresses, BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL } from '@utils/inferenceServer';
+import { BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL } from '@utils/inferenceServer';
 import { ModelManager, LocalModelState } from '@utils/ModelManager';
 import { detectAgentCapabilities } from './agentCapabilities';
 import SensorModal from './SensorModal';
@@ -422,9 +422,7 @@ const ModelDropdown: React.FC<{ currentModel: string; onModelChange: (modelName:
         setIsLoading(true);
         setError(null);
         try {
-            const addresses = getInferenceAddresses();
-            if (addresses.length === 0) throw new Error("No inference servers configured.");
-            const response = listModels();
+            const response = ModelManager.getInstance().listModels();
             if (response.error) throw new Error(response.error);
             setAvailableModels(response.models);
         } catch (e) {
@@ -568,7 +566,7 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
 
         const lookupModel = () => {
             if (cancelled) return;
-            const models = listModels().models;
+            const models = ModelManager.getInstance().listModels().models;
             const modelInfo = models.find(m => m.name === currentModel);
             setCurrentModelInfo(modelInfo
                 ? { server: modelInfo.server, ownedBy: modelInfo.ownedBy, status: modelInfo.status, localModelId: modelInfo.localModelId }
@@ -577,13 +575,7 @@ const StaticAgentView: React.FC<StaticAgentViewProps> = ({
         };
 
         // Try immediately
-        const models = listModels().models;
-        if (models.length > 0) {
-            lookupModel();
-        } else if (currentModel) {
-            // Models not loaded yet, fetch them (only if needed)
-            fetchModels().then(lookupModel);
-        }
+        lookupModel();
 
         // Subscribe to ModelManager for all model state changes
         // ModelManager handles forwarding from underlying managers (Gemma + Native)

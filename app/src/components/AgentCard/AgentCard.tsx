@@ -4,7 +4,8 @@ import confetti from 'canvas-confetti';
 import { Zap } from 'lucide-react';
 import { CompleteAgent } from '@utils/agent_database';
 import { isJupyterConnected } from '@utils/handlers/JupyterConfig';
-import { listModels, getInferenceAddresses, BROWSER_LOCAL_SENTINEL } from '@utils/inferenceServer';
+import { BROWSER_LOCAL_SENTINEL } from '@utils/inferenceServer';
+import { ModelManager } from '@utils/ModelManager';
 import { Logger, LogEntry } from '@utils/logging';
 import { StreamManager, StreamState } from '@utils/streamManager';
 import { isIOS } from '@utils/platform';
@@ -344,9 +345,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
     }
 
     try {
-      const addresses = getInferenceAddresses();
-      if (addresses.length === 0) throw new Error("No inference servers configured.");
-      const modelsResponse = listModels();
+      const modelsResponse = ModelManager.getInstance().listModels();
       const foundModel = modelsResponse.models.find(m => m.name === currentModel);
       if (modelsResponse.error || !foundModel) {
         setStartWarning(`Model "${currentModel}" is not available. Check server or edit agent.`);
