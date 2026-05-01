@@ -507,7 +507,8 @@ const ModelHub: React.FC<ModelHubProps> = ({
   const ggufModels = ggufFiles.filter(f => !f.filename.toLowerCase().includes('mmproj'));
   const ggufProjectors = ggufFiles.filter(f => f.filename.toLowerCase().includes('mmproj'));
   const isTransformersLoading = gemmaState.status === 'loading';
-  const isDownloadingAny = downloadingPreset !== null || (isNativeDownloading && !downloadingPreset) || isTransformersLoading;
+  const isTransformersDownloading = isTransformersLoading && !transformersModels.some(m => m.id === gemmaState.modelId);
+  const isDownloadingAny = downloadingPreset !== null || (isNativeDownloading && !downloadingPreset) || isTransformersDownloading;
   const installedCount = ggufFiles.length + transformersModels.length + (isDownloadingAny ? 1 : 0);
 
   const isPresetInstalled = (preset: ModelPreset) => {
@@ -732,7 +733,7 @@ const ModelHub: React.FC<ModelHubProps> = ({
               )}
 
               {/* In-flight preset download (Transformers.js) */}
-              {isTransformersLoading && (
+              {isTransformersDownloading && (
                 <div className="border border-yellow-300 bg-yellow-50 rounded-xl p-3">
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
