@@ -569,7 +569,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = broadcast/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = broadcast;
+				INFOPLIST_KEY_CFBundleDisplayName = Observer;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -649,7 +649,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = broadcast/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = broadcast;
+				INFOPLIST_KEY_CFBundleDisplayName = Observer;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -733,7 +733,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = broadcastSetupUI/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = broadcastSetupUI;
+				INFOPLIST_KEY_CFBundleDisplayName = "Observer Screen Sharing";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -812,7 +812,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = broadcastSetupUI/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = broadcastSetupUI;
+				INFOPLIST_KEY_CFBundleDisplayName = "Observer Screen Sharing";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = (
