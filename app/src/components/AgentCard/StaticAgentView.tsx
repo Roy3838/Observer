@@ -1,10 +1,10 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
-    Brain, Clock, Eye, ChevronDown, AlertTriangle, Server, Wrench, ChevronRight, Zap, Settings, Cloud, Download, Cpu, CheckCircle, FileDown, StopCircle
+    Brain, Clock, Eye, ChevronDown, AlertTriangle, Server, Wrench, ChevronRight, Zap, Settings, Cloud, Download, Cpu, CheckCircle, FileDown, StopCircle, MinusCircle
 } from 'lucide-react';
 import { CompleteAgent } from '@utils/agent_database';
-import { BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL } from '@utils/inferenceServer';
+import { BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL, SKIP_MODEL_SENTINEL } from '@utils/inferenceServer';
 import { ModelManager, LocalModelState } from '@utils/ModelManager';
 import { detectAgentCapabilities } from './agentCapabilities';
 import SensorModal from './SensorModal';
@@ -111,6 +111,7 @@ const ModelLocationIndicator: React.FC<{
     const popoverRef = useRef<HTMLDivElement>(null);
 
     // Get unified local model state from ModelManager
+    const isSkipModel = server === SKIP_MODEL_SENTINEL;
     const isLocalModel = server === LLAMA_CPP_LOCAL_SENTINEL || server === BROWSER_LOCAL_SENTINEL;
     const [localState, setLocalState] = useState<LocalModelState | null>(
         isLocalModel && server ? ModelManager.getInstance().getLocalModelState(server) : null
@@ -188,7 +189,11 @@ const ModelLocationIndicator: React.FC<{
     let IconComponent = Server;
     let title = 'Local model';
 
-    if (isCloud) {
+    if (isSkipModel) {
+        iconColor = 'text-gray-400 hover:text-gray-500 hover:bg-gray-50';
+        IconComponent = MinusCircle;
+        title = 'No model call — agent runs without AI inference';
+    } else if (isCloud) {
         iconColor = 'text-blue-500 hover:text-blue-600 hover:bg-blue-50';
         IconComponent = Cloud;
         title = 'Cloud model';
@@ -219,7 +224,17 @@ const ModelLocationIndicator: React.FC<{
                     className="fixed w-64 p-3 bg-white border border-gray-200 rounded-lg shadow-lg z-[100]"
                     style={{ top: popoverPosition.top, left: popoverPosition.left }}
                 >
-                    {isCloud ? (
+                    {isSkipModel ? (
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                                <MinusCircle className="w-4 h-4 text-gray-400" />
+                                <p className="text-xs font-semibold text-gray-700">Skip Model Call</p>
+                            </div>
+                            <p className="text-xs text-gray-500">
+                                The agent loop runs normally, but no AI model is called. The response is always an empty string. You can do cool stuff with the `prompt` variable. (OCR only, transcription only, etc.) 
+                            </p>
+                        </div>
+                    ) : isCloud ? (
                         <>
                             <div className="text-xs font-semibold text-gray-800 mb-2">
                                 → {providerName && PROVIDER_PRIVACY_URLS[providerName] ? (
@@ -509,7 +524,8 @@ const ModelDropdown: React.FC<{ currentModel: string; onModelChange: (modelName:
                                   </div>
                                   <div className="flex items-center space-x-1">
                                     {model.multimodal && <Eye className="h-4 w-4 text-purple-600" />}
-                                    {!model.server.includes('api.observer-ai.com') && <Server className="h-4 w-4 text-gray-600" />}
+                                    {model.server === SKIP_MODEL_SENTINEL && <MinusCircle className="h-4 w-4 text-gray-400" />}
+                                    {!model.server.includes('api.observer-ai.com') && model.server !== SKIP_MODEL_SENTINEL && <Server className="h-4 w-4 text-gray-600" />}
                                   </div>
                                 </div>
                             </button>

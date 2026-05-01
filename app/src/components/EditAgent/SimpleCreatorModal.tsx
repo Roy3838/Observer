@@ -2,12 +2,12 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Modal from '@components/EditAgent/Modal';
 import SensorInputText from '@components/EditAgent/SensorInputText';
 import { SimpleTool, ToolData } from '@utils/agentTemplateManager';
-import { Model, listModels } from '@utils/inferenceServer';
+import { Model, listModels, SKIP_MODEL_SENTINEL } from '@utils/inferenceServer';
 import { isIOS } from '@utils/platform';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { listAgents, CompleteAgent } from '@utils/agent_database';
 import {
-  Bell, Save, Monitor, ScanText, Eye, Camera, Clipboard, Mic, ArrowRight, ArrowLeft, ChevronDown, AlertTriangle, Info, Loader2, CheckCircle2, MessageSquare, Smartphone, Mail, Volume2, Blend, Clapperboard, Tag, HelpCircle, MessageCircle, Images, Server, MousePointer, Phone, PartyPopper
+  Bell, Save, Monitor, ScanText, Eye, Camera, Clipboard, Mic, ArrowRight, ArrowLeft, ChevronDown, AlertTriangle, Info, Loader2, CheckCircle2, MessageSquare, Smartphone, Mail, Volume2, Blend, Clapperboard, Tag, HelpCircle, MessageCircle, Images, Server, MousePointer, Phone, PartyPopper, MinusCircle
 } from 'lucide-react';
 
 
@@ -46,7 +46,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ availableModels, selected
               <span className="truncate pr-2">{m.name}</span>
               <div className="flex items-center space-x-1">
                 {m.multimodal && <span title="Supports Vision" className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded ${selectedModel === m.name ? 'bg-blue-400 text-white' : 'text-purple-600 bg-purple-100'}`}><Eye className="h-3.5 w-3.5 mr-1" />Vision</span>}
-                {!m.server.includes('api.observer-ai.com') && <span title="Running Locally" className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded ${selectedModel === m.name ? 'bg-blue-400 text-white' : 'text-gray-600 bg-gray-100'}`}><Server className="h-3.5 w-3.5 mr-1" />Local</span>}
+                {m.server === SKIP_MODEL_SENTINEL && <span title="No model call" className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded ${selectedModel === m.name ? 'bg-blue-400 text-white' : 'text-gray-500 bg-gray-100'}`}><MinusCircle className="h-3.5 w-3.5 mr-1" />Skip</span>}
+                {!m.server.includes('api.observer-ai.com') && m.server !== SKIP_MODEL_SENTINEL && <span title="Running Locally" className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded ${selectedModel === m.name ? 'bg-blue-400 text-white' : 'text-gray-600 bg-gray-100'}`}><Server className="h-3.5 w-3.5 mr-1" />Local</span>}
               </div>
             </button>
           ))}
@@ -365,7 +366,8 @@ const SimpleCreatorModal: React.FC<SimpleCreatorModalProps> = ({ isOpen, onClose
                             {model === m.name && <CheckCircle2 className="h-4 w-4" />}
                             <span className="truncate">{m.name}</span>
                             {m.multimodal && (<span title="Vision Model"><Eye className="h-4 w-4 text-purple-400 group-hover:text-purple-500" /></span>)}
-                            {!m.server.includes('api.observer-ai.com') && (<span title="Running Locally"><Server className="h-4 w-4 text-gray-400 group-hover:text-gray-500" /></span>)}
+                            {m.server === SKIP_MODEL_SENTINEL && (<span title="No model call"><MinusCircle className="h-4 w-4 text-gray-400 group-hover:text-gray-500" /></span>)}
+                            {!m.server.includes('api.observer-ai.com') && m.server !== SKIP_MODEL_SENTINEL && (<span title="Running Locally"><Server className="h-4 w-4 text-gray-400 group-hover:text-gray-500" /></span>)}
                         </button>
                     ))}
                 </div>

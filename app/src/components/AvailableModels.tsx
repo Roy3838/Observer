@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { fetchModels as fetchAllModels, Model } from '@utils/inferenceServer';
 import {
   Cpu, RefreshCw, Eye, CheckCircle, X, StopCircle, Sparkles,
-  AlertTriangle, Trash2, Settings2, BarChart3, FileDown, Cpu as CpuIcon, Cloud,
+  AlertTriangle, Trash2, Settings2, BarChart3, FileDown, Cpu as CpuIcon, Cloud, MinusCircle,
 } from 'lucide-react';
-import { BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL } from '@utils/inferenceServer';
+import { BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL, SKIP_MODEL_SENTINEL } from '@utils/inferenceServer';
 import { Logger } from '@utils/logging';
 import ModelHub from '@components/ModelHub';
 import BenchmarkPanel from '@components/BenchmarkPanel';
@@ -195,6 +195,7 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
 
   // Determine if a model has configurable settings
   const hasSettings = (model: Model) => {
+    if (model.server === SKIP_MODEL_SENTINEL) return false;
     if (model.server === LLAMA_CPP_LOCAL_SENTINEL) return nativeState.status === 'loaded';
     if (model.server === BROWSER_LOCAL_SENTINEL) return false;
     if (model.server.includes('api.observer-ai.com')) return false;
@@ -481,14 +482,33 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
         </div>
       )}
 
+      {/* Skip Model Call card */}
+      <div className="space-y-2 mb-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Special</p>
+        <div className="border border-gray-200 bg-white rounded-xl p-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-100">
+            <MinusCircle size={18} className="text-gray-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-medium text-gray-900">Skip Model Call</span>
+              <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">Always ready</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Runs the agent loop without calling an AI model — response is always an empty string.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Remote model cards */}
       {models.length > 0 && (
         <div className="space-y-2 mb-4">
-          {models.some(m => !m.server.includes('api.observer-ai.com') && m.server !== LLAMA_CPP_LOCAL_SENTINEL && m.server !== BROWSER_LOCAL_SENTINEL) && (
+          {models.some(m => !m.server.includes('api.observer-ai.com') && m.server !== LLAMA_CPP_LOCAL_SENTINEL && m.server !== BROWSER_LOCAL_SENTINEL && m.server !== SKIP_MODEL_SENTINEL) && (
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Remote Servers</p>
           )}
           {models
-            .filter(m => m.server !== LLAMA_CPP_LOCAL_SENTINEL && m.server !== BROWSER_LOCAL_SENTINEL)
+            .filter(m => m.server !== LLAMA_CPP_LOCAL_SENTINEL && m.server !== BROWSER_LOCAL_SENTINEL && m.server !== SKIP_MODEL_SENTINEL)
             .map(model => {
               const isObServer = model.server.includes('api.observer-ai.com');
               const settingsOpen = expandedSettings === model.name;

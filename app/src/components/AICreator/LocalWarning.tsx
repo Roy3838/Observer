@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, AlertTriangle, Clipboard, Check, Zap, Server } from 'lucide-react';
-import { listModels, Model } from '@utils/inferenceServer';
+import { listModels, Model, SKIP_MODEL_SENTINEL } from '@utils/inferenceServer';
 import getConversationalSystemPrompt from '@utils/conversational_system_prompt';
 import getMultiAgentSystemPrompt from '@utils/multi_agent_creator';
 
@@ -44,7 +44,7 @@ const LocalWarning: React.FC<LocalWarningProps> = ({
     } else if (result.models.length === 0) {
       setLocalModelError('No models found. Ensure your local server is running.');
     } else {
-      setLocalModels(result.models);
+      setLocalModels(result.models.filter(m => m.server !== SKIP_MODEL_SENTINEL));
     }
     setIsFetchingModels(false);
   }, [isOpen]);

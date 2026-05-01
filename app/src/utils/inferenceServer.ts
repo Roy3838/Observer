@@ -9,6 +9,7 @@ export type { Model, CustomServer };
 // Re-export sentinel constants from ModelManager for backward compatibility
 export const BROWSER_LOCAL_SENTINEL = ModelManager.BROWSER_LOCAL;
 export const LLAMA_CPP_LOCAL_SENTINEL = ModelManager.LLAMA_CPP_LOCAL;
+export const SKIP_MODEL_SENTINEL = ModelManager.SKIP_MODEL;
 
 interface ServerResponse {
   status: 'online' | 'offline';

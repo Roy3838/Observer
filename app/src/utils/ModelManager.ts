@@ -193,14 +193,14 @@ export class ModelManager {
   public listModels(): ModelsResponse {
     const localModels = this.getLocalModels();
 
-    // Sort: local models first, then user-managed servers, then Observer cloud last
+    // Sort: local models first, then user-managed servers, then Observer cloud, then skip model last
     const sortedModels = [...this.remoteModels, ...localModels].sort((a, b) => {
-      const isLocalA = this.isLocalModel(a.server);
-      const isLocalB = this.isLocalModel(b.server);
-      const aScore = isLocalA ? 0
+      const aScore = a.server === ModelManager.SKIP_MODEL ? 3
+        : this.isLocalModel(a.server) ? 0
         : a.server.includes('api.observer-ai.com') ? 2
         : 1;
-      const bScore = isLocalB ? 0
+      const bScore = b.server === ModelManager.SKIP_MODEL ? 3
+        : this.isLocalModel(b.server) ? 0
         : b.server.includes('api.observer-ai.com') ? 2
         : 1;
       return aScore - bScore;
