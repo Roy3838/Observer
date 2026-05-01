@@ -151,6 +151,7 @@ export class ModelManager {
   // Sentinel values for local model servers
   static readonly BROWSER_LOCAL = 'browser_local';
   static readonly LLAMA_CPP_LOCAL = 'llama_cpp_local';
+  static readonly SKIP_MODEL = 'skip_model';
 
   // State
   private inferenceAddresses: string[] = [];
@@ -215,6 +216,14 @@ export class ModelManager {
    */
   private getLocalModels(): Model[] {
     const models: Model[] = [];
+
+    // Skip Model Call — always available, returns empty string
+    models.push({
+      name: 'Skip Model Call',
+      server: ModelManager.SKIP_MODEL,
+      multimodal: false,
+      status: 'loaded',
+    });
 
     // Transformers.js models (available on all platforms)
     const gemmaModels = GemmaModelManager.getInstance().listLocalModels();
@@ -540,6 +549,7 @@ export class ModelManager {
    * Check if a local model is ready for inference.
    */
   public isLocalModelReady(server: string): boolean {
+    if (server === ModelManager.SKIP_MODEL) return true;
     if (server === ModelManager.BROWSER_LOCAL) {
       return GemmaModelManager.getInstance().isReady();
     }
@@ -559,6 +569,10 @@ export class ModelManager {
     onToken?: (token: string) => void,
     onReasoningToken?: (token: string) => void,
   ): Promise<string> {
+    if (server === ModelManager.SKIP_MODEL) {
+      return '';
+    }
+
     if (server === ModelManager.BROWSER_LOCAL) {
       const manager = GemmaModelManager.getInstance();
       if (!manager.isReady()) {
@@ -690,7 +704,9 @@ export class ModelManager {
    * Check if a server string represents a local model
    */
   public isLocalModel(server: string): boolean {
-    return server === ModelManager.BROWSER_LOCAL || server === ModelManager.LLAMA_CPP_LOCAL;
+    return server === ModelManager.BROWSER_LOCAL
+      || server === ModelManager.LLAMA_CPP_LOCAL
+      || server === ModelManager.SKIP_MODEL;
   }
 
   /**
