@@ -1836,12 +1836,13 @@ const ModelHub: React.FC<ModelHubProps> = ({
                             Save
                           </button>
                         </div>
-                        <p className="text-xs text-gray-500 mt-2">Set your local Ollama or compatible server</p>
+                        <p className="text-xs text-gray-500 mt-2">Routes through local proxy, CORS handled automatically</p>
                       </div>
                     )}
 
                     <div className="border border-gray-200 rounded-xl p-4">
-                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Custom Servers</h3>
+                      <h3 className="text-sm font-semibold text-gray-700 mb-1">Custom Servers</h3>
+                      <p className="text-xs text-gray-500 mb-3">Direct connection, may fail if server blocks cross-origin requests</p>
                       {!isAddingServer ? (
                         <button
                           onClick={() => setIsAddingServer(true)}
