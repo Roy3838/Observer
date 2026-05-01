@@ -482,38 +482,63 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
         </div>
       )}
 
-      {/* Skip Model Call card */}
-      <div className="space-y-2 mb-4">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Special</p>
-        <div className="border border-gray-200 bg-white rounded-xl p-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-100">
-            <MinusCircle size={18} className="text-gray-400" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-medium text-gray-900">Skip Model Call</span>
-              <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">Always ready</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Runs the agent loop without calling an AI model — response is always an empty string.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Remote model cards */}
-      {models.length > 0 && (
+      {/* Remote (custom/local-network) model cards */}
+      {models.filter(m => m.server !== LLAMA_CPP_LOCAL_SENTINEL && m.server !== BROWSER_LOCAL_SENTINEL && m.server !== SKIP_MODEL_SENTINEL && !m.server.includes('api.observer-ai.com')).length > 0 && (
         <div className="space-y-2 mb-4">
-          {models.some(m => !m.server.includes('api.observer-ai.com') && m.server !== LLAMA_CPP_LOCAL_SENTINEL && m.server !== BROWSER_LOCAL_SENTINEL && m.server !== SKIP_MODEL_SENTINEL) && (
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Remote Servers</p>
-          )}
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Remote</p>
           {models
-            .filter(m => m.server !== LLAMA_CPP_LOCAL_SENTINEL && m.server !== BROWSER_LOCAL_SENTINEL && m.server !== SKIP_MODEL_SENTINEL)
+            .filter(m => m.server !== LLAMA_CPP_LOCAL_SENTINEL && m.server !== BROWSER_LOCAL_SENTINEL && m.server !== SKIP_MODEL_SENTINEL && !m.server.includes('api.observer-ai.com'))
             .map(model => {
-              const isObServer = model.server.includes('api.observer-ai.com');
               const settingsOpen = expandedSettings === model.name;
               const canConfigure = hasSettings(model);
+              return (
+                <div key={model.name} className={`border rounded-xl transition-all ${settingsOpen ? 'border-blue-200' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                  <div className="flex items-center gap-3 p-3">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-100">
+                      <CpuIcon size={18} className="text-gray-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-medium text-gray-900 truncate">{model.name}</span>
+                        {model.multimodal && (
+                          <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                            <Eye size={9} />
+                          </span>
+                        )}
+                        <span className="text-[10px] font-semibold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">Server</span>
+                      </div>
+                      {model.parameterSize && model.parameterSize !== 'N/A' && (
+                        <p className="text-xs text-gray-500 mt-0.5">{model.parameterSize}</p>
+                      )}
+                    </div>
+                    {canConfigure && (
+                      <button
+                        onClick={() => toggleSettings(model.name)}
+                        className={`p-1.5 rounded transition-colors flex-shrink-0 ${settingsOpen ? 'text-blue-700 bg-blue-100' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+                        title="Inference settings"
+                      >
+                        <Settings2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                  {settingsOpen && canConfigure && (
+                    <RemoteInferenceParamsPanel modelName={model.name} />
+                  )}
+                </div>
+              );
+            })}
+        </div>
+      )}
 
+      {/* Cloud (Observer API) model cards */}
+      {models.filter(m => m.server.includes('api.observer-ai.com')).length > 0 && (
+        <div className="space-y-2 mb-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Cloud</p>
+          {models
+            .filter(m => m.server.includes('api.observer-ai.com'))
+            .map(model => {
+              const settingsOpen = expandedSettings === model.name;
+              const canConfigure = hasSettings(model);
               return (
                 <div key={model.name} className={`border rounded-xl transition-all ${
                   model.pro && !isProUser ? 'opacity-60' : ''
@@ -533,13 +558,9 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
                             <Eye size={9} />
                           </span>
                         )}
-                        {isObServer ? (
-                          <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                            <Cloud size={9} />
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-semibold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">Server</span>
-                        )}
+                        <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                          <Cloud size={9} />
+                        </span>
                       </div>
                       {model.parameterSize && model.parameterSize !== 'N/A' && (
                         <p className="text-xs text-gray-500 mt-0.5">{model.parameterSize}</p>
@@ -548,9 +569,7 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
                     {canConfigure && (
                       <button
                         onClick={() => toggleSettings(model.name)}
-                        className={`p-1.5 rounded transition-colors flex-shrink-0 ${
-                          settingsOpen ? 'text-blue-700 bg-blue-100' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                        }`}
+                        className={`p-1.5 rounded transition-colors flex-shrink-0 ${settingsOpen ? 'text-blue-700 bg-blue-100' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
                         title="Inference settings"
                       >
                         <Settings2 size={14} />
@@ -565,6 +584,25 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
             })}
         </div>
       )}
+
+      {/* Skip Model Call card */}
+      <div className="space-y-2 mb-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Special</p>
+        <div className="border border-gray-200 bg-white rounded-xl p-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-100">
+            <MinusCircle size={18} className="text-gray-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-medium text-gray-900">Skip Model Call</span>
+              <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">Always ready</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Runs the agent loop without calling an AI model — response is always an empty string.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {models.length === 0 && ggufModels.length === 0 && !gemmaState.modelId && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-6">
