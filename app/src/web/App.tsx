@@ -596,8 +596,11 @@ function AppContent() {
         setIsUsingObServer(true);
       }
       if (!isAuthenticated) {
-        setShowStartupDialog(true);
-        Analytics.startupShown();
+        const localOnboardingComplete = localStorage.getItem('observer_onboarding_complete_local');
+        if (!localOnboardingComplete) {
+          setShowStartupDialog(true);
+          Analytics.startupShown();
+        }
       }
     }
   }, [isLoading, isAuthenticated]);

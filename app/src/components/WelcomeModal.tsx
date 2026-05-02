@@ -110,8 +110,11 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
   };
 
   const handleClose = () => {
-    if (dontShowAgain && user?.sub) {
-      localStorage.setItem(`observer_onboarding_complete_${user.sub}`, 'true');
+    if (dontShowAgain) {
+      const key = user?.sub
+        ? `observer_onboarding_complete_${user.sub}`
+        : 'observer_onboarding_complete_local';
+      localStorage.setItem(key, 'true');
       Logger.info('WELCOME', 'User set don\'t show again');
     }
     onClose();
@@ -213,9 +216,9 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
               </button>
               <button
                 onClick={() => { Analytics.localModeContinue(); handleClose(); }}
-                className="w-full px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-4 focus:ring-gray-400 transition-all duration-200 font-semibold"
+                className="text-xs text-gray-400 hover:text-gray-500 transition-colors mt-1"
               >
-                Continue Without Sign In
+                I'll self-host models and don't need sign-in →
               </button>
             </div>
 
