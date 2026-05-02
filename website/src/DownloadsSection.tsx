@@ -272,7 +272,8 @@ const DownloadsSection = () => {
 
         {/* Platform Tabs */}
         <div className="flex justify-center mb-10">
-          <div className="inline-flex gap-1 p-1.5 bg-white/5 rounded-2xl border border-white/10">
+          {/* Desktop: single row */}
+          <div className="hidden md:inline-flex gap-1 p-1.5 bg-white/5 rounded-2xl border border-white/10">
             {platforms.map((platform) => (
               <button
                 key={platform.id}
@@ -289,6 +290,46 @@ const DownloadsSection = () => {
                 <span className="text-sm font-medium">{platform.label}</span>
               </button>
             ))}
+          </div>
+
+          {/* Mobile: two rows */}
+          <div className="md:hidden flex flex-col gap-1 p-1.5 bg-white/5 rounded-2xl border border-white/10">
+            <div className="flex gap-1">
+              {platforms.slice(0, 3).map((platform) => (
+                <button
+                  key={platform.id}
+                  onClick={() => setActivePlatform(platform.id)}
+                  className={`
+                    flex flex-col items-center gap-2 px-4 py-3 rounded-xl transition-all
+                    ${activePlatform === platform.id
+                      ? 'bg-white/10 text-white'
+                      : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                    }
+                  `}
+                >
+                  {platform.icon}
+                  <span className="text-xs font-medium">{platform.label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1 justify-center">
+              {platforms.slice(3).map((platform) => (
+                <button
+                  key={platform.id}
+                  onClick={() => setActivePlatform(platform.id)}
+                  className={`
+                    flex flex-col items-center gap-2 px-4 py-3 rounded-xl transition-all
+                    ${activePlatform === platform.id
+                      ? 'bg-white/10 text-white'
+                      : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                    }
+                  `}
+                >
+                  {platform.icon}
+                  <span className="text-xs font-medium">{platform.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
