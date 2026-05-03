@@ -161,48 +161,44 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
         {/* STATE 1: Local Mode Warning (Not Signed In) */}
         {shouldShowLocalMode && (
           <div className="p-6 md:p-8">
-            {/* Warning Header */}
-            <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-4 md:p-5 mb-6">
-              <div className="flex items-center gap-3 mb-3">
-                <span className="text-2xl">⚠️</span>
-                <h2 className="text-xl md:text-2xl font-bold text-amber-900">Warning: 100% Offline Mode</h2>
-              </div>
-              <p className="text-sm md:text-base text-amber-800 leading-relaxed">
-                It's really cool that you value your privacy! Observer is all in on that.
-                <br />
-                Everything will work if you host your own models.
+            {/* Header */}
+            <div className="mb-6">
+              <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">Love that you value your privacy 🔒</h2>
+              <p className="text-sm md:text-base text-gray-600 leading-relaxed">
+                Observer is built for this. Your screen, camera, and audio never have to leave your device.
+                Just a heads-up on what the fully local path needs to work well:
               </p>
             </div>
 
-            {/* API Features Warning */}
-            <div className="mb-5">
-              <p className="text-sm md:text-base text-gray-700 font-semibold mb-3">
-                Just be mindful that API functions will not work:
-              </p>
-              <div className="space-y-1.5 text-sm md:text-base pl-2">
-                <div className="flex items-center gap-2">
-                  <X className="h-4 w-4 text-red-400 flex-shrink-0" />
-                  <span className="text-gray-600">Telegram, SMS, Calling, Whatsapp, Email and Pushover</span>
+            {/* Requirements */}
+            <div className="space-y-3 mb-6">
+              <div className="flex items-start gap-3 bg-gray-50 rounded-lg p-3">
+                <Server className="h-5 w-5 text-gray-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">An OpenAI-compatible model server</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Ollama, LM Studio, llama.cpp, etc. running locally or on your network. The AI Agent Builder needs a model with at least a 50k token context window to work.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 bg-gray-50 rounded-lg p-3">
+                <Monitor className="h-5 w-5 text-gray-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">A desktop browser if using in-browser models</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Transformers.js runs models via WebGPU, it's experimental and <strong>will crash on mobile browsers</strong> and low-memory machines. An external server is more reliable.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 bg-amber-50 rounded-lg p-3">
+                <X className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">No onboarding tutorial or notification integrations</p>
+                  <p className="text-xs text-gray-500 mt-0.5">The interactive tutorial, Telegram, SMS, Email, and calling features require a free account. Discord and all logging features still work.</p>
                 </div>
               </div>
             </div>
 
-            {/* What Works */}
-            <div className="space-y-2 text-sm md:text-base mb-6">
-              <div className="flex items-center gap-2">
-                <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
-                <span className="text-gray-800 font-medium">Discord will work!</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
-                <span className="text-gray-800 font-medium">All logging/recording features will work!</span>
-              </div>
-            </div>
-
-            {/* Recommended */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-              <p className="text-sm md:text-base text-blue-900">
-                <strong>Recommended:</strong> Sign in AND use local models, that way you have access to those features while keeping your sensitive data 100% on your device!
+            {/* Soft sign-in nudge */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
+              <p className="text-xs md:text-sm text-blue-800 leading-relaxed">
+                <strong>Tip:</strong> You can sign in <em>and</em> use local models, your data stays on-device either way, and you'll get the full experience including the tutorial.
               </p>
             </div>
 
@@ -216,9 +212,9 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
               </button>
               <button
                 onClick={() => { Analytics.localModeContinue(); handleClose(); }}
-                className="text-xs text-gray-400 hover:text-gray-500 transition-colors mt-1"
+                className="text-xs text-gray-400 hover:text-gray-600 transition-colors mt-1 leading-relaxed"
               >
-                I'll self-host models and don't need sign-in →
+                I have an OpenAI comaptible local server ready, continue without signing in →
               </button>
             </div>
 
