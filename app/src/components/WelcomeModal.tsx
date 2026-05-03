@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@contexts/AuthContext';
 import { useApplePayments } from '@hooks/useApplePayments';
-import { X as CloseIcon, X, Loader2, Sparkles, Zap, Heart, Star, Shield, Check, Monitor, Camera, Mic, Clipboard, Server } from 'lucide-react';
+import { X as CloseIcon, X, Loader2, Sparkles, Zap, Heart, Star, Shield, Monitor, Camera, Mic, Clipboard, Server } from 'lucide-react';
 import { Logger } from '@utils/logging';
 import { Analytics } from '@utils/analytics';
 import { isIOS } from '../utils/platform';
