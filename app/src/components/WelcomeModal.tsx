@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@contexts/AuthContext';
 import { useApplePayments } from '@hooks/useApplePayments';
-import { X as CloseIcon, X, Loader2, Sparkles, Zap, Heart, Star, Shield, Monitor, Camera, Mic, Clipboard, Server } from 'lucide-react';
+import { X as CloseIcon, Loader2, Sparkles, Zap, Heart, Star, Shield, Monitor, Camera, Mic, Clipboard, Server } from 'lucide-react';
 import { Logger } from '@utils/logging';
 import { Analytics } from '@utils/analytics';
 import { isIOS } from '../utils/platform';
@@ -146,13 +146,13 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-[10000] backdrop-blur-sm p-2 md:p-4"
-      onClick={shouldShowPrivacyConsent ? undefined : handleClose}
+      onClick={shouldShowSubscription ? handleClose : undefined}
     >
       <div
         className="relative bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-3xl max-h-[85vh] md:max-h-[90vh] overflow-y-auto transition-all duration-300"
         onClick={e => e.stopPropagation()}
       >
-        {!shouldShowPrivacyConsent && (
+        {shouldShowSubscription && (
           <button onClick={handleClose} className="absolute top-3 right-3 md:top-4 md:right-4 text-gray-400 hover:text-gray-700 z-10 transition-colors">
             <CloseIcon className="h-5 w-5 md:h-6 md:w-6" />
           </button>
@@ -165,8 +165,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
             <div className="mb-6">
               <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">Love that you value your privacy 🔒</h2>
               <p className="text-sm md:text-base text-gray-600 leading-relaxed">
-                Observer is built for this. Your screen, camera, and audio never have to leave your device.
-                Just a heads-up on what the fully local path needs to work well:
+                 Observer is all in on that! Just a heads-up on what the fully offline path needs to work well:
               </p>
             </div>
 
@@ -175,22 +174,8 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
               <div className="flex items-start gap-3 bg-gray-50 rounded-lg p-3">
                 <Server className="h-5 w-5 text-gray-500 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">An OpenAI-compatible model server</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Ollama, LM Studio, llama.cpp, etc. running locally or on your network. The AI Agent Builder needs a model with at least a 50k token context window to work.</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 bg-gray-50 rounded-lg p-3">
-                <Monitor className="h-5 w-5 text-gray-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">A desktop browser if using in-browser models</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Transformers.js runs models via WebGPU, it's experimental and <strong>will crash on mobile browsers</strong> and low-memory machines. An external server is more reliable.</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 bg-amber-50 rounded-lg p-3">
-                <X className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">No onboarding tutorial or notification integrations</p>
-                  <p className="text-xs text-gray-500 mt-0.5">The interactive tutorial, Telegram, SMS, Email, and calling features require a free account. Discord and all logging features still work.</p>
+                  <p className="text-sm font-semibold text-gray-800">Your own OpenAI-compatible model server</p>
+                  <p className="text-xs text-gray-500 mt-0.5">The AI Agent Builder needs a model with at least a 50k token context window to work.</p>
                 </div>
               </div>
             </div>
@@ -198,8 +183,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
             {/* Soft sign-in nudge */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
               <p className="text-xs md:text-sm text-blue-800 leading-relaxed">
-                <strong>Tip:</strong> You can sign in <em>and</em> use local models, your data stays on-device either way, and you'll get the full experience including the tutorial.
-              </p>
+                <strong>Tip:</strong> You can sign in <em>and</em> use local models, your data stays on-device either way, and you'll be able to build agents with AI and run them locally.              </p>
             </div>
 
             {/* Action Buttons */}
@@ -210,26 +194,26 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onV
               >
                 Sign In
               </button>
-              <button
-                onClick={() => { Analytics.localModeContinue(); handleClose(); }}
-                className="text-xs text-gray-400 hover:text-gray-600 transition-colors mt-1 leading-relaxed"
-              >
-                I have an OpenAI comaptible local server ready, continue without signing in →
-              </button>
-            </div>
-
-            {/* Don't show again checkbox */}
-            <div className="flex items-center justify-center pt-4 mt-4 border-t border-gray-200">
-              <label className="flex items-center cursor-pointer text-xs md:text-sm text-gray-600 hover:text-gray-800 transition-colors">
+              <label className="flex items-start gap-2 cursor-pointer mt-1">
                 <input
                   type="checkbox"
                   checked={dontShowAgain}
                   onChange={(e) => setDontShowAgain(e.target.checked)}
-                  className="mr-2 h-3.5 w-3.5 md:h-4 md:w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
-                Don't show this again
+                <span className="text-xs text-gray-500 leading-relaxed">
+                  I know what I'm doing, I have a local server running and I already know how to use Observer 
+                </span>
               </label>
+              <button
+                onClick={() => { Analytics.localModeContinue(); handleClose(); }}
+                disabled={!dontShowAgain}
+                className="text-xs text-gray-400 hover:text-gray-600 transition-colors leading-relaxed disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400"
+              >
+                Continue without signing in →
+              </button>
             </div>
+
           </div>
         )}
 
