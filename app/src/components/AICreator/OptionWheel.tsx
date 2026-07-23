@@ -33,6 +33,8 @@ interface OptionWheelProps {
   ariaLabel: string;
   /** Tailwind width classes for the scroll column. Defaults to the original size. */
   widthClass?: string;
+  /** Rendered absolutely, centered over the scroll column only (excludes the chevrons). */
+  tooltip?: React.ReactNode;
 }
 
 const CYCLE_MS = 2100;         // auto-cycle cadence
@@ -60,6 +62,7 @@ const OptionWheel: React.FC<OptionWheelProps> = ({
   onInteract,
   ariaLabel,
   widthClass = 'w-[13rem] md:w-[16rem]',
+  tooltip,
 }) => {
   const startIndex = Math.max(0, options.findIndex(o => o.id === value));
   const [index, setIndex] = useState(startIndex);
@@ -187,29 +190,32 @@ const OptionWheel: React.FC<OptionWheelProps> = ({
         </button>
       </div>
 
-      <div
-        className={`wheel-mask relative overflow-hidden ${widthClass} touch-none select-none cursor-grab active:cursor-grabbing`}
-        style={{ height: `${ROW_REM * VISIBLE}rem` }}
-        onPointerDown={onPointerDown}
-      >
+      <div className={`relative ${widthClass}`}>
+        {tooltip}
         <div
-          className="absolute inset-x-0 top-0 flex flex-col will-change-transform"
-          style={{
-            transform: `translateY(${translateY}px)`,
-            transition: instant || dragging || reduce ? 'none' : `transform ${animMs}ms cubic-bezier(0.22, 1, 0.36, 1)`,
-          }}
-          onTransitionEnd={handleTransitionEnd}
+          className="wheel-mask relative overflow-hidden w-full touch-none select-none cursor-grab active:cursor-grabbing"
+          style={{ height: `${ROW_REM * VISIBLE}rem` }}
+          onPointerDown={onPointerDown}
         >
-          {RENDER.map(offset => (
-            <div
-              key={offset}
-              onClick={() => { if (Math.abs(offset) === 1) glide(offset); }}
-              className={`flex items-center justify-center text-center px-2 text-lg md:text-xl font-medium text-white truncate ${offset !== 0 ? 'cursor-pointer' : ''}`}
-              style={{ height: `${ROW_REM}rem` }}
-            >
-              {at(offset).label}
-            </div>
-          ))}
+          <div
+            className="absolute inset-x-0 top-0 flex flex-col will-change-transform"
+            style={{
+              transform: `translateY(${translateY}px)`,
+              transition: instant || dragging || reduce ? 'none' : `transform ${animMs}ms cubic-bezier(0.22, 1, 0.36, 1)`,
+            }}
+            onTransitionEnd={handleTransitionEnd}
+          >
+            {RENDER.map(offset => (
+              <div
+                key={offset}
+                onClick={() => { if (Math.abs(offset) === 1) glide(offset); }}
+                className={`flex items-center justify-center text-center px-2 text-lg md:text-xl font-medium text-white truncate ${offset !== 0 ? 'cursor-pointer' : ''}`}
+                style={{ height: `${ROW_REM}rem` }}
+              >
+                {at(offset).label}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

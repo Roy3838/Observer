@@ -112,6 +112,7 @@ const RecipeSplash: React.FC<RecipeSplashProps> = ({ isOpen, onClose }) => {
 
   const [triggerId, setTriggerId] = useState(TRIGGERS[0].id);
   const [actionId, setActionId] = useState(ACTIONS[0].id);
+  const [triggerChosen, setTriggerChosen] = useState(false); // gates Build it until user picks a trigger
   const [actionChosen, setActionChosen] = useState(false); // gates the Message-setup block
   const [contact, setContact] = useState('');
   const [phoneVerified, setPhoneVerified] = useState(false);
@@ -138,9 +139,11 @@ const RecipeSplash: React.FC<RecipeSplashProps> = ({ isOpen, onClose }) => {
   const needsPhone = !editingMessage && contactKind === 'phone';
   const canBuild = editingMessage
     ? messageDraft.trim().length > 0
-    : needsPhone
-      ? contactValid('phone', contact) && phoneVerified
-      : contactValid(contactKind, contact);
+    : !triggerChosen
+      ? false
+      : needsPhone
+        ? contactValid('phone', contact) && phoneVerified
+        : contactValid(contactKind, contact);
 
   const handleBuild = () => {
     if (!canBuild) return;
@@ -186,14 +189,41 @@ const RecipeSplash: React.FC<RecipeSplashProps> = ({ isOpen, onClose }) => {
           </div>
         ) : (
           <div className="flex flex-col md:flex-row md:flex-nowrap items-center justify-center gap-x-3 gap-y-3">
-            <span className="text-4xl md:text-6xl font-bold text-white tracking-tight select-none pointer-events-none">When</span>
-            <OptionWheel
-              options={TRIGGERS}
-              value={triggerId}
-              onChange={setTriggerId}
-              ariaLabel="Choose a trigger"
-              widthClass="w-[15rem] md:w-[19rem]"
-            />
+            <div className="relative">
+              <span className="text-4xl md:text-6xl font-bold text-white tracking-tight select-none pointer-events-none">When</span>
+              {/* Mobile (stacked layout): anchor to "When" itself, which is already
+                  centered correctly — simpler than chasing the wheel's own offset. */}
+              {!triggerChosen && (
+                <div className="md:hidden absolute -top-11 left-1/2 -translate-x-1/2 select-none pointer-events-none z-10">
+                  <div className="flex flex-col items-center animate-bounce">
+                    <span className="whitespace-nowrap text-xs font-semibold text-slate-900 bg-white rounded-full px-4 py-1.5 shadow-[0_0_20px_-4px_rgba(255,255,255,0.7)]">
+                      Select what you want to detect
+                    </span>
+                    <div className="w-2.5 h-2.5 bg-white rotate-45 -mt-1.5" />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div>
+              <OptionWheel
+                options={TRIGGERS}
+                value={triggerId}
+                onChange={setTriggerId}
+                onInteract={() => setTriggerChosen(true)}
+                ariaLabel="Choose a trigger"
+                widthClass="w-[15rem] md:w-[19rem]"
+                tooltip={!triggerChosen && (
+                  <div className="hidden md:block absolute -top-11 left-1/2 -translate-x-1/2 select-none pointer-events-none z-10">
+                    <div className="flex flex-col items-center animate-bounce">
+                      <span className="whitespace-nowrap text-sm font-semibold text-slate-900 bg-white rounded-full px-4 py-1.5 shadow-[0_0_20px_-4px_rgba(255,255,255,0.7)]">
+                        Select what you want to detect
+                      </span>
+                      <div className="w-2.5 h-2.5 bg-white rotate-45 -mt-1.5" />
+                    </div>
+                  </div>
+                )}
+              />
+            </div>
             <span className="text-4xl md:text-6xl font-bold text-white tracking-tight select-none pointer-events-none">then</span>
             <OptionWheel
               options={ACTIONS}
