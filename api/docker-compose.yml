@@ -13,6 +13,32 @@ services:
         condition: service_healthy
     network_mode: "service:observer-api"
 
+  # Local Redis for quota / rate-limit / observability state. Replaces the
+  # managed Upstash instance: at current scale a box-local Redis is simpler,
+  # ~100x faster per op, and has no per-command bill. No persistence on purpose
+  # - quota keys expire at the next UTC midnight and rate-limit keys within
+  # 60s, so a restart just resets counters slightly early, which is harmless.
+  # noeviction so a memory blowout fails loudly instead of silently dropping
+  # quota keys (the working set here is tiny; 256mb is already generous).
+  #
+  # When the API runs as more than one *concurrent* box (horizontal scale, not
+  # the manual failover swap), this has to go back to a shared/managed Redis -
+  # flip REDIS_URL in .env and restore the pool settings kept in redis_client.py.
+  redis:
+    image: redis:7-alpine
+    container_name: observer-redis
+    restart: unless-stopped
+    command: >
+      redis-server --save "" --appendonly no
+      --maxmemory 256mb --maxmemory-policy noeviction
+    networks:
+      - observer-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   observer-api:
     build: .
     container_name: observer-api
@@ -22,9 +48,13 @@ services:
       - "3839:3839"
     env_file:
       - .env
+    depends_on:
+      redis:
+        condition: service_healthy
     environment:
-      # REDIS_URL comes from .env and points at the managed Upstash instance
-      # (rediss://... native TCP endpoint, not the REST URL).
+      # REDIS_URL comes from .env and points at the local redis service above
+      # (redis://redis:6379/0). The old Upstash rediss://... URL is kept
+      # commented in .env for the day this needs a shared Redis again.
       #
       # Every time key in the API is UTC: quota resets, observability hour
       # buckets and digest days. Pinned so nothing depends on ambient host tz.
