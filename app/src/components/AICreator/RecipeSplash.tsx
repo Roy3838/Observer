@@ -75,17 +75,21 @@ export const ACTIONS: ActionOption[] = [
  * also guide the user through obtaining them. Email is the one exception — the Auth0
  * address needs no user input, so it's inlined here.
  */
+export type ModelMode = 'cloud' | 'local';
+
 export function composeRecipePrompt(
   trigger: TriggerOption | undefined,
   action: ActionOption | undefined,
   authEmail: string,
+  mode: ModelMode = 'cloud',
 ): string {
   const sensor = trigger?.sensor ?? '$SCREEN';
   const watchWhat = sensor === '$CAMERA' ? 'my camera' : 'my screen';
   const triggerFrag = trigger?.promptFragment ?? '';
   const actionFrag = action?.actionFragment ?? '';
   const phrase = action?.contact === 'email' && authEmail ? ` at ${authEmail}` : '';
-  return `Watch ${watchWhat}. When ${triggerFrag}, ${actionFrag}${phrase}. Use a cloud model.`;
+  const modelClause = mode === 'local' ? 'Use a local model.' : 'Use a cloud model.';
+  return `Watch ${watchWhat}. When ${triggerFrag}, ${actionFrag}${phrase}. ${modelClause}`;
 }
 
 interface RecipeSplashProps {
@@ -100,6 +104,7 @@ const RecipeSplash: React.FC<RecipeSplashProps> = ({ isOpen, onClose }) => {
 
   const [triggerId, setTriggerId] = useState(TRIGGERS[0].id);
   const [actionId, setActionId] = useState(ACTIONS[0].id);
+  const [modelMode, setModelMode] = useState<ModelMode>('cloud');
   // Free text typed onto a preset's row, keyed by that preset's id. Overwrites the row's
   // label/fragment in place — spinning the wheel carries it along like any other row, and
   // spinning back to that id later still shows the edited text (until edited again).
@@ -129,13 +134,13 @@ const RecipeSplash: React.FC<RecipeSplashProps> = ({ isOpen, onClose }) => {
   const trigger = useMemo(() => triggerOptions.find(t => t.id === triggerId), [triggerOptions, triggerId]);
   const action = useMemo(() => actionOptions.find(a => a.id === actionId), [actionOptions, actionId]);
 
-  const composePrompt = (): string => composeRecipePrompt(trigger, action, authEmail);
+  const composePrompt = (): string => composeRecipePrompt(trigger, action, authEmail, modelMode);
 
   // No gating, by design. A slot always holds a valid trigger/action pair — a preset or
   // an edited-in-place one — so there is nothing left to wait for.
   const handleBuild = () => {
     const prompt = composePrompt();
-    Analytics.recipeBuilt(triggerOverrides[triggerId] ? 'custom' : triggerId, actionOverrides[actionId] ? 'custom' : actionId);
+    Analytics.recipeBuilt(triggerOverrides[triggerId] ? 'custom' : triggerId, actionOverrides[actionId] ? 'custom' : actionId, modelMode);
     // First-run agents should just run — nobody's here yet to click through tool
     // confirmations, so building from the splash turns on yolo mode.
     SensorSettings.setMcpYoloMode(true);
@@ -144,6 +149,35 @@ const RecipeSplash: React.FC<RecipeSplashProps> = ({ isOpen, onClose }) => {
   };
 
   if (!isOpen) return null;
+
+  // Compact so it sits inline next to the header title on every breakpoint, rather than
+  // stacking below it (mobile has enough vertical stuff going on already).
+  const modelToggle = (
+    <div className="relative inline-flex items-center rounded-full bg-white/10 border border-white/15 p-0.5 backdrop-blur-sm shadow-inner shrink-0">
+      <div
+        className="absolute top-0.5 bottom-0.5 w-10 md:w-12 rounded-full bg-white shadow-[0_0_20px_-4px_rgba(255,255,255,0.7)] transition-transform duration-300 ease-out"
+        style={{ transform: modelMode === 'cloud' ? 'translateX(0%)' : 'translateX(100%)' }}
+      />
+      <button
+        type="button"
+        onClick={() => setModelMode('cloud')}
+        className={`relative z-10 w-10 md:w-12 py-1 text-[9px] md:text-xs font-semibold rounded-full transition-colors duration-300 ${
+          modelMode === 'cloud' ? 'text-slate-900' : 'text-white/60 hover:text-white/80'
+        }`}
+      >
+        Cloud
+      </button>
+      <button
+        type="button"
+        onClick={() => setModelMode('local')}
+        className={`relative z-10 w-10 md:w-12 py-1 text-[9px] md:text-xs font-semibold rounded-full transition-colors duration-300 ${
+          modelMode === 'local' ? 'text-slate-900' : 'text-white/60 hover:text-white/80'
+        }`}
+      >
+        Local
+      </button>
+    </div>
+  );
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] bg-slate-950/70 backdrop-blur-md font-golos flex flex-col items-center justify-center p-4">
@@ -157,13 +191,18 @@ const RecipeSplash: React.FC<RecipeSplashProps> = ({ isOpen, onClose }) => {
         <X className="h-6 w-6" />
       </button>
 
-      {/* Header label — offset below the safe area so it clears the iOS dynamic island */}
-      <p
-        style={{ top: 'calc(1.5rem + env(safe-area-inset-top))' }}
-        className="absolute left-1/2 -translate-x-1/2 text-white/50 text-xs md:text-sm tracking-[0.3em] uppercase select-none text-center px-10"
+      {/* Header — title (free to wrap, so it never fights the close X) with the
+          Local/Cloud toggle right beneath it. Title runs smaller on mobile so the
+          pair stays compact and doesn't crowd the wheels below. */}
+      <div
+        style={{ top: 'calc(1.25rem + env(safe-area-inset-top))' }}
+        className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 select-none px-12"
       >
-        Welcome to Observer!   Build your first agent:
-      </p>
+        <p className="text-white/50 text-[10px] md:text-sm tracking-[0.2em] md:tracking-[0.3em] uppercase text-center">
+          Welcome to Observer!   Build your first agent:
+        </p>
+        {modelToggle}
+      </div>
 
       {/* Centered builder: "When [wheel]  then [wheel]" — click the row itself to type. */}
       <div className="w-full max-w-6xl flex items-center justify-center">

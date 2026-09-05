@@ -19,7 +19,7 @@ export const Analytics = {
 
   // ── Recipe builder (IFTTT onboarding hero) ──────────────────────────────────
   recipeShown: () => track('recipe_builder_shown'),
-  recipeBuilt: (trigger: string, action: string) => track('recipe_built', { trigger, action }),
+  recipeBuilt: (trigger: string, action: string, modelMode?: string) => track('recipe_built', { trigger, action, modelMode }),
 
   // ── Upsell (WelcomeModal — 'welcome' after ToS, 'activation' after first agent starts)
   upsellShown: (source: UpsellSource) => track('upsell_shown', { source }),
