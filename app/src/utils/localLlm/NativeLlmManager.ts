@@ -37,7 +37,7 @@ export class NativeLlmManager {
     downloadedBytes: 0,
     totalBytes: 0,
     error: null,
-    enableThinking: true,
+    enableThinking: false,
   };
   private stateChangeListeners: Array<(state: NativeModelState) => void> = [];
   private autoLoadTriggered = false;

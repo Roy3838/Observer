@@ -18,7 +18,7 @@ const LEGACY_V2_KEY  = 'observer-gemma-model-settings-v2';
 const LEGACY_V1_KEY  = 'observer-gemma-model-settings';
 
 const DEFAULT_DTYPE:   GemmaDtype            = 'q4';
-const DEFAULT_RUNTIME: RuntimeSettings       = { device: 'webgpu', imageTokenBudget: 70, enableThinking: true };
+const DEFAULT_RUNTIME: RuntimeSettings       = { device: 'webgpu', imageTokenBudget: 70, enableThinking: false };
 
 export class GemmaModelManager {
   private static instance: GemmaModelManager | null = null;
@@ -80,7 +80,7 @@ export class GemmaModelManager {
     device: GemmaDevice,
     dtype: GemmaDtype,
     imageTokenBudget: GemmaImageTokenBudget,
-    enableThinking: boolean = true,
+    enableThinking: boolean = false,
   ): Promise<void> {
     if (this.state.status === 'loading') {
       Logger.warn('GemmaModelManager', 'Model already loading');
@@ -158,7 +158,7 @@ export class GemmaModelManager {
           this.saveRuntimeSettings({
             device: this.currentLoadSettings.device,
             imageTokenBudget: this.currentLoadSettings.imageTokenBudget,
-            enableThinking: this.currentLoadSettings.enableThinking ?? true,
+            enableThinking: this.currentLoadSettings.enableThinking ?? false,
           });
         }
         this.setState({ status: 'loaded', progress: [] });
@@ -256,7 +256,7 @@ export class GemmaModelManager {
         let migratedRuntime: Partial<RuntimeSettings> = {};
         for (const [id, s] of Object.entries(v2map)) {
           installs[id] = { dtype: s.dtype ?? DEFAULT_DTYPE };
-          if (!migratedRuntime.device && s.device) migratedRuntime = { device: s.device, imageTokenBudget: s.imageTokenBudget ?? DEFAULT_RUNTIME.imageTokenBudget, enableThinking: true };
+          if (!migratedRuntime.device && s.device) migratedRuntime = { device: s.device, imageTokenBudget: s.imageTokenBudget ?? DEFAULT_RUNTIME.imageTokenBudget, enableThinking: false };
         }
         localStorage.setItem(GEMMA_INSTALL_KEY, JSON.stringify(installs));
         if (migratedRuntime.device) localStorage.setItem(GEMMA_RUNTIME_KEY, JSON.stringify({ ...DEFAULT_RUNTIME, ...migratedRuntime }));
@@ -271,7 +271,7 @@ export class GemmaModelManager {
         const s = JSON.parse(v1) as { modelId?: GemmaModelId; dtype?: GemmaDtype; device?: GemmaDevice; imageTokenBudget?: GemmaImageTokenBudget };
         const installs: InstallMap = s.modelId ? { [s.modelId]: { dtype: s.dtype ?? DEFAULT_DTYPE } } : {};
         localStorage.setItem(GEMMA_INSTALL_KEY, JSON.stringify(installs));
-        if (s.device) localStorage.setItem(GEMMA_RUNTIME_KEY, JSON.stringify({ device: s.device, imageTokenBudget: s.imageTokenBudget ?? DEFAULT_RUNTIME.imageTokenBudget, enableThinking: true }));
+        if (s.device) localStorage.setItem(GEMMA_RUNTIME_KEY, JSON.stringify({ device: s.device, imageTokenBudget: s.imageTokenBudget ?? DEFAULT_RUNTIME.imageTokenBudget, enableThinking: false }));
         localStorage.removeItem(LEGACY_V1_KEY);
         return installs;
       }
