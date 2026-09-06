@@ -74,7 +74,7 @@ const EyeLogo = ({
   );
 };
 
-const TAGLINE_LINE_1 = 'Local open-source micro-agents that observe, log and react,';
+const TAGLINE_LINE_1 = 'Local open-source micro-agents that monitor your screen,';
 const TAGLINE_LINE_2 = "so you don't have to.";
 const TAGLINE_FULL = TAGLINE_LINE_1 + '\n' + TAGLINE_LINE_2;
 
