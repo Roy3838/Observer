@@ -132,6 +132,64 @@ export function notify(title: string, message: string): void {
   }
 }
 
+// Bundled sounds. Adding a file to ./sounds/ is all it takes to add a new name:
+// './sounds/airplane.mp3' becomes sound('airplane'). Vite emits each file as a
+// separate hashed asset, so they cost nothing until one is actually played.
+// Cast because tsconfig sets an explicit "types" array, which leaves out vite/client.
+const SOUND_FILES = (import.meta as any).glob('./sounds/*.{mp3,ogg,wav}', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+}) as Record<string, string>;
+
+const SOUND_LIBRARY: Record<string, string> = Object.fromEntries(
+  Object.entries(SOUND_FILES).map(([path, url]) => [
+    path.split('/').pop()!.replace(/\.\w+$/, ''),
+    url,
+  ])
+);
+
+// Agents run on a loop, so a condition that stays true would otherwise fire every
+// iteration. This only stops a burst; the real fix is stopAgent() after the sound.
+const SOUND_COOLDOWN_MS = 3000;
+let lastSoundPlayedAt = 0;
+
+/**
+ * Plays a notification sound in the browser. Works on both web and app.
+ * @param name A bundled sound name (see ./sounds/), or a http(s)/data/blob/absolute URL.
+ * @param volume Playback volume from 0 to 1. Defaults to 0.5.
+ */
+export async function sound(name: string = 'ping', volume: number = 0.5): Promise<void> {
+  const now = Date.now();
+  if (now - lastSoundPlayedAt < SOUND_COOLDOWN_MS) {
+    Logger.debug('utils', `sound("${name}") skipped: within ${SOUND_COOLDOWN_MS}ms cooldown`);
+    return;
+  }
+  lastSoundPlayedAt = now;
+
+  const isUrl = /^(https?:|data:|blob:|\/)/.test(name);
+  const src = SOUND_LIBRARY[name] ?? (isUrl ? name : null);
+  if (!src) {
+    throw new Error(
+      `Unknown sound "${name}". Available: ${Object.keys(SOUND_LIBRARY).join(', ')} (or pass a URL).`
+    );
+  }
+
+  const audio = new Audio(src);
+  audio.volume = Math.min(Math.max(volume, 0), 1);
+
+  try {
+    await audio.play();
+  } catch (error) {
+    // Most likely the browser's autoplay policy: the page has had no user
+    // interaction yet, so audible playback is blocked until it does.
+    throw new Error(
+      `Could not play sound "${name}": ${error instanceof Error ? error.message : String(error)}. ` +
+      `If the browser blocked it, click anywhere on the Observer page and try again.`
+    );
+  }
+}
+
 /**
  * Sends an SMS message by calling the backend API.
  * This is the core utility function.

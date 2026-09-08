@@ -686,6 +686,24 @@ export async function executeJavaScript(
         Logger.info(agentId, 'celebrate() called', { logType: 'tool-success', iterationId });
       },
 
+      sound: async (name: string = 'ping', volume: number = 0.5): Promise<void> => {
+        try {
+          await utils.sound(name, volume);
+          Logger.info(agentId, `Played sound "${name}"`, {
+            logType: 'tool-success',
+            iterationId,
+            content: { tool: 'sound', params: { name, volume }, success: true }
+          });
+        } catch (error) {
+          Logger.error(agentId, `Failed to play sound "${name}"`, {
+            logType: 'tool-error',
+            iterationId,
+            content: { tool: 'sound', params: { name, volume }, error: extractErrorMessage(error) }
+          });
+          throw error;
+        }
+      },
+
     };
 
     const wrappedCode = `
