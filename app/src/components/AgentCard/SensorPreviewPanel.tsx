@@ -391,15 +391,25 @@ const AudioPlaceholder: React.FC<AudioPlaceholderProps> = ({
 
 // --- Helper Functions ---
 
-const getActiveAudioStreamsForDisplay = (state: StreamState): { type: AudioStreamType; stream: MediaStream; title: string; icon: ReactNode; }[] => {
-  if (state.allAudioStream) {
+/**
+ * A stream being available is not the same as this agent using it. A browser tab share
+ * hands back an audio track whether or not the agent asked for one, and nothing transcribes
+ * it unless the prompt declares an audio sensor (see requestStreamsForAgent in streamManager).
+ * Gate the cards on the agent's declared sensors so an untranscribed track never renders as
+ * a live waveform.
+ */
+const getActiveAudioStreamsForDisplay = (
+  state: StreamState,
+  sensors: { allAudio: boolean; microphone: boolean; screenAudio: boolean },
+): { type: AudioStreamType; stream: MediaStream; title: string; icon: ReactNode; }[] => {
+  if (sensors.allAudio && state.allAudioStream) {
     return [{ type: 'allAudio', stream: state.allAudioStream, title: 'All Audio (Mixed)', icon: <><Volume2 className="w-3 h-3" /><Mic className="w-3 h-3 -ml-1" /></> }];
   }
   const activeStreams: { type: AudioStreamType; stream: MediaStream; title: string; icon: ReactNode; }[] = [];
-  if (state.microphoneStream) {
+  if (sensors.microphone && state.microphoneStream) {
     activeStreams.push({ type: 'microphone', stream: state.microphoneStream, title: 'Microphone', icon: <Mic className="w-4 h-4" /> });
   }
-  if (state.screenAudioStream) {
+  if (sensors.screenAudio && state.screenAudioStream) {
     activeStreams.push({ type: 'screenAudio', stream: state.screenAudioStream, title: 'System Audio', icon: <Volume2 className="w-4 h-4" /> });
   }
   return activeStreams;
@@ -883,8 +893,6 @@ const SensorPreviewPanel: React.FC<SensorPreviewPanelProps> = ({
   streams,
   systemPrompt,
 }) => {
-  const audioStreamsToDisplay = useMemo(() => getActiveAudioStreamsForDisplay(streams), [streams]);
-
   // Loading states for start buttons
   const [isStartingScreen, setIsStartingScreen] = useState(false);
   const [isStartingCamera, setIsStartingCamera] = useState(false);
@@ -901,6 +909,15 @@ const SensorPreviewPanel: React.FC<SensorPreviewPanelProps> = ({
   const hasMicrophoneSensor = useMemo(() => agentHasSensor(systemPrompt, 'MICROPHONE'), [systemPrompt]);
   const hasScreenAudioSensor = useMemo(() => agentHasSensor(systemPrompt, 'SCREEN_AUDIO'), [systemPrompt]);
   const hasAllAudioSensor = useMemo(() => agentHasSensor(systemPrompt, 'ALL_AUDIO'), [systemPrompt]);
+
+  const audioStreamsToDisplay = useMemo(
+    () => getActiveAudioStreamsForDisplay(streams, {
+      allAudio: hasAllAudioSensor,
+      microphone: hasMicrophoneSensor,
+      screenAudio: hasScreenAudioSensor,
+    }),
+    [streams, hasAllAudioSensor, hasMicrophoneSensor, hasScreenAudioSensor]
+  );
 
   // Check if we have any sensors configured (not necessarily active)
   const hasAnySensorsConfigured = hasScreenSensor || hasCameraSensor || hasMemorySensor || hasImageMemorySensor || hasClipboardSensor || hasMicrophoneSensor || hasScreenAudioSensor || hasAllAudioSensor;
