@@ -14,10 +14,12 @@ export class TranscriptionRouter {
   private mode: TranscriptionMode;
   private modeChangeListeners: Array<(mode: TranscriptionMode) => void> = [];
 
-  // Singleton service management - one service per stream type
+  // Singleton service management - one service per stream type.
+  // Ownership lives in StreamManager: its userSets track which agents need a stream, and
+  // releaseService is only reached once those are empty (or the master stream died). The
+  // router therefore does no counting of its own - acquire is idempotent, release is final.
   private activeServices: Map<AudioStreamType, UnifiedTranscriptionService> = new Map();
   private pendingStarts: Set<AudioStreamType> = new Set();
-  private refCounts: Map<AudioStreamType, number> = new Map();
 
   private constructor() {
     this.mode = SensorSettings.getTranscriptionMode();
@@ -74,16 +76,15 @@ export class TranscriptionRouter {
 
   /**
    * Acquire a transcription service for a stream type.
-   * Returns existing service if one is active, otherwise creates a new one.
-   * Uses reference counting - call releaseService() when done.
+   * Returns the existing service if one is active, otherwise creates a new one.
+   * Idempotent: repeat acquisitions of a live stream type are a no-op, so an agent that
+   * requests the same blueprint twice cannot strand a service that release can't reach.
    */
   public async acquireService(streamType: AudioStreamType): Promise<UnifiedTranscriptionService> {
-    // Already running? Increment refcount and return existing
+    // Already running? Hand back the same service
     const existing = this.activeServices.get(streamType);
     if (existing) {
-      const count = (this.refCounts.get(streamType) || 1) + 1;
-      this.refCounts.set(streamType, count);
-      Logger.info('TranscriptionRouter', `Reusing existing service for '${streamType}' (refcount: ${count})`);
+      Logger.info('TranscriptionRouter', `Reusing existing service for '${streamType}'`);
       return existing;
     }
 
@@ -104,7 +105,6 @@ export class TranscriptionRouter {
       await service.start(streamType);
 
       this.activeServices.set(streamType, service);
-      this.refCounts.set(streamType, 1);
 
       return service;
     } finally {
@@ -113,24 +113,20 @@ export class TranscriptionRouter {
   }
 
   /**
-   * Release a transcription service for a stream type.
-   * Decrements reference count; stops service when count reaches 0.
+   * Release the transcription service for a stream type, stopping it.
+   * Safe to call when nothing is active (the browser hands us a screen audio track whether
+   * or not an agent asked for one, so teardown can run for a type that never had a service).
    */
   public releaseService(streamType: AudioStreamType): void {
-    const count = (this.refCounts.get(streamType) || 1) - 1;
-
-    if (count <= 0) {
-      const service = this.activeServices.get(streamType);
-      if (service) {
-        Logger.info('TranscriptionRouter', `Stopping service for '${streamType}' (refcount reached 0)`);
-        service.stop();
-      }
-      this.activeServices.delete(streamType);
-      this.refCounts.delete(streamType);
-    } else {
-      this.refCounts.set(streamType, count);
-      Logger.debug('TranscriptionRouter', `Released service for '${streamType}' (refcount: ${count})`);
+    const service = this.activeServices.get(streamType);
+    if (!service) {
+      Logger.debug('TranscriptionRouter', `Release for '${streamType}' ignored - no active service`);
+      return;
     }
+
+    Logger.info('TranscriptionRouter', `Stopping service for '${streamType}'`);
+    service.stop();
+    this.activeServices.delete(streamType);
   }
 
   /**

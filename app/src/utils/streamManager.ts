@@ -769,7 +769,8 @@ class Manager {
       this.tauriPCMCallbackActive = false;
     }
 
-    // Release service (router handles refcount and stopping)
+    // Release service. We only get here once userSets is empty for this type (or the master
+    // stream died), so this is the single owner of the service's lifetime.
     const router = TranscriptionRouter.getInstance();
     router.releaseService(type);
   }
