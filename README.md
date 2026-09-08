@@ -177,6 +177,7 @@ Notification Tools:
   * `sendWhatsapp(phone_number, message, images?, videos?)*` - Sends a whatsapp message with the Observer bot. Needs whitelisting. 
   * `sendSms(phone_number, message, images?, videos?)*` - Sends an SMS to a phone number. Due to A2P policy, blocked for US/Canada. Needs whitelisting.
   * `notify(title, options)` – Send browser notification ⚠️IMPORTANT: Some browsers block notifications
+  * `sound(name?, volume?)` - Plays a notification sound locally. No account needed, works on web and app.
 
 `*` To whitelist, SMS or call +1 (863)208-5341 or whatsapp +1 (555)783-4727
 

@@ -2,7 +2,7 @@
 
 import { CompleteAgent } from './agent_database';
 
-export type SimpleTool = 'notification' | 'memory' | 'sms' | 'email' | 'whatsapp' | 'call' | 'start_clip' | 'mark_clip' | 'pushover' | 'discord' | 'telegram' | 'ask' | 'system_notify' | 'message' | 'overlay' | 'click' | 'celebrate';
+export type SimpleTool = 'notification' | 'memory' | 'sms' | 'email' | 'whatsapp' | 'call' | 'start_clip' | 'mark_clip' | 'pushover' | 'discord' | 'telegram' | 'ask' | 'system_notify' | 'message' | 'overlay' | 'click' | 'celebrate' | 'sound';
 
 export interface ToolData {
   smsPhoneNumber?: string;
@@ -143,6 +143,12 @@ click();
 // --- CELEBRATE TOOL ---
 // Triggers a celebration animation in the Observer UI.
 celebrate();
+`,
+
+  sound: () => `
+// --- SOUND TOOL ---
+// Plays a notification sound. Works on web and in the app.
+sound();
 `,
   call: (data: ToolData) => {
     const phoneNumber = data.phoneNumber ? JSON.stringify(data.phoneNumber) : '""';

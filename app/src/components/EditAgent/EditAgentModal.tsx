@@ -448,6 +448,7 @@ const DraggableReferencePopup: React.FC<{ onClose: () => void }> = ({ onClose })
               <li>• <code>sendPushover(user_token, message, images?, title?)</code></li>
               <li>• <code>sendSms(phone_number, message, images?)</code></li>
               <li>• <code>notify(title, options)</code></li>
+              <li>• <code>sound(name?, volume?)</code></li>
             </ul>
           </div>
 

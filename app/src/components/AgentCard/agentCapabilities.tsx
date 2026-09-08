@@ -82,6 +82,7 @@ export const TOOL_CONFIG: Record<string, ToolConfigEntry> = {
     click: { label: 'Mouse Click', iconName: 'MousePointer', iconType: 'lucide', regex: /\bclick\s*\(/g, warning: 'Position mouse before agent runs' },
     call: { label: 'Phone Call', iconName: 'Phone', iconType: 'lucide', regex: /\bcall\s*\(/g },
     celebrate: { label: 'Celebrate', iconName: 'PartyPopper', iconType: 'lucide', regex: /\bcelebrate\s*\(/g },
+    sound: { label: 'Play Sound', iconName: 'Volume2', iconType: 'lucide', regex: /\bsound\s*\(/g },
 };
 
 // --- Icon Loading Helpers ---

@@ -32,6 +32,7 @@ export const toolsReference = {
         "sendTelegram(chat_id, message, images?) - Sends a telegram message with the Observer bot. Get the chat_id messaging the bot @observer_notification_bot",
         "sendWhatsapp(phone_number, message) - Sends a whatsapp message with the Observer bot. Send a message first to +1 (555)783-4727 to use",
         "notify(title, options) – Send browser notification ⚠️IMPORTANT: Some browsers block notifications",
+        "sound(name?, volume?) - Plays a notification sound. Works on web and app",
         "sendSms(phone_number, message, images?) - Sends an SMS to a phone number, format as e.g. sendSms(\"hello\",+181429367\"). ⚠️IMPORTANT: Due to A2P policy, some SMS messages are being blocked, not recommended for US/Canada"
       ]
     },

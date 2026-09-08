@@ -4,7 +4,7 @@ import { LogEntry } from '../../utils/logging';
 import {
   ImageIcon, Save, Zap, Eye, ScanText, Mic, CheckCircle, XCircle,
   Bell, Mail, Send, MessageSquare, MessageSquarePlus,
-  MessageSquareQuote, PlayCircle, StopCircle, Video, VideoOff, Tag, SquarePen, Hourglass
+  MessageSquareQuote, PlayCircle, StopCircle, Video, VideoOff, Tag, SquarePen, Hourglass, Volume2
 } from 'lucide-react';
 
 // Icon components for tools
@@ -112,6 +112,7 @@ const DetailedExecution: React.FC<DetailedExecutionProps> = ({ group }) => {
       markClip: Tag,
       ask: MessageSquareQuote,
       message: MessageSquare,
+      sound: Volume2,
     };
     return iconMap[toolName] || CheckCircle;
   };

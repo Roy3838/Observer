@@ -116,7 +116,7 @@ An agent has a **system_prompt** and a **code** body. Each iteration:
 3. The **code** (JavaScript) runs with these utilities in scope:
 
 Agent/memory tools: \`getMemory(agentId?)\`, \`setMemory(agentId?, content)\`, \`appendMemory(agentId?, content)\`, \`getImageMemory(agentId?)\`, \`setImageMemory(agentId?, images)\`, \`appendImageMemory(agentId?, images)\`, \`startAgent(agentId)\`, \`stopAgent(agentId?)\`, \`time()\`, \`sleep(ms)\`.
-Notification tools: \`sendEmail(email, message, images?)\`, \`sendPushover(user_token, message, images?, title?)\`, \`sendDiscord(webhook, message, images?)\`, \`sendTelegram(chat_id, message, images?)\`, \`sendWhatsapp(phone_number, message)\`, \`sendSms(phone_number, message, images?)\`, \`call(phone_number, message)\`, \`notify(title, options)\`.
+Notification tools: \`sendEmail(email, message, images?)\`, \`sendPushover(user_token, message, images?, title?)\`, \`sendDiscord(webhook, message, images?)\`, \`sendTelegram(chat_id, message, images?)\`, \`sendWhatsapp(phone_number, message)\`, \`sendSms(phone_number, message, images?)\`, \`call(phone_number, message)\`, \`notify(title, options)\`, \`sound(name?, volume?)\`.
 Recording tools: \`startClip()\`, \`stopClip()\`, \`markClip(label)\`.
 App tools (Observer desktop app only): \`ask(question, title?)\`, \`message(message, title?)\`, \`system_notify(body, title?)\`, \`overlay(body)\`, \`click()\`, \`celebrate()\`.
 

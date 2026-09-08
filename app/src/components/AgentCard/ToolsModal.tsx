@@ -3,7 +3,7 @@ import Modal from '@components/EditAgent/Modal';
 import {
   X, Mail, MessageSquare, MessageSquareQuote, Bell, Monitor, MessageCircle,
   MessageSquarePlus, CheckCircle, XCircle, Loader2, Save, SquarePen, PlayCircle,
-  StopCircle, Hourglass, Video, VideoOff, Tag, Info, MousePointer, Phone, Zap, Brain, PartyPopper
+  StopCircle, Hourglass, Video, VideoOff, Tag, Info, MousePointer, Phone, Zap, Brain, PartyPopper, Volume2
 } from 'lucide-react';
 import { WhatsAppIcon, DiscordIcon } from './icons';
 import type { TokenProvider } from '@utils/main_loop';
@@ -243,6 +243,20 @@ function getAllTools(channel?: WhitelistChannel): ToolConfig[] {
       isTestable: true,
       parameters: [],
       testMessage: ''
+    },
+    {
+      id: 'sound',
+      name: 'sound()',
+      functionName: 'sound',
+      icon: Volume2,
+      description: 'Play a notification sound',
+      isTestable: true,
+      parameters: [
+        { name: 'name', description: 'Bundled sound name (ping) or a URL' },
+        { name: 'volume', description: 'Volume from 0 to 1 (default 0.5)' }
+      ],
+      testMessage: 'ping',
+      warning: '⚠️ Repeat calls within 3s are skipped by the anti-spam cooldown.'
     },
 
     // Non-testable tools (info only)
@@ -1277,6 +1291,13 @@ const ToolsModal: React.FC<ToolsModalProps> = ({ isOpen, onClose, code, agentNam
 
         case 'celebrate': {
           window.dispatchEvent(new CustomEvent('celebrateAgent', { detail: { agentId } }));
+          break;
+        }
+
+        case 'sound': {
+          const name = testInputs[0] || selectedToolConfig.testMessage || 'ping';
+          const volume = testInputs[1] ? parseFloat(testInputs[1]) : 0.5;
+          await utils.sound(name, volume);
           break;
         }
 
