@@ -1,4 +1,3 @@
-import { useRef, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import {
   Camera, Monitor, Bell, Mail, Eye, Box, GitBranch, Package,
@@ -56,13 +55,9 @@ const communityAgents = [
 ];
 
 const CARD_WIDTH_CLASS = 'w-[280px] sm:w-[320px]';
-const AUTOSCROLL_PX_PER_FRAME = 0.6;
-// How long to hold off auto-scroll after the user stops touching/scrolling the strip.
-const RESUME_DELAY_MS = 1500;
 
 const AgentCard = ({ agent }: { agent: typeof communityAgents[number] }) => (
   <div
-    data-card
     className={`${CARD_WIDTH_CLASS} shrink-0 p-6 rounded-xl border border-white/10 hover:border-white/25 transition-colors`}
   >
     <div className="flex items-center gap-3 mb-4">
@@ -81,7 +76,6 @@ const AgentCard = ({ agent }: { agent: typeof communityAgents[number] }) => (
 const CreateCard = () => (
   <a
     href="https://app.observer-ai.com"
-    data-card
     className={`${CARD_WIDTH_CLASS} shrink-0 group p-6 rounded-xl border border-dashed border-white/15 hover:border-white/30 transition-colors flex flex-col items-center justify-center text-center`}
   >
     <div className="w-9 h-9 rounded-full border border-white/15 flex items-center justify-center mb-3 group-hover:border-white/30 transition">
@@ -95,57 +89,16 @@ const CreateCard = () => (
 );
 
 const CommunityAgents = () => {
-  const scrollerRef = useRef<HTMLDivElement>(null);
-  const pausedRef = useRef(false);
-  const resumeTimerRef = useRef<number>(0);
-
-  // Continuous linear auto-scroll: real scrollLeft, so native drag/wheel/touch scrolling
-  // just works alongside it. Content is rendered twice back-to-back; once the strip has
-  // scrolled past exactly one copy's width, we snap back by that width — seamless since
-  // the two copies are identical.
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduceMotion) return;
-
-    let raf = 0;
-    const tick = () => {
-      const setWidth = el.scrollWidth / 2;
-      if (!pausedRef.current && setWidth > 0) {
-        el.scrollLeft += AUTOSCROLL_PX_PER_FRAME;
-        if (el.scrollLeft >= setWidth) el.scrollLeft -= setWidth;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-
-    const pause = () => {
-      pausedRef.current = true;
-      window.clearTimeout(resumeTimerRef.current);
-    };
-    const resumeSoon = () => {
-      window.clearTimeout(resumeTimerRef.current);
-      resumeTimerRef.current = window.setTimeout(() => { pausedRef.current = false; }, RESUME_DELAY_MS);
-    };
-
-    el.addEventListener('pointerenter', pause);
-    el.addEventListener('pointerleave', resumeSoon);
-    el.addEventListener('touchstart', pause, { passive: true });
-    el.addEventListener('touchend', resumeSoon);
-    el.addEventListener('wheel', () => { pause(); resumeSoon(); }, { passive: true });
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.clearTimeout(resumeTimerRef.current);
-      el.removeEventListener('pointerenter', pause);
-      el.removeEventListener('pointerleave', resumeSoon);
-      el.removeEventListener('touchstart', pause);
-      el.removeEventListener('touchend', resumeSoon);
-      el.removeEventListener('wheel', resumeSoon);
-    };
-  }, []);
+  // The strip renders its content twice back-to-back and slides left by exactly one
+  // copy's width, then loops — seamless since the two copies are identical. It's a
+  // pure CSS animation with no scroll container, so the mouse wheel and drag never
+  // interact with it. It never stops; reduced-motion users get a static strip.
+  const track = (key: string) => (
+    <div key={key} className="flex gap-6 pr-6 shrink-0">
+      {communityAgents.map((agent, idx) => <AgentCard key={`${key}-${idx}`} agent={agent} />)}
+      <CreateCard />
+    </div>
+  );
 
   return (
     <section className="py-24 md:py-32 bg-[#0a0e17]" id="agents">
@@ -160,15 +113,25 @@ const CommunityAgents = () => {
         </div>
       </div>
 
-      {/* Full-bleed auto-scrolling strip, still freely scrollable by hand */}
-      <div
-        ref={scrollerRef}
-        className="flex gap-6 overflow-x-auto px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {communityAgents.map((agent, idx) => <AgentCard key={`a-${idx}`} agent={agent} />)}
-        <CreateCard />
-        {communityAgents.map((agent, idx) => <AgentCard key={`b-${idx}`} agent={agent} />)}
-        <CreateCard />
+      <style>{`
+        @keyframes community-marquee {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+        .community-marquee-track {
+          animation: community-marquee 60s linear infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .community-marquee-track { animation: none; }
+        }
+      `}</style>
+
+      {/* Full-bleed auto-scrolling strip driven purely by CSS (no user scrolling) */}
+      <div className="community-marquee overflow-hidden">
+        <div className="community-marquee-track flex w-max pl-6">
+          {track('a')}
+          {track('b')}
+        </div>
       </div>
     </section>
   );
