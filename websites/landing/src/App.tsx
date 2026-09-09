@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Github, ArrowRight } from 'lucide-react';
+import { Github, ArrowRight, Youtube, Mail, MessageCircle, Twitter, Instagram, Music2 } from 'lucide-react';
 import ObserverLanding from './ObserverLanding';
 import DownloadsSection from './DownloadsSection';
 import EnterpriseSection from './EnterpriseSection';
@@ -76,19 +76,72 @@ const LandingPage = () => {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 border-t border-white/5">
+      <footer className="pt-16 pb-8 border-t border-white/5 bg-[#0a0e17]">
         <div className="container mx-auto px-6">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center space-x-3">
-              <img src="/eye-logo-white.svg" alt="Observer AI Logo" className="w-5 h-5 opacity-60" />
-              <span className="text-gray-500 text-sm">Observer AI</span>
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-10">
+            {/* Brand */}
+            <div className="max-w-xs">
+              <div className="flex items-center space-x-3 mb-3">
+                <img src="/eye-logo-white.svg" alt="Observer AI Logo" className="w-6 h-6 opacity-70" />
+                <span className="text-gray-300 font-semibold">Observer AI</span>
+              </div>
+              <p className="text-sm text-gray-500">
+                Open-source micro-agents that watch your screen and act, running entirely on your machine.
+              </p>
             </div>
-            <div className="flex items-center space-x-8 text-sm text-gray-500">
-              <Link to="/privacy" className="hover:text-white transition">Privacy</Link>
-              <Link to="/terms" className="hover:text-white transition">Terms</Link>
-              <a href="https://github.com/Roy3838/Observer" className="hover:text-white transition">GitHub</a>
-              <a href="https://discord.gg/wnBb7ZQDUC" className="hover:text-white transition">Discord</a>
+
+            {/* Link columns */}
+            <div className="flex flex-wrap gap-x-16 gap-y-8">
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">Follow</h4>
+                <ul className="space-y-2 text-sm">
+                  {[
+                    { href: "https://github.com/Roy3838/Observer", label: "GitHub", Icon: Github },
+                    { href: "https://discord.gg/wnBb7ZQDUC", label: "Discord", Icon: MessageCircle },
+                    { href: "https://x.com/AppObserverAI", label: "X / Twitter", Icon: Twitter },
+                    { href: "https://www.youtube.com/@Observer-AI", label: "YouTube", Icon: Youtube },
+                    { href: "https://www.tiktok.com/@observerai", label: "TikTok", Icon: Music2 },
+                    { href: "https://www.instagram.com/observer_ai.tech/", label: "Instagram", Icon: Instagram },
+                  ].map(({ href, label, Icon }) => (
+                    <li key={label}>
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-gray-400 hover:text-white transition"
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span>{label}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">Company</h4>
+                <ul className="space-y-2 text-sm">
+                  <li><Link to="/privacy" className="text-gray-400 hover:text-white transition">Privacy</Link></li>
+                  <li><Link to="/terms" className="text-gray-400 hover:text-white transition">Terms</Link></li>
+                  <li><Link to="/howitworks" className="text-gray-400 hover:text-white transition">How it works</Link></li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">Contact us</h4>
+                <a
+                  href="mailto:help@observer-ai.com"
+                  className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>help@observer-ai.com</span>
+                </a>
+              </div>
             </div>
+          </div>
+
+          <div className="mt-12 pt-6 border-t border-white/5 text-xs text-gray-600">
+            © {new Date().getFullYear()} Observer AI. Open source under the AGPL-3.0 license.
           </div>
         </div>
       </footer>
