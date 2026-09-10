@@ -33,7 +33,7 @@ import type { WheelOption } from './OptionWheel';
 export type ContactKind = 'phone' | 'email' | 'telegram' | 'discord' | 'none';
 
 export interface TriggerOption extends WheelOption {
-  sensor: '$SCREEN' | '$CAMERA';
+  sensor: '$SCREEN' | '$CAMERA' | '$UNKNOWN';
   promptFragment: string;
 }
 
@@ -79,6 +79,10 @@ export const ACTIONS: ActionOption[] = [
  * number / chat_id / webhook: the MCP collects those itself via `ask_user_info`, which can
  * also guide the user through obtaining them. Email is the one exception — the Auth0
  * address needs no user input, so it's inlined here.
+ *
+ * The watch clause is pinned to the trigger's `sensor` for the presets. An edited-in-place
+ * trigger carries `sensor: '$UNKNOWN'` (its text no longer matches the row it replaced), so
+ * we stop asserting screen-vs-camera and let the MCP infer it from the trigger phrasing.
  */
 export type ModelMode = 'cloud' | 'local';
 
@@ -89,12 +93,15 @@ export function composeRecipePrompt(
   mode: ModelMode = 'cloud',
 ): string {
   const sensor = trigger?.sensor ?? '$SCREEN';
-  const watchWhat = sensor === '$CAMERA' ? 'my camera' : 'my screen';
+  const watchClause =
+    sensor === '$CAMERA' ? 'Watch my camera.' :
+    sensor === '$UNKNOWN' ? 'Watch my screen or camera — whichever fits what I describe next.' :
+    'Watch my screen.';
   const triggerFrag = trigger?.promptFragment ?? '';
   const actionFrag = action?.actionFragment ?? '';
   const phrase = action?.contact === 'email' && authEmail ? ` at ${authEmail}` : '';
   const modelClause = mode === 'local' ? 'Use a local model.' : 'Use a cloud model.';
-  return `Watch ${watchWhat}. When ${triggerFrag}, ${actionFrag}${phrase}. ${modelClause}`;
+  return `${watchClause} When ${triggerFrag}, ${actionFrag}${phrase}. ${modelClause}`;
 }
 
 interface RecipeSplashProps {
@@ -125,7 +132,9 @@ const RecipeSplash: React.FC<RecipeSplashProps> = ({ isOpen, onClose }) => {
 
   const triggerOptions = useMemo(
     () => TRIGGERS.map(t => triggerOverrides[t.id]
-      ? { ...t, label: triggerOverrides[t.id], promptFragment: triggerOverrides[t.id] }
+      // Edited in place: the text no longer matches this row, so its $SCREEN/$CAMERA no
+      // longer applies — hand the MCP '$UNKNOWN' and let it infer the sensor.
+      ? { ...t, label: triggerOverrides[t.id], promptFragment: triggerOverrides[t.id], sensor: '$UNKNOWN' as const }
       : t),
     [triggerOverrides],
   );
