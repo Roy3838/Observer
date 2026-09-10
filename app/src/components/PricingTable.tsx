@@ -60,11 +60,11 @@ const featureGroups: FeatureGroup[] = [
   {
     group: 'It drives itself',
     rows: [
-      { label: 'Agent Builder (MCP)', sparkle: true, notLoggedIn: false, free: '3 agents / day', pro: 'Unlimited', max: 'Unlimited',
+      { label: 'Micro-Agent Builder', sparkle: true, notLoggedIn: false, free: '3 agents / day', pro: 'Unlimited', max: 'Unlimited',
         info: {
-          free: 'Building an agent takes ~15 messages on average, and the free tier gives you 45/day, about 3 full agent builds. Plenty to design and iterate.',
-          pro: "1,000 messages/day, roughly 67 agent builds in a single day. If you genuinely need to spin up more than 67 agents a day, one subscription was never going to cover that 😅. Reach out and we'll figure it out.",
-          max: "1,000 messages/day, roughly 67 agent builds in a single day. If you genuinely need to spin up more than 67 agents a day, one subscription was never going to cover that 😅. Reach out and we'll figure it out.",
+          free: 'Building a micro-agent takes ~15 messages with Observer on average, and the free tier gives you 45/day, about 3 full builds. Plenty to design and iterate.',
+          pro: "1,000 messages/day with Observer, roughly 67 micro-agents in a single day. If you genuinely need to spin up more than 67 a day, one subscription was never going to cover that 😅. Reach out and we'll figure it out.",
+          max: "1,000 messages/day with Observer, roughly 67 micro-agents in a single day. If you genuinely need to spin up more than 67 a day, one subscription was never going to cover that 😅. Reach out and we'll figure it out.",
         } },
       { label: 'Cloud Monitoring',         notLoggedIn: false, free: '1 hr / day', pro: '8 hr / day', max: '24 / 7', creditInfo: { free: 60, pro: 480, max: 2880 } },
     ],

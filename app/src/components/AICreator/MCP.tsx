@@ -654,9 +654,9 @@ const MCP: React.FC<MCPProps> = ({
   const showSuggestions = !hideSuggestions && messages.length === 0 && !isRunning && !pendingApproval;
 
   const getPlaceholder = () => {
-    if (isUsingObServer && !isAuthenticated) return 'Enable Ob-Server and log in to use MCP';
+    if (isUsingObServer && !isAuthenticated) return 'Enable Ob-Server and log in to use Observer';
     if (pendingApproval) return 'Approve or deny the proposed action above…';
-    return 'Describe the agent you want to build…';
+    return 'Describe what you want monitored…';
   };
 
   return (
@@ -666,7 +666,7 @@ const MCP: React.FC<MCPProps> = ({
         {messages.length === 0 && (
           <div className="flex justify-start">
             <div className="max-w-xs md:max-w-md p-2 md:p-3 rounded-lg text-sm md:text-base bg-gradient-to-br from-purple-50 to-indigo-50 text-gray-800 shadow-sm">
-              <Markdown text={`Hi! I'm **Observer's Agent Builder**. I can create and run Observer agents. `} />
+              <Markdown text={`Hi! I'm **Observer**! I can create and run micro-agents. `} />
             </div>
           </div>
         )}

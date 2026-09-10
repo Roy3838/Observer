@@ -1173,7 +1173,7 @@ function AppContent() {
                   ? 'bg-purple-600 text-white shadow-md'
                   : 'bg-purple-500 text-white'
               }`}
-              title="Open MCP assistant"
+              title="Open Observer"
             >
               <Sparkles size={18} />
             </button>
@@ -1252,10 +1252,10 @@ function AppContent() {
                 ? 'bg-purple-600 border-purple-600 text-white'
                 : 'bg-purple-500 border-purple-500 text-white hover:bg-purple-600 hover:border-purple-600'
             }`}
-            title="Open MCP assistant"
+            title="Open Observer"
           >
             <Sparkles className="h-5 w-5" />
-            <span>MCP</span>
+            <span>Observer</span>
           </button>
         )}
       </div>
