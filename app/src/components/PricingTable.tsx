@@ -67,7 +67,7 @@ const featureGroups: FeatureGroup[] = [
           pro: "1,000 messages/day with Observer, roughly 67 micro-agents in a single day. If you genuinely need to spin up more than 67 a day, one subscription was never going to cover that 😅. Reach out and we'll figure it out.",
           max: "1,000 messages/day with Observer, roughly 67 micro-agents in a single day. If you genuinely need to spin up more than 67 a day, one subscription was never going to cover that 😅. Reach out and we'll figure it out.",
         } },
-      { label: 'Cloud Monitoring',         notLoggedIn: false, free: '1 hr / day', pro: '8 hr/day · 100 hr/mo', max: '24 / 7', creditInfo: { free: 60, pro: 480, max: 2880 }, monthlyCreditInfo: { pro: 6000 } },
+      { label: 'Cloud Monitoring',         notLoggedIn: false, free: '30 min / day', pro: '8 hr/day · 100 hr/mo', max: '24 / 7', creditInfo: { free: 60, pro: 480, max: 2880 }, monthlyCreditInfo: { pro: 6000 } },
     ],
   },
   {
