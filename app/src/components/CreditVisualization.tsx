@@ -7,6 +7,8 @@ import { Info, X, Clock, Zap, TrendingUp } from 'lucide-react';
 interface CreditVisualizationProps {
   /** Number of daily credits for this tier */
   dailyCredits: number;
+  /** Optional monthly credit cap for this tier, if one exists on top of the daily cap */
+  monthlyCredits?: number;
   /** Tier name for display */
   tierName?: string;
   /** Compact mode for inline display */
@@ -46,6 +48,7 @@ const formatInterval = (seconds: number): string => {
 
 export const CreditVisualization: React.FC<CreditVisualizationProps> = ({
   dailyCredits,
+  monthlyCredits,
   tierName = 'Your plan',
   compact = false,
 }) => {
@@ -85,7 +88,8 @@ export const CreditVisualization: React.FC<CreditVisualizationProps> = ({
 
       {/* Explanation */}
       <p className="text-sm text-gray-600 mb-4">
-        <strong>{tierName}</strong> includes <strong>{dailyCredits} credits/day</strong>.
+        <strong>{tierName}</strong> includes <strong>{dailyCredits} credits/day</strong>
+        {monthlyCredits ? <> (up to <strong>{monthlyCredits.toLocaleString()} credits/month</strong>)</> : null}.
         Each credit = 1 agent loop. Adjust your loop interval to control monitoring duration:
       </p>
 
@@ -168,6 +172,8 @@ export const CreditVisualization: React.FC<CreditVisualizationProps> = ({
 interface CreditInfoButtonProps {
   /** Number of daily credits */
   dailyCredits: number;
+  /** Optional monthly credit cap for this tier */
+  monthlyCredits?: number;
   /** Tier name */
   tierName?: string;
   /** Size of the info icon */
@@ -178,6 +184,7 @@ interface CreditInfoButtonProps {
 
 export const CreditInfoButton: React.FC<CreditInfoButtonProps> = ({
   dailyCredits,
+  monthlyCredits,
   tierName,
   size = 'sm',
   className = '',
@@ -219,6 +226,7 @@ export const CreditInfoButton: React.FC<CreditInfoButtonProps> = ({
             <div className="p-5">
               <CreditVisualization
                 dailyCredits={dailyCredits}
+                monthlyCredits={monthlyCredits}
                 tierName={tierName}
               />
             </div>

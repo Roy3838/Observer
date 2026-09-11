@@ -34,13 +34,9 @@ import {
   GEMMA_DISPLAY_NAMES,
 } from '@utils/localLlm/types';
 import { MODEL_PRESETS, EXTENDED_PRESETS, type ModelPreset } from '@utils/modelPresets';
+import { remaining as remainingOf, type QuotaInfo as QuotaInfoBase } from '@/types/quota';
 
-type QuotaInfo = {
-  used: number;
-  remaining: number;
-  limit: number;
-  tier: string;
-} | null;
+type QuotaInfo = QuotaInfoBase | null;
 
 type TabId = 'llamacpp' | 'transformers' | 'servers';
 type TabColor = 'green' | 'purple' | 'blue' | 'orange';
@@ -575,8 +571,8 @@ const ModelHub: React.FC<ModelHubProps> = ({
                       ? 'Disabled — fully offline mode'
                       : !isAuthenticated
                         ? 'Login required'
-                        : quotaInfo && typeof quotaInfo.remaining === 'number' && typeof quotaInfo.limit === 'number'
-                          ? `${quotaInfo.remaining} of ${quotaInfo.limit} credits remaining`
+                        : quotaInfo?.daily
+                          ? `${remainingOf(quotaInfo.daily)} of ${quotaInfo.daily.limit} credits remaining today`
                           : 'Cloud inference enabled'
                     }
                   </p>
@@ -595,20 +591,45 @@ const ModelHub: React.FC<ModelHubProps> = ({
               </button>
             </div>
 
-            {isUsingObServer && isAuthenticated && quotaInfo && typeof quotaInfo.remaining === 'number' && typeof quotaInfo.limit === 'number' && (
-              <div className="mt-3 pt-3 border-t border-indigo-100">
-                <div className="w-full bg-white/70 rounded-full h-2">
-                  <div
-                    className={`h-2 rounded-full transition-all ${
-                      quotaInfo.remaining <= 10 ? 'bg-red-500' :
-                      quotaInfo.remaining <= quotaInfo.limit * 0.3 ? 'bg-orange-500' :
-                      'bg-indigo-600'
-                    }`}
-                    style={{ width: `${Math.max(0, Math.min(100, ((quotaInfo.limit - quotaInfo.remaining) / quotaInfo.limit) * 100))}%` }}
-                  />
+            {isUsingObServer && isAuthenticated && quotaInfo?.daily && quotaInfo?.monthly && (
+              <div className="mt-3 pt-3 border-t border-indigo-100 space-y-2">
+                <div>
+                  <div className="flex items-center justify-between text-[11px] text-gray-500 mb-0.5">
+                    <span>Today</span>
+                    <span className="tabular-nums">{remainingOf(quotaInfo.daily)} / {quotaInfo.daily.limit} left</span>
+                  </div>
+                  <div className="w-full bg-white/70 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all ${
+                        remainingOf(quotaInfo.daily) <= 10 ? 'bg-red-500' :
+                        remainingOf(quotaInfo.daily) <= quotaInfo.daily.limit * 0.3 ? 'bg-orange-500' :
+                        'bg-indigo-600'
+                      }`}
+                      style={{ width: `${Math.max(0, Math.min(100, (quotaInfo.daily.used / quotaInfo.daily.limit) * 100))}%` }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between text-[11px] text-gray-500 mb-0.5">
+                    <span>{quotaInfo.monthly.scope === 'org' ? 'This month (org pool)' : 'This month'}</span>
+                    <span className="tabular-nums">{remainingOf(quotaInfo.monthly)} / {quotaInfo.monthly.limit} left</span>
+                  </div>
+                  <div className="w-full bg-white/70 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all ${
+                        remainingOf(quotaInfo.monthly) <= quotaInfo.monthly.limit * 0.1 ? 'bg-red-500' :
+                        remainingOf(quotaInfo.monthly) <= quotaInfo.monthly.limit * 0.3 ? 'bg-orange-500' :
+                        'bg-purple-600'
+                      }`}
+                      style={{ width: `${Math.max(0, Math.min(100, (quotaInfo.monthly.used / quotaInfo.monthly.limit) * 100))}%` }}
+                    />
+                  </div>
+                  {quotaInfo.monthly.scope === 'org' && typeof quotaInfo.monthly.your_contribution === 'number' && (
+                    <div className="text-[11px] text-gray-400 mt-0.5">Your contribution: {quotaInfo.monthly.your_contribution.toLocaleString()}</div>
+                  )}
                 </div>
                 {renderQuotaStatus && (
-                  <div className="text-xs text-gray-600 mt-1.5">{renderQuotaStatus()}</div>
+                  <div className="text-xs text-gray-600 pt-0.5">{renderQuotaStatus()}</div>
                 )}
               </div>
             )}

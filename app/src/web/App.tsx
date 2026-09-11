@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from '@contexts/AuthContext';
 import { useIOSKeyboard } from '@hooks/useIOSKeyboard';
 import { isMobile, confirm, isDesktop, getPlatformName } from '@utils/platform';
 import { version as appVersion } from '../../package.json';
+import type { QuotaInfo } from '@/types/quota';
 import {
   listAgents,
   getAgentCode,
@@ -120,12 +121,7 @@ function AppContent() {
   const [activityModalAgentId, setActivityModalAgentId] = useState<string | null>(null);
 
   // Quota info state
-  const [quotaInfo, setQuotaInfo] = useState<{
-    used: number;
-    remaining: number;
-    limit: number;
-    tier: string;
-  } | null>(null);
+  const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
 
   // Mobile UI state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);

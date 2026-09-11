@@ -40,6 +40,7 @@ interface FeatureRow {
   pro: boolean | string;
   max: boolean | string;
   creditInfo?: { free?: number; pro?: number; max?: number };
+  monthlyCreditInfo?: { free?: number; pro?: number; max?: number };
   info?: { notLoggedIn?: string; free?: string; pro?: string; max?: string };
 }
 
@@ -66,7 +67,7 @@ const featureGroups: FeatureGroup[] = [
           pro: "1,000 messages/day with Observer, roughly 67 micro-agents in a single day. If you genuinely need to spin up more than 67 a day, one subscription was never going to cover that 😅. Reach out and we'll figure it out.",
           max: "1,000 messages/day with Observer, roughly 67 micro-agents in a single day. If you genuinely need to spin up more than 67 a day, one subscription was never going to cover that 😅. Reach out and we'll figure it out.",
         } },
-      { label: 'Cloud Monitoring',         notLoggedIn: false, free: '1 hr / day', pro: '8 hr / day', max: '24 / 7', creditInfo: { free: 60, pro: 480, max: 2880 } },
+      { label: 'Cloud Monitoring',         notLoggedIn: false, free: '1 hr / day', pro: '8 hr/day · 100 hr/mo', max: '24 / 7', creditInfo: { free: 60, pro: 480, max: 2880 }, monthlyCreditInfo: { pro: 6000 } },
     ],
   },
   {
@@ -91,7 +92,7 @@ const featureGroups: FeatureGroup[] = [
 const CheckMark = () => <Check className="h-5 w-5 text-green-500 mx-auto" />;
 const CrossMark = () => <X className="h-5 w-5 text-gray-300 dark:text-gray-600 mx-auto" />;
 
-const renderCell = (value: boolean | string, dailyCredits?: number, tierName?: string, info?: string) => {
+const renderCell = (value: boolean | string, dailyCredits?: number, tierName?: string, info?: string, monthlyCredits?: number) => {
   const infoBtn = info ? <InfoTooltip body={info} className="align-middle" /> : null;
   if (value === true) {
     return (
@@ -106,7 +107,7 @@ const renderCell = (value: boolean | string, dailyCredits?: number, tierName?: s
     <span className="inline-flex items-center justify-center gap-1 text-sm font-semibold text-gray-700 dark:text-gray-300">
       {value}
       {dailyCredits !== undefined && tierName && (
-        <CreditInfoButton dailyCredits={dailyCredits} tierName={tierName} className="align-middle" />
+        <CreditInfoButton dailyCredits={dailyCredits} monthlyCredits={monthlyCredits} tierName={tierName} className="align-middle" />
       )}
       {infoBtn}
     </span>
@@ -213,8 +214,9 @@ export const PricingTable: React.FC<PricingTableProps> = ({
           You're on an Enterprise plan
         </h1>
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          Your seat is provided by your organization and includes all {tierLabel} features.
-          Billing and seats are managed by your team's owner.
+          Your seat is provided by your organization and includes all {tierLabel} features,
+          drawing from a shared monthly hours pool quoted for your organization.
+          Billing, seats, and the pool are managed by your team's owner.
         </p>
         <a
           href="/team"
@@ -390,14 +392,14 @@ export const PricingTable: React.FC<PricingTableProps> = ({
                     </td>
                     {isAuthenticated ? (
                       <>
-                        <td className={getCellClass('free')}>{renderCell(row.free, row.creditInfo?.free, 'Free tier', row.info?.free)}</td>
-                        <td className={getCellClass('pro')}>{renderCell(row.pro, row.creditInfo?.pro, 'Pro tier', row.info?.pro)}</td>
-                        <td className={getCellClass('max')}>{renderCell(row.max, row.creditInfo?.max, 'Max tier', row.info?.max)}</td>
+                        <td className={getCellClass('free')}>{renderCell(row.free, row.creditInfo?.free, 'Free tier', row.info?.free, row.monthlyCreditInfo?.free)}</td>
+                        <td className={getCellClass('pro')}>{renderCell(row.pro, row.creditInfo?.pro, 'Pro tier', row.info?.pro, row.monthlyCreditInfo?.pro)}</td>
+                        <td className={getCellClass('max')}>{renderCell(row.max, row.creditInfo?.max, 'Max tier', row.info?.max, row.monthlyCreditInfo?.max)}</td>
                       </>
                     ) : (
                       <>
                         <td className={getCellClass('notLoggedIn')}>{renderCell(row.notLoggedIn)}</td>
-                        <td className={getCellClass('free')}>{renderCell(row.free, row.creditInfo?.free, 'Free tier', row.info?.free)}</td>
+                        <td className={getCellClass('free')}>{renderCell(row.free, row.creditInfo?.free, 'Free tier', row.info?.free, row.monthlyCreditInfo?.free)}</td>
                       </>
                     )}
                   </tr>

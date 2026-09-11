@@ -6,6 +6,7 @@ import { useApplePayments } from '@hooks/useApplePayments';
 import { X as CloseIcon, Loader2 } from 'lucide-react';
 import { Logger } from '@utils/logging';
 import { PricingTable } from './PricingTable';
+import { fetchQuota } from '@/types/quota';
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -23,7 +24,7 @@ const QUOTA_MESSAGES: Record<string, {
 }> = {
   monitor: {
     headline: "You've Reached Your Daily Monitoring Limit!",
-    subheadline: "Upgrade to Observer Pro for 8 hours/day of cloud monitoring!",
+    subheadline: "Upgrade to Observer Pro for 8 hours/day, 100 hours/month of cloud monitoring!",
     recommendedTier: 'pro',
     isUrgent: true
   },
@@ -97,14 +98,12 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, isH
       setStatus('loading');
       try {
         const token = await getAccessToken();
-        const response = await fetch('https://api.observer-ai.com/quota', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error(`API request failed: ${response.statusText}`);
-        const data = await response.json();
-        // Backend returns tier: 'free' | 'plus' | 'pro' | 'max', plus org_id for enterprise seats
-        setOrgTier(data.org_tier ?? null);
-        setStatus(data.org_id ? 'enterprise' : (data.tier || (data.pro_status ? 'pro' : 'free')));
+        if (!token) throw new Error('Authentication token not available.');
+        const data = await fetchQuota(token);
+        if (!data) throw new Error('Empty quota response');
+        // Backend returns tier: 'free' | 'plus' | 'pro' | 'max', plus is_enterprise for org seats
+        setOrgTier(data.is_enterprise ? (data.tier ?? null) : null);
+        setStatus(data.is_enterprise ? 'enterprise' : ((data.tier as any) || 'free'));
       } catch (err) {
         Logger.error('PAYMENTS', 'Failed to check pro status:', err);
         setError('Could not retrieve your subscription status.');

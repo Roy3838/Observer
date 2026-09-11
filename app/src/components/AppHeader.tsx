@@ -23,6 +23,7 @@ import ModelHub from './ModelHub';
 import AccountModal from './AccountModal';
 import StartupDialogs from './StartupDialogs';
 import type { TokenProvider } from '@utils/main_loop';
+import { fetchQuota, remaining as remainingOf, type QuotaInfo as QuotaInfoBase } from '@/types/quota';
 
 // Server address constants
 const OB_SERVER_ADDRESS = 'https://api.observer-ai.com:443';
@@ -30,12 +31,7 @@ const LOCAL_SERVER_ADDRESS = 'http://localhost:3838';
 
 
 // --- The rest of your component ---
-type QuotaInfo = {
-  used: number;
-  remaining: number;
-  limit: number;
-  tier: string;
-} | null;
+type QuotaInfo = QuotaInfoBase | null;
 
 interface AuthState {
   isLoading: boolean;
@@ -194,45 +190,38 @@ const AppHeader: React.FC<AppHeaderProps> = ({
       const token = await getToken();
       if (!token) throw new Error("Authentication token not available.");
 
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const response = await fetch('https://api.observer-ai.com/quota', { headers });
+      const data = await fetchQuota(token);
+      setQuotaInfo(data);
+      setIsSessionExpired(false);
+      if (data && data.daily) {
+        localStorage.setItem('observer-quota-remaining', remainingOf(data.daily).toString());
 
-      if (response.ok) {
-        const data: QuotaInfo = await response.json();
-        setQuotaInfo(data);
-        setIsSessionExpired(false);
-        if (data && typeof data.remaining === 'number') {
-          localStorage.setItem('observer-quota-remaining', data.remaining.toString());
-
-          // Trigger upgrade modal at 50% usage for non-pro users
-          if (data.tier !== 'pro' && data.tier !== 'max' && data.tier !== 'plus' && typeof data.limit === 'number' && data.limit > 0) {
-            const usagePercentage = ((data.limit - data.remaining) / data.limit) * 100;
-            console.log(`Usage: ${usagePercentage.toFixed(1)}%, Remaining: ${data.remaining}/${data.limit}, Warning shown: ${has70PercentWarningBeenShown}`);
-            if (usagePercentage >= 50 && !has70PercentWarningBeenShown && onUpgradeClick) {
-              console.log('Triggering upgrade modal at 50% usage');
-              setHas70PercentWarningBeenShown(true);
-              onUpgradeClick();
-            }
+        // Trigger upgrade modal at 50% usage for non-pro users
+        if (data.tier !== 'pro' && data.tier !== 'max' && data.tier !== 'plus' && data.daily.limit > 0) {
+          const usagePercentage = (data.daily.used / data.daily.limit) * 100;
+          console.log(`Usage: ${usagePercentage.toFixed(1)}%, Remaining: ${remainingOf(data.daily)}/${data.daily.limit}, Warning shown: ${has70PercentWarningBeenShown}`);
+          if (usagePercentage >= 50 && !has70PercentWarningBeenShown && onUpgradeClick) {
+            console.log('Triggering upgrade modal at 50% usage');
+            setHas70PercentWarningBeenShown(true);
+            onUpgradeClick();
           }
-        } else {
-          localStorage.removeItem('observer-quota-remaining');
         }
-      } else if (response.status === 401) {
+      } else {
+        localStorage.removeItem('observer-quota-remaining');
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message === 'unauthorized') {
         Logger.warn('AUTH', 'Session expired. Quota check failed with 401.');
         setQuotaInfo(null);
         setIsSessionExpired(true);
         localStorage.removeItem('observer-quota-remaining');
       } else {
-        Logger.error('QUOTA', `Failed to fetch quota, status: ${response.status}`);
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        Logger.error('QUOTA', `Error fetching quota info: ${errorMessage}`, err);
         setQuotaInfo(null);
         setIsSessionExpired(false);
         localStorage.removeItem('observer-quota-remaining');
       }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      Logger.error('QUOTA', `Error fetching quota info: ${errorMessage}`, err);
-      setQuotaInfo(null);
-      setIsSessionExpired(false);
     } finally {
       setIsLoadingQuota(false);
     }
@@ -244,9 +233,9 @@ const AppHeader: React.FC<AppHeaderProps> = ({
       return;
     }
 
-    if (typeof quotaInfo.remaining === 'number' && typeof quotaInfo.limit === 'number' && quotaInfo.limit > 0) {
-      const usagePercentage = ((quotaInfo.limit - quotaInfo.remaining) / quotaInfo.limit) * 100;
-      console.log(`Real-time usage check: ${usagePercentage.toFixed(1)}%, Remaining: ${quotaInfo.remaining}/${quotaInfo.limit}`);
+    if (quotaInfo.daily && quotaInfo.daily.limit > 0) {
+      const usagePercentage = (quotaInfo.daily.used / quotaInfo.daily.limit) * 100;
+      console.log(`Real-time usage check: ${usagePercentage.toFixed(1)}%, Remaining: ${remainingOf(quotaInfo.daily)}/${quotaInfo.daily.limit}`);
 
       if (usagePercentage >= 50) {
         console.log('Triggering upgrade modal at 50% usage (real-time)');
@@ -331,9 +320,12 @@ const AppHeader: React.FC<AppHeaderProps> = ({
 
   useEffect(() => {
     const handleQuotaUpdate = () => {
-      const storedQuota = localStorage.getItem('observer-quota-remaining');
-      if (storedQuota) {
-        setQuotaInfo(prev => prev ? { ...prev, remaining: parseInt(storedQuota, 10) } : null);
+      const storedRemaining = localStorage.getItem('observer-quota-remaining');
+      if (storedRemaining) {
+        const newRemaining = parseInt(storedRemaining, 10);
+        setQuotaInfo(prev => (prev && prev.daily)
+          ? { ...prev, daily: { ...prev.daily, used: Math.max(0, prev.daily.limit - newRemaining) } }
+          : prev);
       }
     };
 
@@ -456,6 +448,12 @@ const AppHeader: React.FC<AppHeaderProps> = ({
       if (quotaInfo.tier === 'max') {
         return <span className="font-semibold text-green-600">MAX unlimited</span>;
       }
+      const dailyRemaining = quotaInfo.daily ? remainingOf(quotaInfo.daily) : undefined;
+      const monthlyRemaining = quotaInfo.monthly ? remainingOf(quotaInfo.monthly) : undefined;
+      const hoverDetail = dailyRemaining !== undefined && monthlyRemaining !== undefined
+        ? `${dailyRemaining} / ${quotaInfo.daily.limit} today · ${monthlyRemaining} / ${quotaInfo.monthly.limit} this month`
+        : undefined;
+
       if (quotaInfo.tier === 'plus') {
         return (
           <div
@@ -463,10 +461,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
             onMouseEnter={() => setIsQuotaHovered(true)}
             onMouseLeave={() => setIsQuotaHovered(false)}
           >
-            {isQuotaHovered && typeof quotaInfo.remaining === 'number' && typeof quotaInfo.limit === 'number'
-              ? `${quotaInfo.remaining} / ${quotaInfo.limit} Credits left`
-              : 'Plus monitoring'
-            }
+            {isQuotaHovered && hoverDetail ? hoverDetail : 'Plus monitoring'}
           </div>
         );
       }
@@ -477,36 +472,30 @@ const AppHeader: React.FC<AppHeaderProps> = ({
             onMouseEnter={() => setIsQuotaHovered(true)}
             onMouseLeave={() => setIsQuotaHovered(false)}
           >
-            {isQuotaHovered && typeof quotaInfo.remaining === 'number' && typeof quotaInfo.limit === 'number'
-              ? `${quotaInfo.remaining} / ${quotaInfo.limit} Credits left`
-              : 'Pro extended'
-            }
+            {isQuotaHovered && hoverDetail ? hoverDetail : 'Pro extended'}
           </div>
         );
       }
-      if (typeof quotaInfo.remaining === 'number') {
-        if (quotaInfo.remaining <= 0) {
+      if (dailyRemaining !== undefined) {
+        if (dailyRemaining <= 0) {
           return (
             <span className="font-medium text-red-500">
               No credits left!
             </span>
           );
         }
-        
+
         // Show "Limited Use" that changes to credit count on hover
         return (
           <div
             className={`font-medium cursor-help ${
-              quotaInfo.remaining <= 10 ? 'text-orange-500'
+              dailyRemaining <= 10 ? 'text-orange-500'
               : 'text-green-600'
             }`}
             onMouseEnter={() => setIsQuotaHovered(true)}
             onMouseLeave={() => setIsQuotaHovered(false)}
           >
-            {isQuotaHovered 
-              ? `${quotaInfo.remaining} / ${quotaInfo.limit} Credits left`
-              : 'Limited Use'
-            }
+            {isQuotaHovered && hoverDetail ? hoverDetail : 'Limited Use'}
           </div>
         );
       }

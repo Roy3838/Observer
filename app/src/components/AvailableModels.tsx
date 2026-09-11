@@ -23,13 +23,9 @@ import {
   SamplerParams,
   DEFAULT_SAMPLER_PARAMS,
 } from '@utils/localLlm/types';
+import type { QuotaInfo as QuotaInfoBase } from '@/types/quota';
 
-type QuotaInfo = {
-  used: number;
-  remaining: number;
-  limit: number;
-  tier: string;
-} | null;
+type QuotaInfo = QuotaInfoBase | null;
 
 interface AvailableModelsProps {
   isProUser?: boolean;
