@@ -13,8 +13,6 @@ interface StartupDialogProps {
 
 
 const StartupDialog: React.FC<StartupDialogProps> = ({
-  onDismiss,
-  onSkip,
   onLogin,
   onToggleObServer,
   isAuthenticated,
@@ -38,14 +36,6 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
     if (onToggleObServer) {
       onToggleObServer();
     }
-  };
-
-  const handleSkip = () => {
-    Analytics.startupSkip();
-    if (onSkip) {
-      onSkip();
-    }
-    onDismiss();
   };
 
   return (
@@ -82,14 +72,6 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Other options: intentionally de-emphasized, outside the white card */}
-      <button
-        onClick={handleSkip}
-        className="mt-4 text-xs text-gray-400 hover:text-gray-300 transition-colors"
-      >
-        Other options
-      </button>
     </div>
   );
 };
