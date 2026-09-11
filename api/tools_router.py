@@ -17,7 +17,7 @@ import base64
 from auth import AuthUser
 from admin_auth import get_admin_access
 # Import the new, unified quota manager functions and constants
-from quota_manager import try_consume, get_all_usage_data
+from quota_manager import try_consume_for, get_all_usage_data
 from messaging import save_temp_image
 
 # --- Setup (logging is configured once in api.py via logging_config.setup_logging()) ---
@@ -78,10 +78,7 @@ async def send_email(
         )
 
     # 2. Quota Check (using the "email" service)
-    allowed, _usage_count, _reason = await try_consume(
-        current_user.id, "email",
-        current_user.is_pro, current_user.is_max, current_user.is_plus,
-    )
+    allowed, _usage_count, _reason = await try_consume_for(current_user, "email")
     if not allowed:
         raise HTTPException(
             status_code=429,
@@ -168,10 +165,7 @@ async def send_pushover(
         logger.error("Server is missing PUSHOVER_API_KEY environment variable.")
         raise HTTPException(status_code=500, detail="Notification service (Pushover) is not configured on the server.")
 
-    allowed, _usage_count, _reason = await try_consume(
-        current_user.id, "pushover",
-        current_user.is_pro, current_user.is_max, current_user.is_plus,
-    )
+    allowed, _usage_count, _reason = await try_consume_for(current_user, "pushover")
     if not allowed:
         raise HTTPException(
             status_code=429,
@@ -251,10 +245,7 @@ async def send_telegram(
         raise HTTPException(status_code=500, detail="Telegram service is not configured on the server.")
 
     # 2. Quota Check
-    allowed, _usage_count, _reason = await try_consume(
-        current_user.id, "telegram",
-        current_user.is_pro, current_user.is_max, current_user.is_plus,
-    )
+    allowed, _usage_count, _reason = await try_consume_for(current_user, "telegram")
     if not allowed:
         raise HTTPException(
             status_code=429,

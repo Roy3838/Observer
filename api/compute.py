@@ -9,7 +9,12 @@ import json
 from auth import AuthUser
 from admin_auth import get_admin_access
 # Import the new, specific functions and the QUOTA_LIMITS dictionary
-from quota_manager import try_consume, limit_for, get_usage_for_service, QUOTA_LIMITS, PRO_QUOTA_LIMITS, MAX_QUOTA_LIMITS, PLUS_QUOTA_LIMITS
+from quota_manager import (
+    try_consume_for, limit_for, monthly_limit_for, org_monthly_limit,
+    get_usage_for_service, get_monthly_usage,
+    daily_resets_at, monthly_resets_at, NO_MONTHLY_LIMIT,
+    QUOTA_LIMITS, PRO_QUOTA_LIMITS, MAX_QUOTA_LIMITS, PLUS_QUOTA_LIMITS,
+)
 import observability
 
 # Logging is configured once in api.py via logging_config.setup_logging()
@@ -170,15 +175,51 @@ async def check_quota_endpoint(current_user: AuthUser):
     # so tier/limit above are already correct. org_id tells the frontend the seat is
     # org-managed (no Stripe portal for this user — send them to /team instead).
     app_metadata = current_user.app_metadata or {}
+    org_id = current_user.org_id
+
+    # The monthly budget. For an enterprise seat this is the whole org's pool and
+    # the count is the team's, not this user's - scope says which, and the
+    # frontend has to label it accordingly ("your team has used", not "you have
+    # used"). A limit of -1 is uncapped and the frontend should hide the bar.
+    if org_id:
+        monthly_limit = await org_monthly_limit(org_id)
+        monthly_scope = "org"
+    else:
+        monthly_limit = monthly_limit_for(
+            "monitor",
+            is_pro=current_user.is_pro, is_max=current_user.is_max,
+            is_plus=current_user.is_plus,
+        )
+        monthly_scope = "user"
+
+    monthly_used = await get_monthly_usage(current_user.id, "monitor", org_id)
+    uncapped = monthly_limit == NO_MONTHLY_LIMIT
 
     return JSONResponse(content={
+        # used/remaining/limit stay at the top level, and stay daily, so clients
+        # built against the old shape keep working untouched.
         "used": used,
         "remaining": remaining,
         "limit": limit,
+        "resets_at": daily_resets_at(),
+        "daily": {
+            "used": used,
+            "remaining": remaining,
+            "limit": limit,
+            "resets_at": daily_resets_at(),
+        },
+        "monthly": {
+            "used": monthly_used,
+            "limit": monthly_limit,
+            "remaining": None if uncapped else max(0, monthly_limit - monthly_used),
+            "unlimited": uncapped,
+            "scope": monthly_scope,
+            "resets_at": monthly_resets_at(),
+        },
         "tier": tier,
-        "org_id": current_user.org_id,
+        "org_id": org_id,
         "org_tier": app_metadata.get("org_tier"),
-        "is_enterprise": bool(current_user.org_id),
+        "is_enterprise": bool(org_id),
     })
 
 
@@ -205,10 +246,7 @@ async def handle_chat_completions_endpoint(request: Request, current_user: AuthU
     service_type = "agent_creator" if model_name in AGENT_CREATOR_MODELS else "monitor"
 
     # Check and consume quota for all users (each tier has limits as anti-abuse)
-    allowed, usage_count, reason = await try_consume(
-        current_user.id, service_type,
-        current_user.is_pro, current_user.is_max, current_user.is_plus,
-    )
+    allowed, usage_count, reason = await try_consume_for(current_user, service_type)
     user_type = "max" if current_user.is_max else ("plus" if current_user.is_plus else ("pro" if current_user.is_pro else "free"))
 
     if not allowed:
@@ -217,11 +255,27 @@ async def handle_chat_completions_endpoint(request: Request, current_user: AuthU
             is_pro=current_user.is_pro, is_max=current_user.is_max, is_plus=current_user.is_plus,
         )
         logger.warning(f"{service_type.capitalize()} limit exceeded for {user_type} user: {current_user.id} (reason: {reason}, daily limit: {limit_value})")
+        # Three refusals with three different remedies: slow down, wait for
+        # midnight, or wait for the 1st. An org seat that exhausts the pool
+        # cannot fix it alone, so that message has to point at the owner.
+        if reason == "rate_limit":
+            message = "Rate limit exceeded. Please slow down your requests or try again later."
+        elif reason == "monthly_quota" and current_user.org_id:
+            message = (
+                "Your team's monthly credits are used up. They reset on the 1st "
+                "(UTC); your org owner can add more before then."
+            )
+        elif reason == "monthly_quota":
+            message = "You have used all of this month's credits. They reset on the 1st (UTC)."
+        else:
+            message = "You have used all of today's credits. They reset at midnight UTC."
+
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={
-                "message": "Rate limit exceeded. Please slow down your requests or try again later.",
-                "quota_type": service_type
+                "message": message,
+                "quota_type": service_type,
+                "reason": reason,
             }
         )
 

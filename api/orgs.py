@@ -44,6 +44,13 @@ from auth0_manager import (
     check_existing_subscription,
     update_user_subscription_status,
 )
+from quota_manager import (
+    NO_MONTHLY_LIMIT,
+    get_monthly_usage,
+    invalidate_org_limit,
+    monthly_resets_at,
+    org_monthly_limit,
+)
 from redis_client import get_redis
 
 logger = logging.getLogger('orgs')
@@ -54,7 +61,7 @@ APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://app.observer-ai.com")
 INVITE_TTL_DAYS = 14
 
 # Services surfaced on the team dashboard, in display order.
-DASHBOARD_SERVICES = ["monitor", "agent_creator", "email", "sms", "whatsapp", "telegram", "discord", "slack"]
+DASHBOARD_SERVICES = ["monitor", "agent_creator", "email", "sms", "whatsapp", "telegram", "voice_call", "pushover"]
 
 
 # --- Models -----------------------------------------------------------------
@@ -64,6 +71,9 @@ class OrgCreateRequest(BaseModel):
     admin_email: EmailStr
     tier: str = "pro"           # "pro" | "max"
     seats: int
+    # Shared monthly monitor-credit pool for the whole org. -1 is uncapped,
+    # which is what an org gets until a number is actually negotiated.
+    monthly_credits: int = NO_MONTHLY_LIMIT
     price_id: Optional[str] = None
     days_until_due: int = 30
     dry_run: bool = False
@@ -79,6 +89,10 @@ class RemoveRequest(BaseModel):
 
 class ClaimRequest(BaseModel):
     token: str
+
+
+class OrgCreditsRequest(BaseModel):
+    monthly_credits: int
 
 
 # --- Helpers ----------------------------------------------------------------
@@ -297,6 +311,7 @@ async def create_org(body: OrgCreateRequest):
         return {
             "dry_run": True, "org_id": org_id, "price_id": price_id,
             "seats": body.seats, "tier": body.tier, "owner_email": admin_email,
+            "monthly_credits": body.monthly_credits,
         }
 
     await _assert_no_personal_subscription(admin_email)
@@ -340,6 +355,7 @@ async def create_org(body: OrgCreateRequest):
             "owner_email": admin_email,
             "tier": body.tier,
             "seats_purchased": body.seats,
+            "monthly_credits": body.monthly_credits,
             "status": subscription.status,
             "stripe_customer_id": customer.id,
             "stripe_subscription_id": subscription.id,
@@ -412,8 +428,40 @@ async def admin_get_org(org_id: str):
     return {
         **org,
         "seats_used": _seats_used(org),
+        "monthly_pool": await _pool_summary(org_id),
         "members": [{**m, "usage": usage.get(m.get("auth0_user_id"), {})} for m in org["members"]],
     }
+
+
+@orgs_router.post("/admin/orgs/{org_id}/credits", dependencies=[Depends(get_admin_access)], summary="Set the org's monthly credit pool")
+async def admin_set_org_credits(org_id: str, body: OrgCreditsRequest):
+    """
+    Set the monthly monitor-credit pool shared by every seat in the org. Seats
+    keep their own per-tier *daily* limit; this is the monthly budget they all
+    draw from. -1 means uncapped.
+
+    R2 is the source of truth and quota_manager caches the number in Redis, so
+    the cached copy is dropped here rather than left to age out - otherwise a
+    renegotiated pool would not take effect on every worker for up to an hour.
+    """
+    if body.monthly_credits < NO_MONTHLY_LIMIT:
+        raise HTTPException(
+            status_code=400,
+            detail="monthly_credits must be -1 (uncapped) or a non-negative number.",
+        )
+
+    org, _ = await r2_store.get_json(r2_store.org_key(org_id))
+    if not org:
+        raise HTTPException(status_code=404, detail=f"No org record for {org_id}")
+
+    def apply(rec):
+        rec["monthly_credits"] = body.monthly_credits
+
+    updated = await r2_store.update_json(r2_store.org_key(org_id), apply)
+    await invalidate_org_limit(org_id)
+
+    logger.info(f"Org {org_id} monthly credit pool set to {body.monthly_credits}")
+    return {"org_id": org_id, "monthly_credits": updated["monthly_credits"]}
 
 
 @orgs_router.post("/admin/orgs/{org_id}/sync", dependencies=[Depends(get_admin_access)], summary="Force a Stripe resync")
@@ -532,7 +580,28 @@ async def _usage_for_members(member_ids: list[str]) -> dict:
     return out
 
 
-@orgs_router.get("/orgs/me", summary="Org record, roster and today's usage")
+async def _pool_summary(org_id: str) -> dict:
+    """
+    The org's shared monthly credit pool and how much of it is spent.
+
+    Read from the same counter the limiter increments, so the number on the
+    dashboard is the number the next request will be checked against. The
+    per-member figures alongside it are today's daily counters - different
+    window, same property.
+    """
+    limit = await org_monthly_limit(org_id)
+    used = await get_monthly_usage(None, "monitor", org_id)
+    uncapped = limit == NO_MONTHLY_LIMIT
+    return {
+        "used": used,
+        "limit": limit,
+        "remaining": None if uncapped else max(0, limit - used),
+        "unlimited": uncapped,
+        "resets_at": monthly_resets_at(),
+    }
+
+
+@orgs_router.get("/orgs/me", summary="Org record, roster, credit pool and today's usage")
 async def get_my_org(current_user: AuthUser):
     org_id, org = await _require_org(current_user)
 
@@ -549,6 +618,7 @@ async def get_my_org(current_user: AuthUser):
         "status": org["status"],
         "seats_purchased": org["seats_purchased"],
         "seats_used": _seats_used(org),
+        "monthly_pool": await _pool_summary(org_id),
         "is_owner": is_owner,
         "owner_email": org["owner_email"],
         "members": [

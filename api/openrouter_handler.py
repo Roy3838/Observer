@@ -70,6 +70,23 @@ class OpenRouterAPIHandler(BaseAPIHandler):
                 "model_id": "nvidia/nemotron-nano-12b-v2-vl:free",
                 "parameters": "12B",
                 "multimodal": True
+            },
+            # Paid-only fast lane for Gemma 4 26B A4B. Same weights as the free
+            # gemma-4-26b-a4b-it on Gemini's direct AI Studio proxy, but routed
+            # through OpenRouter pinned to DeepInfra's dedicated paid capacity —
+            # sub-second latency instead of Google's free-tier serving lane,
+            # which queues badly under load (see gemini_handler.py).
+            "gemma-4-26b-a4b-fast": {
+                "model_id": "google/gemma-4-26b-a4b-it",
+                "parameters": "26BA4",
+                "multimodal": True,
+                "pro": True,
+                # Prefer cheap+fast providers in order, but DON'T hard-pin: OpenRouter's
+                # DeepInfra pool is shared across all their customers and gets rate-limited
+                # on its own under load (confirmed live: 429 "engine_overloaded" 3/3 tries
+                # while Cloudflare/Novita served fine). allow_fallbacks left True so a bad
+                # provider degrades to the next one instead of hard-failing the request.
+                "provider_routing": {"order": ["deepinfra", "cloudflare", "novita"], "allow_fallbacks": True},
             }
             # "Skip Model Call": {
             #     "model_id": "deepseek/deepseek-chat-v3.1:free", # Example
@@ -172,6 +189,11 @@ class OpenRouterAPIHandler(BaseAPIHandler):
         payload = request_data.copy()
         # *** IMPORTANT: Set the 'model' in the payload to the ACTUAL OpenRouter ID ***
         payload["model"] = actual_model_id
+        # Pin provider routing when the model map asks for it (e.g. the fast
+        # Gemma lane pinned to DeepInfra) so OpenRouter never falls back to a
+        # slower/pricier provider behind the scenes.
+        if model_info.get("provider_routing"):
+            payload["provider"] = model_info["provider_routing"]
 
         # Update headers (in case API key was missing during init)
         headers = self.base_headers.copy()

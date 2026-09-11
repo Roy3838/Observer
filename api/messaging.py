@@ -25,7 +25,7 @@ from twilio.request_validator import RequestValidator
 # Local imports
 from auth import AuthUser
 import r2_store
-from quota_manager import try_consume
+from quota_manager import try_consume_for
 from redis_client import get_redis
 
 # Setup (logging is configured once in api.py via logging_config.setup_logging())
@@ -530,10 +530,7 @@ async def send_sms(
     resolved_phone = await resolve_to_phone(request_data.to_number)
 
     # 2. Quota Check (using the "sms" service)
-    allowed, _usage_count, _reason = await try_consume(
-        current_user.id, "sms",
-        current_user.is_pro, current_user.is_max, current_user.is_plus,
-    )
+    allowed, _usage_count, _reason = await try_consume_for(current_user, "sms")
     if not allowed:
         raise HTTPException(
             status_code=429,
@@ -674,10 +671,7 @@ async def send_whatsapp(
     resolved_phone = await resolve_to_phone(request_data.to_number)
 
     # 2. Quota Check (using the "whatsapp" service)
-    allowed, _usage_count, _reason = await try_consume(
-        current_user.id, "whatsapp",
-        current_user.is_pro, current_user.is_max, current_user.is_plus,
-    )
+    allowed, _usage_count, _reason = await try_consume_for(current_user, "whatsapp")
     if not allowed:
         raise HTTPException(
             status_code=429,
@@ -869,10 +863,7 @@ async def make_voice_call(
     resolved_phone = await resolve_to_phone(request_data.to_number)
 
     # 2. Quota Check (separate voice_call quota)
-    allowed, _usage_count, _reason = await try_consume(
-        current_user.id, "voice_call",
-        current_user.is_pro, current_user.is_max, current_user.is_plus,
-    )
+    allowed, _usage_count, _reason = await try_consume_for(current_user, "voice_call")
     if not allowed:
         raise HTTPException(
             status_code=429,
