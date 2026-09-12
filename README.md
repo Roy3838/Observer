@@ -7,19 +7,50 @@
 
 [YouTube](https://www.youtube.com/@Observer-AI) | [Tiktok](https://www.tiktok.com/@observerai) | [Instagram](https://www.instagram.com/observer_ai.tech/) | [Twitter](https://x.com/AppObserverAI) | [Discord](https://discord.com/invite/wnBb7ZQDUC) 
 
-### *_Build powerful micro-agents that observe, log and react, so you don't have to._*
+### *_The Agent that monitors your screen, so you don't have to._*
 
-All while keeping your data **100% private and secure**.
+Using local models, keeping your data **100% private and secure**.
 
 [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Deployed-success)](https://roy3838.github.io/observer-ai)
 [![License](https://img.shields.io/badge/License-AGPLv3-blue.svg)](LICENSE)
 
 
+## What Observer Does Best
+
+### When X then Y
 
 
----
+• When I'm distracted, call me.       
+• When my download finishes, SMS me.      
+• When my render is done, Whatsapp me.        
+• When this dashboard changes, email me.      
+• When a person is on camera, telegram me.       
+• When my dog finishes their food, log it.        
 
-## How Observer Agents Work
+<!--### Integrations-->
+<!--<table>-->
+<!--<tr>-->
+<!--<td width="50%" valign="top">-->
+<!---->
+<!--### **Intelligent Logging**-->
+<!---->
+<!--**Text & Visual Memory**-->
+<!---->
+<!--**Smart Screen Recording**-->
+<!---->
+<!--</td>-->
+<!--<td width="50%" valign="top">-->
+<!---->
+<!--### **Powerful Notifications**-->
+<!---->
+<!--**Calling** • **SMS** • **WhatsApp**   -->
+<!--**Email** • **Discord** • **Telegram** -->
+<!--</td>-->
+<!--</tr>-->
+<!--</table>-->
+
+
+## How Observer Micro-Agents Work
 
 <div align="center">
 
@@ -82,7 +113,7 @@ All while keeping your data **100% private and secure**.
 
 ---
 
-## Base Agent Example 
+## Base Micro-Agent Example 
 Sends an email when the Observer logo is on screen
 
 System Prompt (uses $SCREEN for multimodal screen input)
@@ -100,34 +131,8 @@ if(response.includes("OBSERVER")){
 
 ---
 
-## What Observer AI Does Best
 
-<table>
-<tr>
-<td width="50%" valign="top">
-
-### **Intelligent Logging**
-
-🧠 **Text & Visual Memory**
-
-🎥 **Smart Screen Recording**
-
-</td>
-<td width="50%" valign="top">
-
-### **Powerful Notifications**
-
-📧 **Email** • 💬 **Discord** • 📱 **Telegram**
-📞 **SMS** • 💚 **WhatsApp** • **Pushover**  
-
-</td>
-</tr>
-</table>
-
-
----
-
-# Building Your Own Agent
+# Building Your Own Micro-Agent
 
 Creating your own Observer AI consist of three things:
 
@@ -227,7 +232,7 @@ if(response.includes("word")){
 ```
 
 
-# Getting Started with Local Inference
+# Getting Started with Local Inference for Micro-Agents
 
 
 There are a few ways to get Observer up and running with local inference. I recommend the Observer App. 
