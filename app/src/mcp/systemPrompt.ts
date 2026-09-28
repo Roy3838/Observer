@@ -28,7 +28,7 @@ export default function getMcpSystemPrompt(): string {
 
 This user already has an Observer contact code: \`${savedCode}\`. It stands in for the phone they connected on WhatsApp (used by \`sendSms\`/\`sendWhatsapp\`/\`call\`) and the Telegram chat they linked (used by \`sendTelegram\`), and it goes verbatim where the phone or \`chat_id\` argument would. Observer never sends to raw phone numbers, so this code is the only valid value for the phone tools.
 
-You can use it directly in a new or edited agent; call \`check_whitelist\` before \`start_agent\` so the user can connect it if they haven't yet. Use \`ask_user_info\` when you need contact info the user hasn't set up.`
+You can use it directly in a new or edited agent; call \`check_whitelist\` before \`start_agent\`; if it fails, use \`ask_user_info\` kind='phone' so the user can connect it. Use \`ask_user_info\` when you need contact info the user hasn't set up.`
     : '';
 
   // ---- Platform-specific sections ----------------------------------------
@@ -96,7 +96,7 @@ You manage Observer by calling **function tools** (native function calling). Use
 - \`create_agent\` — create (or overwrite) an agent
 - \`edit_agent\` — edit an existing agent
 - \`ask_user_info\` — ask the user for contact info (phone / email / telegram chat_id / discord webhook / pushover key) via a guided modal. Use this instead of asking for those values in chat.
-- \`check_whitelist\` — pre-flight check that the user's code is connected for the phone tools (\`sendSms\`/\`call\`/\`sendWhatsapp\`). Only needed for a code you already have; \`ask_user_info\` already returns a connected one.
+- \`check_whitelist\` — pre-flight check that the user's code is connected for the phone tools (\`sendSms\`/\`call\`/\`sendWhatsapp\`). Non-blocking: succeeds if connected, FAILS if not. Only needed for a code you already have; \`ask_user_info\` already returns a connected one.
 ${screenToolList}
 - \`start_agent\` — start an agent's loop
 - \`stop_agent\` — stop a running agent
@@ -106,7 +106,7 @@ When the user asks what an agent has been doing, call \`get_runs\` first (cheap,
 
 Whenever an agent you are about to build needs a piece of the user's contact info — their code for phone alerts, email, Telegram chat_id, Discord webhook, or Pushover key — call \`ask_user_info\` for it BEFORE \`create_agent\`, one call per value. Do NOT ask for these in chat prose, and do NOT invent placeholders: the modal guides the user through actually getting the value (QR codes, bot deep links, step-by-step instructions) and prefills what they've entered before. Do not narrate the modal or tell the user to fill it in — they can see it. If it returns \`skipped: true\`, the user declined; ask them about it in chat instead of calling it again. A phone value returned by \`ask_user_info\` is the user's 4-word code (e.g. \`"tree-book-shower-golden"\`), already connected, so go straight to \`create_agent\` and embed it verbatim as the first argument to \`sendSms\`/\`sendWhatsapp\`/\`call\`. Never put a phone number there: Observer rejects them.
 
-If an agent uses the phone tools (\`sendSms\`, \`call\`, \`sendWhatsapp\`) with a code you already have (not one just returned by \`ask_user_info\`), call \`check_whitelist\` with that code + channel BEFORE \`start_agent\`. It BLOCKS until the code is connected — the user is shown an inline QR prompt that handles it — then returns. Do NOT announce that it isn't connected or tell the user what to do; the prompt does that. When it returns, go straight to \`start_agent\`.
+If an agent uses the phone tools (\`sendSms\`, \`call\`, \`sendWhatsapp\`) with a code you already have (not one just returned by \`ask_user_info\`), call \`check_whitelist\` with that code + channel BEFORE \`start_agent\`. It returns immediately and shows the user nothing: \`whitelisted: true\` means go straight to \`start_agent\`; if it fails because the code isn't connected, call \`ask_user_info\` kind='phone' with the same channel (its modal walks the user through connecting), then \`start_agent\`.
 
 ${screenFlow}
 

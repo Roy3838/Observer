@@ -35,10 +35,6 @@ import { normalizeWhitelistCode } from '@utils/whitelistCode';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** How often check_whitelist re-checks, and how long it waits before giving up. */
-const WHITELIST_POLL_MS = 5000;
-const WHITELIST_WAIT_MS = 15 * 60 * 1000;
-
 /** Resolve after `ms`, or reject as soon as `signal` aborts (so a blocking wait is cancellable). */
 function sleepOrAbort(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -477,7 +473,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'check_whitelist',
-    description: "Pre-flight gate for the phone notification tools (sendSms, call, sendWhatsapp). They only send to the user's 4-word Observer code once that code is connected on WhatsApp, and start_agent FAILS otherwise — so call this BEFORE start_agent for any agent that uses a phone tool. Pass the code the agent sends to (defaults to the user's saved code) and the channel. This BLOCKS: if the code is already connected it returns immediately; if not, the user is shown an inline QR and this WAITS until they send the code on WhatsApp, then returns success. Do NOT announce that it isn't connected or tell the user what to do — the inline prompt handles that. Once this returns, go straight to start_agent. Phone numbers are never accepted: if an agent uses one, replace it with the user's code.",
+    description: "Pre-flight check for the phone notification tools (sendSms, call, sendWhatsapp). They only send to the user's 4-word Observer code once that code is connected on WhatsApp, and start_agent FAILS otherwise — so call this BEFORE start_agent for any agent that uses a phone tool. Pass the code the agent sends to (defaults to the user's saved code) and the channel. This does NOT block and shows the user nothing: it returns {whitelisted:true} if the code is connected, and FAILS if it isn't. On failure, call ask_user_info kind='phone' (same channel) to get the user connected, then call check_whitelist again (or just start_agent). Phone numbers are never accepted: if an agent uses one, replace it with the user's code.",
     parameters: {
       type: 'object',
       properties: {
@@ -506,38 +502,17 @@ export const TOOLS: ToolDefinition[] = [
       const snippet = `${fn}("${code}")`;
       const channel = args.channel ?? 'sms';
 
-      // Block until the code is connected (the inline pill guides the user), the run is
-      // aborted (Stop), or we give up after WHITELIST_WAIT_MS. Waiting here — instead of
-      // returning "not connected" — is what lets the run resume silently once the user has
-      // sent the code, with no extra model/user messages.
-      const deadline = Date.now() + WHITELIST_WAIT_MS;
-      while (true) {
-        if (ctx.signal?.aborted) return { error: 'Cancelled.' };
-        try {
-          const { phoneNumbers } = await checkPhoneWhitelist(snippet, ctx.getToken);
-          if (phoneNumbers.length > 0 && phoneNumbers.every(p => p.isWhitelisted)) {
-            return { data: { code, channel, whitelisted: true } };
-          }
-        } catch (e) {
-          return { error: e instanceof Error ? e.message : String(e) };
+      try {
+        const { phoneNumbers } = await checkPhoneWhitelist(snippet, ctx.getToken);
+        if (phoneNumbers.length > 0 && phoneNumbers.every(p => p.isWhitelisted)) {
+          return { data: { code, channel, whitelisted: true } };
         }
-        if (Date.now() >= deadline) {
-          return {
-            data: {
-              code,
-              channel,
-              whitelisted: false,
-              timedOut: true,
-              note: 'Still not connected after a long wait. Ask the user whether to keep waiting or skip starting the agent.',
-            },
-          };
-        }
-        try {
-          await sleepOrAbort(WHITELIST_POLL_MS, ctx.signal);
-        } catch {
-          return { error: 'Cancelled.' };
-        }
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : String(e) };
       }
+      return {
+        error: `Code '${code}' is not connected for ${channel}. Call ask_user_info kind='phone' channel='${channel}' so the user can connect it, then check again.`,
+      };
     },
   },
   {
