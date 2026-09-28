@@ -164,7 +164,7 @@ const ObserverHero: React.FC = () => {
         </button>
       )}
       <h1 className="text-2xl md:text-3xl font-semibold text-gray-800 mb-6 text-center">
-        What do you want Observer<br className="md:hidden" /> to watch for?
+        What do you want me to Observe?
       </h1>
       {(isRecording || micStarting) && (
         <div className="w-full max-w-2xl flex items-center gap-2 px-1 pb-1.5 text-xs font-medium text-red-600 relative z-10">
@@ -185,7 +185,7 @@ const ObserverHero: React.FC = () => {
           onKeyDown={handleKeyDown}
           placeholder="Describe what to monitor…"
           disabled={isRunning}
-          className="flex-1 min-w-0 p-4 md:p-5 text-left text-base md:text-lg text-gray-700 bg-white border border-gray-200 rounded-3xl shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none leading-snug max-h-56 overflow-y-auto"
+          className="flex-1 min-w-0 p-4 md:p-5 text-left text-sm md:text-lg text-gray-700 bg-white border border-gray-200 rounded-3xl shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none leading-snug max-h-56 overflow-y-auto"
         />
         <button
           type="button"
