@@ -183,11 +183,21 @@ async function captureScreenWeb(): Promise<ToolResult> {
 /**
  * Mobile app (Tauri iOS/Android): trigger the native picker via tauriStreamCapture — the
  * same singleton the agent loop acquires, so the live stream is reused by start_agent.
- * Frames arrive asynchronously (on iOS the user taps "Start Broadcast" + a short countdown),
- * so poll the latest raw frame until one lands or we time out, rather than grabbing
- * synchronously like the browser path.
  */
-async function captureScreenTauri(): Promise<ToolResult> {
+function captureScreenTauri(): Promise<ToolResult> {
+  return grabTauriFrame(
+    { captured: true, note: 'Native screen capture is live (whole screen) and will be reused by start_agent — no second prompt.' },
+    'Screen capture started but no frame has arrived yet. On iOS, make sure you tapped "Start Broadcast" in the system sheet, then call capture_screen again.',
+  );
+}
+
+/**
+ * Acquire tauriStreamCapture's display stream and return its newest frame. Frames arrive
+ * asynchronously (on iOS the user taps "Start Broadcast" + a short countdown), so poll the
+ * latest raw frame until one lands or we time out, rather than grabbing synchronously like
+ * the browser path.
+ */
+async function grabTauriFrame(data: Record<string, unknown>, noFrameError: string): Promise<ToolResult> {
   try {
     await tauriStreamCapture.acquireMasterStream('display');
   } catch (e) {
@@ -203,10 +213,7 @@ async function captureScreenTauri(): Promise<ToolResult> {
   // frames ever arrive for getLatestBase64Frame() — serve a still of the fake screen instead.
   if (tauriStreamCapture.isTutorialDisplayActive()) {
     return {
-      data: {
-        captured: true,
-        note: 'Stream is live and will be reused by start_agent — no second prompt.',
-      },
+      data,
       images: [`data:image/jpeg;base64,${tutorialStreamCapture.captureStillFrame()}`],
     };
   }
@@ -222,14 +229,11 @@ async function captureScreenTauri(): Promise<ToolResult> {
   }
 
   if (!raw) {
-    return { error: 'Screen capture started but no frame has arrived yet. On iOS, make sure you tapped "Start Broadcast" in the system sheet, then call capture_screen again.' };
+    return { error: noFrameError };
   }
 
   return {
-    data: {
-      captured: true,
-      note: 'Native screen capture is live (whole screen) and will be reused by start_agent — no second prompt.',
-    },
+    data,
     images: [`data:image/jpeg;base64,${raw}`],
   };
 }
@@ -237,6 +241,52 @@ async function captureScreenTauri(): Promise<ToolResult> {
 // Sentinel target id used to stand in for a real screen/window during the RecipeSplash
 // onboarding tutorial (see SensorSettings.isMcpTutorialMode / tutorialStreamCapture).
 const TUTORIAL_TARGET_ID = 'tutorial';
+
+/**
+ * Desktop app: start the live stream on a target from list_screen_targets with no selector
+ * window, by seating it as the preselected target before acquiring. The frame comes from
+ * the same capture pipeline the agent uses (unlike see_screen_target's small xcap
+ * thumbnail), so a box_2d read off it lines up with the agent's crop. There is only one
+ * master display stream: if one is already live (e.g. a running agent's), its frame is
+ * returned as-is and target_id is not applied.
+ */
+async function captureScreenDesktop(targetId: unknown): Promise<ToolResult> {
+  if (typeof targetId !== 'string' || !targetId) {
+    return { error: 'On desktop, capture_screen needs a target_id from list_screen_targets.' };
+  }
+
+  if (tauriStreamCapture.isStreamAvailable('screenVideo')) {
+    return grabTauriFrame(
+      {
+        captured: true,
+        note: `A screen stream was already live (only one can run at a time), so this frame is from that stream and target '${targetId}' was NOT applied. Check the image is what you expected; to switch targets, stop the agents using the screen first.`,
+      },
+      'The screen stream is live but no frame has arrived yet. Call capture_screen again.',
+    );
+  }
+
+  let target: Record<string, unknown> = { id: TUTORIAL_TARGET_ID, kind: 'window', name: 'Downloader.app', width: 960, height: 540 };
+  // The tutorial target needs no seating: the synthetic stream is substituted inside
+  // tauriStreamCapture the moment the display stream is acquired.
+  if (targetId !== TUTORIAL_TARGET_ID) {
+    try {
+      const targets = await tauriStreamCapture.getTargets(false);
+      const match = targets.find(t => t.id === targetId);
+      if (!match) {
+        return { error: `Target '${targetId}' is no longer available (window may have closed). Re-run list_screen_targets.` };
+      }
+      target = { id: match.id, kind: match.kind, name: match.name, width: match.width, height: match.height };
+      tauriStreamCapture.setPreselectedTarget(match.id);
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  return grabTauriFrame(
+    { captured: true, ...target, note: 'Stream is live on this target and will be reused by start_agent — no selector, no select_screen_target needed.' },
+    'Screen capture started but no frame has arrived yet. Call capture_screen again.',
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Tool definitions
@@ -613,7 +663,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'list_screen_targets',
-    description: 'List the screens (monitors) and windows available to capture for a $SCREEN agent, as a text-only catalog (NO images — a desktop can have many windows, so thumbnails are fetched one at a time with see_screen_target). Call this on desktop BEFORE start_agent for any agent whose system_prompt uses $SCREEN: read the list, see_screen_target the few that plausibly match what the user wants to watch, then select_screen_target the best one. On the web/mobile app this returns a note instead — there the OS picker appears automatically when the agent starts, so just go straight to start_agent. Each target has an id (for see_screen_target / select_screen_target), kind (monitor/window), name, appName, and width/height in pixels (for context; set_screen_crop takes a normalized box_2d, not these pixels).',
+    description: 'List the screens (monitors) and windows available to capture for a $SCREEN agent, as a text-only catalog (NO images — a desktop can have many windows, so thumbnails are fetched one at a time with see_screen_target). Call this on desktop BEFORE create_agent for any agent whose system_prompt uses $SCREEN: read the list, see_screen_target the few that plausibly match what the user wants to watch, then capture_screen the best one. On the web/mobile app this returns a note instead — there the OS picker appears automatically when the agent starts, so just go straight to start_agent. Each target has an id (for see_screen_target / capture_screen / select_screen_target), kind (monitor/window), name, appName, and width/height in pixels (for context; set_screen_crop takes a normalized box_2d, not these pixels).',
     parameters: { type: 'object', properties: {} },
     multimodal: false,
     execute: async (): Promise<ToolResult> => {
@@ -660,7 +710,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'see_screen_target',
-    description: 'Fetch a thumbnail image of ONE capture target so you can actually SEE what is on that monitor/window before committing to it. Pass a target_id from list_screen_targets. Desktop only. Use this to check the one or few candidates that match what the user wants to watch, then select_screen_target the right one. Cheaper than dumping every window\'s image at once — call it per target as needed. If the target has since closed, this fails; re-run list_screen_targets.',
+    description: 'Fetch a small, low-resolution thumbnail of ONE capture target so you can tell which monitor/window it is. Pass a target_id from list_screen_targets. Desktop only. Use this to check the one or few candidates that match what the user wants to watch, then capture_screen the right one. The thumbnail is for IDENTIFYING the target only — it is too small and not framed exactly like the live capture, so never read a set_screen_crop box_2d off it; read the crop off capture_screen\'s frame instead. Starts no stream. If the target has since closed, this fails; re-run list_screen_targets.',
     parameters: {
       type: 'object',
       properties: {
@@ -706,7 +756,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'select_screen_target',
-    description: 'Pre-select which screen or window a $SCREEN agent will capture, so start_agent runs without popping the desktop screen-selector. Pass a target_id from list_screen_targets. Desktop only. Call this (optionally with set_screen_crop) right before start_agent. If the chosen window has since closed, this fails — re-run list_screen_targets and pick again.',
+    description: 'Pre-select which screen or window a $SCREEN agent will capture, so start_agent runs without popping the desktop screen-selector — WITHOUT starting the stream or returning an image. Pass a target_id from list_screen_targets. Desktop only. Not needed after capture_screen (which already starts the stream on its target); use this only to seat a target you do not need to look at. Call it right before start_agent. If the chosen window has since closed, this fails — re-run list_screen_targets and pick again.',
     parameters: {
       type: 'object',
       properties: {
@@ -739,7 +789,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'set_screen_crop',
-    description: 'OPTIONAL. Crop a $SCREEN agent\'s capture to a rectangular sub-region of its target, so the model only sees (and only spends tokens on) the part that matters — e.g. a download progress bar. Skip this entirely to watch the whole screen/window (the default). Give the region as box_2d = [ymin, xmin, ymax, xmax] in the SAME normalized 0–1000 coordinate space you use for object detection: top-left origin, y first, every value 0–1000 regardless of the screen\'s real resolution. Read box_2d straight off the image you saw in see_screen_target / capture_screen — do NOT convert to pixels yourself, and do NOT pass the target\'s resolution; the crop is stored normalized and resolved against the live frame at capture time. Pass clear:true to remove an existing crop and capture the full target.',
+    description: 'OPTIONAL. Crop a $SCREEN agent\'s capture to a rectangular sub-region of its target, so the model only sees (and only spends tokens on) the part that matters — e.g. a download progress bar. Skip this entirely to watch the whole screen/window (the default). Give the region as box_2d = [ymin, xmin, ymax, xmax] in the SAME normalized 0–1000 coordinate space you use for object detection: top-left origin, y first, every value 0–1000 regardless of the screen\'s real resolution. Read box_2d straight off the frame capture_screen returned (or an iteration image from get_iteration) — never off a see_screen_target thumbnail, and do NOT convert to pixels yourself, and do NOT pass the target\'s resolution; the crop is stored normalized and resolved against the live frame at capture time. Pass clear:true to remove an existing crop and capture the full target.',
     parameters: {
       type: 'object',
       properties: {
@@ -791,11 +841,19 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'capture_screen',
-    description: 'Trigger a screen-share preview so you can SEE what will be monitored before building the agent, then return one captured frame as an image. On web / mobile web this opens the browser screen-share picker (pick a screen, window, or tab). On the mobile app it triggers the OS screen-capture picker and captures the WHOLE screen (iOS broadcast / Android screen-record permission): the user must approve the system prompt, and on iOS there can be a few seconds of delay before the first frame — if this returns a "no frame yet" message, just call it again. The stream stays live — start_agent reuses it without prompting again. Use this on web and mobile app instead of list_screen_targets/see_screen_target/select_screen_target. Call it BEFORE create_agent for any agent whose system_prompt uses $SCREEN.',
-    parameters: { type: 'object', properties: {} },
+    description: 'Start the live screen stream a $SCREEN agent will use and return one frame from it, so you can SEE exactly what will be monitored before building the agent. The frame comes from the real capture pipeline, so it is the image to read a set_screen_crop box_2d from. On the desktop app pass target_id (from list_screen_targets): the stream starts on that screen/window with NO selector popping up; only one screen stream runs at a time, so if one is already live (e.g. a running agent\'s) you get its frame and target_id is not applied. On web / mobile web (no target_id) this opens the browser screen-share picker (pick a screen, window, or tab). On the mobile app (no target_id) it triggers the OS screen-capture picker and captures the WHOLE screen (iOS broadcast / Android screen-record permission): the user must approve the system prompt, and on iOS there can be a few seconds of delay before the first frame — if this returns a "no frame yet" message, just call it again. The stream stays live — start_agent reuses it without prompting again. Call it BEFORE create_agent for any agent whose system_prompt uses $SCREEN.',
+    parameters: {
+      type: 'object',
+      properties: {
+        target_id: { type: 'string', description: 'Desktop app only (required there): the id of the target to capture, from list_screen_targets. Omit on web / mobile.' },
+      },
+    },
     multimodal: true,
-    // Same platform split as StreamManager: browser → getDisplayMedia; Tauri → native plugin.
-    execute: async (): Promise<ToolResult> => isWeb() ? captureScreenWeb() : captureScreenTauri(),
+    // Same platform split as StreamManager: browser → getDisplayMedia; Tauri → native plugin
+    // (desktop seats the target up front so no selector opens).
+    execute: async (args): Promise<ToolResult> => isWeb()
+      ? captureScreenWeb()
+      : isDesktop() ? captureScreenDesktop(args.target_id) : captureScreenTauri(),
   },
   {
     name: 'download_model',
@@ -817,15 +875,11 @@ export const TOOLS: ToolDefinition[] = [
 // Registry lookups
 // ---------------------------------------------------------------------------
 
-/** Desktop-only screen tools — replaced by capture_screen on all other surfaces. */
+/** Desktop-only screen tools — on all other surfaces the OS/browser picker inside capture_screen does the choosing. */
 const DESKTOP_ONLY_TOOLS = new Set(['list_screen_targets', 'see_screen_target', 'select_screen_target']);
-/** Sub-agentic screen tool — only exposed on web / mobile app / mobile web. */
-const WEB_ONLY_TOOLS = new Set(['capture_screen']);
 
 function getPlatformTools(): ToolDefinition[] {
-  if (isDesktop()) {
-    return TOOLS.filter(t => !WEB_ONLY_TOOLS.has(t.name));
-  }
+  if (isDesktop()) return TOOLS;
   // Web, mobile app, mobile web — sub-agentic: browser picker flow.
   return TOOLS.filter(t => !DESKTOP_ONLY_TOOLS.has(t.name));
 }

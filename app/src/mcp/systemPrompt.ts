@@ -35,14 +35,15 @@ You can use it directly in a new or edited agent; call \`check_whitelist\` befor
 
   const screenToolList = desktop
     ? `- \`list_screen_targets\` — list capturable screens/windows as a text catalog, no images
-- \`see_screen_target\` — fetch a thumbnail of ONE target so you can see it before picking
-- \`select_screen_target\` — pre-pick which screen/window a \`$SCREEN\` agent captures, so start_agent doesn't pop the selector
+- \`see_screen_target\` — fetch a small thumbnail of ONE target, just to identify which one it is
+- \`capture_screen\` — start the live stream on a target (no selector) and return a real frame from it; start_agent reuses the stream
+- \`select_screen_target\` — pre-pick a target without starting the stream or seeing it (not needed after capture_screen)
 - \`set_screen_crop\` — crop a \`$SCREEN\` agent's capture to a sub-region (e.g. just a progress bar)`
     : `- \`capture_screen\` — open the browser screen-share picker, then return a preview image of what was selected so you can see it before building the agent; the stream stays live and is reused by start_agent
 - \`set_screen_crop\` — crop a \`$SCREEN\` agent's capture to a sub-region (e.g. just a progress bar)`;
 
   const screenFlow = desktop
-    ? `If an agent's system_prompt uses \`$SCREEN\`, perceive the screen BEFORE you \`create_agent\`, then configure capture AFTER: first \`list_screen_targets\` for the text catalog of monitors/windows, then \`see_screen_target\` the one (or few) that plausibly match what the user wants to watch — don't preview all of them, just the likely candidates. Looking at that thumbnail, decide which target it is AND whether a sub-region matters (e.g. only a download bar, a chat panel, a video player), reading the crop region straight off the thumbnail as a \`box_2d\` ([ymin, xmin, ymax, xmax] normalized 0–1000 — the same grid you use for object detection). Now \`create_agent\` with a system_prompt grounded in what you actually saw ("watch this download progress bar"). The crop is decided here but can only be APPLIED once the agent exists, so AFTER \`create_agent\`: \`select_screen_target\` to seat the choice (always use \`select_screen_target\` before \`start_agent\` so it won't pop the desktop selector) and, if you decided a sub-region matters, \`set_screen_crop\` that agent's \`agent_id\` to that region. Cropping is OPTIONAL and only for narrowing to a sub-region — watching the whole screen/window is the default and needs NO crop. NEVER ask the user for their monitor resolution or any pixel dimensions: read the \`box_2d\` straight off the thumbnail — \`set_screen_crop\` stores it normalized and resolves it against the live frame, so no pixel/resolution numbers are needed.`
+    ? `If an agent's system_prompt uses \`$SCREEN\`, perceive the screen BEFORE you \`create_agent\`, then configure capture AFTER: first \`list_screen_targets\` for the text catalog of monitors/windows, then \`see_screen_target\` the one (or few) that plausibly match what the user wants to watch — don't preview all of them, just the likely candidates. Those thumbnails are small and only for IDENTIFYING the right target. Once you know which one it is, \`capture_screen\` with its \`target_id\`: this starts the live stream on that target with no selector popping up and returns a real frame from the exact pipeline the agent will use. Looking at THAT frame, decide whether a sub-region matters (e.g. only a download bar, a chat panel, a video player), reading the crop region straight off it as a \`box_2d\` ([ymin, xmin, ymax, xmax] normalized 0–1000 — the same grid you use for object detection). Never read a \`box_2d\` off a \`see_screen_target\` thumbnail — it is too small and framed differently, so the crop will miss. Now \`create_agent\` with a system_prompt grounded in what you actually saw ("watch this download progress bar"). The crop is decided here but can only be APPLIED once the agent exists, so AFTER \`create_agent\`, if you decided a sub-region matters, \`set_screen_crop\` that agent's \`agent_id\` to that region, then \`start_agent\` — it reuses the live stream, so no \`select_screen_target\` is needed. Cropping is OPTIONAL and only for narrowing to a sub-region — watching the whole screen/window is the default and needs NO crop. Only one screen stream runs at a time: if \`capture_screen\` says a stream was already live, its frame is from that stream, so check it shows what you expect. NEVER ask the user for their monitor resolution or any pixel dimensions: read the \`box_2d\` straight off the frame — \`set_screen_crop\` stores it normalized and resolves it against the live frame, so no pixel/resolution numbers are needed.`
     : `If an agent's system_prompt uses \`$SCREEN\`, call \`capture_screen\` BEFORE \`create_agent\`. It opens the browser screen-share picker — the user picks what to share — and returns a preview image so you can see exactly what was selected. Use that image to write a grounded system_prompt ("watch this download progress bar"). If only a sub-region matters (e.g. a progress bar, a chat panel), call \`set_screen_crop\` after \`create_agent\` with a \`box_2d\` ([ymin, xmin, ymax, xmax] normalized 0–1000) read straight off the preview. Cropping is OPTIONAL — skip it to watch the full shared area. NEVER ask the user for screen dimensions or pixel numbers; the crop is stored normalized and resolved against the live frame. The stream stays live — \`start_agent\` reuses it without prompting again. If \`capture_screen\` fails with "not supported", screen monitoring is unavailable in this browser — tell the user and suggest a different notification method.`;
 
   const goldenPath = desktop
@@ -50,8 +51,8 @@ You can use it directly in a new or edited agent; call \`check_whitelist\` befor
 User: can you monitor my steam download?
 MCP: list_agents list_models // get all context and available models always
 MCP: list_screen_targets // agent will use $SCREEN; find the Steam window in the catalog
-MCP: see_screen_target // look at that thumbnail, it's the download bar; decide to crop to it
-MCP: select_screen_target // select screen, maybe tell the user it will watch a specific part of the screen
+MCP: see_screen_target // look at that thumbnail: yes, that's the Steam window
+MCP: capture_screen 'target_id' // starts the stream on it (no selector); real frame shows the download bar; decide to crop to it and read box_2d off THIS frame
 MCP: of course! do you want to be called when it finishes? // infer what state triggers notificatio
 User: yes
 MCP: ask_user_info kind='phone' channel='voice' // modal returns the user's connected code; never ask for a phone number in chat
@@ -59,8 +60,8 @@ MCP: do you want it to use a local model? // always offer local model path
 User: yes
 MCP: download_model
 MCP: create_agent // write prompt grounded in what you saw: "watch this download progress bar"
-MCP: set_screen_crop 'agent_id' // apply crop, if not sure about coordinates use see_screen_target again
-MCP: start_agent`
+MCP: set_screen_crop 'agent_id' // apply crop, if not sure about coordinates use capture_screen again
+MCP: start_agent // reuses the stream capture_screen started`
     : `# Golden Path — Web / Mobile app (sub-agentic)
 User: can you monitor my steam download?
 MCP: list_agents list_models // get all context and available models use this always
@@ -76,6 +77,16 @@ MCP: create_agent // write prompt grounded in what you saw; optionally decide to
 MCP: set_screen_crop 'agent_id' // only if a sub-region matters, if not sure about coordinates use capture_screen again
 MCP: start_agent`;
 
+
+  const recropFlow = desktop
+    ? `MCP: stop_agent
+MCP: capture_screen 'target_id' // restart the stream on the target and read the corrected box_2d off this fresh frame
+MCP: set_screen_crop 'agent_id'
+MCP: start_agent // reuses the stream capture_screen started`
+    : `MCP: stop_agent
+MCP: capture_screen // share again and read the corrected box_2d off this fresh frame
+MCP: set_screen_crop 'agent_id'
+MCP: start_agent`;
 
   const proactiveTools = desktop
     ? 'use list_agents, list_models, list_screen_targets, see_screen_target proactively to gain information and ground agent generation.'
@@ -150,11 +161,7 @@ ${goldenPath}
 MCP: get_iteration 'agent_id' // Call with JUST the agent_id (no iteration_id). It BLOCKS until the agent's first pass finishes — which can take a while on the first run — then returns the exact image the agent saw, so you can verify you cropped the right region or the agent is responding as expected. Always check this! You're not done when starting the agent. (If it returns a "no completed iteration after 2 min" error, the agent may be stuck — get_status, then stop_agent.)
 // re-cropping flow or just edit agent and restart if something is wrong.
 MCP: I made a mistake! The crop was wrong, let me fix it. //tell the user what went wrong, cropping or general agent config.
-MCP: stop_agent
-MCP: see_screen_target
-MCP: select_screen_target //always do this!! It doesn't persist after start/stop of agent
-MCP: set_screen_crop 'agent_id'
-MCP: start_agent // always select_screen_target before starting up again
+${recropFlow}
 MCP: get_iteration 'agent_id' // check the first iteration again... repeat if still wrong
 
 // If the cropping went fine and agent responded well, you're done:
