@@ -11,7 +11,7 @@ import type { TokenProvider } from '@utils/main_loop';
 import { type ToolStatusEntry } from '../../mcp/useMCP';
 import { useMCPContext } from '../../mcp/MCPContext';
 import { parseRemotePrompt, type RemoteChannel } from '../../mcp/remote';
-import type { ToolCall } from '../../mcp/types';
+import type { ToolCall, WireMessage } from '../../mcp/types';
 import { Logger, type WhitelistChannel } from '@utils/logging';
 import { StreamManager, StreamState } from '@utils/streamManager';
 import type { CompleteAgent } from '@utils/agent_database';
@@ -99,10 +99,78 @@ const StatusIcon: React.FC<{ status?: string }> = ({ status }) => {
 
 // Deliberately small and muted — a status caption, not a message. Tool calls aren't
 // conversation content, so they shouldn't read like a chat bubble the user is meant to parse.
-const ToolChip: React.FC<{ call: ToolCall; status?: ToolStatusEntry }> = ({ call, status }) => (
-  <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-[10px] font-medium text-gray-500 dark:text-gray-300">
+// Clickable so the raw call (args + result) can be inspected when debugging model confusion.
+const ToolChip: React.FC<{ call: ToolCall; status?: ToolStatusEntry; onInspect?: () => void }> = ({ call, status, onInspect }) => (
+  <button
+    type="button"
+    onClick={onInspect}
+    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-[10px] font-medium text-gray-500 dark:text-gray-300 hover:border-purple-300 dark:hover:border-purple-500 hover:text-purple-600 dark:hover:text-purple-300 transition-colors"
+  >
     <StatusIcon status={status?.status} />
     <span className="font-mono">{call.function.name}</span>
+  </button>
+);
+
+// Pretty-prints a JSON string (tool arguments, or a `role: 'tool'` result's content) for
+// display; falls back to the raw string when it isn't valid JSON (e.g. a plain-text error).
+const formatJsonish = (raw: unknown): string => {
+  if (raw == null) return '';
+  const str = typeof raw === 'string' ? raw : JSON.stringify(raw);
+  try {
+    return JSON.stringify(JSON.parse(str), null, 2);
+  } catch {
+    return str;
+  }
+};
+
+// ===================================================================================
+//  TOOL-CALL DETAIL MODAL
+// ===================================================================================
+// Shows exactly what the model sent (name + parsed arguments) and what came back (the
+// paired `role: 'tool'` result message), so you can see why the model got confused —
+// e.g. it called create_agent with a malformed config, or the executor returned an error
+// the chip alone never surfaces.
+const ToolCallDetailModal: React.FC<{
+  call: ToolCall;
+  status?: ToolStatusEntry;
+  resultMsg?: WireMessage;
+  onClose: () => void;
+}> = ({ call, status, resultMsg, onClose }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div
+      className="w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl p-4"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <StatusIcon status={status?.status} />
+          <span className="font-mono text-sm font-semibold text-gray-800 dark:text-gray-100">{call.function.name}</span>
+        </div>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+          <XCircle className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="mb-3">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Arguments</div>
+        <pre className="text-xs font-mono whitespace-pre-wrap break-all bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded p-2 text-gray-700 dark:text-gray-300">
+          {formatJsonish(call.function.arguments) || '(none)'}
+        </pre>
+      </div>
+
+      <div>
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Result</div>
+        {resultMsg ? (
+          <pre className="text-xs font-mono whitespace-pre-wrap break-all bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded p-2 text-gray-700 dark:text-gray-300">
+            {formatJsonish(resultMsg.content)}
+          </pre>
+        ) : (
+          <div className="text-xs text-gray-400 italic">
+            {status?.status === 'running' ? 'Still running…' : 'No result recorded.'}
+          </div>
+        )}
+      </div>
+    </div>
   </div>
 );
 
@@ -113,10 +181,11 @@ const ToolChip: React.FC<{ call: ToolCall; status?: ToolStatusEntry }> = ({ call
 // moment, not a stack of separate messages — so they're merged into a single compact,
 // auto-collapsing panel instead of one spaced-out chip row per turn (see grouping logic
 // in renderMessages below).
-const WorkingGroup: React.FC<{ batches: ToolCall[][]; toolStatus: Map<string, ToolStatusEntry> }> = ({ batches, toolStatus }) => {
+const WorkingGroup: React.FC<{ batches: ToolCall[][]; toolStatus: Map<string, ToolStatusEntry>; messages: WireMessage[] }> = ({ batches, toolStatus, messages }) => {
   const calls = batches.flat();
   const isRunning = calls.some(tc => toolStatus.get(tc.id)?.status === 'running');
   const hasError = calls.some(tc => toolStatus.get(tc.id)?.status === 'error');
+  const [inspecting, setInspecting] = useState<ToolCall | null>(null);
   // Auto-collapse shortly after the run finishes, mirroring Cowork's "done, tucked away" feel.
   // Stays expanded while running or right after finishing so the last tool is still visible.
   const [collapsed, setCollapsed] = useState(false);
@@ -156,12 +225,20 @@ const WorkingGroup: React.FC<{ batches: ToolCall[][]; toolStatus: Map<string, To
           {batches.map((batch, bi) => (
             <div key={bi} className="flex flex-wrap items-center gap-1">
               {batch.map(tc => (
-                <ToolChip key={tc.id} call={tc} status={toolStatus.get(tc.id)} />
+                <ToolChip key={tc.id} call={tc} status={toolStatus.get(tc.id)} onInspect={() => setInspecting(tc)} />
               ))}
               {bi < batches.length - 1 && <span className="text-gray-300 dark:text-gray-600 text-[10px]">·</span>}
             </div>
           ))}
         </div>
+      )}
+      {inspecting && (
+        <ToolCallDetailModal
+          call={inspecting}
+          status={toolStatus.get(inspecting.id)}
+          resultMsg={messages.find(m => m.role === 'tool' && m.tool_call_id === inspecting.id)}
+          onClose={() => setInspecting(null)}
+        />
       )}
     </div>
   );
@@ -588,7 +665,7 @@ const MCP: React.FC<MCPProps> = ({
       const { calls, batches } = block as { calls: ToolCall[]; batches: ToolCall[][] };
       return (
         <div key={idx} className="flex flex-col items-start w-full">
-          <WorkingGroup batches={batches} toolStatus={toolStatus} />
+          <WorkingGroup batches={batches} toolStatus={toolStatus} messages={messages} />
           {calls.some(tc => tc.function.name === 'download_model') && <DownloadModelProgress />}
           {calls
             .filter(tc => tc.function.name === 'check_whitelist')
