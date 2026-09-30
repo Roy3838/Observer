@@ -1,6 +1,7 @@
 import { datadogRum } from '@datadog/browser-rum';
 import { reactPlugin } from '@datadog/browser-rum-react';
 import { Analytics } from '@utils/analytics';
+import { ModelManager } from '@utils/ModelManager';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Auth0Provider } from '@auth0/auth0-react';
 import { platform as getPlatform } from '@tauri-apps/plugin-os';
@@ -948,7 +949,7 @@ function AppContent() {
       }
       if (!isAuthenticated) {
         const localOnboardingComplete = localStorage.getItem('observer_onboarding_complete_local');
-        if (!localOnboardingComplete) {
+        if (!localOnboardingComplete && !ModelManager.getInstance().hasUserServer()) {
           setShowStartupDialog(true);
           Analytics.startupShown();
         }
@@ -1478,7 +1479,7 @@ function AppContent() {
       {showStartupDialog && (
         <StartupDialogs
           onDismiss={handleDismissStartupDialog}
-          onSkip={() => { setShowLocalModeWarning(true); Analytics.localModeShown(); }}
+          onServerConnected={() => { setCustomServers(getCustomServers()); fetchModels(); }}
           onLogin={login}
           onToggleObServer={() => setIsUsingObServer(true)}
           isAuthenticated={isAuthenticated}

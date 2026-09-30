@@ -11,7 +11,7 @@
 // wheels are currently spelling out — spinning a wheel visibly grows/edits the input live.
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Send, Loader2, Info, Mic } from 'lucide-react';
+import { Send, Loader2, Info, Mic, Cpu } from 'lucide-react';
 import { useMCPContext } from '../../mcp/MCPContext';
 import { useAuth } from '@contexts/AuthContext';
 import { SensorSettings } from '@utils/settings';
@@ -20,14 +20,17 @@ import { tutorialFlow } from '@utils/tutorialFlow';
 import { StreamManager } from '@utils/streamManager';
 import { useSubscriberText } from '@hooks/useTranscriptionState';
 import { Logger } from '@utils/logging';
+import { ModelManager, type Model } from '@utils/ModelManager';
 import RecipeInline, { type TutorialStep } from '../AICreator/RecipeInline';
 
 // Synthetic owner id for voice dictation on the hero splash screen — mirrors MCP.tsx's
 // MCP_MIC_ID so it routes through the same StreamManager / TranscriptionRouter path.
 const HERO_MIC_ID = 'observer-hero-mic';
+const DEFAULT_CLOUD_MODEL = 'gemini-2.5-flash-lite-free';
 
 const ObserverHero: React.FC = () => {
-  const { send, isRunning } = useMCPContext();
+  const { send, isRunning, modelName, setModelName } = useMCPContext();
+  const { isAuthenticated } = useAuth();
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -77,6 +80,27 @@ const ObserverHero: React.FC = () => {
       if (micGenRef.current === gen) setMicStarting(false);
     }
   };
+  // --- Model selection (same custom-server list as MCP.tsx's input) --------------
+  const getCustomServerModels = (): Model[] =>
+    ModelManager.getInstance().listModels().models.filter(m =>
+      m.server !== ModelManager.BROWSER_LOCAL &&
+      m.server !== ModelManager.LLAMA_CPP_LOCAL &&
+      m.server !== ModelManager.SKIP_MODEL &&
+      !m.server.includes('api.observer-ai.com')
+    );
+  const [customModels, setCustomModels] = useState<Model[]>(getCustomServerModels);
+
+  useEffect(() => ModelManager.getInstance().onModelsChange(() => {
+    setCustomModels(getCustomServerModels());
+  }), []);
+
+  // Signed-out users can't use the cloud default, so pick their first own-server model.
+  useEffect(() => {
+    if (!isAuthenticated && customModels.length > 0 && !customModels.some(m => m.name === modelName)) {
+      setModelName(customModels[0].name);
+    }
+  }, [isAuthenticated, customModels, modelName, setModelName]);
+
   // Once the user types their own text, wheel spins stop overwriting it. Clearing the box
   // (back to empty) hands control back to the wheels.
   const [userEdited, setUserEdited] = useState(false);
@@ -173,6 +197,20 @@ const ObserverHero: React.FC = () => {
             <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
           </span>
           <span>{micStarting ? 'Starting microphone…' : 'Listening… tap the mic to stop'}</span>
+        </div>
+      )}
+      {customModels.length > 0 && (
+        <div className="w-full max-w-2xl flex items-center gap-1.5 px-1 pb-1.5 relative z-10">
+          <Cpu className="h-3.5 w-3.5 text-purple-400 flex-shrink-0" />
+          <select
+            value={modelName}
+            onChange={e => setModelName(e.target.value)}
+            disabled={isRunning}
+            className="flex-1 text-xs text-gray-600 bg-transparent border-0 focus:ring-0 focus:outline-none cursor-pointer disabled:cursor-not-allowed truncate"
+          >
+            {isAuthenticated && <option value={DEFAULT_CLOUD_MODEL}>Default (cloud)</option>}
+            {customModels.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+          </select>
         </div>
       )}
       <form onSubmit={handleSubmit} className="w-full max-w-2xl flex items-center gap-2 relative z-10">

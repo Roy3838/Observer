@@ -365,6 +365,10 @@ export class ModelManager {
       const stored = localStorage.getItem(CUSTOM_SERVERS_KEY);
       if (stored) {
         this.customServers = JSON.parse(stored);
+        // Re-register persisted servers so fetchModels() queries them after a reload
+        for (const server of this.customServers) {
+          if (server.enabled && server.status === 'online') this.addServer(server.address);
+        }
       }
     } catch (error) {
       console.error('Failed to load custom servers:', error);
@@ -436,6 +440,15 @@ export class ModelManager {
     }
 
     return [...this.customServers];
+  }
+
+  /**
+   * True if the user has a verified, enabled custom inference server (not Observer Cloud).
+   * Used to gate the "skip sign in" option on the startup dialog.
+   */
+  public hasUserServer(): boolean {
+    return this.customServers.some(s =>
+      s.enabled && s.status === 'online' && !s.address.includes('api.observer-ai.com'));
   }
 
   public async checkCustomServer(address: string): Promise<{ status: 'online' | 'offline'; error?: string }> {
