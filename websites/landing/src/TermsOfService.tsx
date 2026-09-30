@@ -206,8 +206,7 @@ const TermsOfService = () => {
             <p className="mt-2">
               Each message or call draws down the budget by the price our messaging provider (Twilio)
               charges us for it. We do not add a markup. That price depends on the destination country, the
-              message length and, for calls, the duration. 
-            </p>
+              message length and, for calls, the duration.
             </p>
             <p className="mt-2">
               Because the provider reports its price only after a message is sent or a call ends, each send
