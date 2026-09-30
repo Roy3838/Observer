@@ -18,7 +18,7 @@ const TermsOfService = () => {
       <main className="py-16">
         <div className="container mx-auto px-6 max-w-4xl">
           <h1 className="text-4xl font-bold mb-4 text-black">Terms of Service</h1>
-          <p className="text-black mb-8">Last updated: June 2026</p>
+          <p className="text-black mb-8">Last updated: September 2026</p>
 
           <div className="space-y-6 text-gray-700">
             <p>
@@ -44,9 +44,8 @@ const TermsOfService = () => {
             <p>
               Observer AI is open source software. You have an implied license to compile, modify, and run your
               own version of Observer from the <a href="https://github.com/Roy3838/Observer" className="text-blue-600 hover:underline">source code</a>.
-              When using a self-compiled version with local inference providers and Discord notifications (which
-              connect directly to Discord's servers), no data passes through our servers and these Terms do not
-              apply to such usage.
+              When using a self-compiled version with local inference providers and without our cloud services,
+              no data passes through our servers and these Terms do not apply to such usage.
             </p>
 
             <h2 className="text-xl font-semibold mt-8 mb-4 text-gray-900">4. User Accounts</h2>
@@ -89,8 +88,8 @@ const TermsOfService = () => {
             <h2 className="text-xl font-semibold mt-8 mb-4 text-gray-900">7. Third-Party Services</h2>
             <p>
               The Service integrates with third-party AI inference providers (including Google AI Studio,
-              OpenRouter, and Fireworks.ai) and notification services (including Twilio, SendGrid, Telegram,
-              and Discord). Your use of these services is subject to their respective terms and privacy policies.
+              OpenRouter, and Fireworks.ai) and notification services (including Twilio, SendGrid, and
+              Telegram). Your use of these services is subject to their respective terms and privacy policies.
             </p>
             <p>
               <strong>We are not responsible for the practices, policies, or actions of third-party service
@@ -119,10 +118,15 @@ const TermsOfService = () => {
             </p>
             <h3 className="text-lg font-medium mt-6 mb-2 text-gray-800">Credit Allocation by Tier</h3>
             <ul className="list-disc pl-6 space-y-1">
-              <li><strong>Free tier:</strong> 60 credits per day</li>
-              <li><strong>Pro tier:</strong> 480 credits per day</li>
-              <li><strong>Max tier:</strong> 2,880 credits per day (effectively unlimited at 30-second loop intervals)</li>
+              <li><strong>Free tier:</strong> 60 credits per day, up to 1,200 credits per month (about 10 hours at 30-second loop intervals)</li>
+              <li><strong>Plus tier:</strong> 480 credits per day, up to 4,800 credits per month (about 4 hours per day and 40 hours per month at 30-second loop intervals)</li>
+              <li><strong>Pro tier:</strong> 1,440 credits per day, up to 12,000 credits per month (about 100 hours at 30-second loop intervals)</li>
+              <li><strong>Max tier:</strong> 2,880 credits per day with no monthly cap (effectively unlimited at 30-second loop intervals)</li>
             </ul>
+            <p className="mt-2">
+              Daily and monthly limits apply together: usage stops when either one is reached, whichever
+              comes first.
+            </p>
             <h3 className="text-lg font-medium mt-6 mb-2 text-gray-800">How Credits Translate to Monitoring Time</h3>
             <p>
               The actual monitoring duration depends on your configured loop interval. For example, with 60 daily credits:
@@ -135,41 +139,93 @@ const TermsOfService = () => {
             </ul>
             <h3 className="text-lg font-medium mt-6 mb-2 text-gray-800">Credit Usage Rules</h3>
             <ul className="list-disc pl-6 space-y-1">
-              <li>Credits reset daily at midnight UTC</li>
-              <li>Unused credits do not roll over to the next day</li>
+              <li>Daily limits reset at midnight UTC</li>
+              <li>Monthly limits reset on the first day of each calendar month (UTC), not on your billing date</li>
+              <li>Unused credits do not roll over to the next day or month</li>
               <li>Each running agent consumes credits independently</li>
               <li>Local inference (using your own models) does not consume cloud credits</li>
               <li>We reserve the right to modify credit allocations with reasonable notice</li>
             </ul>
 
-            <h3 className="text-lg font-medium mt-6 mb-2 text-gray-800">Daily Service Limits (Anti-Abuse Measures)</h3>
+            <h3 className="text-lg font-medium mt-6 mb-2 text-gray-800">Service Limits (Anti-Abuse Measures)</h3>
             <p>
-              To ensure fair usage and prevent abuse, all tiers have daily limits on notifications and other services.
-              These limits reset daily at midnight UTC.
+              To ensure fair usage and prevent abuse, all tiers have daily limits on notifications and other
+              services, and some services also have monthly limits. Daily limits reset at midnight UTC; monthly
+              limits reset on the first day of each calendar month (UTC). In addition, metered requests are
+              limited to 30 per minute per account across all services.
             </p>
 
-            <h4 className="font-medium mt-4 mb-2 text-gray-800">Free Tier Daily Limits</h4>
+            <h4 className="font-medium mt-4 mb-2 text-gray-800">Free Tier Limits</h4>
             <ul className="list-disc pl-6 space-y-1">
-              <li><strong>Cloud Monitoring:</strong> 60 credits</li>
-              <li><strong>Agent Builder (MCP) messages:</strong> 45</li>
-              <li><strong>SMS, WhatsApp, Voice Calls:</strong> 5 each</li>
-              <li><strong>Email, Telegram, Pushover:</strong> 2,880 each</li>
+              <li><strong>Cloud Monitoring:</strong> 60 credits per day, 1,200 per month</li>
+              <li><strong>Agent Builder (MCP) messages:</strong> 45 per day, 150 per month</li>
+              <li><strong>SMS, WhatsApp, Voice Calls:</strong> 5 each per day, within a shared $0.50 monthly notification budget (see below)</li>
+              <li><strong>Email, Telegram, Pushover:</strong> 2,880 each per day</li>
             </ul>
 
-            <h4 className="font-medium mt-4 mb-2 text-gray-800">Pro Tier Daily Limits</h4>
+            <h4 className="font-medium mt-4 mb-2 text-gray-800">Plus Tier Limits</h4>
+            <p>
+              Same as the Free tier, except Cloud Monitoring: 480 credits per day and 4,800 per month (about
+              4 hours per day and 40 hours per month at 30-second loop intervals).
+            </p>
+
+            <h4 className="font-medium mt-4 mb-2 text-gray-800">Pro Tier Limits</h4>
             <ul className="list-disc pl-6 space-y-1">
-              <li><strong>Cloud Monitoring:</strong> 480 credits</li>
-              <li><strong>Agent Builder (MCP) messages:</strong> 1,000</li>
-              <li><strong>SMS, WhatsApp, Voice Calls:</strong> 100 each</li>
-              <li><strong>Email, Telegram, Pushover:</strong> 2,880 each</li>
+              <li><strong>Cloud Monitoring:</strong> 1,440 credits per day, 12,000 per month</li>
+              <li><strong>Agent Builder (MCP) messages:</strong> 1,000 per day, 1,500 per month</li>
+              <li><strong>SMS, WhatsApp, Voice Calls:</strong> 300 each per day, within a shared $5.00 monthly notification budget (see below)</li>
+              <li><strong>Email, Telegram, Pushover:</strong> 2,880 each per day</li>
             </ul>
 
-            <h4 className="font-medium mt-4 mb-2 text-gray-800">Max Tier Daily Limits</h4>
+            <h4 className="font-medium mt-4 mb-2 text-gray-800">Max Tier Limits</h4>
             <ul className="list-disc pl-6 space-y-1">
-              <li><strong>Cloud Monitoring:</strong> 2,880 credits (effectively unlimited at 30-second intervals)</li>
-              <li><strong>Agent Builder (MCP) messages:</strong> 1,000</li>
-              <li><strong>SMS, WhatsApp, Voice Calls:</strong> 100 each</li>
-              <li><strong>Email, Telegram, Pushover:</strong> 2,880 each</li>
+              <li><strong>Cloud Monitoring:</strong> 2,880 credits per day, no monthly cap (effectively unlimited at 30-second intervals)</li>
+              <li><strong>Agent Builder (MCP) messages:</strong> 1,000 per day, 3,000 per month</li>
+              <li><strong>SMS, WhatsApp, Voice Calls:</strong> 300 each per day, within a shared $5.00 monthly notification budget (see below)</li>
+              <li><strong>Email, Telegram, Pushover:</strong> 2,880 each per day</li>
+            </ul>
+
+            <h4 className="font-medium mt-4 mb-2 text-gray-800">Organization Plans</h4>
+            <p>
+              Limits for organization and enterprise plans are set by the agreement for that plan, which
+              takes precedence over the tier limits above where they differ.
+            </p>
+
+            <h3 className="text-lg font-medium mt-6 mb-2 text-gray-800">SMS, WhatsApp and Voice Call Budget</h3>
+            <p>
+              SMS, WhatsApp messages and voice calls cost us real money for every message and every minute,
+              and that cost varies widely by country. Instead of a fixed number of messages, these three
+              channels share one monthly dollar budget per account:
+            </p>
+            <ul className="list-disc pl-6 space-y-1">
+              <li><strong>Free tier:</strong> $0.50 per month</li>
+              <li><strong>Plus tier:</strong> $0.50 per month</li>
+              <li><strong>Pro tier:</strong> $5.00 per month</li>
+              <li><strong>Max tier:</strong> $5.00 per month</li>
+            </ul>
+            <p className="mt-2">
+              Each message or call draws down the budget by the price our messaging provider (Twilio)
+              charges us for it. We do not add a markup. That price depends on the destination country, the
+              message length and, for calls, the duration. 
+            </p>
+            </p>
+            <p className="mt-2">
+              Because the provider reports its price only after a message is sent or a call ends, each send
+              first reserves an estimated amount from your budget. The reservation is replaced with the actual
+              price once the provider reports it, usually within a few minutes. While reservations are pending,
+              a send may be refused shortly before your budget is fully used.
+            </p>
+            <ul className="list-disc pl-6 space-y-1 mt-2">
+              <li>SMS messages are shortened to at most 3 segments (about 459 plain characters, or about 201 characters if the message contains emoji or other special characters)</li>
+              <li>Videos sent by SMS are delivered as links</li>
+              <li>The budget resets on the first day of each calendar month (UTC) and unused budget does not roll over</li>
+            </ul>
+
+            <h3 className="text-lg font-medium mt-6 mb-2 text-gray-800">Connecting a Phone for Notifications</h3>
+            <ul className="list-disc pl-6 space-y-1">
+              <li>SMS, WhatsApp and voice notifications are only sent to a phone you have connected by sending your 4-word Observer code to the Observer bot on WhatsApp. Notifications cannot be sent to arbitrary phone numbers.</li>
+              <li>By connecting a phone, you confirm that it is your phone (or that you have its owner's permission) and consent to receive notifications from your agents on it.</li>
+              <li>WhatsApp only allows us to message you within 24 hours of your last message to the Observer bot. After that, send the bot any message to resume WhatsApp notifications.</li>
             </ul>
 
             <p className="mt-4 text-sm text-gray-600">
@@ -254,7 +310,7 @@ const TermsOfService = () => {
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-8">
         <div className="container mx-auto px-6 text-center text-gray-400">
-          <p>&copy; 2025 Observer AI. Open source and community driven.</p>
+          <p>&copy; 2026 Observer AI. Open source and community driven.</p>
         </div>
       </footer>
     </div>
