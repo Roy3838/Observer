@@ -69,7 +69,10 @@ export const AcceptToS: React.FC<AcceptToSProps> = ({ isOpen, onAccept }) => {
                 </div>
               </div>
               <p className="text-xs text-gray-400 mt-3 text-center">
-                You control which sensors each agent uses when creating or configuring agents.
+                You control which sensors each agent uses when creating or configuring agents. To improve Observer, we use{' '}
+              <a href="https://www.datadoghq.com/legal/privacy/" target="_blank" rel="noopener noreferrer" className="hover:underline">Datadog</a>
+              {' '} to collect anonymous usage analytics and masked session recordings of the app interface.
+
               </p>
             </div>
 
@@ -87,6 +90,7 @@ export const AcceptToS: React.FC<AcceptToSProps> = ({ isOpen, onAccept }) => {
                 </div>
               </div>
             </div>
+
 
             {/* Terms Link */}
             <p className="text-sm text-gray-500 text-center">

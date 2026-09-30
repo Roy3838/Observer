@@ -89,7 +89,9 @@ const TermsOfService = () => {
             <p>
               The Service integrates with third-party AI inference providers (including Google AI Studio,
               OpenRouter, and Fireworks.ai) and notification services (including Twilio, SendGrid, and
-              Telegram). Your use of these services is subject to their respective terms and privacy policies.
+              Telegram), as well as analytics and monitoring services (including Datadog) that help us
+              understand and improve the Service. Your use of these services is subject to their respective
+              terms and privacy policies, and our use of analytics is described in our Privacy Policy.
             </p>
             <p>
               <strong>We are not responsible for the practices, policies, or actions of third-party service

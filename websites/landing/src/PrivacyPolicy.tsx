@@ -18,7 +18,7 @@ const PrivacyPolicy = () => {
       <main className="py-16">
         <div className="container mx-auto px-6 max-w-4xl">
           <h1 className="text-4xl font-bold mb-4 text-black">Privacy Policy</h1>
-          <p className="text-black mb-8">Last updated: January 2026</p>
+          <p className="text-black mb-8">Last updated: September 2026</p>
 
           <div className="space-y-6 text-gray-700">
             {/* Privacy-First Option */}
@@ -80,6 +80,15 @@ const PrivacyPolicy = () => {
               We maintain ephemeral logs of API requests to monitor service health and ensure proper usage.
               These logs are not stored in a persistent database and are used solely for operational purposes.
             </p>
+            <p>
+              We also use Datadog to collect product analytics and diagnostics about how the app is used, such as
+              the screens and buttons you interact with, onboarding choices (including how you heard about Observer),
+              performance data, and errors. For some sessions this includes a recording of interface activity, with
+              on-screen text and inputs masked, which we use to find and fix usability problems. This information is
+              collected together with technical details such as your IP address (used for approximate location),
+              browser, operating system, and device type, and is not linked to your name or email address. Datadog
+              stores a session identifier in a cookie or similar local storage to tie these events together.
+            </p>
 
             <h2 className="text-xl font-semibold mt-8 mb-4 text-gray-900">2. How We Use Your Information</h2>
             <p>We use the information we collect to:</p>
@@ -136,12 +145,17 @@ const PrivacyPolicy = () => {
             <ul className="list-disc pl-6 space-y-1">
               <li>Auth0 (authentication)</li>
               <li>Stripe (payment processing)</li>
+              <li>
+                Datadog (product analytics, performance monitoring, and error tracking; data is processed in the United States).{' '}
+                <a href="https://www.datadoghq.com/legal/privacy/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Privacy Policy</a>
+              </li>
             </ul>
 
             <h2 className="text-xl font-semibold mt-8 mb-4 text-gray-900">4. Data Retention</h2>
             <ul className="list-disc pl-6 space-y-1">
               <li><strong>Temporarily cached data</strong> (screenshots, audio, notification content): Up to 24 hours</li>
               <li><strong>Account information</strong>: Retained until you delete your account</li>
+              <li><strong>Analytics and diagnostics data</strong> (Datadog): Retained for a limited period, typically up to 30 days</li>
               <li><strong>Payment records</strong>: Retained as required by law and for accounting purposes</li>
             </ul>
 
