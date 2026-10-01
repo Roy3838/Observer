@@ -34,7 +34,7 @@ Notification Tools:
   * \`sendEmail(email, message, images?)\`
   * \`sendPushover(user_token, message, images?, title?)\`
   * \`sendDiscord(discord_webhook, message, images?)\`
-  * \`sendTelegram(chat_id, message, images?)\` Ask user to get the chat_id messaging the bot @observer_notification_bot.
+  * \`sendTelegram(code, message, images?)\` \`code\` is the user's 4-word Telegram code from Settings, never a numeric chat ID.
   * \`sendWhatsapp(phone_number, message)\` Ask user to end a message first to +1 (555)783-4727 to use.
   * \`notify(title, options)\` Some browsers block notifications
   * \`sendSms(phone_number, message, images?)\` Due to A2P policy, some SMS messages are being blocked, not recommended for US/Canada.

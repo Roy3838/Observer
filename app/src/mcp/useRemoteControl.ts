@@ -12,21 +12,27 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TokenProvider } from '@utils/main_loop';
 import { Logger } from '@utils/logging';
 import { SensorSettings } from '@utils/settings';
-import { fetchStatus, listenInbox, postReply, remotePrompt, type RemoteChannel, type RemoteMessage } from './remote';
+import { fetchStatus, listenInbox, postReply, remotePrompt, type RemoteChannel, type RemoteMessage, type RemoteStatus } from './remote';
 import type { UseMCPReturn } from './useMCP';
 
-/** What the settings card renders. `linked` is the server's view; the rest is this tab's. */
+/** What the settings card renders. `status` is the server's view; the rest is this tab's. */
 export interface RemoteControlState {
   enabled: boolean;
   setEnabled: (enabled: boolean) => void;
-  /** Null until the first status fetch answers (or while there is no code / no token). */
-  linked: Record<RemoteChannel, boolean> | null;
+  /** Per channel: null until its first status fetch answers (or while there is no code, or
+   *  for WhatsApp no token). Telegram needs no sign-in. */
+  status: Record<RemoteChannel, RemoteStatus | null>;
   /** This tab is the one holding the session open for the phone. */
   listening: boolean;
   lastMessageAt: number | null;
 }
 
 const STATUS_POLL_MS = 60_000;
+const CHANNELS: RemoteChannel[] = ['whatsapp', 'telegram'];
+
+/** Each channel listens on its own code. */
+const codeFor = (channel: RemoteChannel) =>
+  channel === 'telegram' ? SensorSettings.getTelegramCode() : SensorSettings.getWhitelistCode();
 
 export function useRemoteControl(
   mcp: Pick<UseMCPReturn, 'send' | 'isRunning'>,
@@ -43,7 +49,7 @@ export function useRemoteControl(
   const [wake, setWake] = useState(0);
 
   const [enabled, setEnabledState] = useState(() => SensorSettings.isRemoteControlEnabled());
-  const [linked, setLinked] = useState<Record<RemoteChannel, boolean> | null>(null);
+  const [status, setStatus] = useState<Record<RemoteChannel, RemoteStatus | null>>({ whatsapp: null, telegram: null });
   const [listening, setListening] = useState(false);
   const [lastMessageAt, setLastMessageAt] = useState<number | null>(null);
 
@@ -60,8 +66,9 @@ export function useRemoteControl(
     const controller = new AbortController();
     listenerRef.current = controller;
     setListening(true);
-    listenInbox({
-      getCode: () => SensorSettings.getWhitelistCode(),
+    Promise.all(CHANNELS.map(channel => listenInbox({
+      channel,
+      getCode: () => codeFor(channel),
       getToken: () => getTokenRef.current(),
       signal: controller.signal,
       onMessage: message => {
@@ -73,7 +80,7 @@ export function useRemoteControl(
       // Only the current loop may clear the flag. A superseded loop (React re-running this
       // effect, e.g. StrictMode's double mount) settles after its replacement started, and
       // would otherwise leave the UI reading "connecting…" while the new loop polls happily.
-    }).finally(() => { if (listenerRef.current === controller) setListening(false); });
+    }))).finally(() => { if (listenerRef.current === controller) setListening(false); });
     return () => controller.abort();
   }, [enabled]);
 
@@ -83,14 +90,13 @@ export function useRemoteControl(
   useEffect(() => {
     let cancelled = false;
     const check = async () => {
-      const code = SensorSettings.getWhitelistCode();
-      const token = code ? await getTokenRef.current().catch(() => undefined) : undefined;
-      if (!code || !token) {
-        if (!cancelled) setLinked(null);
-        return;
-      }
-      const status = await fetchStatus(code, token).catch(() => null);
-      if (!cancelled && status) setLinked(status.linked);
+      const token = await getTokenRef.current().catch(() => undefined);
+      const next = Object.fromEntries(await Promise.all(CHANNELS.map(async channel => {
+        const code = codeFor(channel);
+        if (!code || (channel === 'whatsapp' && !token)) return [channel, null];
+        return [channel, await fetchStatus(channel, code, token)];
+      }))) as Record<RemoteChannel, RemoteStatus | null>;
+      if (!cancelled) setStatus(next);
     };
     check();
     const interval = window.setInterval(check, STATUS_POLL_MS);
@@ -107,8 +113,8 @@ export function useRemoteControl(
 
     (async () => {
       const answer = await mcp.send(remotePrompt(message));
-      const token = await getTokenRef.current();
-      if (answer && token) await postReply(message, answer.text, token, answer.images);
+      const token = await getTokenRef.current().catch(() => undefined);
+      if (answer && (token || message.channel === 'telegram')) await postReply(message, answer.text, token, answer.images);
     })()
       .catch(error => Logger.error('MCP', `Remote reply failed: ${error instanceof Error ? error.message : String(error)}`))
       .finally(() => {
@@ -117,5 +123,5 @@ export function useRemoteControl(
       });
   }, [mcp.isRunning, mcp.send, wake]);
 
-  return { enabled, setEnabled, linked, listening, lastMessageAt };
+  return { enabled, setEnabled, status, listening, lastMessageAt };
 }

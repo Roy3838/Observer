@@ -567,14 +567,14 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'ask_user_info',
-    description: "Ask the user for a piece of contact info needed by a notification tool, via a guided modal. Use this INSTEAD of asking for a phone number / chat_id / webhook URL in chat prose — the modal walks the user through actually obtaining the value (QR codes, deep links, step-by-step instructions) and prefills anything they've given before. Call it BEFORE create_agent, once per piece of info you need. This BLOCKS until the user confirms. For kind='phone' the value is ALWAYS the user's 4-word Observer code (e.g. \"tree-book-shower-golden\"), never a phone number, and the modal only returns once it's connected, so you do NOT need a separate check_whitelist call for it; pass it verbatim as the phone_number/number argument to sendSms/sendWhatsapp/call. Observer never sends to raw phone numbers. The same goes for kind='telegram': the value may be that passphrase instead of a numeric chat_id; pass it verbatim as sendTelegram's chat_id. If the result is {skipped:true}, the user declined — ask them about it in chat rather than calling this again. Do not narrate the modal or tell the user to fill it in; they can see it.",
+    description: "Ask the user for a piece of contact info needed by a notification tool, via a guided modal. Use this INSTEAD of asking for a phone number / chat_id / webhook URL in chat prose — the modal walks the user through actually obtaining the value (QR codes, deep links, step-by-step instructions) and prefills anything they've given before. Call it BEFORE create_agent, once per piece of info you need. This BLOCKS until the user confirms. For kind='phone' the value is ALWAYS the user's 4-word Observer code (e.g. \"tree-book-shower-golden\"), never a phone number, and the modal only returns once it's connected, so you do NOT need a separate check_whitelist call for it; pass it verbatim as the phone_number/number argument to sendSms/sendWhatsapp/call. Observer never sends to raw phone numbers. For kind='telegram' the value is the user's separate 4-word Telegram code (not the phone code, never a numeric chat_id), already linked; pass it verbatim as sendTelegram's first argument. If the result is {skipped:true}, the user declined — ask them about it in chat rather than calling this again. Do not narrate the modal or tell the user to fill it in; they can see it.",
     parameters: {
       type: 'object',
       properties: {
         kind: {
           type: 'string',
           enum: ['phone', 'email', 'telegram', 'discord', 'pushover'],
-          description: "Which piece of info to collect: 'phone' for sendSms/call/sendWhatsapp, 'email' for sendEmail, 'telegram' for sendTelegram's chat_id, 'discord' for sendDiscord's webhook URL, 'pushover' for sendPushover's user key.",
+          description: "Which piece of info to collect: 'phone' for sendSms/call/sendWhatsapp, 'email' for sendEmail, 'telegram' for sendTelegram's code, 'discord' for sendDiscord's webhook URL, 'pushover' for sendPushover's user key.",
         },
         channel: {
           type: 'string',

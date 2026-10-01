@@ -76,7 +76,7 @@ You are a notification agent watching for a process to complete.
 $SCREEN
 code: |
 if (response.includes("NOTIFY_USER")) {
-  sendTelegram("chat_id", "Your render is complete!", screen);
+  sendTelegram("telegram-code", "Your render is complete!", screen);
   //sleep for 10 minutes to prevent spam
   sleep(600000);
 }
@@ -134,7 +134,7 @@ $$$
 | \`sendEmail(email, message, images?)\`   | Sends an email with optional images.              |
 | \`sendPushover(token, message, images?, title?)\`| Sends a Pushover notification.             |
 | \`sendDiscord(webhook, message, images?)\`| Sends a Discord message to a server.              |
-| \`sendTelegram(chat_id, message, images?)\`| Sends a Telegram message with optional images.  |
+| \`sendTelegram(code, message, images?)\`| Sends a Telegram message with optional images to the user's Telegram code. |
 | \`sendWhatsapp(code, message, images?)\`| Sends a WhatsApp message with optional images to the user's code. |
 | \`sendSms(code, message, images?)\`     | Sends an SMS with optional images to the user's code. |
 | \`call(code, message)\`                 | Calls the phone behind the user's code with a message. |

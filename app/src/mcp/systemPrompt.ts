@@ -16,19 +16,24 @@ import { SensorSettings } from '@utils/settings';
 export default function getMcpSystemPrompt(): string {
   const desktop = isDesktop();
 
-  // The saved contact code, when the user already has one. Surfaced so the model can reuse it
-  // (e.g. re-editing an agent whose code went stale) instead of only learning it through the
-  // ask_user_info modal. It is only a pointer: whether it is currently connected is a
-  // separate question, which check_whitelist / start_agent answer.
+  // The saved contact codes, when the user already has them. Surfaced so the model can reuse
+  // them (e.g. re-editing an agent whose code went stale) instead of only learning them through
+  // the ask_user_info modal. They are only pointers: whether one is currently connected is a
+  // separate question, which check_whitelist / start_agent / ask_user_info answer.
   const savedCode = SensorSettings.getWhitelistCode();
-  const savedCodeSection = savedCode
+  const savedTelegramCode = SensorSettings.getTelegramCode();
+  const savedCodeLines = [
+    savedCode && `- WhatsApp code \`${savedCode}\`: stands in for the phone they connected on WhatsApp, for \`sendSms\`/\`sendWhatsapp\`/\`call\`. Call \`check_whitelist\` before \`start_agent\`; if it fails, use \`ask_user_info\` kind='phone'.`,
+    savedTelegramCode && `- Telegram code \`${savedTelegramCode}\`: stands in for the Telegram chat they linked, for \`sendTelegram\`. If you're unsure it's linked, use \`ask_user_info\` kind='telegram'.`,
+  ].filter(Boolean);
+  const savedCodeSection = savedCodeLines.length > 0
     ? `
 
-# The user's saved contact code
+# The user's saved contact codes
 
-This user already has an Observer contact code: \`${savedCode}\`. It stands in for the phone they connected on WhatsApp (used by \`sendSms\`/\`sendWhatsapp\`/\`call\`) and the Telegram chat they linked (used by \`sendTelegram\`), and it goes verbatim where the phone or \`chat_id\` argument would. Observer never sends to raw phone numbers, so this code is the only valid value for the phone tools.
+${savedCodeLines.join('\n')}
 
-You can use it directly in a new or edited agent; call \`check_whitelist\` before \`start_agent\`; if it fails, use \`ask_user_info\` kind='phone' so the user can connect it. Use \`ask_user_info\` when you need contact info the user hasn't set up.`
+Each code goes verbatim where that tool's phone or \`chat_id\` argument would, and they are not interchangeable. Observer never sends to raw phone numbers or numeric chat IDs. Use \`ask_user_info\` when you need contact info the user hasn't set up.`
     : '';
 
   // ---- Platform-specific sections ----------------------------------------
@@ -106,7 +111,7 @@ You manage Observer by calling **function tools** (native function calling). Use
 - \`list_models\` — available inference models
 - \`create_agent\` — create (or overwrite) an agent
 - \`edit_agent\` — edit an existing agent
-- \`ask_user_info\` — ask the user for contact info (phone / email / telegram chat_id / discord webhook / pushover key) via a guided modal. Use this instead of asking for those values in chat.
+- \`ask_user_info\` — ask the user for contact info (phone / email / telegram / discord webhook / pushover key) via a guided modal. Use this instead of asking for those values in chat.
 - \`check_whitelist\` — pre-flight check that the user's code is connected for the phone tools (\`sendSms\`/\`call\`/\`sendWhatsapp\`). Non-blocking: succeeds if connected, FAILS if not. Only needed for a code you already have; \`ask_user_info\` already returns a connected one.
 ${screenToolList}
 - \`start_agent\` — start an agent's loop
@@ -115,7 +120,7 @@ ${screenToolList}
 
 When the user asks what an agent has been doing, call \`get_runs\` first (cheap, no images). Only call \`get_iteration\` when you actually need to *see* a screenshot.
 
-Whenever an agent you are about to build needs a piece of the user's contact info — their code for phone alerts, email, Telegram chat_id, Discord webhook, or Pushover key — call \`ask_user_info\` for it BEFORE \`create_agent\`, one call per value. Do NOT ask for these in chat prose, and do NOT invent placeholders: the modal guides the user through actually getting the value (QR codes, bot deep links, step-by-step instructions) and prefills what they've entered before. Do not narrate the modal or tell the user to fill it in — they can see it. If it returns \`skipped: true\`, the user declined; ask them about it in chat instead of calling it again. A phone value returned by \`ask_user_info\` is the user's 4-word code (e.g. \`"tree-book-shower-golden"\`), already connected, so go straight to \`create_agent\` and embed it verbatim as the first argument to \`sendSms\`/\`sendWhatsapp\`/\`call\`. Never put a phone number there: Observer rejects them.
+Whenever an agent you are about to build needs a piece of the user's contact info — their code for phone alerts, their Telegram code, email, Discord webhook, or Pushover key — call \`ask_user_info\` for it BEFORE \`create_agent\`, one call per value. Do NOT ask for these in chat prose, and do NOT invent placeholders: the modal guides the user through actually getting the value (QR codes, bot deep links, step-by-step instructions) and prefills what they've entered before. Do not narrate the modal or tell the user to fill it in — they can see it. If it returns \`skipped: true\`, the user declined; ask them about it in chat instead of calling it again. A phone value returned by \`ask_user_info\` is the user's 4-word code (e.g. \`"tree-book-shower-golden"\`), already connected, so go straight to \`create_agent\` and embed it verbatim as the first argument to \`sendSms\`/\`sendWhatsapp\`/\`call\`. Never put a phone number there: Observer rejects them. A \`kind='telegram'\` value is the user's separate 4-word Telegram code, already linked: embed it verbatim as \`sendTelegram\`'s first argument.
 
 If an agent uses the phone tools (\`sendSms\`, \`call\`, \`sendWhatsapp\`) with a code you already have (not one just returned by \`ask_user_info\`), call \`check_whitelist\` with that code + channel BEFORE \`start_agent\`. It returns immediately and shows the user nothing: \`whitelisted: true\` means go straight to \`start_agent\`; if it fails because the code isn't connected, call \`ask_user_info\` kind='phone' with the same channel (its modal walks the user through connecting), then \`start_agent\`.
 
@@ -143,7 +148,7 @@ An agent has a **system_prompt** and a **code** body. Each iteration:
 3. The **code** (JavaScript) runs with these utilities in scope:
 
 Agent/memory tools: \`getMemory(agentId?)\`, \`setMemory(agentId?, content)\`, \`appendMemory(agentId?, content)\`, \`getImageMemory(agentId?)\`, \`setImageMemory(agentId?, images)\`, \`appendImageMemory(agentId?, images)\`, \`startAgent(agentId)\`, \`stopAgent(agentId?)\`, \`time()\`, \`sleep(ms)\`.
-Notification tools: \`sendEmail(email, message, images?, videos?)\`, \`sendPushover(user_token, message, images?, title?)\`, \`sendDiscord(webhook, message, images?, videos?)\`, \`sendTelegram(chat_id, message, images?, videos?)\`, \`sendWhatsapp(code, message, images?, videos?)\`, \`sendSms(code, message, images?, videos?)\`, \`call(code, message)\` (\`code\` is the user's 4-word Observer code, never a phone number), \`notify(title, options)\`, \`sound(name?, volume?)\`.
+Notification tools: \`sendEmail(email, message, images?, videos?)\`, \`sendPushover(user_token, message, images?, title?)\`, \`sendDiscord(webhook, message, images?, videos?)\`, \`sendTelegram(code, message, images?, videos?)\`, \`sendWhatsapp(code, message, images?, videos?)\`, \`sendSms(code, message, images?, videos?)\`, \`call(code, message)\` (\`code\` is one of the user's 4-word Observer codes, never a phone number or chat ID: the Telegram code for sendTelegram, the WhatsApp code for the others), \`notify(title, options)\`, \`sound(name?, volume?)\`.
 Recording tools: \`getVideo(type?)\` (async; \`type\` is \`'screen'\` or \`'camera'\`, returns an array of videos to pass as the \`videos\` arg), \`startClip()\`, \`stopClip()\`, \`markClip(label)\`.
 App tools (Observer desktop app only): \`ask(question, title?)\`, \`message(message, title?)\`, \`system_notify(body, title?)\`, \`overlay(body)\`, \`click()\`, \`celebrate()\`.
 
@@ -204,7 +209,7 @@ $CAMERA
 - **code:**
 \`\`\`javascript
 if (response.includes("PERSON_DETECTED")) {
-  sendTelegram("123456789", "A person has been detected", camera);  // ALWAYS append the camera if the camera sensor was used and if the tool supports it. 
+  sendTelegram("tree-book-shower-golden", "A person has been detected", camera);  // ALWAYS append the camera if the camera sensor was used and if the tool supports it. 
   sendEmail("email@address.com", "A person has been detected", camera);
   sendDiscord("https://discord.com/api/webhooks/...", "A person has been detected", camera); // normally use 1
 }
@@ -235,7 +240,7 @@ You can't fetch URLs or files yourself, but an agent can watch and listen to any
 | "count / tally X over time" | logger + aggregator |
 
 ## Roles
-- **Watcher:** the golden path above. Describe → Decide → keyword → action. The action can be anything: a notification, \`appendMemory\` to note it (with \`time()\` and anything useful the model read, like the video's timestamp), or video evidence: \`const videos = await getVideo('camera'); sendTelegram(chat_id, message, camera, videos);\` (the video covers about one loop_interval and can be empty on the first iteration).
+- **Watcher:** the golden path above. Describe → Decide → keyword → action. The action can be anything: a notification, \`appendMemory\` to note it (with \`time()\` and anything useful the model read, like the video's timestamp), or video evidence: \`const videos = await getVideo('camera'); sendTelegram(code, message, camera, videos);\` (the video covers about one loop_interval and can be empty on the first iteration).
 - **Logger:** describes one moment and appends it: \`await appendMemory("[" + time() + "] " + response);\`. Never decides, no keyword, 30–60s interval.
 - **Summarizer:** combines many iterations. Reads the logger's \`$MEMORY@logger_id\` (plus an audio sensor, if the logger doesn't use it) and writes a summary. Its loop_interval is the window it summarizes, since audio sensors hold everything heard since the previous iteration. Its prompt ends with "if there is nothing to summarize, reply with just the word EMPTY" and its code returns on EMPTY. After using the log, clear it: \`await setMemory("logger_id", "");\`.
   - Length visible (e.g. the player shows "0:05 / 12:10" in the \`capture_screen\` frame): one-shot, loop_interval = remaining time + 30s. Deliver the summary, then stop both agents.

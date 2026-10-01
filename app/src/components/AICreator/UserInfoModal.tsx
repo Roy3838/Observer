@@ -11,16 +11,16 @@
 // Values are remembered (SensorSettings.getNotificationContact) so a returning user gets a
 // prefilled field and a one-click confirm rather than re-hunting a webhook URL.
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Phone, Mail, Send, Hash, Bell, ExternalLink, Check, Pencil, X,
+  Phone, Mail, Send, Hash, Bell, Check, Pencil, X,
   CheckCircle2, Loader, RefreshCw, XCircle, KeyRound,
 } from 'lucide-react';
 import Modal from '@components/EditAgent/Modal';
 import WhitelistQR from '@components/whitelist/WhitelistQR';
+import TelegramQR from '@components/whitelist/TelegramQR';
 import {
-  useWhitelistPolling, checkNumber,
+  useWhitelistPolling, useTelegramStatus, checkNumber,
 } from '@components/whitelist/shared';
 import { useAuth } from '@contexts/AuthContext';
 import { SensorSettings } from '@utils/settings';
@@ -29,9 +29,6 @@ import type { UserInfoKind, UserInfoRequest, UserInfoResponse } from '../../mcp/
 import {
   CONTACT_LABEL,
   CONTACT_PLACEHOLDER,
-  TELEGRAM_BOT,
-  TELEGRAM_BOT_URL,
-  telegramCodeLink,
   contactError,
   contactValid,
   normalizeContact,
@@ -128,45 +125,30 @@ const GoldenPathPanel: React.FC<{
 };
 
 /**
- * Golden path for Telegram, mirroring the phone one: the bot deep link carries the persisted
- * whitelist code (`/start <code>`), which links the chat to that code server-side. The code is
- * then what agent code passes as sendTelegram's chat_id, and the chat can also talk to the MCP.
+ * Golden path for Telegram, mirroring the phone one: the bot deep link carries the user's
+ * Telegram code (`/start <code>`), which pairs the chat with it server-side. The code is then
+ * what agent code passes as sendTelegram's chat_id, and the chat can also talk to the MCP.
+ * No sign-in needed: the Telegram code is its own credential.
  */
-const TelegramCodePanel: React.FC<{
-  code: string;
-  getToken: () => Promise<string | undefined>;
-  onLinked: () => void;
-}> = ({ code, getToken, onLinked }) => {
-  const { allWhitelisted } = useWhitelistPolling([{ number: code, isWhitelisted: false }], getToken, 'telegram', true);
-  const link = telegramCodeLink(code);
+const TelegramCodePanel: React.FC<{ onLinked: (code: string) => void }> = ({ onLinked }) => {
+  const { code, status, linked } = useTelegramStatus();
 
-  useEffect(() => { if (allWhitelisted) onLinked(); }, [allWhitelisted, onLinked]);
+  useEffect(() => { if (linked) onLinked(code); }, [linked, code, onLinked]);
 
-  if (allWhitelisted) {
+  if (linked) {
     return (
       <div className="flex flex-col items-center gap-2 py-6 text-green-700">
         <CheckCircle2 className="h-8 w-8" />
-        <p className="text-sm font-medium">You're all set — Telegram connected.</p>
+        <p className="text-sm font-medium">
+          You're all set — Telegram connected{status?.name ? ` to ${status.name}` : ''}.
+        </p>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col items-center gap-4 py-2">
-      <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
-        <QRCodeSVG value={link} size={168} level="H" includeMargin={false} fgColor="#111827" />
-      </div>
-      <a
-        href={link}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded text-xs font-medium hover:bg-black transition-colors"
-      >
-        Open in Telegram <ExternalLink className="h-3 w-3" />
-      </a>
-      <p className="text-xs text-gray-500 text-center">
-        Scan or open, then tap <span className="font-medium">Start</span> in the chat with @{TELEGRAM_BOT}.
-      </p>
+      <TelegramQR code={code} />
       <div className="flex items-center gap-1.5 text-[11px] text-purple-600">
         <Loader className="h-3 w-3 animate-spin" />
         <span>Waiting — this continues automatically.</span>
@@ -310,11 +292,8 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
   );
   const [codeVerified, setCodeVerified] = useState(false);
 
-  // Telegram: the same persisted code via the bot's /start deep link, unless the user already
-  // has a remembered chat ID (then the one-click confirm below) or picks "paste a chat ID".
-  const [telegramStep, setTelegramStep] = useState<'code' | 'paste'>(kind === 'telegram' && !initial ? 'code' : 'paste');
-  const telegramCode = useMemo(() => (kind === 'telegram' ? SensorSettings.ensureWhitelistCode() : ''), [kind]);
-  const useTelegramCode = kind === 'telegram' && telegramStep === 'code';
+  // Telegram: its own persisted code via the bot's /start deep link. Nothing to type.
+  const useTelegramCode = kind === 'telegram';
   const useCodePath = needsWhitelist && phoneStep === 'qr';
 
   const rotateCode = () => {
@@ -363,6 +342,10 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
   }, [useCodePath, codeVerified, code, requestId]);
 
   const skip = () => onResolve(requestId, { value: '', skipped: true });
+  const resolveTelegram = useCallback(
+    (telegramCode: string) => onResolve(requestId, { value: telegramCode }),
+    [onResolve, requestId],
+  );
 
   const title = kind === 'phone' && channel ? CHANNEL_TITLE[channel] ?? KIND_TITLE.phone : KIND_TITLE[kind];
 
@@ -408,21 +391,7 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
         )}
 
         {useTelegramCode && (
-          <>
-            <TelegramCodePanel
-              code={telegramCode}
-              getToken={getAccessToken}
-              onLinked={() => onResolve(requestId, { value: telegramCode })}
-            />
-            <div className="text-center">
-              <button
-                onClick={() => { setTelegramStep('paste'); setEditing(true); }}
-                className="text-xs font-medium text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                Or paste a chat ID instead
-              </button>
-            </div>
-          </>
+          <TelegramCodePanel onLinked={resolveTelegram} />
         )}
 
         {/* Phone: one big WhatsApp QR + code, no typing required. */}
@@ -457,38 +426,6 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
         {editing && (
           <>
             {/* Guided steps — the part that makes this worth a modal. */}
-            {kind === 'telegram' && (
-              <ol className="space-y-2.5">
-                <Step n={1}>
-                  Open our bot{' '}
-                  <span className="font-mono text-gray-900">@{TELEGRAM_BOT}</span>
-                  <div className="mt-2 flex items-start gap-3">
-                    <a
-                      href={TELEGRAM_BOT_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded text-xs font-medium hover:bg-black transition-colors"
-                    >
-                      Open in Telegram <ExternalLink className="h-3 w-3" />
-                    </a>
-                    <div className="hidden sm:block bg-white p-1.5 rounded border border-gray-200">
-                      <QRCodeSVG value={TELEGRAM_BOT_URL} size={72} level="M" includeMargin={false} />
-                    </div>
-                  </div>
-                </Step>
-                <Step n={2}>Send it <span className="font-mono text-gray-900">/start</span></Step>
-                <Step n={3}>Paste the chat ID it replies with below.</Step>
-                <li>
-                  <button
-                    onClick={() => setTelegramStep('code')}
-                    className="text-xs font-medium text-purple-700 hover:text-purple-900 transition-colors"
-                  >
-                    Connect with a QR code instead
-                  </button>
-                </li>
-              </ol>
-            )}
-
             {kind === 'discord' && (
               <ol className="space-y-2.5">
                 <Step n={1}>In Discord, open <span className="font-medium">Server Settings → Integrations</span>.</Step>

@@ -29,7 +29,7 @@ export const toolsReference = {
         "sendEmail(email, message, images?) - Sends an email",
         "sendPushover(user_token, message, images?, title?) - Sends a pushover notification",
         "sendDiscord(discord_webhook, message, images?) - Sends a discord message to a server",
-        "sendTelegram(chat_id, message, images?) - Sends a telegram message with the Observer bot. Get the chat_id messaging the bot @observer_notification_bot",
+        "sendTelegram(code, message, images?) - Sends a telegram message with the Observer bot to the user's 4-word Telegram code (from Settings)",
         "sendWhatsapp(phone_number, message) - Sends a whatsapp message with the Observer bot. Send a message first to +1 (555)783-4727 to use",
         "notify(title, options) – Send browser notification ⚠️IMPORTANT: Some browsers block notifications",
         "sound(name?, volume?) - Plays a notification sound. Works on web and app",

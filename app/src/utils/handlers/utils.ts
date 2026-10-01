@@ -618,19 +618,15 @@ export async function sendDiscord(message: string, webhookUrl: string, images?: 
 }
 
 /**
- * Sends a Telegram message by calling the backend API.
+ * Sends a Telegram message by calling the backend API. No sign-in needed: the user's
+ * Telegram code is its own credential, and it only reaches the chat paired with it.
  * @param message The message content to send.
- * @param chatId The Telegram chat ID to send the message to.
- * @param authToken The authentication token for the Observer AI API.
+ * @param chatId The user's 4-word Telegram code (named chat_id for agent-code compatibility).
  * @param images Optional array of base64-encoded images (without data:image prefix).
  * @param videos Optional array of base64-encoded videos (without data:video prefix).
  */
-export async function sendTelegram(message: string, chatId: string, authToken: string, images?: string[], videos?: string[]): Promise<void> {
+export async function sendTelegram(message: string, chatId: string, images?: string[], videos?: string[]): Promise<void> {
   const API_HOST = "https://api.observer-ai.com";
-
-  if (!authToken) {
-    throw new Error("Authentication error: Auth token is missing.");
-  }
 
   try {
     const requestBody: { chat_id: string; message: string; images?: string[]; videos?: string[] } = {
@@ -650,12 +646,9 @@ export async function sendTelegram(message: string, chatId: string, authToken: s
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
       },
       body: JSON.stringify(requestBody),
     });
-
-    await handleQuotaExceeded(response, 'telegram');
 
     if (!response.ok) {
       try {

@@ -259,36 +259,43 @@ class SettingsManager {
         localStorage.removeItem(this.NOTIFICATION_CONTACTS_KEY);
     }
 
-    // --- WHITELIST CODE ---
-    // A stable, per-user code (e.g. "tree-book-shower-golden") shown in the golden-path QR.
-    // Generated once and never regenerated: agent code bakes this in literally, so if it
-    // changed, every agent built against the old code would silently stop working.
+    // --- CONTACT CODES ---
+    // Stable codes (e.g. "tree-book-shower-golden") shown in the golden-path QRs, one per
+    // channel. The WhatsApp code reaches the phone (WhatsApp/SMS/voice) and is tied to the
+    // account; the Telegram code reaches the chat and works without one. Generated once and
+    // only replaced on rotate: agent code bakes them in literally, so if one changed, every
+    // agent built against the old code would silently stop working. Pairing a new code from
+    // the same phone/chat revokes the old one server-side.
     private readonly WHITELIST_CODE_KEY = 'observer-ai:settings:whitelistCode';
+    private readonly TELEGRAM_CODE_KEY = 'observer-ai:settings:telegramCode';
 
-    /** The persisted whitelist code, generating and storing one on first use. */
-    public ensureWhitelistCode(): string {
-        const existing = localStorage.getItem(this.WHITELIST_CODE_KEY);
-        if (existing) return existing;
+    private ensureCode(key: string): string {
+        return localStorage.getItem(key) ?? this.rotateCode(key);
+    }
+
+    private rotateCode(key: string): string {
         const code = generateWhitelistCode();
-        localStorage.setItem(this.WHITELIST_CODE_KEY, code);
+        localStorage.setItem(key, code);
         return code;
     }
 
-    /** The persisted whitelist code, or null if one hasn't been generated yet. */
-    public getWhitelistCode(): string | null {
-        return localStorage.getItem(this.WHITELIST_CODE_KEY);
-    }
+    /** The persisted WhatsApp code, generating and storing one on first use. */
+    public ensureWhitelistCode(): string { return this.ensureCode(this.WHITELIST_CODE_KEY); }
 
-    /**
-     * Mints a fresh code and overwrites the stored one, for "rotate to a new contact".
-     * The old code isn't invalidated server-side (no API for that) — it just stops being
-     * the one new agent code is written against.
-     */
-    public rotateWhitelistCode(): string {
-        const code = generateWhitelistCode();
-        localStorage.setItem(this.WHITELIST_CODE_KEY, code);
-        return code;
-    }
+    /** The persisted WhatsApp code, or null if one hasn't been generated yet. */
+    public getWhitelistCode(): string | null { return localStorage.getItem(this.WHITELIST_CODE_KEY); }
+
+    /** Mints a fresh WhatsApp code and overwrites the stored one, for "rotate to a new contact". */
+    public rotateWhitelistCode(): string { return this.rotateCode(this.WHITELIST_CODE_KEY); }
+
+    /** The persisted Telegram code, generating and storing one on first use. */
+    public ensureTelegramCode(): string { return this.ensureCode(this.TELEGRAM_CODE_KEY); }
+
+    /** The persisted Telegram code, or null if one hasn't been generated yet. */
+    public getTelegramCode(): string | null { return localStorage.getItem(this.TELEGRAM_CODE_KEY); }
+
+    /** Mints a fresh Telegram code, e.g. after the chat sent /stop and revoked the old one. */
+    public rotateTelegramCode(): string { return this.rotateCode(this.TELEGRAM_CODE_KEY); }
 
     // --- REMOTE CONTROL ---
     // Whether this browser listens for messages the user sends from their linked

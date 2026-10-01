@@ -418,12 +418,7 @@ export async function executeJavaScript(
 
       sendTelegram: async (chatId: string, message: string, images?: string[], videos?: string[]) => {
         try {
-          if (!getToken) throw new Error("Authentication context not available for sendTelegram.");
-
-          const token = await getToken();
-          if (!token) throw new Error("Failed to retrieve authentication token for Telegram.");
-
-          await utils.sendTelegram(message, chatId, token, images, videos);
+          await utils.sendTelegram(message, chatId, images, videos);
           Logger.info(agentId, `Telegram message sent to ${chatId}${images && images.length > 0 ? ` with ${images.length} images` : ''}${videos && videos.length > 0 ? ` and ${videos.length} videos` : ''}`, {
             logType: 'tool-success',
             iterationId,

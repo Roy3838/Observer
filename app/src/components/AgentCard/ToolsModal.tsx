@@ -124,11 +124,11 @@ function getAllTools(channel?: WhitelistChannel): ToolConfig[] {
       description: 'Send a Telegram message',
       isTestable: true,
       parameters: [
-        { name: 'chat_id', description: 'Telegram chat ID' },
+        { name: 'chat_id', description: 'Your 4-word Telegram code (Settings)' },
         { name: 'message', description: 'Message content' }
       ],
       testMessage: 'This is a test from Observer!',
-      infoMessage: 'ℹ️ Get your chat_id by messaging @observer_notification_bot'
+      infoMessage: 'ℹ️ Use your Telegram code from Settings — scan its QR once to link your chat'
     },
     {
       id: 'sendSms',
@@ -1233,10 +1233,9 @@ const ToolsModal: React.FC<ToolsModalProps> = ({ isOpen, onClose, code, agentNam
         }
 
         case 'sendTelegram': {
-          const token = await getAuthToken();
           const chatId = testInputs[0] || '';
           const message = testInputs[1] || selectedToolConfig.testMessage || '';
-          await utils.sendTelegram(message, chatId, token);
+          await utils.sendTelegram(message, chatId);
           break;
         }
 

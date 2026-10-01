@@ -7,11 +7,14 @@
 //
 // Phones are reached only through the user's 4-word code, paired by sending it to the
 // Observer bot on WhatsApp (see api/remote.py). That one pairing enables WhatsApp, SMS and
-// voice alerts to the phone; there is no SMS or call-in pairing.
+// voice alerts to the phone; there is no SMS or call-in pairing. Telegram has its own code,
+// which needs no account: see useTelegramStatus.
 
 import { useEffect, useRef, useState } from 'react';
 import type { WhitelistChannel } from '@utils/logging';
 import { openExternal } from '@utils/platform';
+import { SensorSettings } from '@utils/settings';
+import { fetchStatus, type RemoteStatus } from '../../mcp/remote';
 
 export const OBSERVER_WHATSAPP = '+1 (555) 783-4727';
 export const OBSERVER_WHATSAPP_PLAIN = '15557834727';
@@ -29,14 +32,11 @@ export interface PhoneEntry {
 
 export type WhitelistPollStatus = 'idle' | 'checking' | 'success';
 
-/** Check a single number against the whitelist API; resolves false on any failure. */
-/** Whitelist channels, plus 'telegram': whether a code is linked to a Telegram chat. */
-export type CheckChannel = WhitelistChannel | 'telegram';
-
+/** Check a single code against the whitelist API; resolves false on any failure. */
 export async function checkNumber(
   number: string,
   token: string,
-  channel?: CheckChannel,
+  channel?: WhitelistChannel,
 ): Promise<PhoneEntry> {
   try {
     const response = await fetch('https://api.observer-ai.com/tools/is-whitelisted', {
@@ -47,7 +47,7 @@ export async function checkNumber(
       },
       body: JSON.stringify({
         phone_number: number,
-        ...(channel === 'whatsapp' || channel === 'telegram' ? { channel } : {}),
+        ...(channel === 'whatsapp' ? { channel } : {}),
       }),
     });
     if (!response.ok) return { number, isWhitelisted: false };
@@ -66,7 +66,7 @@ export async function checkNumber(
 export function useWhitelistPolling(
   initial: PhoneEntry[],
   getToken: () => Promise<string | undefined>,
-  channel?: CheckChannel,
+  channel?: WhitelistChannel,
   enabled = true,
 ) {
   // Keep the latest getToken without making it an effect dependency (callers often pass a
@@ -110,4 +110,43 @@ export function useWhitelistPolling(
 
   const allWhitelisted = numbers.length > 0 && numbers.every(p => p.isWhitelisted);
   return { numbers, status, allWhitelisted };
+}
+
+/**
+ * The user's Telegram code and its pairing, polled every 5s until linked. No token: the
+ * Telegram code is its own credential. A revoked code (the chat sent /stop, or paired a newer
+ * code) is dead for good, so it is swapped for a fresh one and the QR shows that instead.
+ */
+export function useTelegramStatus(enabled = true) {
+  const [code, setCode] = useState(() => SensorSettings.ensureTelegramCode());
+  const [status, setStatus] = useState<RemoteStatus | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    let intervalId = 0;
+
+    const check = async () => {
+      const next = await fetchStatus('telegram', code);
+      if (cancelled) return;
+      if (next.revoked) {
+        setStatus(null);
+        setCode(SensorSettings.rotateTelegramCode());
+        return;
+      }
+      setStatus(next);
+      if (next.linked) clearInterval(intervalId);
+    };
+
+    check();
+    intervalId = window.setInterval(check, 5000);
+    return () => { cancelled = true; clearInterval(intervalId); };
+  }, [enabled, code]);
+
+  const rotate = () => {
+    setStatus(null);
+    setCode(SensorSettings.rotateTelegramCode());
+  };
+
+  return { code, status, linked: !!status?.linked, rotate };
 }

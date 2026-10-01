@@ -8,8 +8,9 @@
 // RecipeSplash and duplicated as prose in SimpleCreatorModal.
 
 import type { UserInfoKind } from '../mcp/types';
+import { normalizeWhitelistCode } from './whitelistCode';
 
-/** The Telegram bot users message to obtain their chat_id. */
+/** The Observer Telegram bot: users pair a chat by sending it their Telegram code. */
 export const TELEGRAM_BOT = 'observer_notification_bot';
 export const TELEGRAM_BOT_URL = `https://t.me/${TELEGRAM_BOT}`;
 /** Bot deep link that sends `/start <code>`, linking the chat to the user's whitelist code. */
@@ -18,7 +19,7 @@ export const telegramCodeLink = (code: string) => `${TELEGRAM_BOT_URL}?start=${e
 export const CONTACT_PLACEHOLDER: Record<UserInfoKind, string> = {
   phone: '+1 555 123 4567',
   email: 'you@email.com',
-  telegram: '847392011',
+  telegram: 'tree-book-shower-golden',
   discord: 'https://discord.com/api/webhooks/…',
   pushover: 'Your Pushover user key',
 };
@@ -26,7 +27,7 @@ export const CONTACT_PLACEHOLDER: Record<UserInfoKind, string> = {
 export const CONTACT_LABEL: Record<UserInfoKind, string> = {
   phone: 'Your phone number',
   email: 'Your email address',
-  telegram: 'Your Telegram chat ID',
+  telegram: 'Your Telegram code',
   discord: 'Discord webhook URL',
   pushover: 'Pushover user key',
 };
@@ -37,8 +38,8 @@ export function contactValid(kind: UserInfoKind, value: string): boolean {
   switch (kind) {
     case 'phone': return /^\+?[0-9][0-9\s()-]{6,}$/.test(v);
     case 'email': return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
-    // Telegram chat_ids are numeric and may be negative (groups/channels).
-    case 'telegram': return /^-?[0-9]{5,}$/.test(v);
+    // Telegram is reached only through its 4-word code, never a raw chat ID.
+    case 'telegram': return normalizeWhitelistCode(v) !== null;
     case 'discord': return /^https?:\/\/(canary\.|ptb\.)?discord(app)?\.com\/api\/webhooks\/.+/.test(v);
     case 'pushover': return v.length >= 20;
   }
@@ -51,7 +52,7 @@ export function contactError(kind: UserInfoKind, value: string): string | null {
   switch (kind) {
     case 'phone': return 'Include the country code, e.g. +1 555 123 4567.';
     case 'email': return "That doesn't look like an email address.";
-    case 'telegram': return 'A chat ID is all digits — the bot replies with it after you send /start.';
+    case 'telegram': return 'Use your 4-word Telegram code from Settings.';
     case 'discord': return 'Paste the full webhook URL starting with https://discord.com/api/webhooks/';
     case 'pushover': return 'Pushover user keys are 30 characters.';
   }
