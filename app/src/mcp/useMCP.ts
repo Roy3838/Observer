@@ -34,7 +34,7 @@ export interface UseMCPOptions {
 }
 
 /** Listener fired after any agent-mutating tool completes. Receives the tool name. */
-export type MutationListener = (toolName: string) => void;
+export type MutationListener = (toolName: string, args?: Record<string, any>) => void;
 
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite-free';
 
@@ -260,7 +260,7 @@ export function useMCP(options: UseMCPOptions) {
               Logger.error(LOG_SOURCE, `Tool failed: ${toolName}`, { toolCallId: id });
             }
             if (status === 'done' && meta && MUTATING_TOOLS.has(meta.name)) {
-              mutationListeners.current.forEach(l => l(meta.name));
+              mutationListeners.current.forEach(l => l(meta.name, meta.args));
             }
           },
         });

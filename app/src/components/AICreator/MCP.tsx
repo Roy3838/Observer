@@ -439,7 +439,7 @@ const MCP: React.FC<MCPProps> = ({
     setModelName,
   } = useMCPContext();
 
-  const { isFloating, dock, setDockTarget } = useFloatingAgents();
+  const { isFloating, dock, setDockTarget, getSlotSize, flyToCorner } = useFloatingAgents();
   const [liveStreams, setLiveStreams] = useState<StreamState>(StreamManager.getCurrentState());
   useEffect(() => {
     StreamManager.addListener(setLiveStreams);
@@ -447,13 +447,15 @@ const MCP: React.FC<MCPProps> = ({
   }, []);
 
   // Each screen reacts to agent mutations in its own way; register this screen's reaction.
-  useEffect(() => subscribeMutation((toolName) => {
+  useEffect(() => subscribeMutation((toolName, args) => {
     onRefresh?.();
+    // A started agent leaves the chat for the top-right corner so it stays visible on scroll.
+    if (toolName === 'start_agent' && typeof args?.id === 'string') flyToCorner(args.id);
     // Mirror the old "Save → close modal" UX once an agent is actually persisted.
     if (toolName === 'create_agent' || toolName === 'edit_agent') {
       onSaveComplete?.();
     }
-  }), [subscribeMutation, onRefresh, onSaveComplete]);
+  }), [subscribeMutation, onRefresh, onSaveComplete, flyToCorner]);
 
   const [userInput, setUserInput] = useState('');
   const [previewImages, setPreviewImages] = useState<string[]>([]);
@@ -687,16 +689,21 @@ const MCP: React.FC<MCPProps> = ({
                 // Registered as this agent's dock target — dragging the floating card back
                 // onto this specific pill (not just "anywhere in the chat") is what re-docks
                 // it; see FloatingAgentsContext.tsx for why the hit zone has to be this small.
+                // Same footprint as the inline card it stands in for, so the transcript
+                // doesn't reflow when the card leaves or comes back.
+                const slot = getSlotSize(createdId);
                 return (
-                  <button
-                    key={tc.id}
-                    ref={(el) => setDockTarget(createdId!, el)}
-                    onClick={() => dock(createdId!)}
-                    className="mt-2 flex items-center gap-2 px-3 py-2 rounded-full bg-gray-50 border border-gray-200 text-xs text-gray-500 hover:bg-gray-100 transition-colors"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
-                    <span className="font-medium text-gray-700">{agentObj.name}</span> is floating — drop it here (or tap) to bring back
-                  </button>
+                  <div key={tc.id} className="mt-2 w-full">
+                    <button
+                      ref={(el) => setDockTarget(createdId!, el)}
+                      onClick={() => dock(createdId!)}
+                      style={slot ? { width: slot.width, height: slot.height } : undefined}
+                      className="max-w-[350px] w-full min-h-[72px] flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 text-xs text-gray-500 hover:bg-gray-100 transition-colors px-4 text-center"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
+                      <span><span className="font-medium text-gray-700">{agentObj.name}</span> is floating — drop it here (or tap) to bring back</span>
+                    </button>
+                  </div>
                 );
               }
 

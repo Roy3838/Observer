@@ -9,12 +9,12 @@
 // instances involved in a pop-out.
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Square, Play, Loader2, ArrowUpRight } from 'lucide-react';
+import { Square, Play, Loader2, ArrowUpRight, X } from 'lucide-react';
 import type { CompleteAgent } from '@utils/agent_database';
 import { StreamState } from '@utils/streamManager';
 import PieTimer from '@components/AgentCard/PieTimer';
 import SensorPreviewPanel from '@components/AgentCard/SensorPreviewPanel';
-import { useFloatingAgents } from './FloatingAgentsContext';
+import { useFloatingAgents, type FloatingPos } from './FloatingAgentsContext';
 import { useTutorialFlow, tutorialFlow } from '@utils/tutorialFlow';
 import { useAgentLiveStateFor, type AgentLiveStatus } from './AgentLiveStateContext';
 
@@ -48,7 +48,7 @@ interface AgentLiveCardProps {
   mode: 'inline' | 'floating';
   /** 'floating' only — this card's current position, owned by RunningAgentsStrip (it reads
    *  the initial spot from context on mount, then this component drives it during drags). */
-  floatingPos?: { x: number; y: number };
+  floatingPos?: FloatingPos;
 }
 
 const AgentLiveCard: React.FC<AgentLiveCardProps> = ({ agent, isRunning, isStarting, streams, onToggle, onSelectAgent, mode, floatingPos }) => {
@@ -67,9 +67,20 @@ const AgentLiveCard: React.FC<AgentLiveCardProps> = ({ agent, isRunning, isStart
   // Points at the countdown in the status line, since that's what ticks over to the next loop.
   const finishedCopy = isTutorialAgent && tutorial.phase === 'finished'
     ? 'The download is finished! On the next loop the agent will notice' : null;
-  const { popOut, dock, isOverDockTarget, dragSessionRef } = useFloatingAgents();
+  const { popOut, dock, isOverDockTarget, dragSessionRef, setCardEl, measureSlot } = useFloatingAgents();
 
-  const [pos, setPos] = useState(floatingPos || { x: 0, y: 0 });
+  // Set when flyToCorner sent this card out (no drag involved): it animates from the inline
+  // card's spot to its corner target instead of handing off a pointer gesture.
+  const flyFrom = mode === 'floating' ? floatingPos?.from : undefined;
+  const [pos, setPos] = useState(flyFrom ?? floatingPos ?? { x: 0, y: 0 });
+  const [isFlying, setIsFlying] = useState(!!flyFrom);
+  useEffect(() => {
+    if (!flyFrom || !floatingPos) return;
+    const raf = requestAnimationFrame(() => setPos({ x: floatingPos.x, y: floatingPos.y }));
+    const done = setTimeout(() => setIsFlying(false), 600);
+    return () => { cancelAnimationFrame(raf); clearTimeout(done); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [isDragging, setIsDragging] = useState(false);
   const headerRef = useRef<HTMLDivElement>(null);
   // Only the very first pop-in should fade from transparent — re-applying that animation on
@@ -95,7 +106,7 @@ const AgentLiveCard: React.FC<AgentLiveCardProps> = ({ agent, isRunning, isStart
   };
 
   useEffect(() => {
-    if (mode !== 'floating') return;
+    if (mode !== 'floating' || flyFrom) return;
     setIsDragging(true);
     claimDragSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -136,6 +147,7 @@ const AgentLiveCard: React.FC<AgentLiveCardProps> = ({ agent, isRunning, isStart
           // dropped in that gap; once the floating instance's effect runs, it overwrites this
           // with its own cheap local-state version and steady-state dragging never touches
           // context again.
+          measureSlot(agent.id);
           popOut(agent.id, ev.clientX - grabDX, ev.clientY - grabDY);
           dragSessionRef.current = {
             onMove: (mx, my) => popOut(agent.id, mx, my),
@@ -154,7 +166,7 @@ const AgentLiveCard: React.FC<AgentLiveCardProps> = ({ agent, isRunning, isStart
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
       if (!dragging) {
-        onSelectAgent?.(agent.id);
+        if (mode === 'inline') onSelectAgent?.(agent.id);
         return;
       }
       dragSessionRef.current?.onEnd(ev.clientX - grabDX, ev.clientY - grabDY, ev.clientX, ev.clientY);
@@ -165,14 +177,18 @@ const AgentLiveCard: React.FC<AgentLiveCardProps> = ({ agent, isRunning, isStart
   };
 
   const containerStyle: React.CSSProperties = mode === 'floating'
-    ? { position: 'fixed', left: pos.x, top: pos.y }
+    ? {
+        position: 'fixed', left: pos.x, top: pos.y,
+        ...(isFlying ? { transition: 'left 0.5s cubic-bezier(0.22, 1, 0.36, 1), top 0.5s cubic-bezier(0.22, 1, 0.36, 1)' } : {}),
+      }
     : {};
 
-  const playPopInAnimation = mode === 'floating' && !isDragging && !hasAnimatedIn.current;
+  const playPopInAnimation = mode === 'floating' && !isDragging && !flyFrom && !hasAnimatedIn.current;
   if (playPopInAnimation) hasAnimatedIn.current = true;
 
   return (
     <div
+      ref={mode === 'inline' ? (el) => setCardEl(agent.id, el) : undefined}
       className={`relative ${mode === 'floating' ? 'pointer-events-auto' : 'w-full'} max-w-[350px] bg-white border border-gray-200 rounded-xl shadow-lg ${playPopInAnimation ? 'animate-fade-in' : ''}`}
       style={containerStyle}
     >
@@ -182,10 +198,19 @@ const AgentLiveCard: React.FC<AgentLiveCardProps> = ({ agent, isRunning, isStart
           <div className="w-3 h-3 bg-slate-900 rotate-45 -mt-1.5" />
         </div>
       )}
+      {mode === 'floating' && (
+        <button
+          onClick={() => dock(agent.id)}
+          title="Return to conversation"
+          className="absolute -top-2 -right-2 z-10 w-6 h-6 rounded-full bg-white border border-gray-200 shadow-md flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
       <div
         ref={headerRef}
         onPointerDown={handleHeaderPointerDown}
-        title={onSelectAgent ? `Drag to move · click to open "${agent.name}" in Micro Agents` : 'Drag to move'}
+        title={onSelectAgent && mode === 'inline' ? `Drag to move · click to open "${agent.name}" in Micro Agents` : 'Drag to move'}
         className={`flex items-center gap-3 px-4 py-3 border-b border-gray-100 select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
       >
         <div className="relative w-9 h-9 flex-shrink-0 flex items-center justify-center">
@@ -199,7 +224,7 @@ const AgentLiveCard: React.FC<AgentLiveCardProps> = ({ agent, isRunning, isStart
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="text-base font-semibold text-gray-800 truncate">{agent.name}</span>
-            {onSelectAgent && <ArrowUpRight className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />}
+            {onSelectAgent && mode === 'inline' && <ArrowUpRight className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />}
           </div>
           {/* status | time | last word — one glance line, e.g. "Sleeping · 12s · PERSON_DETECTED" */}
           <div className="flex items-center gap-1.5 text-xs text-gray-400 min-w-0">

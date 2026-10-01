@@ -24,7 +24,20 @@
 
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 
-export interface FloatingPos { x: number; y: number }
+export interface FloatingPos {
+  x: number;
+  y: number;
+  /** Set when the card was sent to the corner programmatically (flyToCorner): the inline
+   *  card's on-screen top-left, so the floating card can animate from there to x/y. */
+  from?: { x: number; y: number };
+}
+
+export interface SlotSize { width: number; height: number }
+
+const CORNER_MARGIN = 16;
+const CORNER_TOP = 72; // clears the top bar
+const CORNER_CASCADE = 24;
+const CARD_MAX_WIDTH = 350;
 
 export interface DragSession {
   /** Called on every pointermove once the gesture is past the drag threshold, with the
@@ -48,6 +61,14 @@ interface FloatingAgentsValue {
   /** True while `clientX`/`clientY` sit over this agent's own registered dock target
    *  (measured live, so scrolling the transcript while dragging still hit-tests correctly). */
   isOverDockTarget: (agentId: string, clientX: number, clientY: number) => boolean;
+  /** Registers (or unregisters, with null) the DOM node of an agent's inline card. */
+  setCardEl: (agentId: string, el: HTMLElement | null) => void;
+  /** Records an agent's inline card size so its dock placeholder can match it exactly. */
+  measureSlot: (agentId: string) => void;
+  /** Size of the agent's inline card the last time it left the chat (null if never measured). */
+  getSlotSize: (agentId: string) => SlotSize | null;
+  /** Animate an agent's inline card into the top-right corner of the screen, floating. */
+  flyToCorner: (agentId: string) => void;
   /** The in-progress drag's current handlers — see file header. Null when nothing is being dragged. */
   dragSessionRef: React.MutableRefObject<DragSession | null>;
 }
@@ -66,6 +87,10 @@ function createDefaultValue(): FloatingAgentsValue {
     dock: () => {},
     setDockTarget: () => {},
     isOverDockTarget: () => false,
+    setCardEl: () => {},
+    measureSlot: () => {},
+    getSlotSize: () => null,
+    flyToCorner: () => {},
     dragSessionRef: { current: null },
   };
 }
@@ -76,6 +101,8 @@ export const FloatingAgentsProvider: React.FC<{ children: React.ReactNode }> = (
   const [floating, setFloating] = useState<Record<string, FloatingPos>>({});
   const dockTargetsRef = useRef<Record<string, HTMLElement | null>>({});
   const dragSessionRef = useRef<DragSession | null>(null);
+  const cardElsRef = useRef<Record<string, HTMLElement | null>>({});
+  const slotSizesRef = useRef<Record<string, SlotSize>>({});
 
   const isFloating = useCallback((agentId: string) => Object.prototype.hasOwnProperty.call(floating, agentId), [floating]);
 
@@ -103,9 +130,42 @@ export const FloatingAgentsProvider: React.FC<{ children: React.ReactNode }> = (
     return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
   }, []);
 
+  const setCardEl = useCallback((agentId: string, el: HTMLElement | null) => {
+    cardElsRef.current[agentId] = el;
+  }, []);
+
+  const measureSlot = useCallback((agentId: string) => {
+    const el = cardElsRef.current[agentId];
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) slotSizesRef.current[agentId] = { width: r.width, height: r.height };
+  }, []);
+
+  const getSlotSize = useCallback((agentId: string) => slotSizesRef.current[agentId] ?? null, []);
+
+  const flyToCorner = useCallback((agentId: string) => {
+    const el = cardElsRef.current[agentId];
+    if (!el) return; // no inline card on screen (e.g. conversation scrolled away/unmounted) — leave it docked
+    measureSlot(agentId);
+    const r = el.getBoundingClientRect();
+    setFloating(prev => {
+      if (agentId in prev) return prev;
+      const width = Math.min(CARD_MAX_WIDTH, r.width);
+      return {
+        ...prev,
+        [agentId]: {
+          x: Math.max(CORNER_MARGIN, window.innerWidth - width - CORNER_MARGIN),
+          y: CORNER_TOP + Object.keys(prev).length * CORNER_CASCADE,
+          from: { x: r.left, y: r.top },
+        },
+      };
+    });
+  }, [measureSlot]);
+
   const value = useMemo<FloatingAgentsValue>(() => ({
-    floating, isFloating, popOut, dock, setDockTarget, isOverDockTarget, dragSessionRef,
-  }), [floating, isFloating, popOut, dock, setDockTarget, isOverDockTarget]);
+    floating, isFloating, popOut, dock, setDockTarget, isOverDockTarget,
+    setCardEl, measureSlot, getSlotSize, flyToCorner, dragSessionRef,
+  }), [floating, isFloating, popOut, dock, setDockTarget, isOverDockTarget, setCardEl, measureSlot, getSlotSize, flyToCorner]);
 
   return <FloatingAgentsContext.Provider value={value}>{children}</FloatingAgentsContext.Provider>;
 };
