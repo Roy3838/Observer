@@ -1,8 +1,18 @@
-export type GemmaModelId = 'onnx-community/gemma-4-E2B-it-ONNX' | 'onnx-community/gemma-4-E4B-it-ONNX';
+export type GemmaModelId =
+  | 'onnx-community/gemma-4-E2B-it-ONNX'
+  | 'onnx-community/gemma-4-E4B-it-ONNX'
+  | 'onnx-community/LFM2.5-VL-450M-ONNX'
+  | 'onnx-community/Qwen3-VL-2B-Instruct-ONNX'
+  | 'onnx-community/FastVLM-0.5B-ONNX'
+  | 'onnx-community/Qwen3.5-0.8B-ONNX';
 
 export const GEMMA_DISPLAY_NAMES: Record<GemmaModelId, string> = {
-  'onnx-community/gemma-4-E2B-it-ONNX': 'gemma-4-E2B ONNX',
-  'onnx-community/gemma-4-E4B-it-ONNX': 'gemma-4-E4B ONNX',
+  'onnx-community/gemma-4-E2B-it-ONNX': 'gemma-4-E2B',
+  'onnx-community/gemma-4-E4B-it-ONNX': 'Gemma 4 E4B',
+  'onnx-community/LFM2.5-VL-450M-ONNX': 'LFM2.5-VL-450M',
+  'onnx-community/Qwen3-VL-2B-Instruct-ONNX': 'Qwen3-VL-2B',
+  'onnx-community/FastVLM-0.5B-ONNX': 'FastVLM 0.5B',
+  'onnx-community/Qwen3.5-0.8B-ONNX': 'Qwen3.5-0.8B',
 };
 
 export type GemmaDevice = 'webgpu' | 'wasm';

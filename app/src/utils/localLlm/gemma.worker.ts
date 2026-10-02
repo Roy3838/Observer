@@ -11,6 +11,63 @@ let TextStreamer: any = null;
 let load_image: any = null;
 let transformersModule: any = null;
 let currentImageTokenBudget: GemmaImageTokenBudget = 280;
+let currentFamily: ModelFamily | null = null;
+
+// Per-architecture differences, keyed by `config.model_type` from the model's config.json.
+// Model + processor classes are resolved by transformers.js itself (AutoModelForImageTextToText /
+// AutoProcessor); only the processor call signature and optional features differ per family.
+type ModelFamily = {
+  supportsThinking: boolean;
+  // Set for templates that expect plain-string content with an inline image token
+  // (e.g. FastVLM's `<image>`) instead of structured `{ type: 'image' }` parts.
+  inlineImageToken?: string;
+  // Applied once after the processor loads, to map Observer's image token budget onto the
+  // model's own resolution limits (only needed when the model's default is unbounded).
+  configureProcessor?: (proc: any, imageTokenBudget: number) => void;
+  buildImageInputs: (proc: any, prompt: string, images: any[], imageTokenBudget: number) => Promise<any>;
+};
+
+// Qwen2_5_VLProcessor._call(text, images) — image placeholders come from the chat template.
+// Shared by qwen3_vl and qwen3_5 (both use Qwen3VLProcessor + Qwen2VLImageProcessor).
+const QWEN_VL_FAMILY: ModelFamily = {
+  supportsThinking: false,
+  // preprocessor_config.json allows up to 16.7M pixels (~16k vision tokens) per image, which
+  // blows past WebGPU memory on a full screenshot. One vision token covers a
+  // (patch_size * merge_size)^2 = 32x32 px area, so budget * 1024 caps the token count.
+  configureProcessor: (proc, imageTokenBudget) => {
+    const ip = proc.image_processor;
+    const factor = (ip.patch_size ?? 16) * (ip.merge_size ?? 2);
+    ip.max_pixels = imageTokenBudget * factor * factor;
+    ip.min_pixels = Math.min(ip.min_pixels ?? 0, ip.max_pixels);
+  },
+  buildImageInputs: (proc, prompt, images) => proc(prompt, images),
+};
+
+const MODEL_FAMILIES: Record<string, ModelFamily> = {
+  // Gemma4Processor._call(text, images, audio, options)
+  gemma4: {
+    supportsThinking: true,
+    buildImageInputs: (proc, prompt, images, imageTokenBudget) =>
+      // Processor expects a single RawImage here
+      proc(prompt, images[0], null, { add_special_tokens: false, max_soft_tokens: imageTokenBudget }),
+  },
+  // Lfm2VlProcessor._call(images, text, kwargs)
+  lfm2_vl: {
+    supportsThinking: false,
+    buildImageInputs: (proc, prompt, images) =>
+      proc(images, prompt, { add_special_tokens: false }),
+  },
+  qwen3_vl: QWEN_VL_FAMILY,
+  qwen3_5: QWEN_VL_FAMILY,
+  // LlavaProcessor._call(images, text, kwargs) — chat template takes string content with `<image>`;
+  // the processor only expands the first `<image>`, so a single image is supported.
+  llava_qwen2: {
+    supportsThinking: false,
+    inlineImageToken: '<image>',
+    buildImageInputs: (proc, prompt, images) =>
+      proc(images[0], prompt, { add_special_tokens: false }),
+  },
+};
 
 async function loadTransformers() {
   if (!transformersModule) {
@@ -67,10 +124,11 @@ self.onmessage = async (event: MessageEvent) => {
         currentImageTokenBudget = (data.imageTokenBudget ?? 280) as GemmaImageTokenBudget;
         processor = null;
         model = null;
+        currentFamily = null;
 
         console.log('[Gemma Worker] Loading model:', modelId, 'device:', device, 'dtype:', dtype, 'imageTokenBudget:', currentImageTokenBudget);
 
-        const { AutoProcessor, Gemma4ForConditionalGeneration } = await loadTransformers();
+        const { AutoConfig, AutoProcessor, AutoModelForImageTextToText } = await loadTransformers();
 
         const progressCallback = (info: any) => {
           // "done" status with no download = loaded from cache
@@ -80,15 +138,29 @@ self.onmessage = async (event: MessageEvent) => {
           self.postMessage({ type: 'progress', data: info });
         };
 
+        // config.json is the source of truth for which architecture (and therefore which ONNX
+        // sessions: vision_encoder, audio_encoder, ...) transformers.js will load.
+        const config = await AutoConfig.from_pretrained(modelId, { progress_callback: progressCallback });
+        const family = MODEL_FAMILIES[config.model_type];
+        if (!family) {
+          throw new Error(`Unsupported model_type '${config.model_type}' for ${modelId}. Supported: ${Object.keys(MODEL_FAMILIES).join(', ')}`);
+        }
+        console.log('[Gemma Worker] model_type:', config.model_type);
+
         processor = await AutoProcessor.from_pretrained(modelId, {
           progress_callback: progressCallback,
         });
 
-        model = await Gemma4ForConditionalGeneration.from_pretrained(modelId, {
+        family.configureProcessor?.(processor, currentImageTokenBudget);
+
+        model = await AutoModelForImageTextToText.from_pretrained(modelId, {
+          config,
           dtype,
           device,
           progress_callback: progressCallback,
         });
+
+        currentFamily = family;
 
         self.postMessage({ type: 'ready' });
         break;
@@ -97,9 +169,10 @@ self.onmessage = async (event: MessageEvent) => {
       case 'generate': {
         const { messages, generationId, enableThinking = false } = data;
 
-        if (!processor || !model) {
+        if (!processor || !model || !currentFamily) {
           throw new Error('Model not loaded');
         }
+        const family = currentFamily;
 
         console.log('[Gemma Worker] Received messages:', JSON.stringify(messages, null, 2).slice(0, 500));
 
@@ -109,6 +182,19 @@ self.onmessage = async (event: MessageEvent) => {
         // Transform messages for chat template:
         // Replace image_url/image content with simple { type: "image" } placeholders
         const templateMessages = messages.map((msg: { role: string; content: any }) => {
+          if (Array.isArray(msg.content) && family.inlineImageToken) {
+            // Flatten to a string: image token (first image only) followed by the text parts
+            let imageEmitted = false;
+            const content = msg.content.map((part: any) => {
+              if (part.type === 'image_url' || part.type === 'image') {
+                if (imageEmitted) return '';
+                imageEmitted = true;
+                return family.inlineImageToken;
+              }
+              return part.text ?? '';
+            }).join('');
+            return { ...msg, content };
+          }
           if (Array.isArray(msg.content)) {
             return {
               ...msg,
@@ -127,22 +213,21 @@ self.onmessage = async (event: MessageEvent) => {
         console.log('[Gemma Worker] Template messages:', JSON.stringify(templateMessages, null, 2).slice(0, 500));
         console.log('[Gemma Worker] Images extracted:', images.length);
 
+        const thinking = enableThinking && family.supportsThinking;
+
         const prompt = processor.apply_chat_template(templateMessages, {
-          enable_thinking: enableThinking,
+          enable_thinking: thinking,
           add_generation_prompt: true,
         });
 
         console.log('[Gemma Worker] Generated prompt length:', prompt.length);
 
-        // For multimodal, pass first image (processor expects single RawImage)
+        // For multimodal, the processor call signature depends on the model family
         // For text-only, use tokenizer directly
         let inputs;
         if (images.length > 0) {
           console.log('[Gemma Worker] Processing with image, token budget:', currentImageTokenBudget);
-          inputs = await processor(prompt, images[0], null, {
-            add_special_tokens: false,
-            max_soft_tokens: currentImageTokenBudget,
-          });
+          inputs = await family.buildImageInputs(processor, prompt, images, currentImageTokenBudget);
           console.log('[Gemma Worker] Inputs created with image');
         } else {
           console.log('[Gemma Worker] Processing text-only...');
@@ -165,7 +250,7 @@ self.onmessage = async (event: MessageEvent) => {
         const DROP_TOKENS  = new Set(['<bos>', '<eos>', '<|end_of_turn|>']);
 
         type ThinkState = 'scanning' | 'thinking' | 'answering';
-        let thinkState: ThinkState = enableThinking ? 'scanning' : 'answering';
+        let thinkState: ThinkState = thinking ? 'scanning' : 'answering';
         let scanBuf = '';   // accumulator for prefix detection / partial-end detection
 
         const handleToken = (raw: string) => {
@@ -234,7 +319,7 @@ self.onmessage = async (event: MessageEvent) => {
 
         const streamer = new TextStreamer(processor.tokenizer, {
           skip_prompt: true,
-          skip_special_tokens: !enableThinking,
+          skip_special_tokens: !thinking,
           callback_function: handleToken,
         });
 

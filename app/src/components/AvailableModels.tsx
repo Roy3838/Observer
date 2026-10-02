@@ -404,10 +404,12 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
 
   const handleDownloadPreset = async (preset: ModelPreset) => {
     if (preset.engine === 'transformers') {
+      // Some repos don't publish every dtype (declared via preset.dtypes): fall back to one they do.
+      const dtype = !preset.dtypes || preset.dtypes.includes(gemmaDtype) ? gemmaDtype : preset.dtypes[0];
       GemmaModelManager.getInstance().loadModelWithSettings(
         preset.hfModelId! as GemmaModelId,
         useGpu ? 'webgpu' : 'wasm',
-        gemmaDtype,
+        dtype,
         gemmaTokenBudget,
         gemmaEnableThinking,
       );

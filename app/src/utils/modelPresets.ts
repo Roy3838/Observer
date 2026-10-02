@@ -1,3 +1,5 @@
+import type { GemmaDtype } from './localLlm/types';
+
 export type ModelPreset = {
   name: string;
   sizeLabel: string;
@@ -5,6 +7,8 @@ export type ModelPreset = {
   ggufUrl?: string;
   mmprojUrl?: string;
   hfModelId?: string;
+  // transformers only: dtypes with files in the repo. Omit when all are published.
+  dtypes?: GemmaDtype[];
 };
 
 // Extended quant ladder for testing across devices.
@@ -50,10 +54,22 @@ export const MODEL_PRESETS: ModelPreset[] = [
     mmprojUrl: 'https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/mmproj-F16.gguf',
   },
   {
-    name: 'Gemma 4 E2B ONNX',
+    name: 'gemma-4-E2B',
     sizeLabel: '~3 GB will crash on mobile',
     engine: 'transformers',
     hfModelId: 'onnx-community/gemma-4-E2B-it-ONNX',
+  },
+  {
+    name: 'Qwen3.5-0.8B',
+    sizeLabel: '~1 GB',
+    engine: 'transformers',
+    hfModelId: 'onnx-community/Qwen3.5-0.8B-ONNX',
+  },
+  {
+    name: 'Qwen3-VL-2B',
+    sizeLabel: '~2 GB',
+    engine: 'transformers',
+    hfModelId: 'onnx-community/Qwen3-VL-2B-Instruct-ONNX',
   },
   {
     name: 'Gemma 4 E4B',
@@ -70,9 +86,21 @@ export const MODEL_PRESETS: ModelPreset[] = [
     mmprojUrl: 'https://huggingface.co/ggml-org/dots.ocr-GGUF/resolve/main/mmproj-dots.ocr-Q8_0.gguf',
   },
   {
-    name: 'Gemma 4 E4B ONNX',
+    name: 'Gemma 4 E4B',
     sizeLabel: '~5 GB will crash on mobile',
     engine: 'transformers',
     hfModelId: 'onnx-community/gemma-4-E4B-it-ONNX',
+  },
+  {
+    name: 'LFM2.5-VL-450M',
+    sizeLabel: '~0.5 GB, hallucinates — best for simple describer agents',
+    engine: 'transformers',
+    hfModelId: 'onnx-community/LFM2.5-VL-450M-ONNX',
+  },
+  {
+    name: 'FastVLM 0.5B',
+    sizeLabel: '~0.7 GB, hallucinates — best for simple describer agents',
+    engine: 'transformers',
+    hfModelId: 'onnx-community/FastVLM-0.5B-ONNX',
   },
 ];
