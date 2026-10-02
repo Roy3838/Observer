@@ -5,9 +5,25 @@ import { resolve } from 'path';
 
 const devHost = process.env.TAURI_DEV_HOST;
 
+// onnxruntime-web references its ~26 MB wasm via `new URL(..., import.meta.url)`, so Vite copies it
+// into dist/assets, and Cloudflare Pages rejects files over 25 MiB. transformers.js never loads that
+// copy: unless wasmPaths is set it fetches the matching ort wasm/mjs from jsDelivr
+// (see transformers backends/onnx.js), so we drop the bundled files from the output.
+const dropOrtWasm = () => ({
+  name: 'drop-ort-wasm',
+  generateBundle(_options: unknown, bundle: Record<string, { type: string }>) {
+    for (const fileName of Object.keys(bundle)) {
+      if (bundle[fileName].type === 'asset' && /(^|\/)ort-wasm[^/]*\.wasm$/.test(fileName)) {
+        delete bundle[fileName];
+      }
+    }
+  },
+});
+
 export default defineConfig({
   plugins: [
     react(),
+    dropOrtWasm(),
     //visualizer({
     //  open: true, // Open the visualization after build
     //  gzipSize: true,
