@@ -14,8 +14,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Phone, Mail, Send, Hash, Bell, Check, Pencil, X,
-  CheckCircle2, Loader, RefreshCw, XCircle, KeyRound,
+  CheckCircle2, Loader, RefreshCw, XCircle, KeyRound, MessageSquare,
 } from 'lucide-react';
+import { FaWhatsapp } from 'react-icons/fa';
 import Modal from '@components/EditAgent/Modal';
 import WhitelistQR from '@components/whitelist/WhitelistQR';
 import TelegramQR from '@components/whitelist/TelegramQR';
@@ -120,6 +121,32 @@ const GoldenPathPanel: React.FC<{
       <div className="flex items-center gap-1.5 text-[11px] text-purple-600">
         <Loader className="h-3 w-3 animate-spin" />
         <span>Waiting — this continues automatically.</span>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * For a call, which pairing to show: either one covers calls, so the user picks. Each side
+ * has its own persisted code (see SensorSettings.ensurePhoneCode).
+ */
+const PairingToggle: React.FC<{ value: PhoneChannel; onChange: (c: PhoneChannel) => void }> = ({ value, onChange }) => {
+  const option = (c: PhoneChannel, label: string, icon: React.ReactNode) => (
+    <button
+      onClick={() => onChange(c)}
+      aria-pressed={value === c}
+      className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-medium transition-colors ${
+        value === c ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+      }`}
+    >
+      {icon}{label}
+    </button>
+  );
+  return (
+    <div className="flex justify-center">
+      <div className="inline-flex p-1 rounded-full bg-gray-100">
+        {option('sms', 'SMS', <MessageSquare className="h-3.5 w-3.5" />)}
+        {option('whatsapp', 'WhatsApp', <FaWhatsapp className="h-3.5 w-3.5" />)}
       </div>
     </div>
   );
@@ -430,6 +457,14 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
         )}
 
         {/* Phone: one big SMS or WhatsApp QR + code, no typing required. */}
+        {/* A call takes either pairing, so let the user pick; sms/whatsapp are fixed. */}
+        {useCodePath && !codeVerified && channel === 'voice' && (
+          <PairingToggle
+            value={SensorSettings.pairingChannelFor(code, channel)}
+            onChange={c => setCode(SensorSettings.ensurePhoneCode(c))}
+          />
+        )}
+
         {useCodePath && (
           <GoldenPathPanel
             code={code}
