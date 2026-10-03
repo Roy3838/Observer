@@ -22,10 +22,13 @@ export interface AgentLiveState {
   durationMs: number;
   isSleeping: boolean;
   sleepRemainingMs: number;
+  /** The loop interval elapsed while the model was still working; the countdown restarts
+   *  (following main_loop's tick grid) and the UI shows "still working" in orange. */
+  isOverrun: boolean;
 }
 
 const DEFAULT_STATE: AgentLiveState = {
-  liveStatus: 'IDLE', lastWord: '', progress: 0, durationMs: 0, isSleeping: false, sleepRemainingMs: 0,
+  liveStatus: 'IDLE', lastWord: '', progress: 0, durationMs: 0, isSleeping: false, sleepRemainingMs: 0, isOverrun: false,
 };
 
 const AgentLiveStateContext = createContext<Record<string, AgentLiveState>>({});
@@ -45,11 +48,47 @@ function useAgentLiveState(agentId: string, isRunning: boolean, isStarting: bool
   const [durationMs, setDurationMs] = useState(0);
   const [isSleeping, setIsSleeping] = useState(false);
   const [sleepRemainingMs, setSleepRemainingMs] = useState(0);
+  const [isOverrun, setIsOverrun] = useState(false);
 
   const statusRef = useRef<AgentLiveStatus>('IDLE');
   statusRef.current = liveStatus;
   const startRef = useRef(0);
   const durationRef = useRef(0);
+  const loopTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopLoopTimer = useCallback(() => {
+    if (loopTimerRef.current) clearInterval(loopTimerRef.current);
+    loopTimerRef.current = null;
+  }, []);
+
+  // Ticks progress off startRef/durationRef. If the interval elapses while the model is still
+  // working, main_loop skips that tick (isExecuting), so flag an overrun and restart the
+  // countdown instead of leaving it pinned at 0.
+  const startLoopTimer = useCallback(() => {
+    stopLoopTimer();
+    loopTimerRef.current = setInterval(() => {
+      const status = statusRef.current;
+      let elapsed = Date.now() - startRef.current;
+      if (elapsed >= durationRef.current && (status === 'CAPTURING' || status === 'THINKING' || status === 'RESPONDING')) {
+        setIsOverrun(true);
+        startRef.current = Date.now();
+        elapsed = 0;
+      }
+      setProgress(Math.min(100, (elapsed / durationRef.current) * 100));
+    }, 100);
+  }, [stopLoopTimer]);
+
+  // main_loop runs one fixed setInterval and sleep only makes ticks return early, so after a
+  // wake the next iteration lands on the original tick grid (last start + k * interval), not
+  // a full interval from now. Re-anchor to the latest grid boundary to show the real remainder;
+  // the next agentIterationStart then corrects any small drift.
+  const resumeLoopTimer = useCallback(() => {
+    if (!startRef.current || !durationRef.current) return;
+    const ticksElapsed = Math.floor((Date.now() - startRef.current) / durationRef.current);
+    startRef.current += ticksElapsed * durationRef.current;
+    setProgress(Math.min(100, ((Date.now() - startRef.current) / durationRef.current) * 100));
+    startLoopTimer();
+  }, [startLoopTimer]);
 
   useEffect(() => {
     if (!isRunning && !isStarting) {
@@ -80,12 +119,10 @@ function useAgentLiveState(agentId: string, isRunning: boolean, isStarting: bool
   }, [agentId, isRunning, isStarting]);
 
   useEffect(() => {
-    let loopTimer: ReturnType<typeof setInterval> | null = null;
-
     const handleIterationStart = (event: CustomEvent) => {
       if (event.detail.agentId !== agentId) return;
-      if (loopTimer) clearInterval(loopTimer);
       setIsSleeping(false);
+      setIsOverrun(false);
       startRef.current = event.detail.iterationStartTime;
       durationRef.current = event.detail.intervalMs;
       setDurationMs(event.detail.intervalMs);
@@ -93,11 +130,7 @@ function useAgentLiveState(agentId: string, isRunning: boolean, isStarting: bool
       if (statusRef.current === 'SLEEPING' || statusRef.current === 'IDLE' || statusRef.current === 'STARTING') {
         setLiveStatus('CAPTURING');
       }
-
-      loopTimer = setInterval(() => {
-        const elapsed = Date.now() - startRef.current;
-        setProgress(Math.min(100, (elapsed / durationRef.current) * 100));
-      }, 100);
+      startLoopTimer();
     };
 
     const handleStreamStart = (event: CustomEvent) => {
@@ -108,11 +141,11 @@ function useAgentLiveState(agentId: string, isRunning: boolean, isStarting: bool
     window.addEventListener('agentIterationStart', handleIterationStart as EventListener);
     window.addEventListener('agentStreamStart', handleStreamStart as EventListener);
     return () => {
-      if (loopTimer) clearInterval(loopTimer);
+      stopLoopTimer();
       window.removeEventListener('agentIterationStart', handleIterationStart as EventListener);
       window.removeEventListener('agentStreamStart', handleStreamStart as EventListener);
     };
-  }, [agentId]);
+  }, [agentId, startLoopTimer, stopLoopTimer]);
 
   // Streamed response chunks -> last word ticker. Never cleared on sleep — it should keep
   // showing the last decision the agent made until a new one replaces it.
@@ -144,6 +177,10 @@ function useAgentLiveState(agentId: string, isRunning: boolean, isStarting: bool
       if (sleepTimer) clearInterval(sleepTimer);
       const sleepDurationMs = event.detail.durationMs;
       const sleepEnd = Date.now() + sleepDurationMs;
+      // Stop the loop ticker so it doesn't pin progress at 100 (or flag a bogus overrun)
+      // for the whole sleep; resumeLoopTimer re-anchors it on wake.
+      stopLoopTimer();
+      setIsOverrun(false);
       setIsSleeping(true);
       setLiveStatus('SLEEPING');
       setSleepRemainingMs(sleepDurationMs);
@@ -154,6 +191,7 @@ function useAgentLiveState(agentId: string, isRunning: boolean, isStarting: bool
           setIsSleeping(false);
           setLiveStatus('WAITING');
           if (sleepTimer) clearInterval(sleepTimer);
+          resumeLoopTimer();
           return;
         }
         setSleepRemainingMs(remaining);
@@ -165,6 +203,7 @@ function useAgentLiveState(agentId: string, isRunning: boolean, isStarting: bool
       if (sleepTimer) clearInterval(sleepTimer);
       setIsSleeping(false);
       setLiveStatus('WAITING');
+      resumeLoopTimer();
     };
 
     window.addEventListener('agentSleepStart', handleSleepStart as EventListener);
@@ -174,9 +213,9 @@ function useAgentLiveState(agentId: string, isRunning: boolean, isStarting: bool
       window.removeEventListener('agentSleepStart', handleSleepStart as EventListener);
       window.removeEventListener('agentSleepEnd', handleSleepEnd as EventListener);
     };
-  }, [agentId]);
+  }, [agentId, stopLoopTimer, resumeLoopTimer]);
 
-  return { liveStatus, lastWord, progress, durationMs, isSleeping, sleepRemainingMs };
+  return { liveStatus, lastWord, progress, durationMs, isSleeping, sleepRemainingMs, isOverrun };
 }
 
 const Keeper: React.FC<{
@@ -189,7 +228,7 @@ const Keeper: React.FC<{
   useEffect(() => {
     onUpdate(agentId, state);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentId, state.liveStatus, state.lastWord, state.progress, state.durationMs, state.isSleeping, state.sleepRemainingMs]);
+  }, [agentId, state.liveStatus, state.lastWord, state.progress, state.durationMs, state.isSleeping, state.sleepRemainingMs, state.isOverrun]);
   return null;
 };
 

@@ -31,6 +31,13 @@ const STATUS_LABEL: Record<AgentLiveStatus, string> = {
   IDLE: 'Idle',
 };
 
+// While the loop interval has elapsed but the model is still working.
+const OVERRUN_LABEL: Partial<Record<AgentLiveStatus, string>> = {
+  CAPTURING: 'Still capturing…',
+  THINKING: 'Still thinking…',
+  RESPONDING: 'Still responding…',
+};
+
 function formatCountdown(ms: number) {
   const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -52,7 +59,7 @@ interface AgentLiveCardProps {
 }
 
 const AgentLiveCard: React.FC<AgentLiveCardProps> = ({ agent, isRunning, isStarting, streams, onToggle, onSelectAgent, mode, floatingPos }) => {
-  const { liveStatus, lastWord, progress, durationMs, isSleeping, sleepRemainingMs } = useAgentLiveStateFor(agent.id);
+  const { liveStatus, lastWord, progress, durationMs, isSleeping, sleepRemainingMs, isOverrun } = useAgentLiveStateFor(agent.id);
   const tutorial = useTutorialFlow();
   useEffect(() => {
     if (tutorial.phase === 'building' && isRunning) tutorialFlow.attachAgent(agent.id);
@@ -215,7 +222,7 @@ const AgentLiveCard: React.FC<AgentLiveCardProps> = ({ agent, isRunning, isStart
       >
         <div className="relative w-9 h-9 flex-shrink-0 flex items-center justify-center">
           {isRunning && !isSleeping ? (
-            <PieTimer progress={progress} color="green" totalDurationMs={durationMs || undefined} isFilling size={36} />
+            <PieTimer progress={progress} color={isOverrun ? 'orange' : 'green'} totalDurationMs={durationMs || undefined} isFilling size={36} />
           ) : (
             <div className="w-2.5 h-2.5 rounded-full bg-blue-400" />
           )}
@@ -227,8 +234,8 @@ const AgentLiveCard: React.FC<AgentLiveCardProps> = ({ agent, isRunning, isStart
             {onSelectAgent && mode === 'inline' && <ArrowUpRight className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />}
           </div>
           {/* status | time | last word — one glance line, e.g. "Sleeping · 12s · PERSON_DETECTED" */}
-          <div className="flex items-center gap-1.5 text-xs text-gray-400 min-w-0">
-            <span className="flex-shrink-0">{isSleeping ? 'Sleeping' : STATUS_LABEL[liveStatus]}</span>
+          <div className={`flex items-center gap-1.5 text-xs min-w-0 ${isOverrun ? 'text-orange-500' : 'text-gray-400'}`}>
+            <span className="flex-shrink-0">{isSleeping ? 'Sleeping' : (isOverrun && OVERRUN_LABEL[liveStatus]) || STATUS_LABEL[liveStatus]}</span>
             {timeLabel && <><span className="flex-shrink-0">·</span>
               <span className="relative flex-shrink-0">
                 {timeLabel}
