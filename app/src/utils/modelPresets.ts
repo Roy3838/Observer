@@ -6,6 +6,8 @@ export type ModelPreset = {
   engine: 'llamacpp' | 'transformers';
   ggufUrl?: string;
   mmprojUrl?: string;
+  // llamacpp only: HF repo the gguf comes from; the UI lists its other quants from the HF API.
+  repo?: string;
   hfModelId?: string;
   // transformers only: dtypes with files in the repo. Omit when all are published.
   dtypes?: GemmaDtype[];
@@ -45,62 +47,76 @@ export const EXTENDED_PRESETS: ModelPreset[] = [
   { name: 'ggml E2B BF16',  sizeLabel: '~9.3 GB', engine: 'llamacpp', ggufUrl: `${GGML_E2B_BASE}bf16.gguf`,  mmprojUrl: GGML_E2B_MMPROJ },
 ];
 
-export const MODEL_PRESETS: ModelPreset[] = [
-  {
-    name: 'Gemma 4 E2B',
-    sizeLabel: '~3 GB',
-    engine: 'llamacpp',
-    ggufUrl: 'https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q3_K_S.gguf',
-    mmprojUrl: 'https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/mmproj-F16.gguf',
-  },
+// One entry per model, listing every engine it can run on. The Models UI renders one row per entry
+// with a download button for each engine; MODEL_PRESETS below flattens it for the other consumers.
+// NOTE: the app stores downloads by URL basename, so every gguf/mmproj filename must be unique
+// across entries (generic names like unsloth's `mmproj-F16.gguf` would overwrite each other).
+export type CatalogModel = {
+  name: string;
+  note?: string;
+  llamacpp?: { repo: string; ggufUrl: string; mmprojUrl?: string; sizeLabel: string };
+  transformers?: { hfModelId: string; sizeLabel: string; dtypes?: GemmaDtype[] };
+};
+
+const DESCRIBER_NOTE = 'hallucinates — best for simple describer agents';
+
+export const MODEL_CATALOG: CatalogModel[] = [
   {
     name: 'gemma-4-E2B',
-    sizeLabel: '~3 GB will crash on mobile',
-    engine: 'transformers',
-    hfModelId: 'onnx-community/gemma-4-E2B-it-ONNX',
+    llamacpp: {
+      repo: 'unsloth/gemma-4-E2B-it-GGUF',
+      ggufUrl: 'https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q3_K_S.gguf',
+      mmprojUrl: 'https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/mmproj-F16.gguf',
+      sizeLabel: '~3 GB',
+    },
+    transformers: { hfModelId: 'onnx-community/gemma-4-E2B-it-ONNX', sizeLabel: '~3 GB will crash on mobile' },
   },
   {
     name: 'Qwen3.5-0.8B',
-    sizeLabel: '~1 GB',
-    engine: 'transformers',
-    hfModelId: 'onnx-community/Qwen3.5-0.8B-ONNX',
+    llamacpp: {
+      repo: 'unsloth/Qwen3.5-0.8B-GGUF',
+      ggufUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q3_K_S.gguf',
+      // unsloth's projectors are all named `mmproj-*.gguf` and would overwrite the Gemma ones on disk,
+      // so use bartowski's uniquely named f16 projector (same base model).
+      mmprojUrl: 'https://huggingface.co/bartowski/Qwen_Qwen3.5-0.8B-GGUF/resolve/main/mmproj-Qwen_Qwen3.5-0.8B-f16.gguf',
+      sizeLabel: '~0.65 GB',
+    },
+    transformers: { hfModelId: 'onnx-community/Qwen3.5-0.8B-ONNX', sizeLabel: '~1 GB' },
   },
   {
     name: 'Qwen3-VL-2B',
-    sizeLabel: '~2 GB',
-    engine: 'transformers',
-    hfModelId: 'onnx-community/Qwen3-VL-2B-Instruct-ONNX',
+    llamacpp: {
+      repo: 'Qwen/Qwen3-VL-2B-Instruct-GGUF',
+      ggufUrl: 'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf',
+      mmprojUrl: 'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-F16.gguf',
+      sizeLabel: '~2 GB',
+    },
+    transformers: { hfModelId: 'onnx-community/Qwen3-VL-2B-Instruct-ONNX', sizeLabel: '~2 GB' },
   },
   {
     name: 'Gemma 4 E4B',
-    sizeLabel: '~5 GB',
-    engine: 'llamacpp',
-    ggufUrl: 'https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q3_K_M.gguf',
-    mmprojUrl: 'https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-F16.gguf',
-  },
-  {
-    name: 'Dots OCR',
-    sizeLabel: '~5 GB',
-    engine: 'llamacpp',
-    ggufUrl: 'https://huggingface.co/ggml-org/dots.ocr-GGUF/resolve/main/dots.ocr-Q8_0.gguf',
-    mmprojUrl: 'https://huggingface.co/ggml-org/dots.ocr-GGUF/resolve/main/mmproj-dots.ocr-Q8_0.gguf',
-  },
-  {
-    name: 'Gemma 4 E4B',
-    sizeLabel: '~5 GB will crash on mobile',
-    engine: 'transformers',
-    hfModelId: 'onnx-community/gemma-4-E4B-it-ONNX',
+    llamacpp: {
+      repo: 'unsloth/gemma-4-E4B-it-GGUF',
+      ggufUrl: 'https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q3_K_M.gguf',
+      mmprojUrl: 'https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-F16.gguf',
+      sizeLabel: '~5 GB',
+    },
+    transformers: { hfModelId: 'onnx-community/gemma-4-E4B-it-ONNX', sizeLabel: '~5 GB will crash on mobile' },
   },
   {
     name: 'LFM2.5-VL-450M',
-    sizeLabel: '~0.5 GB, hallucinates — best for simple describer agents',
-    engine: 'transformers',
-    hfModelId: 'onnx-community/LFM2.5-VL-450M-ONNX',
-  },
-  {
-    name: 'FastVLM 0.5B',
-    sizeLabel: '~0.7 GB, hallucinates — best for simple describer agents',
-    engine: 'transformers',
-    hfModelId: 'onnx-community/FastVLM-0.5B-ONNX',
+    note: DESCRIBER_NOTE,
+    llamacpp: {
+      repo: 'LiquidAI/LFM2.5-VL-450M-GGUF',
+      ggufUrl: 'https://huggingface.co/LiquidAI/LFM2.5-VL-450M-GGUF/resolve/main/LFM2.5-VL-450M-Q8_0.gguf',
+      mmprojUrl: 'https://huggingface.co/LiquidAI/LFM2.5-VL-450M-GGUF/resolve/main/mmproj-LFM2.5-VL-450m-F16.gguf',
+      sizeLabel: '~0.6 GB',
+    },
+    transformers: { hfModelId: 'onnx-community/LFM2.5-VL-450M-ONNX', sizeLabel: '~0.5 GB' },
   },
 ];
+
+export const MODEL_PRESETS: ModelPreset[] = MODEL_CATALOG.flatMap(m => [
+  ...(m.llamacpp ? [{ name: m.name, engine: 'llamacpp' as const, ...m.llamacpp }] : []),
+  ...(m.transformers ? [{ name: m.name, engine: 'transformers' as const, ...m.transformers }] : []),
+]);

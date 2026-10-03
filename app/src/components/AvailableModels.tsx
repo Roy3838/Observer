@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fetchModels as fetchAllModels, Model } from '@utils/inferenceServer';
 import {
   Cpu, RefreshCw, X, Trash2, Settings2, BarChart3,
-  Cloud, MinusCircle, Server, Check, FileDown, ChevronDown, StopCircle, Plus, Zap, Play,
+  Cloud, MinusCircle, Server, Check, FileDown, Download, ChevronDown, StopCircle, Plus, Zap, Play,
 } from 'lucide-react';
 import { BROWSER_LOCAL_SENTINEL, LLAMA_CPP_LOCAL_SENTINEL, SKIP_MODEL_SENTINEL } from '@utils/inferenceServer';
 import { Logger, LogEntry, LogLevel } from '@utils/logging';
@@ -32,7 +32,7 @@ import {
   ContextParams,
   DEFAULT_CONTEXT_PARAMS,
 } from '@utils/localLlm/types';
-import { MODEL_PRESETS, EXTENDED_PRESETS, type ModelPreset } from '@utils/modelPresets';
+import { MODEL_CATALOG, MODEL_PRESETS, EXTENDED_PRESETS, type ModelPreset } from '@utils/modelPresets';
 import { remaining as remainingOf, type QuotaInfo as QuotaInfoBase, type QuotaBlock } from '@/types/quota';
 
 type QuotaInfo = QuotaInfoBase | null;
@@ -45,8 +45,7 @@ const SUGGESTED_OLLAMA_MODELS = [
 // Matched against LocalOnboardingTutorial's `download-gemma` step — it spotlights
 // whichever engine's default preset applies (native on desktop, ONNX on web) and
 // polls `[data-tutorial-gemma-state]` for 'loaded' or 'installed' to advance.
-const TUTORIAL_GEMMA_NATIVE_NAME = 'Gemma 4 E2B';
-const TUTORIAL_GEMMA_ONNX_ID = 'onnx-community/gemma-4-E2B-it-ONNX';
+const TUTORIAL_MODEL_NAME = 'gemma-4-E2B';
 
 interface AvailableModelsProps {
   isProUser?: boolean;
@@ -141,6 +140,13 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
   );
 };
 
+// Quant name from a GGUF filename (`gemma-4-E2B-it-UD-Q3_K_XL.gguf` -> `UD-Q3_K_XL`). Files without one
+// (e.g. `mtp-gemma-4-E2B-it.gguf`, a speculative-decoding draft head) aren't standalone models: null.
+type GgufOption = { file: string; size: number };
+const QUANT_RE = /(?:^|[-_.])((?:UD-)?(?:IQ\d(?:_[A-Z0-9]+)*|Q\d(?:_[A-Z0-9]+)*|BF16|F16|F32|MXFP4(?:_MOE)?))$/i;
+const quantLabelOf = (file: string): string | null =>
+  file.replace(/\.gguf$/i, '').match(QUANT_RE)?.[1] ?? null;
+
 async function deleteNativeModelCascade(model: NativeLocalModel, allModels: NativeLocalModel[]) {
   const manager = NativeLlmManager.getInstance();
   await manager.deleteModel(model.id);
@@ -198,6 +204,9 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
   const [downloadingPreset, setDownloadingPreset] = useState<ModelPreset | null>(null);
   const [presetDownloadStep, setPresetDownloadStep] = useState<'gguf' | 'mmproj' | null>(null);
   const [ggufUrl, setGgufUrl] = useState('');
+  // Quant dropdown: gguf files per HF repo (fetched from the HF API) and the user's pick per model
+  const [ggufOptions, setGgufOptions] = useState<Record<string, GgufOption[]>>({});
+  const [selectedGguf, setSelectedGguf] = useState<Record<string, string>>({});
 
   // ── UI state ──
   const [expandedSettings, setExpandedSettings] = useState<string | null>(null);
@@ -292,6 +301,31 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
     poll();
     const id = setInterval(poll, 1000);
     return () => clearInterval(id);
+  }, [isTauriApp]);
+
+  // List each llama.cpp model's available quants straight from the HF repo (source of truth).
+  useEffect(() => {
+    if (!isTauriApp) return;
+    let cancelled = false;
+    for (const { llamacpp } of MODEL_CATALOG) {
+      if (!llamacpp) continue;
+      const repo = llamacpp.repo;
+      (async () => {
+        try {
+          const res = await platformFetch(`https://huggingface.co/api/models/${repo}/tree/main`, { method: 'GET' });
+          if (!res.ok) return;
+          const items = await res.json() as { type: string; path: string; size?: number; lfs?: { size: number } }[];
+          const files = items
+            .filter(f => f.type === 'file' && /\.gguf$/i.test(f.path) && !/mmproj/i.test(f.path) && !/-\d{5}-of-\d{5}/.test(f.path) && quantLabelOf(f.path) !== null)
+            .map(f => ({ file: f.path, size: f.lfs?.size ?? f.size ?? 0 }))
+            .sort((a, b) => a.size - b.size);
+          if (!cancelled && files.length > 0) setGgufOptions(prev => ({ ...prev, [repo]: files }));
+        } catch {
+          // offline / rate-limited: the row just keeps its default quant
+        }
+      })();
+    }
+    return () => { cancelled = true; };
   }, [isTauriApp]);
 
   useEffect(() => {
@@ -488,27 +522,33 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
 
   const isAnyNativeBusy = nativeState.status === 'loading' || nativeState.status === 'unloading' || nativeState.status === 'downloading';
 
-  // ── Merge presets + installed into one list per engine ───────
+  // ── Unified local model list: one row per catalog model, one control per engine ───────
 
-  const nativeRows = MODEL_PRESETS
-    .filter(p => p.engine === 'llamacpp')
-    .map(preset => {
-      const filename = preset.ggufUrl!.split('/').pop()!;
-      const installed = nativeModels.find(m => m.id === filename) ?? null;
-      return { preset, installed };
-    });
+  const catalogRows = MODEL_CATALOG.map(model => {
+    const basePreset = MODEL_PRESETS.find(p => p.name === model.name && p.engine === 'llamacpp') ?? null;
+    const transformersPreset = MODEL_PRESETS.find(p => p.name === model.name && p.engine === 'transformers') ?? null;
+
+    // llama.cpp: apply the dropdown's quant pick on top of the catalog default
+    const options = basePreset?.repo ? ggufOptions[basePreset.repo] ?? [] : [];
+    const defaultFile = basePreset?.ggufUrl?.split('/').pop() ?? null;
+    const selectedFile = selectedGguf[model.name] ?? defaultFile;
+    const nativePreset = basePreset && selectedFile
+      ? { ...basePreset, ggufUrl: basePreset.ggufUrl!.replace(/[^/]+$/, selectedFile) }
+      : basePreset;
+    // Installed = the picked quant, else any other quant of this repo already on disk
+    const repoFiles = new Set([...(defaultFile ? [defaultFile] : []), ...options.map(o => o.file)]);
+    const nativeInstalled = nativeModels.find(m => m.id === selectedFile)
+      ?? nativeModels.find(m => repoFiles.has(m.id)) ?? null;
+    const transformersInstalled = transformersPreset
+      ? transformersModels.find(m => m.id === transformersPreset.hfModelId) ?? null
+      : null;
+    return { model, nativePreset, transformersPreset, nativeInstalled, transformersInstalled, options, selectedFile };
+  });
   const nativeExtraModels = nativeModels.filter(
-    m => !nativeRows.some(r => r.installed?.id === m.id)
+    m => !catalogRows.some(r => r.nativeInstalled?.id === m.id)
   );
-
-  const transformersRows = MODEL_PRESETS
-    .filter(p => p.engine === 'transformers')
-    .map(preset => {
-      const installed = transformersModels.find(m => m.id === preset.hfModelId) ?? null;
-      return { preset, installed };
-    });
   const transformersExtraModels = transformersModels.filter(
-    m => !transformersRows.some(r => r.installed?.id === m.id)
+    m => !catalogRows.some(r => r.transformersInstalled?.id === m.id)
   );
 
   const remoteModels = models.filter(m =>
@@ -517,9 +557,19 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
   );
   const cloudModels = models.filter(m => m.server.includes('api.observer-ai.com'));
 
-  // ── Row renderers ─────────────────────────────────────────────
+  // ── Engine views ──────────────────────────────────────────────
+  // Each engine (llama.cpp / Transformers.js) builds the pieces of its half of a row; the row
+  // renderers below either combine two views (catalog models) or show one (extra installed files).
 
-  const renderNativeInstalledRow = (model: NativeLocalModel, showTag = true, isTutorialTarget = false) => {
+  interface EngineView {
+    idle: boolean;            // not installed and not downloading: just a download button
+    meta?: React.ReactNode;   // status text, only for non-idle views
+    action: React.ReactNode;
+    detailSlot?: React.ReactNode;
+    settingsSlot?: React.ReactNode;
+  }
+
+  const nativeInstalledView = (model: NativeLocalModel, isTutorialTarget = false): EngineView => {
     const isLoaded = model.runtime === 'loaded';
     const isLoading = model.runtime === 'loading';
     const isUnloading = nativeState.modelId === model.name && nativeState.status === 'unloading';
@@ -616,25 +666,20 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
       </span>
     );
 
-    return (
-      <ModelRow
-        key={model.id}
-        icon={<Cpu size={16} />}
-        name={model.name}
-        tag={showTag ? 'llama.cpp' : undefined}
-        meta={meta}
-        detailSlot={<FileProgressList items={fileProgress} />}
-        action={action}
-        settingsSlot={isLoaded && settingsOpen && (
-          <LlamaCppSamplerPanel
-            nativeStatus={nativeState.status}
-            samplerParams={samplerParams}
-            onParamChange={handleSamplerParamChange}
-            onReset={handleResetSamplerParams}
-          />
-        )}
-      />
-    );
+    return {
+      idle: false,
+      meta,
+      action,
+      detailSlot: <FileProgressList items={fileProgress} />,
+      settingsSlot: isLoaded && settingsOpen && (
+        <LlamaCppSamplerPanel
+          nativeStatus={nativeState.status}
+          samplerParams={samplerParams}
+          onParamChange={handleSamplerParamChange}
+          onReset={handleResetSamplerParams}
+        />
+      ),
+    };
   };
 
   // Both files (gguf + mmproj) are listed from the first click so the user sees the
@@ -653,33 +698,38 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
     return items;
   };
 
-  const renderNativePresetRow = (preset: ModelPreset) => {
+  const nativePresetView = (preset: ModelPreset, isTutorialTarget = false, quantSelect: React.ReactNode = null): EngineView => {
     const isThisDownloading = downloadingPreset?.name === preset.name && isAnyNativeBusy;
     const blocked = isAnyNativeBusy && !isThisDownloading;
-    const isTutorialTarget = preset.name === TUTORIAL_GEMMA_NATIVE_NAME;
-    return (
-      <ModelRow
-        key={preset.name}
-        icon={<Cpu size={16} />}
-        name={preset.name}
-        tag="llama.cpp"
-        dimmed={!isTauriApp}
-        meta={isThisDownloading ? 'Downloading…' : preset.sizeLabel}
-        detailSlot={isThisDownloading && (
-          <FileProgressList items={presetFileProgress(preset)} />
-        )}
-        action={!isTauriApp ? (
-          <span className="text-xs text-gray-400">App only</span>
-        ) : isThisDownloading ? (
+    if (isThisDownloading) {
+      return {
+        idle: false,
+        meta: 'Downloading…',
+        detailSlot: <FileProgressList items={presetFileProgress(preset)} />,
+        action: (
           <RowIconButton onClick={handleCancelNativeDownload} title="Cancel download" {...(isTutorialTarget ? { 'data-tutorial-gemma-state': 'downloading' } : {})}><StopCircle size={14} /></RowIconButton>
-        ) : (
-          <RowButtonPrimary disabled={blocked} onClick={() => handleDownloadPreset(preset)} {...(isTutorialTarget ? { 'data-tutorial-gemma-e2b': true } : {})}>Download</RowButtonPrimary>
-        )}
-      />
-    );
+        ),
+      };
+    }
+    return {
+      idle: true,
+      action: (
+        <>
+          {quantSelect}
+          <RowButtonPrimary
+            disabled={blocked}
+            onClick={() => handleDownloadPreset(preset)}
+            title="Download for llama.cpp (runs natively in the app)"
+            {...(isTutorialTarget ? { 'data-tutorial-gemma-e2b': true } : {})}
+          >
+            <Download size={12} className="inline -mt-0.5 mr-1" />App
+          </RowButtonPrimary>
+        </>
+      ),
+    };
   };
 
-  const renderTransformersInstalledRow = (model: LocalModelEntry, isTutorialTarget = false) => {
+  const transformersInstalledView = (model: LocalModelEntry, isTutorialTarget = false): EngineView => {
     const isThisModel = gemmaState.modelId === model.id;
     const status = isThisModel ? gemmaState.status : model.status;
     const isLoaded = status === 'loaded';
@@ -691,7 +741,7 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
 
     const meta = isError ? (isThisModel ? gemmaState.error ?? 'Error' : 'Error')
       : loadSettings ? `${loadSettings.device} · ${loadSettings.dtype} · ${loadSettings.imageTokenBudget} tokens`
-      : isLoading ? 'Downloading…' : undefined;
+      : isLoading ? 'Downloading…' : 'Downloaded';
 
     const action = isLoaded ? (
       <button
@@ -713,32 +763,142 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
       </>
     );
 
-    return (
-      <ModelRow key={model.id} icon={<Cpu size={16} />} name={model.name} tag="Transformers.js" meta={meta} detailSlot={<FileProgressList items={fileProgress} />} action={action} />
-    );
+    return { idle: false, meta, action, detailSlot: <FileProgressList items={fileProgress} /> };
   };
 
-  const renderTransformersPresetRow = (preset: ModelPreset) => {
+  const transformersPresetView = (preset: ModelPreset, isTutorialTarget = false): EngineView => {
     const isThisDownloading = gemmaState.modelId === preset.hfModelId && gemmaState.status === 'loading';
     const blocked = gemmaState.status === 'loading' && gemmaState.modelId !== preset.hfModelId;
-    const isTutorialTarget = preset.hfModelId === TUTORIAL_GEMMA_ONNX_ID;
-    const fileProgress = isThisDownloading ? gemmaFileProgress(gemmaState) : [];
+    if (isThisDownloading) {
+      return {
+        idle: false,
+        meta: 'Downloading…',
+        detailSlot: <FileProgressList items={gemmaFileProgress(gemmaState)} />,
+        action: (
+          <RowButtonGhost onClick={() => GemmaModelManager.getInstance().unloadModel()} {...(isTutorialTarget ? { 'data-tutorial-gemma-state': 'downloading' } : {})}>Cancel</RowButtonGhost>
+        ),
+      };
+    }
+    return {
+      idle: true,
+      action: (
+        <RowButtonPrimary
+          disabled={blocked}
+          onClick={() => handleDownloadPreset(preset)}
+          title="Download for Transformers.js (runs in the webview via WebGPU/WASM)"
+          {...(isTutorialTarget ? { 'data-tutorial-gemma-e2b': true } : {})}
+        >
+          <Download size={12} className="inline -mt-0.5 mr-1" />Web
+        </RowButtonPrimary>
+      ),
+    };
+  };
+
+  // ── Row renderers ─────────────────────────────────────────────
+
+  // Table columns shared by the header and every row so the Transformers.js / llama.cpp cells line up.
+  const TF_COL = 'w-[104px]';
+  const NATIVE_COL = 'w-[148px]';
+
+  const engineCells = (transformersCell: React.ReactNode, nativeCell: React.ReactNode) => (
+    <div className="flex items-center">
+      <div className={`${TF_COL} flex items-center gap-1`}>{transformersCell}</div>
+      {isTauriApp && <div className={`${NATIVE_COL} flex items-center gap-1`}>{nativeCell}</div>}
+    </div>
+  );
+
+  // Installed files that don't match a catalog model (custom GGUFs, retired presets, custom ONNX ids).
+  const renderNativeInstalledRow = (model: NativeLocalModel) => {
+    const v = nativeInstalledView(model);
+    return <ModelRow key={model.id} icon={<Cpu size={16} />} name={model.name} tag="llama.cpp" meta={v.meta} detailSlot={v.detailSlot} action={engineCells(null, v.action)} settingsSlot={v.settingsSlot} />;
+  };
+
+  const renderTransformersInstalledRow = (model: LocalModelEntry) => {
+    const v = transformersInstalledView(model);
+    return <ModelRow key={model.id} icon={<Cpu size={16} />} name={model.name} tag="Transformers.js" meta={v.meta} detailSlot={v.detailSlot} action={engineCells(v.action, null)} />;
+  };
+
+  const renderCatalogRow = ({ model, nativePreset, transformersPreset, nativeInstalled, transformersInstalled, options, selectedFile }: typeof catalogRows[number]) => {
+    // The onboarding tutorial targets one engine per platform: llama.cpp in the app, Transformers.js on web.
+    const isTutorialModel = model.name === TUTORIAL_MODEL_NAME;
+    const engines: { label: string; sizeLabel: string; view: EngineView }[] = [];
+    let transformersView: EngineView | null = null;
+    let nativeView: EngineView | null = null;
+
+    if (transformersPreset) {
+      const tutorialTarget = isTutorialModel && !isTauriApp;
+      transformersView = transformersInstalled
+        ? transformersInstalledView(transformersInstalled, tutorialTarget)
+        : transformersPresetView(transformersPreset, tutorialTarget);
+      engines.push({ label: 'Transformers.js', sizeLabel: transformersPreset.sizeLabel, view: transformersView });
+    }
+
+    if (nativePreset && isTauriApp) {
+      const picked = options.find(o => o.file === selectedFile);
+      const isDefaultPick = selectedFile === MODEL_PRESETS.find(p => p.name === model.name && p.engine === 'llamacpp')?.ggufUrl?.split('/').pop();
+      // Styled like the Download button; the closed state shows only the quant (e.g. "Q3_K_S")
+      const quantSelect = options.length > 1 ? (
+        <span className="relative inline-flex items-center">
+          <select
+            value={selectedFile ?? ''}
+            onChange={e => setSelectedGguf(prev => ({ ...prev, [model.name]: e.target.value }))}
+            disabled={isAnyNativeBusy}
+            title="Quantization (from the HuggingFace repo)"
+            className="appearance-none cursor-pointer w-[76px] truncate pl-2.5 pr-5 py-1 text-xs font-medium bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {options.map(o => (
+              <option key={o.file} value={o.file} className="bg-white text-gray-900">{quantLabelOf(o.file)}</option>
+            ))}
+          </select>
+          <ChevronDown size={11} className="pointer-events-none absolute right-1.5 text-white/70" />
+        </span>
+      ) : null;
+      nativeView = nativeInstalled
+        ? nativeInstalledView(nativeInstalled, isTutorialModel)
+        : nativePresetView(nativePreset, isTutorialModel, quantSelect);
+      engines.push({
+        label: 'llama.cpp',
+        sizeLabel: picked && !isDefaultPick ? `${formatBytes(picked.size, 0)} + projector` : nativePreset.sizeLabel,
+        view: nativeView,
+      });
+    }
+
+    const metaParts: React.ReactNode[] = [];
+    if (model.note) metaParts.push(model.note);
+    for (const e of engines) {
+      metaParts.push(e.view.idle ? `${e.label} ${e.sizeLabel}` : <span className="inline-flex items-center gap-1">{e.label}: {e.view.meta}</span>);
+    }
+
     return (
       <ModelRow
-        key={preset.name}
+        key={model.name}
         icon={<Cpu size={16} />}
-        name={preset.name}
-        tag="Transformers.js"
-        meta={isThisDownloading ? 'Downloading…' : preset.sizeLabel}
-        detailSlot={<FileProgressList items={fileProgress} />}
-        action={isThisDownloading ? (
-          <RowButtonGhost onClick={() => GemmaModelManager.getInstance().unloadModel()} {...(isTutorialTarget ? { 'data-tutorial-gemma-state': 'downloading' } : {})}>Cancel</RowButtonGhost>
-        ) : (
-          <RowButtonPrimary disabled={blocked} onClick={() => handleDownloadPreset(preset)} {...(isTutorialTarget ? { 'data-tutorial-gemma-e2b': true } : {})}>Download</RowButtonPrimary>
-        )}
+        name={model.name}
+        meta={
+          <span className="flex items-center gap-x-1.5">
+            {metaParts.map((part, i) => (
+              <React.Fragment key={i}>{i > 0 && <span>·</span>}{part}</React.Fragment>
+            ))}
+          </span>
+        }
+        detailSlot={engines.map(e => <React.Fragment key={e.label}>{e.view.detailSlot}</React.Fragment>)}
+        settingsSlot={engines.map(e => <React.Fragment key={e.label}>{e.view.settingsSlot}</React.Fragment>)}
+        action={engineCells(transformersView?.action, nativeView?.action)}
       />
     );
   };
+
+  // Column headers; mirrors ModelRow's layout (icon + flexible name + action cells).
+  const localModelsHeader = (
+    <div className="flex items-center gap-3 pb-1.5 text-[11px] font-medium text-gray-400">
+      <div className="w-8 flex-shrink-0" />
+      <div className="flex-1 min-w-0" />
+      <div className="flex items-center flex-shrink-0">
+        <div className={TF_COL}>Transformers.js</div>
+        {isTauriApp && <div className={NATIVE_COL}>llama.cpp</div>}
+      </div>
+    </div>
+  );
 
   if (loading && !refreshing) {
     return (
@@ -797,20 +957,12 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
         )}
       </div>
 
-      {/* App Models (native llama.cpp) */}
-      <Section title="App Models">
-        {nativeRows.map(({ preset, installed }) => installed
-          ? renderNativeInstalledRow(installed, false, preset.name === TUTORIAL_GEMMA_NATIVE_NAME)
-          : renderNativePresetRow(preset))}
-        {nativeExtraModels.map(m => renderNativeInstalledRow(m, false))}
-      </Section>
-
-      {/* In-Browser Models (Transformers.js) */}
-      <Section title="In-Browser Models">
-        {transformersRows.map(({ preset, installed }) => installed
-          ? renderTransformersInstalledRow(installed, preset.hfModelId === TUTORIAL_GEMMA_ONNX_ID)
-          : renderTransformersPresetRow(preset))}
-        {transformersExtraModels.map(m => renderTransformersInstalledRow(m))}
+      {/* Local models: one row per model, a download button per engine */}
+      <Section title="Local Models">
+        {localModelsHeader}
+        {catalogRows.map(renderCatalogRow)}
+        {nativeExtraModels.map(renderNativeInstalledRow)}
+        {transformersExtraModels.map(renderTransformersInstalledRow)}
       </Section>
 
       {/* Cloud Models */}
