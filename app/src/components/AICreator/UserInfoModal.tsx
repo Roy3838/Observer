@@ -132,8 +132,16 @@ const GoldenPathPanel: React.FC<{
  */
 const TelegramCodePanel: React.FC<{ onLinked: (code: string) => void }> = ({ onLinked }) => {
   const { code, status, linked, rotate } = useTelegramStatus();
+  const [countdown, setCountdown] = useState(3);
 
-  useEffect(() => { if (linked) onLinked(code); }, [linked, code, onLinked]);
+  // Same beat as the phone panel: show "all set" with a 3…2…1… tick, then continue.
+  useEffect(() => {
+    if (!linked) return;
+    setCountdown(3);
+    const interval = setInterval(() => setCountdown(c => Math.max(c - 1, 0)), 1000);
+    const timer = setTimeout(() => onLinked(code), 3000);
+    return () => { clearInterval(interval); clearTimeout(timer); };
+  }, [linked, code, onLinked]);
 
   if (linked) {
     return (
@@ -142,6 +150,7 @@ const TelegramCodePanel: React.FC<{ onLinked: (code: string) => void }> = ({ onL
         <p className="text-sm font-medium">
           You're all set — Telegram connected{status?.name ? ` to ${status.name}` : ''}.
         </p>
+        <p className="text-xs text-gray-400 tabular-nums">Continuing in {countdown}…</p>
       </div>
     );
   }
@@ -149,6 +158,7 @@ const TelegramCodePanel: React.FC<{ onLinked: (code: string) => void }> = ({ onL
   return (
     <div className="flex flex-col items-center gap-4 py-2">
       <TelegramQR code={code} />
+
       <div className="flex items-center gap-1.5 text-[11px] text-purple-600">
         <Loader className="h-3 w-3 animate-spin" />
         <span>Waiting — this continues automatically.</span>

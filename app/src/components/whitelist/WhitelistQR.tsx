@@ -19,7 +19,7 @@ const WhitelistQR: React.FC<{ code: string }> = ({ code }) => {
 
   return (
     <div className="flex flex-col items-center gap-4">
-    <div className="relative bg-white p-3 rounded-xl border shadow-sm border-[#25D366]/30">
+    <div className="bg-white p-3 rounded-xl border shadow-sm border-[#25D366]/30">
       <QRCodeSVG
         value={whatsappCodeQRValue(code)}
         size={168}
@@ -27,11 +27,6 @@ const WhitelistQR: React.FC<{ code: string }> = ({ code }) => {
         includeMargin={false}
         fgColor="#111827"
       />
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="flex items-center justify-center h-11 w-11 rounded-full ring-4 ring-white bg-[#25D366]">
-          <FaWhatsapp className="h-6 w-6 text-white" />
-        </div>
-      </div>
     </div>
 
     <button
