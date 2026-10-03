@@ -2,8 +2,8 @@
 //
 // One-call acquisition of Observer's default *local* model, mirroring the primary
 // path of AvailableModels.tsx's curated catalog:
-//   - Browser  → the Gemma 4 E2B ONNX transformers.js preset (download + load in one shot)
-//   - Desktop  → the Gemma 4 E2B llama.cpp preset (download gguf + mmproj, then load)
+//   - Browser  → the Qwen3.5 0.8B ONNX transformers.js preset (download + load in one shot)
+//   - Desktop  → the Qwen3.5 0.8B llama.cpp preset (download gguf + mmproj, then load)
 //
 // The MCP exposes this as the zero-param `download_model` tool. We block until the model
 // is actually loaded so the agentic loop can go straight to create_agent with a real,
@@ -25,10 +25,10 @@ export interface DownloadedLocalModel {
 
 // Single source of truth: pull the two default presets straight out of the catalog.
 const TRANSFORMERS_PRESET = MODEL_PRESETS.find(
-  p => p.engine === 'transformers' && p.hfModelId?.includes('E2B'),
+  p => p.engine === 'transformers' && p.hfModelId?.includes('Qwen3.5-0.8B'),
 );
 const LLAMACPP_PRESET = MODEL_PRESETS.find(
-  p => p.engine === 'llamacpp' && p.ggufUrl?.includes('E2B'),
+  p => p.engine === 'llamacpp' && p.ggufUrl?.includes('Qwen3.5-0.8B'),
 );
 
 /** Files the desktop default model downloads, in order (gguf, then vision projector) — lets the
