@@ -4,8 +4,8 @@
 // "what's your Discord webhook?" in chat and hoping the user knows how to find one, this
 // walks them through actually obtaining the value, then hands it back to the run.
 //
-// For phones there is nothing to type: the user's 4-word code is shown as a WhatsApp QR,
-// and the tool only returns once that code is connected, which is what lets `ask_user_info`
+// For phones there is nothing to type: the user's 4-word code for the channel is shown as a
+// QR (texted by SMS, or sent on WhatsApp), and the tool only returns once that code is connected, which is what lets `ask_user_info`
 // replace a separate `check_whitelist` call. Observer never sends to raw phone numbers.
 //
 // Values are remembered (SensorSettings.getNotificationContact) so a returning user gets a
@@ -26,6 +26,7 @@ import { useAuth } from '@contexts/AuthContext';
 import { SensorSettings } from '@utils/settings';
 import * as toolUtils from '@utils/handlers/utils';
 import type { UserInfoKind, UserInfoRequest, UserInfoResponse } from '../../mcp/types';
+import type { PhoneChannel } from '@utils/whitelistCode';
 import {
   CONTACT_LABEL,
   CONTACT_PLACEHOLDER,
@@ -34,7 +35,7 @@ import {
   normalizeContact,
 } from '@utils/contactInfo';
 
-/** The channel to actually test send through — defaults to WhatsApp when unspecified. */
+/** The channel to actually test send through — defaults to SMS when unspecified. */
 const CHANNEL_TEST_LABEL: Record<'sms' | 'voice' | 'whatsapp', string> = {
   whatsapp: 'Test WhatsApp',
   sms: 'Test SMS',
@@ -79,7 +80,7 @@ const Step: React.FC<{ n: number; children: React.ReactNode }> = ({ n, children 
 );
 
 /**
- * Phone setup: one big WhatsApp QR for the user's code, no typing. Purpose-built for the
+ * Phone setup: one big SMS or WhatsApp QR for the user's code, no typing. Purpose-built for the
  * modal's roomy layout rather than reusing WhitelistInline's compact chat-pill chrome (that
  * component is check_whitelist's inline gate).
  */
@@ -114,7 +115,7 @@ const GoldenPathPanel: React.FC<{
 
   return (
     <div className="flex flex-col items-center gap-4 py-2">
-      <WhitelistQR code={code} />
+      <WhitelistQR code={code} channel={SensorSettings.pairingChannelFor(code, channel)} />
 
       <div className="flex items-center gap-1.5 text-[11px] text-purple-600">
         <Loader className="h-3 w-3 animate-spin" />
@@ -195,7 +196,7 @@ const ConfirmExistingCodePanel: React.FC<{
   const [toolTest, setToolTest] = useState<TestState>('idle');
   const [toolTestError, setToolTestError] = useState('');
 
-  const testChannel: 'sms' | 'voice' | 'whatsapp' = channel ?? 'whatsapp';
+  const testChannel: 'sms' | 'voice' | 'whatsapp' = channel ?? 'sms';
 
   const testWhitelist = async () => {
     setWhitelistTest('testing');
@@ -299,15 +300,21 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
   const error = editing ? contactError(kind, value) : null;
   const needsWhitelist = kind === 'phone';
 
-  // Phone: a persisted code + WhatsApp QR, no typing. The code is generated once and only
-  // changes when the user rotates it, so agent code that bakes it in
-  // (sendWhatsapp("tree-book-shower-golden", ...)) never goes stale: pairing is permanent,
-  // and a closed WhatsApp window is reopened by sending anything, the code included.
+  // Phone: a persisted code + SMS or WhatsApp QR, no typing. sms and whatsapp each have their
+  // own code (each pairing is its own opt-in); a call takes either, reusing one the user
+  // already has. The code is generated once and only changes when the user rotates it, so
+  // agent code that bakes it in (sendSms("tree-book-shower-golden", ...)) never goes stale:
+  // pairing is permanent, and a closed WhatsApp window is reopened by sending anything.
   //
   // Steps for phone: 'checking' (silently test the saved code), 'confirm' (it's connected —
   // confirm/test/rotate instead of assuming), 'qr' (not connected yet, or just rotated).
-  const hadExistingCode = useMemo(() => (kind === 'phone' ? !!SensorSettings.getWhitelistCode() : false), [kind]);
-  const [code, setCode] = useState(() => (kind === 'phone' ? SensorSettings.ensureWhitelistCode() : ''));
+  const savedCodes = useMemo(() => {
+    if (kind !== 'phone') return [];
+    const order: PhoneChannel[] = channel === 'whatsapp' ? ['whatsapp'] : channel === 'voice' ? ['sms', 'whatsapp'] : ['sms'];
+    return order.map(c => SensorSettings.getPhoneCode(c)).filter((c): c is string => !!c);
+  }, [kind, channel]);
+  const hadExistingCode = savedCodes.length > 0;
+  const [code, setCode] = useState(() => (kind === 'phone' ? SensorSettings.defaultPhoneCode(channel) : ''));
   const [phoneStep, setPhoneStep] = useState<'checking' | 'confirm' | 'qr'>(
     kind === 'phone' && hadExistingCode ? 'checking' : 'qr',
   );
@@ -318,24 +325,31 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
   const useCodePath = needsWhitelist && phoneStep === 'qr';
 
   const rotateCode = () => {
-    setCode(SensorSettings.rotateWhitelistCode());
+    setCode(SensorSettings.rotatePhoneCode(SensorSettings.pairingChannelFor(code, channel)));
     setCodeVerified(false);
     setPhoneStep('qr');
   };
 
-  // On open, silently check the saved code instead of trusting it blindly. If it isn't ready
-  // (never paired, or WhatsApp's 24h window closed), show the QR for the SAME code: sending
-  // it fixes both. Never rotate here — agents already built with this code would stop
-  // reaching the phone.
+  // On open, silently check the saved code(s) instead of trusting them blindly; for a call,
+  // whichever one is connected wins. If none is ready (never paired, or WhatsApp's 24h window
+  // closed), show the QR for the SAME code: sending it fixes both. Never rotate here — agents
+  // already built with this code would stop reaching the phone.
   useEffect(() => {
     if (phoneStep !== 'checking') return;
     let cancelled = false;
     (async () => {
       const token = await getAccessToken();
       if (!token) { if (!cancelled) setPhoneStep('qr'); return; }
-      const result = await checkNumber(code, token, channel);
-      if (cancelled) return;
-      setPhoneStep(result.isWhitelisted ? 'confirm' : 'qr');
+      for (const saved of savedCodes) {
+        const result = await checkNumber(saved, token, channel);
+        if (cancelled) return;
+        if (result.isWhitelisted) {
+          setCode(saved);
+          setPhoneStep('confirm');
+          return;
+        }
+      }
+      if (!cancelled) setPhoneStep('qr');
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -415,7 +429,7 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
           <TelegramCodePanel onLinked={resolveTelegram} />
         )}
 
-        {/* Phone: one big WhatsApp QR + code, no typing required. */}
+        {/* Phone: one big SMS or WhatsApp QR + code, no typing required. */}
         {useCodePath && (
           <GoldenPathPanel
             code={code}

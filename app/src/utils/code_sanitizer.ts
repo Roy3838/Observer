@@ -16,7 +16,7 @@ export interface PassphraseRedactionResult {
 /**
  * Finds and strips any whitelist passphrase (4 hyphen-joined words drawn from
  * the golden-path wordlist) from code. Only the owner can send with a code, but
- * whoever sends it on WhatsApp/Telegram first while the owner is pairing gets
+ * whoever sends it by SMS/WhatsApp/Telegram first while the owner is pairing gets
  * bound to it — so they're removed automatically rather than just flagged.
  */
 export function redactPassphrases(code: string): PassphraseRedactionResult {

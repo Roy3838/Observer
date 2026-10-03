@@ -1,4 +1,4 @@
-// Front-and-center card on the Settings home: the WhatsApp and Telegram codes + saved
+// Front-and-center card on the Settings home: the SMS, WhatsApp and Telegram codes + saved
 // notification contacts collected by the `ask_user_info` MCP tool.
 import React, { useState } from 'react';
 import { Eye, EyeOff, Copy, Check, QrCode, RefreshCw, Pencil, CheckCircle2, XCircle } from 'lucide-react';
@@ -182,8 +182,12 @@ const UserInfoCard: React.FC = () => {
   const { getAccessToken, isAuthenticated, login } = useAuth();
   const { remote } = useMCPContext();
 
-  // WhatsApp: tied to the account, so it needs sign-in. The whitelist poll also claims the
-  // code and keeps its pairing window open while this card is visible.
+  // SMS and WhatsApp: tied to the account, so they need sign-in. The whitelist poll also
+  // claims each code and keeps its pairing window open while this card is visible.
+  const [smsCode, setSmsCode] = useState<string | null>(SensorSettings.getPhoneCode('sms'));
+  const smsEntries = smsCode ? [{ number: smsCode, isWhitelisted: false }] : [];
+  const { allWhitelisted: smsConnected } = useWhitelistPolling(smsEntries, getAccessToken, 'sms', !!smsCode && isAuthenticated);
+
   const [waCode, setWaCode] = useState<string | null>(SensorSettings.getWhitelistCode());
   const waEntries = waCode ? [{ number: waCode, isWhitelisted: false }] : [];
   const { allWhitelisted: waConnected } = useWhitelistPolling(waEntries, getAccessToken, undefined, !!waCode && isAuthenticated);
@@ -194,12 +198,37 @@ const UserInfoCard: React.FC = () => {
   return (
     <section className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800 overflow-hidden">
       <CodeRow
+        title="SMS code"
+        description="Text it to Observer for SMS and call alerts."
+        code={isAuthenticated ? smsCode : null}
+        connected={smsConnected}
+        qr={code => <WhitelistQR code={code} channel="sms" />}
+        rotateConfirm={ROTATE_CONFIRM}
+        onRotate={() => setSmsCode(SensorSettings.rotatePhoneCode('sms'))}
+        setup={isAuthenticated ? (
+          <button
+            onClick={() => setSmsCode(SensorSettings.ensurePhoneCode('sms'))}
+            className="mt-3 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700"
+          >
+            Set up SMS
+          </button>
+        ) : (
+          <button
+            onClick={login}
+            className="mt-3 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700"
+          >
+            Sign in to use SMS
+          </button>
+        )}
+      />
+
+      <CodeRow
         title="WhatsApp code"
-        description="Link it on WhatsApp for WhatsApp, SMS and call alerts, and to chat with Observer."
+        description="Link it on WhatsApp for WhatsApp and call alerts, and to chat with Observer."
         code={isAuthenticated ? waCode : null}
         connected={waConnected}
         name={remote.status.whatsapp?.name}
-        qr={code => <WhitelistQR code={code} />}
+        qr={code => <WhitelistQR code={code} channel="whatsapp" />}
         rotateConfirm={ROTATE_CONFIRM}
         onRotate={() => setWaCode(SensorSettings.rotateWhitelistCode())}
         setup={isAuthenticated ? (

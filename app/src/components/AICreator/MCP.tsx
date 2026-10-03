@@ -275,9 +275,9 @@ const CheckWhitelistGate: React.FC<{
   // defaults to the saved code. Anything that isn't a code fails the tool immediately, so
   // there's nothing to pair and no pill.
   const raw: string | undefined = status?.args?.code ?? status?.args?.phone_number;
-  const code = raw ? normalizeWhitelistCode(raw) : SensorSettings.ensureWhitelistCode();
+  const channel = (status?.args?.channel as WhitelistChannel | undefined) ?? 'sms';
+  const code = raw ? normalizeWhitelistCode(raw) : SensorSettings.defaultPhoneCode(channel);
   if (!code) return null;
-  const channel = status?.args?.channel as WhitelistChannel | undefined;
   return <WhitelistInline code={code} channel={channel} onCancel={onCancel} />;
 };
 

@@ -1,14 +1,14 @@
 // src/components/whitelist/shared.ts
 //
-// Single source of truth for the Observer WhatsApp contact, the pairing QR payload, and
-// the background polling loop. Shared by the full WhitelistModal and the compact inline
+// Single source of truth for the Observer SMS and WhatsApp contacts, the pairing QR payloads,
+// and the background polling loop. Shared by the full WhitelistModal and the compact inline
 // chip the MCP renders under a `check_whitelist` tool call, so the two surfaces can never
 // drift apart.
 //
-// Phones are reached only through the user's 4-word code, paired by sending it to the
-// Observer bot on WhatsApp (see api/remote.py). That one pairing enables WhatsApp, SMS and
-// voice alerts to the phone; there is no SMS or call-in pairing. Telegram has its own code,
-// which needs no account: see useTelegramStatus.
+// Phones are reached only through the user's 4-word codes (see api/remote.py), one per
+// channel because each pairing is its own opt-in: the SMS code, texted to Observer's number,
+// enables SMS and calls; the WhatsApp code, sent to the bot, enables WhatsApp and calls.
+// Telegram has its own code, which needs no account: see useTelegramStatus.
 
 import { useEffect, useRef, useState } from 'react';
 import type { WhitelistChannel } from '@utils/logging';
@@ -24,6 +24,21 @@ export const whatsappCodeQRValue = (code: string) =>
   `https://wa.me/${OBSERVER_WHATSAPP_PLAIN}?text=${encodeURIComponent(code)}`;
 
 export const openWhatsApp = () => openExternal(`https://wa.me/${OBSERVER_WHATSAPP_PLAIN}`);
+
+export const OBSERVER_SMS = '+1 (863) 208-5341';
+export const OBSERVER_SMS_PLAIN = '+18632085341';
+
+/** Opens the messaging app with the code prefilled: texting it pairs the phone for SMS and calls.
+ *  `?&body=` is the form both iOS and Android read. */
+export const smsCodeQRValue = (code: string) =>
+  `sms:${OBSERVER_SMS_PLAIN}?&body=${encodeURIComponent(code)}`;
+
+export const openSms = (code: string) => openExternal(smsCodeQRValue(code));
+
+/** The disclosure shown wherever the SMS code is: texting it is the user's SMS opt-in. */
+export const SMS_CONSENT =
+  'By texting this code you agree to receive alert texts and calls from Observer AI. ' +
+  'Msg frequency varies. Msg & data rates may apply. Reply HELP for help, DISCONNECT to unlink.';
 
 export interface PhoneEntry {
   number: string;
@@ -45,10 +60,7 @@ export async function checkNumber(
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({
-        phone_number: number,
-        ...(channel === 'whatsapp' ? { channel } : {}),
-      }),
+      body: JSON.stringify({ phone_number: number, ...(channel ? { channel } : {}) }),
     });
     if (!response.ok) return { number, isWhitelisted: false };
     const data = await response.json();

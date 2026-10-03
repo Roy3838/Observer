@@ -20,10 +20,12 @@ export default function getMcpSystemPrompt(): string {
   // them (e.g. re-editing an agent whose code went stale) instead of only learning them through
   // the ask_user_info modal. They are only pointers: whether one is currently connected is a
   // separate question, which check_whitelist / start_agent / ask_user_info answer.
+  const savedSmsCode = SensorSettings.getPhoneCode('sms');
   const savedCode = SensorSettings.getWhitelistCode();
   const savedTelegramCode = SensorSettings.getTelegramCode();
   const savedCodeLines = [
-    savedCode && `- WhatsApp code \`${savedCode}\`: stands in for the phone they connected on WhatsApp, for \`sendSms\`/\`sendWhatsapp\`/\`call\`. Call \`check_whitelist\` before \`start_agent\`; if it fails, use \`ask_user_info\` kind='phone'.`,
+    savedSmsCode && `- SMS code \`${savedSmsCode}\`: stands in for the phone they connected by text, for \`sendSms\`/\`call\`. Call \`check_whitelist\` before \`start_agent\`; if it fails, use \`ask_user_info\` kind='phone'.`,
+    savedCode && `- WhatsApp code \`${savedCode}\`: stands in for the phone they connected on WhatsApp, for \`sendWhatsapp\`/\`call\`. Call \`check_whitelist\` before \`start_agent\`; if it fails, use \`ask_user_info\` kind='phone'.`,
     savedTelegramCode && `- Telegram code \`${savedTelegramCode}\`: stands in for the Telegram chat they linked, for \`sendTelegram\`. If you're unsure it's linked, use \`ask_user_info\` kind='telegram'.`,
   ].filter(Boolean);
   const savedCodeSection = savedCodeLines.length > 0
@@ -186,9 +188,9 @@ $SCREEN
 - **code:**
 \`\`\`javascript
 if (response.includes("FINISHED")) {
-  call("tree-book-shower-golden", "Your steam download has finished!"); // the user's code from ask_user_info, never a phone number
+  call("tree-book-shower-golden", "Your steam download has finished!"); // the user's code from ask_user_info, never a phone number. The SMS code works for sendSms and call
   sendSms("tree-book-shower-golden", "Your steam download has finished!", screen); // ALWAYS append the screen if the screen sensor was used and if the tool supports it.
-  sendWhatsapp("tree-book-shower-golden", "Your steam download has finished!", screen); // Use only 1 notification normally, but here are all phone examples
+  sendWhatsapp("maple-otter-quill-ember", "Your steam download has finished!", screen); // WhatsApp has its own code (ask_user_info channel='whatsapp'). Use only 1 notification normally, but here are all phone examples
   sleep(300000); // always sleep after a call(), sendSms() or sendWhatapp() call these cost money
 }
 \`\`\`

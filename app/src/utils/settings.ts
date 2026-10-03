@@ -3,7 +3,8 @@
 // NOTE: No imports are needed from your config files anymore.
 import { WhisperSettings, TranscriptionMode, WhisperDevice } from './whisper/types';
 import { getDefaultWhisperSettings, migrateWhisperModelId } from '../config/whisper-models';
-import { generateWhitelistCode } from './whitelistCode';
+import { generateWhitelistCode, type PhoneChannel } from './whitelistCode';
+import type { WhitelistChannel } from './logging';
 
 class SettingsManager {
     // --- PRIVATE CONSTANTS FOR LOCALSTORAGE KEYS ---
@@ -261,12 +262,14 @@ class SettingsManager {
 
     // --- CONTACT CODES ---
     // Stable codes (e.g. "tree-book-shower-golden") shown in the golden-path QRs, one per
-    // channel. The WhatsApp code reaches the phone (WhatsApp/SMS/voice) and is tied to the
-    // account; the Telegram code reaches the chat and works without one. Generated once and
-    // only replaced on rotate: agent code bakes them in literally, so if one changed, every
+    // channel, because pairing each one is its own opt-in. The SMS code (texted to our number)
+    // reaches the phone by SMS and calls; the WhatsApp code by WhatsApp and calls. Both are tied
+    // to the account. The Telegram code reaches the chat and works without one. Generated once
+    // and only replaced on rotate: agent code bakes them in literally, so if one changed, every
     // agent built against the old code would silently stop working. Pairing a new code from
     // the same phone/chat revokes the old one server-side.
     private readonly WHITELIST_CODE_KEY = 'observer-ai:settings:whitelistCode';
+    private readonly SMS_CODE_KEY = 'observer-ai:settings:smsCode';
     private readonly TELEGRAM_CODE_KEY = 'observer-ai:settings:telegramCode';
 
     private ensureCode(key: string): string {
@@ -287,6 +290,40 @@ class SettingsManager {
 
     /** Mints a fresh WhatsApp code and overwrites the stored one, for "rotate to a new contact". */
     public rotateWhitelistCode(): string { return this.rotateCode(this.WHITELIST_CODE_KEY); }
+
+    private phoneCodeKey(channel: PhoneChannel): string {
+        return channel === 'sms' ? this.SMS_CODE_KEY : this.WHITELIST_CODE_KEY;
+    }
+
+    /** The persisted SMS or WhatsApp code, generating and storing one on first use. */
+    public ensurePhoneCode(channel: PhoneChannel): string { return this.ensureCode(this.phoneCodeKey(channel)); }
+
+    /** The persisted SMS or WhatsApp code, or null if one hasn't been generated yet. */
+    public getPhoneCode(channel: PhoneChannel): string | null { return localStorage.getItem(this.phoneCodeKey(channel)); }
+
+    /** Mints a fresh SMS or WhatsApp code and overwrites the stored one. */
+    public rotatePhoneCode(channel: PhoneChannel): string { return this.rotateCode(this.phoneCodeKey(channel)); }
+
+    /**
+     * Which pairing a phone tool's code needs: sendSms pairs by SMS, sendWhatsapp on WhatsApp,
+     * and a call takes either, so it goes by which saved code `code` is (SMS by default).
+     */
+    public pairingChannelFor(code: string | null | undefined, channel?: WhitelistChannel): PhoneChannel {
+        if (channel === 'sms' || channel === 'whatsapp') return channel;
+        return code && code === this.getPhoneCode('whatsapp') ? 'whatsapp' : 'sms';
+    }
+
+    /**
+     * The user's code for a phone tool (sms when unspecified), generating one if needed. A call
+     * reuses whichever code they already have, SMS first, before minting a new SMS one.
+     */
+    public defaultPhoneCode(channel?: WhitelistChannel): string {
+        if (channel === 'whatsapp') return this.ensurePhoneCode('whatsapp');
+        if (channel === 'voice') {
+            return this.getPhoneCode('sms') ?? this.getPhoneCode('whatsapp') ?? this.ensurePhoneCode('sms');
+        }
+        return this.ensurePhoneCode('sms');
+    }
 
     /** The persisted Telegram code, generating and storing one on first use. */
     public ensureTelegramCode(): string { return this.ensureCode(this.TELEGRAM_CODE_KEY); }

@@ -1,14 +1,19 @@
 // Shared by the ask_user_info modal and Settings: QR, copyable code, open-app button.
-// WhatsApp is the only way to pair a phone: sending the code there enables WhatsApp, SMS
-// and call alerts to that phone.
+// Each phone pairing has its own code and is its own opt-in: texting the SMS code to
+// Observer's number enables SMS and call alerts, sending the WhatsApp code to the bot
+// enables WhatsApp and call alerts.
 import React, { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, MessageSquare } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
-import { whatsappCodeQRValue, openWhatsApp } from './shared';
+import type { PhoneChannel } from '@utils/whitelistCode';
+import {
+  whatsappCodeQRValue, openWhatsApp, smsCodeQRValue, openSms, OBSERVER_SMS, SMS_CONSENT,
+} from './shared';
 
-const WhitelistQR: React.FC<{ code: string }> = ({ code }) => {
+const WhitelistQR: React.FC<{ code: string; channel: PhoneChannel }> = ({ code, channel }) => {
   const [copied, setCopied] = useState(false);
+  const sms = channel === 'sms';
 
   const copyCode = () => {
     navigator.clipboard.writeText(code).then(() => {
@@ -19,9 +24,9 @@ const WhitelistQR: React.FC<{ code: string }> = ({ code }) => {
 
   return (
     <div className="flex flex-col items-center gap-4">
-    <div className="bg-white p-3 rounded-xl border shadow-sm border-[#25D366]/30">
+    <div className={`bg-white p-3 rounded-xl border shadow-sm ${sms ? 'border-purple-300' : 'border-[#25D366]/30'}`}>
       <QRCodeSVG
-        value={whatsappCodeQRValue(code)}
+        value={sms ? smsCodeQRValue(code) : whatsappCodeQRValue(code)}
         size={168}
         level="H"
         includeMargin={false}
@@ -38,17 +43,30 @@ const WhitelistQR: React.FC<{ code: string }> = ({ code }) => {
       {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5 text-gray-400" />}
     </button>
 
-    <p className="text-xs text-gray-500 text-center max-w-xs">
-      Scan the QR with your phone, or send that code to Observer yourself on WhatsApp.
-      It connects WhatsApp, SMS and call alerts.
-    </p>
+    {sms ? (
+      <>
+        <p className="text-xs text-gray-500 text-center max-w-xs">
+          Scan the QR with your phone, or text that code to Observer at{' '}
+          <span className="font-mono whitespace-nowrap">{OBSERVER_SMS}</span>.
+          It connects SMS and call alerts.
+        </p>
+        <p className="text-[10px] text-gray-400 text-center max-w-xs leading-snug">{SMS_CONSENT}</p>
+      </>
+    ) : (
+      <p className="text-xs text-gray-500 text-center max-w-xs">
+        Scan the QR with your phone, or send that code to Observer yourself on WhatsApp.
+        It connects WhatsApp and call alerts.
+      </p>
+    )}
 
     <button
-      onClick={openWhatsApp}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors bg-[#25D366] text-white hover:bg-[#1ebe57]"
+      onClick={sms ? () => openSms(code) : openWhatsApp}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors text-white ${
+        sms ? 'bg-purple-600 hover:bg-purple-700' : 'bg-[#25D366] hover:bg-[#1ebe57]'
+      }`}
     >
-      <FaWhatsapp className="h-3.5 w-3.5" />
-      Open WhatsApp
+      {sms ? <MessageSquare className="h-3.5 w-3.5" /> : <FaWhatsapp className="h-3.5 w-3.5" />}
+      {sms ? 'Open Messages' : 'Open WhatsApp'}
     </button>
     </div>
   );

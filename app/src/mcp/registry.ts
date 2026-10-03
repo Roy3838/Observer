@@ -132,12 +132,13 @@ function iterationToResult(it: IterationData): ToolResult {
 async function checkContactCodes(agentCode: string, getToken?: TokenProvider): Promise<string | null> {
   const problems: string[] = [];
 
-  const { phoneNumbers, channel } = await checkPhoneWhitelist(agentCode, getToken);
+  // Each use carries its own tool's channel: SMS and WhatsApp have separate codes.
+  const { phoneNumbers } = await checkPhoneWhitelist(agentCode, getToken);
   for (const p of phoneNumbers) {
     if (p.isWhitelisted) continue;
     problems.push(p.isCode
-      ? `'${p.number}' is not whitelisted: the user has not connected this 4-word code. Call ask_user_info kind='phone' channel='${channel}' so they connect it, then edit_agent if the code changed and start_agent again.`
-      : `'${p.number}' is not a 4-word Observer code and phone numbers are never accepted. Call ask_user_info kind='phone' channel='${channel}' to get the user's code, replace it in the agent code with edit_agent, then start_agent again.`);
+      ? `'${p.number}' is not whitelisted for ${p.channel}: the user has not connected this 4-word code for it. Call ask_user_info kind='phone' channel='${p.channel}' so they connect it, then edit_agent if the code changed and start_agent again.`
+      : `'${p.number}' is not a 4-word Observer code and phone numbers are never accepted. Call ask_user_info kind='phone' channel='${p.channel}' to get the user's code, replace it in the agent code with edit_agent, then start_agent again.`);
   }
 
   const telegramRegex = /\bsendTelegram\(\s*["']([^"']+)["']/g;
@@ -560,11 +561,11 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'check_whitelist',
-    description: "Pre-flight check for the phone notification tools (sendSms, call, sendWhatsapp). They only send to the user's 4-word Observer code once that code is connected on WhatsApp, and start_agent FAILS otherwise — so call this BEFORE start_agent for any agent that uses a phone tool. Pass the code the agent sends to (defaults to the user's saved code) and the channel. This does NOT block and shows the user nothing: it returns {whitelisted:true} if the code is connected, and FAILS if it isn't. On failure, call ask_user_info kind='phone' (same channel) to get the user connected, then call check_whitelist again (or just start_agent). Phone numbers are never accepted: if an agent uses one, replace it with the user's code.",
+    description: "Pre-flight check for the phone notification tools (sendSms, call, sendWhatsapp). They only send to the user's 4-word Observer code once it is connected for that tool — the SMS code (texted to Observer) for sendSms, the WhatsApp code (sent on WhatsApp) for sendWhatsapp, either for call — and start_agent FAILS otherwise, so call this BEFORE start_agent for any agent that uses a phone tool. Pass the code the agent sends to (defaults to the user's saved code for that channel) and the channel. This does NOT block and shows the user nothing: it returns {whitelisted:true} if the code is connected, and FAILS if it isn't. On failure, call ask_user_info kind='phone' (same channel) to get the user connected, then call check_whitelist again (or just start_agent). Phone numbers are never accepted: if an agent uses one, replace it with the user's code.",
     parameters: {
       type: 'object',
       properties: {
-        code: { type: 'string', description: "The 4-word Observer code the agent passes to the phone tool (e.g. \"tree-book-shower-golden\"). Omit to use the user's saved code." },
+        code: { type: 'string', description: "The 4-word Observer code the agent passes to the phone tool (e.g. \"tree-book-shower-golden\"). Omit to use the user's saved code for the channel." },
         channel: { type: 'string', enum: ['sms', 'voice', 'whatsapp'], description: "Which tool the code is used with: sms (sendSms), voice (call), or whatsapp (sendWhatsapp). WhatsApp also needs WhatsApp's 24h window to be open. Defaults to sms." },
       },
     },
@@ -573,9 +574,9 @@ export const TOOLS: ToolDefinition[] = [
       // `phone_number` is what this tool took before codes-only; a chat started under the
       // old prompt may still pass it.
       const raw: string | undefined = args.code ?? args.phone_number;
-      const code = raw ? normalizeWhitelistCode(raw) : SensorSettings.ensureWhitelistCode();
+      const code = raw ? normalizeWhitelistCode(raw) : SensorSettings.defaultPhoneCode(args.channel ?? 'sms');
       if (!code) {
-        const saved = SensorSettings.getWhitelistCode();
+        const saved = SensorSettings.defaultPhoneCode(args.channel ?? 'sms');
         return {
           error: `'${raw}' is not an Observer code. The phone tools only send to the user's 4-word code${saved ? ` ('${saved}')` : ''}, never to a phone number: put the code in the agent instead${saved ? '' : " (ask_user_info kind='phone' gets it)"}, then check it.`,
         };
@@ -604,7 +605,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'ask_user_info',
-    description: "Ask the user for a piece of contact info needed by a notification tool, via a guided modal. Use this INSTEAD of asking for a phone number / chat_id / webhook URL in chat prose — the modal walks the user through actually obtaining the value (QR codes, deep links, step-by-step instructions) and prefills anything they've given before. Call it BEFORE create_agent, once per piece of info you need. This BLOCKS until the user confirms. For kind='phone' the value is ALWAYS the user's 4-word Observer code (e.g. \"tree-book-shower-golden\"), never a phone number, and the modal only returns once it's connected, so you do NOT need a separate check_whitelist call for it; pass it verbatim as the phone_number/number argument to sendSms/sendWhatsapp/call. Observer never sends to raw phone numbers. For kind='telegram' the value is the user's separate 4-word Telegram code (not the phone code, never a numeric chat_id), already linked; pass it verbatim as sendTelegram's first argument. If the result is {skipped:true}, the user declined — ask them about it in chat rather than calling this again. Do not narrate the modal or tell the user to fill it in; they can see it.",
+    description: "Ask the user for a piece of contact info needed by a notification tool, via a guided modal. Use this INSTEAD of asking for a phone number / chat_id / webhook URL in chat prose — the modal walks the user through actually obtaining the value (QR codes, deep links, step-by-step instructions) and prefills anything they've given before. Call it BEFORE create_agent, once per piece of info you need. This BLOCKS until the user confirms. For kind='phone' the value is ALWAYS the user's 4-word Observer code for that channel (e.g. \"tree-book-shower-golden\"): the SMS code for sms, the WhatsApp code for whatsapp, either for voice. Never a phone number. Each channel has its own code, so ask again (with the right channel) when an agent uses both sendSms and sendWhatsapp. The modal only returns once it's connected, so you do NOT need a separate check_whitelist call for it; pass it verbatim as the phone_number/number argument to sendSms/sendWhatsapp/call. Observer never sends to raw phone numbers. For kind='telegram' the value is the user's separate 4-word Telegram code (not the phone code, never a numeric chat_id), already linked; pass it verbatim as sendTelegram's first argument. If the result is {skipped:true}, the user declined — ask them about it in chat rather than calling this again. Do not narrate the modal or tell the user to fill it in; they can see it.",
     parameters: {
       type: 'object',
       properties: {

@@ -151,7 +151,7 @@ function AppContent() {
 
   // Whitelist modal state
   const [whitelistModalInfo, setWhitelistModalInfo] = useState<{
-    phoneNumbers: Array<{ number: string; isWhitelisted: boolean }>;
+    phoneNumbers: Array<{ number: string; isWhitelisted: boolean; channel?: WhitelistChannel }>;
     agentId?: string;
     onStartAgent?: () => void;
     channel?: WhitelistChannel;

@@ -192,7 +192,7 @@ export async function sound(name: string = 'ping', volume: number = 0.5): Promis
 
 /**
  * The server's `detail` string for a failed response, or `fallback`. For the phone tools a
- * 403 detail says exactly what to fix (use your code, connect it on WhatsApp, or reopen
+ * 403 detail says exactly what to fix (use your code, connect it by SMS or on WhatsApp, or reopen
  * WhatsApp's 24h window), so it is passed through rather than replaced.
  */
 async function responseDetail(response: Response, fallback: string): Promise<string> {

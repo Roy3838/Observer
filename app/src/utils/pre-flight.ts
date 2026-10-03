@@ -10,7 +10,7 @@ export interface PhoneWhitelistResult {
    * 4-word whitelist code (e.g. a raw phone number): the server rejects those outright,
    * so they are never whitelisted and the fix is to swap in the user's code.
    */
-  phoneNumbers: Array<{ number: string; isWhitelisted: boolean; isCode: boolean }>;
+  phoneNumbers: Array<{ number: string; isWhitelisted: boolean; isCode: boolean; channel: WhitelistChannel }>;
   hasTools: boolean;
   channel?: WhitelistChannel; // 'whatsapp' | 'sms' | 'voice'
 }
@@ -32,17 +32,22 @@ export async function checkPhoneWhitelist(
     return { phoneNumbers: [], hasTools: false };
   }
 
-  // All three tools reach the phone paired on WhatsApp; the channel only decides whether
-  // WhatsApp's 24h window matters. Any sendWhatsapp makes it matter, so 'whatsapp' wins,
-  // and callers pass this channel on to every is-whitelisted poll.
+  // Each tool needs its own pairing: sendSms an SMS one, sendWhatsapp a WhatsApp one (with
+  // WhatsApp's 24h window open), call either. So every code is checked once per tool it is
+  // used with. `channel` is the most demanding one, for callers that show a single prompt.
   const channel: WhitelistChannel = hasWhatsapp ? 'whatsapp' : hasSms ? 'sms' : 'voice';
 
   // Extract the literal string argument passed to each phone tool call, rather than
   // guessing at phone-shaped substrings in the code.
-  const argRegex = /\b(?:sendWhatsapp|sendSms|call)\(\s*["']([^"']+)["']/g;
-  const uniqueNumbers = [...new Set(Array.from(agentCode.matchAll(argRegex), m => m[1]))];
+  const argRegex = /\b(sendWhatsapp|sendSms|call)\(\s*["']([^"']+)["']/g;
+  const toolChannel: Record<string, WhitelistChannel> = { sendWhatsapp: 'whatsapp', sendSms: 'sms', call: 'voice' };
+  const uses = new Map<string, { number: string; channel: WhitelistChannel }>();
+  for (const m of agentCode.matchAll(argRegex)) {
+    const use = { number: m[2], channel: toolChannel[m[1]] };
+    uses.set(`${use.channel}:${use.number}`, use);
+  }
 
-  if (uniqueNumbers.length === 0) {
+  if (uses.size === 0) {
     // Tools present but no numbers found
     return { phoneNumbers: [], hasTools: true, channel };
   }
@@ -58,9 +63,9 @@ export async function checkPhoneWhitelist(
   }
 
   const phoneNumbers = await Promise.all(
-    uniqueNumbers.map(async (number) => {
+    [...uses.values()].map(async ({ number, channel }) => {
       if (!normalizeWhitelistCode(number)) {
-        return { number, isWhitelisted: false, isCode: false };
+        return { number, isWhitelisted: false, isCode: false, channel };
       }
       try {
         const response = await fetch('https://api.observer-ai.com/tools/is-whitelisted', {
@@ -69,21 +74,18 @@ export async function checkPhoneWhitelist(
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            phone_number: number,
-            ...(channel === 'whatsapp' ? { channel } : {})
-          }),
+          body: JSON.stringify({ phone_number: number, channel }),
         });
 
         if (!response.ok) {
-          return { number, isWhitelisted: false, isCode: true };
+          return { number, isWhitelisted: false, isCode: true, channel };
         }
 
         const data = await response.json();
-        return { number, isWhitelisted: data.is_whitelisted, isCode: true };
+        return { number, isWhitelisted: data.is_whitelisted, isCode: true, channel };
       } catch (error) {
         console.error(`Error checking whitelist for ${number}:`, error);
-        return { number, isWhitelisted: false, isCode: true };
+        return { number, isWhitelisted: false, isCode: true, channel };
       }
     })
   );

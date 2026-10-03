@@ -52,6 +52,12 @@ export function generateWhitelistCode(): string {
   return words.join('-');
 }
 
+/**
+ * The two ways to pair a phone, each its own opt-in with its own code: texting the code to
+ * Observer's SMS number (SMS + calls) or sending it on WhatsApp (WhatsApp + calls).
+ */
+export type PhoneChannel = 'sms' | 'whatsapp';
+
 const WORDS = new Set(WORDLIST);
 
 /**

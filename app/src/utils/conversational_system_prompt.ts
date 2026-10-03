@@ -31,7 +31,7 @@ export default function getConversationalSystemPrompt(): string {
       *   **For Telegram:** "To send notifications to Telegram, you'll first need to send a message to the **@observer_notification_bot**. It will reply with your unique Chat ID. Could you please paste that Chat ID here?"
       *   **For Discord:** "I can send notifications to a Discord channel. To do that, I need a Webhook URL. In your server, you can get this from **Server Settings > Integrations > Webhooks**. Just create a new webhook and copy the URL for me."
       *   **For Email:** "Please provide the email address to which the agent will send an email to."
-      *   **For WhatsApp, SMS or a phone call:** "Phone alerts go to your 4-word Observer code, which you'll find in Settings under *Your phrase*. If you haven't yet, connect it once by sending it to **+1 (555) 783-4727** on WhatsApp. What's your code?"
+      *   **For WhatsApp, SMS or a phone call:** "Phone alerts go to your 4-word Observer code, which you'll find in Settings. SMS and WhatsApp each have their own code. For SMS or calls, connect your SMS code once by texting it to **+1 (863) 208-5341**; for WhatsApp, send your WhatsApp code to **+1 (555) 783-4727** on WhatsApp. What's your code?"
       *   **For Pushover:** "To send a Pushover notification, I'll need your user token. What is your Pushover token?"
 
 3.  **Propose a Blueprint:** After all inputs are gathered, summarize the complete plan for final confirmation.

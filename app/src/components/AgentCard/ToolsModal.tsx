@@ -142,7 +142,7 @@ function getAllTools(channel?: WhitelistChannel): ToolConfig[] {
         { name: 'message', description: 'SMS content' }
       ],
       testMessage: 'This is a test from Observer!',
-      warning: channel !== 'whatsapp' ? '⚠️ IMPORTANT: Due to A2P policy, some SMS messages are being blocked. Not recommended for US/Canada. Connect your code by sending it to +1 (555) 783-4727 on WhatsApp.' : undefined
+      warning: channel !== 'whatsapp' ? '⚠️ IMPORTANT: Connect your SMS code by texting it to +1 (863) 208-5341. SMS to US/Canada numbers is paused until carrier (A2P) registration is approved.' : undefined
     },
     {
       id: 'call',
@@ -156,7 +156,7 @@ function getAllTools(channel?: WhitelistChannel): ToolConfig[] {
         { name: 'message', description: 'Message to speak during call' }
       ],
       testMessage: 'This is a test call from Observer!',
-      warning: channel !== 'whatsapp' ? '⚠️ IMPORTANT: Connect your code first by sending it to +1 (555) 783-4727 on WhatsApp.' : undefined
+      warning: channel !== 'whatsapp' ? '⚠️ IMPORTANT: Connect your code first: text your SMS code to +1 (863) 208-5341, or send your WhatsApp code to +1 (555) 783-4727 on WhatsApp.' : undefined
     },
     {
       id: 'notify',

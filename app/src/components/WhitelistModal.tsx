@@ -11,6 +11,8 @@ interface WhitelistModalProps {
   phoneNumbers: Array<{
     number: string;
     isWhitelisted: boolean;
+    /** The tool it's passed to; falls back to `channel`. */
+    channel?: WhitelistChannel;
   }>;
   onClose: () => void;
   onStartAnyway?: () => void;
@@ -21,24 +23,30 @@ interface WhitelistModalProps {
 
 /**
  * Shown when start_agent's phone pre-flight fails. The phone tools only send to the user's
- * 4-word code once it's paired on WhatsApp, so what the user has to do depends on what the
- * agent actually sends to: a raw phone number has to be replaced with their code (it can
- * never be sent to), and a code has to be paired, or its WhatsApp window reopened.
+ * 4-word code once it's paired for that tool (by SMS for sendSms, on WhatsApp for sendWhatsapp,
+ * either for call), so what the user has to do depends on what the agent actually sends to:
+ * a raw phone number has to be replaced with their code (it can never be sent to), and a code
+ * has to be paired, or its WhatsApp window reopened.
  */
 const WhitelistModal: React.FC<WhitelistModalProps> = ({ phoneNumbers, onClose, onStartAnyway, onStartAgent, getToken, channel }) => {
-  const savedCode = React.useMemo(() => SensorSettings.ensureWhitelistCode(), []);
+  const savedCode = React.useMemo(() => SensorSettings.defaultPhoneCode(channel), [channel]);
 
-  const rawNumbers = phoneNumbers.filter(p => !normalizeWhitelistCode(p.number)).map(p => p.number);
-  const codes = [...new Set(
-    phoneNumbers.map(p => normalizeWhitelistCode(p.number)).filter((c): c is string => !!c),
-  )];
+  const rawNumbers = [...new Set(phoneNumbers.filter(p => !normalizeWhitelistCode(p.number)).map(p => p.number))];
+  // Each code once per tool it's used with: the same code can be ready for a call but not SMS.
+  const uses = new Map<string, { code: string; channel?: WhitelistChannel }>();
+  for (const p of phoneNumbers) {
+    const code = normalizeWhitelistCode(p.number);
+    const ch = p.channel ?? channel;
+    if (code) uses.set(`${ch}:${code}`, { code, channel: ch });
+  }
+  if (uses.size === 0 && rawNumbers.length > 0) uses.set(`${channel}:${savedCode}`, { code: savedCode, channel });
 
   const [paired, setPaired] = React.useState<Set<string>>(new Set());
-  const markPaired = React.useCallback((code: string) => {
-    setPaired(prev => (prev.has(code) ? prev : new Set(prev).add(code)));
+  const markPaired = React.useCallback((key: string) => {
+    setPaired(prev => (prev.has(key) ? prev : new Set(prev).add(key)));
   }, []);
 
-  const success = rawNumbers.length === 0 && codes.length > 0 && codes.every(c => paired.has(c));
+  const success = rawNumbers.length === 0 && uses.size > 0 && [...uses.keys()].every(k => paired.has(k));
 
   return (
     <Modal open={true} onClose={onClose} className="w-full max-w-lg md:max-w-2xl">
@@ -48,7 +56,7 @@ const WhitelistModal: React.FC<WhitelistModalProps> = ({ phoneNumbers, onClose, 
           <Phone className="h-6 w-6" />
           <div>
             <h2 className="text-xl font-semibold">Connect your phone</h2>
-            <p className="text-sm text-blue-100">One-time setup on WhatsApp</p>
+            <p className="text-sm text-blue-100">One-time setup</p>
           </div>
         </div>
         <button
@@ -104,20 +112,20 @@ const WhitelistModal: React.FC<WhitelistModalProps> = ({ phoneNumbers, onClose, 
               </div>
             )}
 
-            {codes.length === 0 && rawNumbers.length === 0 && (
+            {uses.size === 0 && (
               <p className="text-sm text-orange-700">
                 ⚠️ This agent uses a phone tool, but passes it a value that can't be checked before starting.
-                It has to be your 4-word code (<span className="font-mono">{savedCode}</span>), connected on WhatsApp.
+                It has to be your 4-word code (<span className="font-mono">{savedCode}</span>), connected to your phone.
               </p>
             )}
 
-            {(codes.length > 0 ? codes : rawNumbers.length > 0 ? [savedCode] : []).map(code => (
+            {[...uses].map(([key, use]) => (
               <WhitelistInline
-                key={code}
-                code={code}
-                channel={channel}
+                key={key}
+                code={use.code}
+                channel={use.channel}
                 getToken={getToken}
-                onWhitelisted={() => markPaired(code)}
+                onWhitelisted={() => markPaired(key)}
               />
             ))}
           </>
