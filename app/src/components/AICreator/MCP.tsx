@@ -5,7 +5,7 @@
 // OpenAI function calls (see src/mcp/). This component is pure UI over the useMCP hook.
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Plus, CheckCircle2, XCircle, Loader, Square, Download, Cpu, Sparkles, StopCircle, Mic, ChevronDown } from 'lucide-react';
+import { Send, Loader2, Plus, CheckCircle2, XCircle, Loader, Square, Cpu, Mic, ChevronDown, Check, FileDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { TokenProvider } from '@utils/main_loop';
 import { type ToolStatusEntry } from '../../mcp/useMCP';
@@ -25,6 +25,7 @@ import { DEFAULT_LLAMACPP_FILES } from '@/mcp/localModel';
 import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
 import type { GemmaModelState, NativeModelState } from '@utils/localLlm/types';
 import { ModelManager, type Model } from '@utils/ModelManager';
+import { ModelRow, RowButtonGhost } from '@components/ModelCard/ModelRow';
 import RecipeMini from './RecipeMini';
 import AgentLiveCard from '@components/Observer/AgentLiveCard';
 import { useFloatingAgents } from '@components/Observer/FloatingAgentsContext';
@@ -290,30 +291,51 @@ const formatBytes = (bytes: number) => {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 };
 
-const Bar: React.FC<{ pct: number; done?: boolean }> = ({ pct, done }) => (
-  <div className="w-full bg-gray-200 rounded-full h-1.5">
-    <div
-      className={`h-1.5 rounded-full transition-all duration-300 ${done ? 'bg-green-500' : 'bg-purple-600'}`}
-      style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
-    />
+// Same per-file row as ModelHub's FileProgressList (AvailableModels.tsx): name, bytes, thin gray bar.
+interface FileProgress { file: string; loaded: number; total: number; progress: number; done: boolean }
+
+const FileProgressList: React.FC<{ items: FileProgress[] }> = ({ items }) => (
+  <div className="pb-2.5 space-y-1.5">
+    {items.map(item => (
+      <div key={item.file}>
+        <div className="flex justify-between items-center gap-2 text-[11px] text-gray-500 mb-0.5">
+          <span className="flex items-center gap-1 min-w-0">
+            {item.done
+              ? <Check size={11} className="text-gray-800 flex-shrink-0" />
+              : <FileDown size={11} className="text-gray-400 flex-shrink-0" />}
+            <span className="truncate" title={item.file}>{item.file}</span>
+          </span>
+          <span className="tabular-nums flex-shrink-0">
+            {item.done ? 'Done'
+              : item.total > 0 ? `${formatBytes(item.loaded)} / ${formatBytes(item.total)}`
+              : `${Math.round(item.progress)}%`}
+          </span>
+        </div>
+        <div className="w-full bg-gray-100 rounded-full h-1">
+          <div
+            className="h-1 rounded-full transition-all duration-300 bg-gray-800"
+            style={{ width: `${Math.max(0, Math.min(100, item.progress))}%` }}
+          />
+        </div>
+      </div>
+    ))}
   </div>
 );
 
 /**
  * Subscribes directly to the local-model managers (the same state the Models tab renders) to show
- * live progress for the in-flight `download_model` tool call. Renders nothing when idle.
+ * live progress for the in-flight `download_model` tool call, as a ModelHub-style ModelRow.
+ * Renders nothing when idle.
  */
-const DownloadShell: React.FC<{ icon: React.ReactNode; children: React.ReactNode; onCancel?: () => void }> = ({ icon, children, onCancel }) => (
-  <div className="mt-2 w-full max-w-md p-3 rounded-lg border border-purple-200 bg-white/70">
-    <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-gray-700">
-      {icon}<span>On-device model</span>
-      {onCancel && (
-        <button onClick={onCancel} className="ml-auto flex items-center gap-1 text-red-500 hover:text-red-700 font-medium">
-          <StopCircle size={11} /> Cancel
-        </button>
-      )}
-    </div>
-    {children}
+const DownloadShell: React.FC<{ meta: React.ReactNode; onCancel?: () => void; children?: React.ReactNode }> = ({ meta, onCancel, children }) => (
+  <div className="mt-2 w-full max-w-md">
+    <ModelRow
+      icon={<Cpu size={16} />}
+      name="On-device model"
+      meta={meta}
+      action={onCancel && <RowButtonGhost onClick={onCancel}>Cancel</RowButtonGhost>}
+      detailSlot={children}
+    />
   </div>
 );
 
@@ -333,41 +355,32 @@ const DownloadModelProgress: React.FC = () => {
     const { status, modelId, downloadProgress, downloadedBytes, totalBytes, error } = native;
     if (status === 'downloading') {
       return (
-        <DownloadShell icon={<Download className="h-4 w-4 text-purple-600 animate-bounce" />} onCancel={() => NativeLlmManager.getInstance().cancelDownload()}>
-          <div className="space-y-1.5">
-            {(DEFAULT_LLAMACPP_FILES.length ? DEFAULT_LLAMACPP_FILES : [modelId ?? 'model']).map((name, i, all) => {
-              const current = Math.max(0, all.indexOf(modelId ?? ''));
-              const done = i < current;
-              const live = i === current;
-              const pct = done ? 100 : live ? downloadProgress : 0;
-              return (
-                <div key={name}>
-                  <div className="flex justify-between text-[11px] text-gray-600 mb-1">
-                    <span className="truncate max-w-[60%]">{name}.gguf</span>
-                    <span className="font-medium">
-                      {done ? 'Done' : live && totalBytes > 0 ? `${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}` : `${Math.round(pct)}%`}
-                    </span>
-                  </div>
-                  <Bar pct={pct} done={done} />
-                </div>
-              );
-            })}
-          </div>
+        <DownloadShell meta="Downloading…" onCancel={() => NativeLlmManager.getInstance().cancelDownload()}>
+          <FileProgressList items={(DEFAULT_LLAMACPP_FILES.length ? DEFAULT_LLAMACPP_FILES : [modelId ?? 'model']).map((name, i, all) => {
+            const current = Math.max(0, all.indexOf(modelId ?? ''));
+            const done = i < current;
+            const live = i === current;
+            return {
+              file: `${name}.gguf`,
+              loaded: live ? downloadedBytes : 0,
+              total: live ? totalBytes : 0,
+              progress: done ? 100 : live ? downloadProgress : 0,
+              done,
+            };
+          })} />
         </DownloadShell>
       );
     }
     if (status === 'loading') {
       return (
-        <DownloadShell icon={<Cpu className="h-4 w-4 text-purple-600 animate-pulse" />} onCancel={() => NativeLlmManager.getInstance().unloadModel()}>
-          <p className="text-xs text-gray-600">Loading model into memory…</p>
-        </DownloadShell>
+        <DownloadShell meta="Loading into memory…" onCancel={() => NativeLlmManager.getInstance().unloadModel()} />
       );
     }
     if (status === 'loaded') {
-      return <DownloadShell icon={<CheckCircle2 className="h-4 w-4 text-green-600" />}><p className="text-xs text-gray-600">Model ready on your device.</p></DownloadShell>;
+      return <DownloadShell meta="Ready on your device" />;
     }
     if (status === 'error' && error) {
-      return <DownloadShell icon={<XCircle className="h-4 w-4 text-red-500" />}><p className="text-xs text-red-600">{error}</p></DownloadShell>;
+      return <DownloadShell meta={error} />;
     }
     return null;
   }
@@ -375,32 +388,16 @@ const DownloadModelProgress: React.FC = () => {
   // transformers.js (browser): one shot that both downloads and loads
   if (gemma.status === 'loading') {
     return (
-      <DownloadShell icon={<Sparkles className="h-4 w-4 text-purple-600 animate-pulse" />} onCancel={() => GemmaModelManager.getInstance().unloadModel()}>
-        {gemma.progress.length > 0 ? (
-          <div className="space-y-1.5">
-            {gemma.progress.map(item => (
-              <div key={item.file}>
-                <div className="flex justify-between text-[11px] text-gray-600 mb-1">
-                  <span className="truncate max-w-[60%]">{item.file}</span>
-                  <span className="font-medium">
-                    {item.status === 'done' ? 'Done' : item.total > 0 ? `${formatBytes(item.loaded)} / ${formatBytes(item.total)}` : `${Math.round(item.progress)}%`}
-                  </span>
-                </div>
-                <Bar pct={item.progress} done={item.status === 'done'} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-gray-600">Downloading & loading…</p>
-        )}
+      <DownloadShell meta="Downloading…" onCancel={() => GemmaModelManager.getInstance().unloadModel()}>
+        <FileProgressList items={gemma.progress.map(p => ({ file: p.file, loaded: p.loaded, total: p.total, progress: p.progress, done: p.status === 'done' }))} />
       </DownloadShell>
     );
   }
   if (gemma.status === 'loaded') {
-    return <DownloadShell icon={<CheckCircle2 className="h-4 w-4 text-green-600" />}><p className="text-xs text-gray-600">Model ready in your browser.</p></DownloadShell>;
+    return <DownloadShell meta="Ready in your browser" />;
   }
   if (gemma.status === 'error' && gemma.error) {
-    return <DownloadShell icon={<XCircle className="h-4 w-4 text-red-500" />}><p className="text-xs text-red-600">{gemma.error}</p></DownloadShell>;
+    return <DownloadShell meta={gemma.error} />;
   }
   return null;
 };
