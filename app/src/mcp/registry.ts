@@ -21,6 +21,7 @@ import {
 } from '@utils/main_loop';
 import { IterationStore, type IterationData } from '@utils/IterationStore';
 import { ModelManager } from '@utils/ModelManager';
+import type { TokenProvider } from '@utils/main_loop';
 import { checkPhoneWhitelist } from '@utils/pre-flight';
 import { downloadDefaultLocalModel } from './localModel';
 import { tauriStreamCapture } from '@utils/tauriStreamCapture';
@@ -30,6 +31,7 @@ import { browserStreamCapture } from '@utils/browserStreamCapture';
 import { tutorialStreamCapture } from '@utils/tutorialStreamCapture';
 import { SensorSettings } from '@utils/settings';
 import { normalizeWhitelistCode } from '@utils/whitelistCode';
+import { fetchStatus } from './remote';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -120,6 +122,36 @@ function iterationToResult(it: IterationData): ToolResult {
     },
     images,
   };
+}
+
+/**
+ * start_agent pre-flight, the MCP-path twin of the one in the UI: every 4-word code the agent
+ * code sends to (phone tools and sendTelegram) must be connected. Returns a descriptive error
+ * telling the model to run ask_user_info, or null when everything checks out / nothing to check.
+ */
+async function checkContactCodes(agentCode: string, getToken?: TokenProvider): Promise<string | null> {
+  const problems: string[] = [];
+
+  const { phoneNumbers, channel } = await checkPhoneWhitelist(agentCode, getToken);
+  for (const p of phoneNumbers) {
+    if (p.isWhitelisted) continue;
+    problems.push(p.isCode
+      ? `'${p.number}' is not whitelisted: the user has not connected this 4-word code. Call ask_user_info kind='phone' channel='${channel}' so they connect it, then edit_agent if the code changed and start_agent again.`
+      : `'${p.number}' is not a 4-word Observer code and phone numbers are never accepted. Call ask_user_info kind='phone' channel='${channel}' to get the user's code, replace it in the agent code with edit_agent, then start_agent again.`);
+  }
+
+  const telegramRegex = /\bsendTelegram\(\s*["']([^"']+)["']/g;
+  const telegramArgs = [...new Set(Array.from(agentCode.matchAll(telegramRegex), m => m[1]))];
+  for (const arg of telegramArgs) {
+    const code = normalizeWhitelistCode(arg);
+    if (!code) {
+      problems.push(`'${arg}' is not a 4-word Telegram code (numeric chat_ids are never accepted). Call ask_user_info kind='telegram' to get the user's code, replace it in the agent code with edit_agent, then start_agent again.`);
+    } else if (!(await fetchStatus('telegram', code)).linked) {
+      problems.push(`Telegram code '${code}' is not whitelisted: no Telegram chat is linked to it. Call ask_user_info kind='telegram' so the user links it, then edit_agent if the code changed and start_agent again.`);
+    }
+  }
+
+  return problems.length ? `start_agent blocked by pre-flight: ${problems.join(' ')}` : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -645,6 +677,8 @@ export const TOOLS: ToolDefinition[] = [
       const agent = await getAgent(args.id);
       if (!agent) return { error: `Agent '${args.id}' not found.` };
       try {
+        const blocked = await checkContactCodes((await getAgentCode(args.id)) ?? '', ctx.getToken);
+        if (blocked) return { error: blocked };
         await startAgentLoop(args.id, ctx.getToken);
         return { data: { started: true, id: args.id } };
       } catch (e) {
