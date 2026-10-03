@@ -36,6 +36,9 @@ function defaultSizePx(): { width: number; height: number } {
   return { width: Math.round(vw * 0.5), height: Math.round(vh * 0.5) };
 }
 
+// Tailwind's `md` breakpoint: below it the grid is a single full-width column of tiles.
+const NARROW_QUERY = '(max-width: 767px)';
+
 function colsForWidth(containerWidth: number): number {
   return Math.max(1, Math.floor((containerWidth - GRID_MARGIN[0]) / (COL_PX + GRID_MARGIN[0])));
 }
@@ -71,6 +74,19 @@ export function useAgentGridLayout(agentIds: string[]) {
   layoutRef.current = layout;
 
   const cols = colsForWidth(width || 1);
+
+  // Below md every tile fills the row. The stored sizes are absolute pixels (half the viewport by
+  // default), which on a phone left each card a fraction of the column width.
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(NARROW_QUERY).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW_QUERY);
+    const onChange = (e: MediaQueryListEvent) => setIsNarrow(e.matches);
+    setIsNarrow(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   const persist = useCallback((next: LayoutItem[]) => {
     setLayout(next);
@@ -117,18 +133,19 @@ export function useAgentGridLayout(agentIds: string[]) {
 
   // Render-time-only clamp: shrink a tile to fit the current column count
   // without mutating (or persisting) its stored absolute size, so it's back
-  // to full size the moment the window is wide enough again. Also floors
+  // to full size the moment the window is wide enough again (below md, tiles are forced to the full
+  // row instead, see isNarrow). Also floors
   // w/h at 1 as a self-heal for any degenerate size persisted by an older
   // build (see the effect above).
   const renderLayout = useMemo(
     () =>
       layout.map(item => {
-        const w = Math.max(1, Math.min(item.w, cols));
+        const w = isNarrow ? cols : Math.max(1, Math.min(item.w, cols));
         const h = Math.max(1, item.h);
-        const x = Math.min(item.x, Math.max(0, cols - w));
+        const x = isNarrow ? 0 : Math.min(item.x, Math.max(0, cols - w));
         return w === item.w && h === item.h && x === item.x ? item : { ...item, w, h, x };
       }),
-    [layout, cols]
+    [layout, cols, isNarrow]
   );
 
   // Un-minimizing a card brings back a layout item whose stored x/y may now
