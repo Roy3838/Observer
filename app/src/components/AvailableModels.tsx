@@ -45,7 +45,7 @@ const SUGGESTED_OLLAMA_MODELS = [
 // Matched against LocalOnboardingTutorial's `download-gemma` step — it spotlights
 // whichever engine's default preset applies (native on desktop, ONNX on web) and
 // polls `[data-tutorial-gemma-state]` for 'loaded' or 'installed' to advance.
-const TUTORIAL_MODEL_NAME = 'gemma-4-E2B';
+const TUTORIAL_MODEL_NAME = 'Gemma 4 E2B';
 
 interface AvailableModelsProps {
   isProUser?: boolean;
@@ -140,6 +140,17 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
   );
 };
 
+type HfFile = { path: string; size: number };
+// Quant list for a GGUF repo, read live from the HF API so new quants show up in the dropdown without an app update.
+const fetchGgufFiles = async (repo: string): Promise<HfFile[]> => {
+  const res = await platformFetch(`https://huggingface.co/api/models/${repo}/tree/main`, { method: 'GET' });
+  if (!res.ok) return [];
+  const items = await res.json() as { type: string; path: string; size?: number; lfs?: { size: number } }[];
+  return items
+    .filter(f => f.type === 'file' && /\.gguf$/i.test(f.path))
+    .map(f => ({ path: f.path, size: f.lfs?.size ?? f.size ?? 0 }));
+};
+
 // Quant name from a GGUF filename (`gemma-4-E2B-it-UD-Q3_K_XL.gguf` -> `UD-Q3_K_XL`). Files without one
 // (e.g. `mtp-gemma-4-E2B-it.gguf`, a speculative-decoding draft head) aren't standalone models: null.
 type GgufOption = { file: string; size: number };
@@ -205,7 +216,7 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
   const [presetDownloadStep, setPresetDownloadStep] = useState<'gguf' | 'mmproj' | null>(null);
   const [ggufUrl, setGgufUrl] = useState('');
   // Quant dropdown: gguf files per HF repo (fetched from the HF API) and the user's pick per model
-  const [ggufOptions, setGgufOptions] = useState<Record<string, GgufOption[]>>({});
+  const [repoGgufs, setRepoGgufs] = useState<Record<string, HfFile[]>>({});
   const [selectedGguf, setSelectedGguf] = useState<Record<string, string>>({});
 
   // ── UI state ──
@@ -303,27 +314,16 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
     return () => clearInterval(id);
   }, [isTauriApp]);
 
-  // List each llama.cpp model's available quants straight from the HF repo (source of truth).
+  // List each llama.cpp model's quants straight from its HF repo (the only live call; sizes of everything else are fixed).
   useEffect(() => {
     if (!isTauriApp) return;
     let cancelled = false;
     for (const { llamacpp } of MODEL_CATALOG) {
       if (!llamacpp) continue;
       const repo = llamacpp.repo;
-      (async () => {
-        try {
-          const res = await platformFetch(`https://huggingface.co/api/models/${repo}/tree/main`, { method: 'GET' });
-          if (!res.ok) return;
-          const items = await res.json() as { type: string; path: string; size?: number; lfs?: { size: number } }[];
-          const files = items
-            .filter(f => f.type === 'file' && /\.gguf$/i.test(f.path) && !/mmproj/i.test(f.path) && !/-\d{5}-of-\d{5}/.test(f.path) && quantLabelOf(f.path) !== null)
-            .map(f => ({ file: f.path, size: f.lfs?.size ?? f.size ?? 0 }))
-            .sort((a, b) => a.size - b.size);
-          if (!cancelled && files.length > 0) setGgufOptions(prev => ({ ...prev, [repo]: files }));
-        } catch {
-          // offline / rate-limited: the row just keeps its default quant
-        }
-      })();
+      fetchGgufFiles(repo)
+        .then(files => { if (!cancelled && files.length > 0) setRepoGgufs(prev => ({ ...prev, [repo]: files })); })
+        .catch(() => {}); // offline / rate-limited: rows keep their default quant, no size shown
     }
     return () => { cancelled = true; };
   }, [isTauriApp]);
@@ -529,7 +529,10 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
     const transformersPreset = MODEL_PRESETS.find(p => p.name === model.name && p.engine === 'transformers') ?? null;
 
     // llama.cpp: apply the dropdown's quant pick on top of the catalog default
-    const options = basePreset?.repo ? ggufOptions[basePreset.repo] ?? [] : [];
+    const options: GgufOption[] = (basePreset?.repo ? repoGgufs[basePreset.repo] ?? [] : [])
+      .filter(f => !/mmproj/i.test(f.path) && !/-\d{5}-of-\d{5}/.test(f.path) && quantLabelOf(f.path) !== null)
+      .map(f => ({ file: f.path, size: f.size }))
+      .sort((a, b) => a.size - b.size);
     const defaultFile = basePreset?.ggufUrl?.split('/').pop() ?? null;
     const selectedFile = selectedGguf[model.name] ?? defaultFile;
     const nativePreset = basePreset && selectedFile
@@ -821,7 +824,7 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
   const renderCatalogRow = ({ model, nativePreset, transformersPreset, nativeInstalled, transformersInstalled, options, selectedFile }: typeof catalogRows[number]) => {
     // The onboarding tutorial targets one engine per platform: llama.cpp in the app, Transformers.js on web.
     const isTutorialModel = model.name === TUTORIAL_MODEL_NAME;
-    const engines: { label: string; sizeLabel: string; view: EngineView }[] = [];
+    const engines: { label: string; view: EngineView }[] = [];
     let transformersView: EngineView | null = null;
     let nativeView: EngineView | null = null;
 
@@ -830,12 +833,10 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
       transformersView = transformersInstalled
         ? transformersInstalledView(transformersInstalled, tutorialTarget)
         : transformersPresetView(transformersPreset, tutorialTarget);
-      engines.push({ label: 'Transformers.js', sizeLabel: transformersPreset.sizeLabel, view: transformersView });
+      engines.push({ label: 'Transformers.js', view: transformersView });
     }
 
     if (nativePreset && isTauriApp) {
-      const picked = options.find(o => o.file === selectedFile);
-      const isDefaultPick = selectedFile === MODEL_PRESETS.find(p => p.name === model.name && p.engine === 'llamacpp')?.ggufUrl?.split('/').pop();
       // Styled like the Download button; the closed state shows only the quant (e.g. "Q3_K_S")
       const quantSelect = options.length > 1 ? (
         <span className="relative inline-flex items-center">
@@ -856,19 +857,10 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
       nativeView = nativeInstalled
         ? nativeInstalledView(nativeInstalled, isTutorialModel)
         : nativePresetView(nativePreset, isTutorialModel, quantSelect);
-      engines.push({
-        label: 'llama.cpp',
-        sizeLabel: picked && !isDefaultPick ? `${formatBytes(picked.size, 0)} + projector` : nativePreset.sizeLabel,
-        view: nativeView,
-      });
+      engines.push({ label: 'llama.cpp', view: nativeView });
     }
 
-    const metaParts: React.ReactNode[] = [];
-    if (model.note) metaParts.push(model.note);
-    for (const e of engines) {
-      metaParts.push(e.view.idle ? `${e.label} ${e.sizeLabel}` : <span className="inline-flex items-center gap-1">{e.label}: {e.view.meta}</span>);
-    }
-
+    // "2B · 3.4 GB", plus status text (downloading, load settings, projector picker) only while an engine is active
     return (
       <ModelRow
         key={model.name}
@@ -876,8 +868,9 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
         name={model.name}
         meta={
           <span className="flex items-center gap-x-1.5">
-            {metaParts.map((part, i) => (
-              <React.Fragment key={i}>{i > 0 && <span>·</span>}{part}</React.Fragment>
+            <span>{model.params} · {model.size}</span>
+            {engines.filter(e => !e.view.idle).map(e => (
+              <React.Fragment key={e.label}><span>·</span>{e.view.meta}</React.Fragment>
             ))}
           </span>
         }
@@ -958,6 +951,10 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
       </div>
 
       {/* Local models: one row per model, a download button per engine */}
+      {/* Heuristic for mobile: below Tailwind's md breakpoint */}
+      <div className="md:hidden mb-3 px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-xs text-red-600">
+        Transformers.js models will crash on mobile.
+      </div>
       <Section title="Local Models">
         {localModelsHeader}
         {catalogRows.map(renderCatalogRow)}
