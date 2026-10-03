@@ -176,7 +176,7 @@ async function captureScreenWeb(): Promise<ToolResult> {
     // Safari rejects getDisplayMedia outside a user gesture, which an MCP tool call never is.
     // Same message as main_loop.ts so the model relays it instead of suggesting a retry.
     if (e instanceof Error && msg.includes('getDisplayMedia must be called from a user gesture handler')) {
-      return { error: "Safari is bad at screen sharing and can't start automatically, click on the Observer App Icon on the top left to enter the Sensor Permissions Menu and ask for screen sharing manually. Also note: Safari won't capture System Audio, use chrome, firefox or edge for the best experience." };
+      return { error: "Safari is bad at screen sharing and can't start automatically, click on the Observer App Icon on the top left to enter the Sensor Permissions Menu and ask for screen sharing manually. Tell user Safari won't capture System Audio, and they have to setup screen sharing manually, and to use chrome, firefox or edge for the best experience." };
     }
     if (msg.includes('Permission denied') || msg.includes('NotAllowed') || msg.includes('user gesture')) {
       return { error: 'Screen share was cancelled or denied. Ask the user if they want to try again.' };
