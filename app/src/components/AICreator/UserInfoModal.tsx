@@ -131,7 +131,7 @@ const GoldenPathPanel: React.FC<{
  * No sign-in needed: the Telegram code is its own credential.
  */
 const TelegramCodePanel: React.FC<{ onLinked: (code: string) => void }> = ({ onLinked }) => {
-  const { code, status, linked } = useTelegramStatus();
+  const { code, status, linked, rotate } = useTelegramStatus();
 
   useEffect(() => { if (linked) onLinked(code); }, [linked, code, onLinked]);
 
@@ -153,9 +153,20 @@ const TelegramCodePanel: React.FC<{ onLinked: (code: string) => void }> = ({ onL
         <Loader className="h-3 w-3 animate-spin" />
         <span>Waiting — this continues automatically.</span>
       </div>
+      <RotateCodeButton onClick={rotate} />
     </div>
   );
 };
+
+/** Escape hatch for a code that won't pair: mint a fresh one right here instead of going to Settings. */
+const RotateCodeButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
+  <button
+    onClick={onClick}
+    className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+  >
+    <RefreshCw className="h-3 w-3" /> Can't connect? Generate a new code
+  </button>
+);
 
 type TestState = 'idle' | 'testing' | 'success' | 'failure';
 
@@ -402,6 +413,11 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
             getToken={getAccessToken}
             onWhitelisted={() => setCodeVerified(true)}
           />
+        )}
+        {useCodePath && !codeVerified && (
+          <div className="flex justify-center">
+            <RotateCodeButton onClick={rotateCode} />
+          </div>
         )}
 
         {!needsWhitelist && !useTelegramCode && (
