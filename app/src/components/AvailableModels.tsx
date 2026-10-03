@@ -800,11 +800,15 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
   // ── Row renderers ─────────────────────────────────────────────
 
   // Table columns shared by the header and every row so the Transformers.js / llama.cpp cells line up.
-  const TF_COL = 'w-[104px]';
+  const TF_COL = 'md:w-[104px]';
   const NATIVE_COL = 'w-[148px]';
+  // Fixed width below md only matters when two cells stack; web has just the one
+  const ACTION_COL = isTauriApp ? 'w-[148px]' : 'w-auto';
 
+  // Below md the two engine cells stack ([Web] above [App]) in one fixed-width column so the name keeps
+  // the room; from md up they sit side by side as table columns under the header.
   const engineCells = (transformersCell: React.ReactNode, nativeCell: React.ReactNode) => (
-    <div className="flex items-center">
+    <div className={`${ACTION_COL} flex flex-col items-start gap-1.5 md:w-auto md:flex-row md:items-center md:gap-0`}>
       <div className={`${TF_COL} flex items-center gap-1`}>{transformersCell}</div>
       {isTauriApp && <div className={`${NATIVE_COL} flex items-center gap-1`}>{nativeCell}</div>}
     </div>
@@ -886,9 +890,15 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
     <div className="flex items-center gap-3 pb-1.5 text-[11px] font-medium text-gray-400">
       <div className="w-8 flex-shrink-0" />
       <div className="flex-1 min-w-0" />
-      <div className="flex items-center flex-shrink-0">
+      {/* md and up: side-by-side column headers */}
+      <div className="hidden md:flex items-center flex-shrink-0">
         <div className={TF_COL}>Transformers.js</div>
         {isTauriApp && <div className={NATIVE_COL}>llama.cpp</div>}
+      </div>
+      {/* below md: stacked to match the stacked [Web] / [App] buttons */}
+      <div className={`${ACTION_COL} md:hidden flex flex-col items-start leading-tight flex-shrink-0`}>
+        <span>Transformers.js{isTauriApp ? ' /' : ''}</span>
+        {isTauriApp && <span>llama.cpp</span>}
       </div>
     </div>
   );
