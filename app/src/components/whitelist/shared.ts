@@ -38,7 +38,7 @@ export const openSms = (code: string) => openExternal(smsCodeQRValue(code));
 /** The disclosure shown wherever the SMS code is: texting it is the user's SMS opt-in. */
 export const SMS_CONSENT =
   'By texting this code you agree to receive alert texts and calls from Observer AI. ' +
-  'Msg frequency varies. Msg & data rates may apply. Reply HELP for help, DISCONNECT to unlink.';
+  'Msg frequency varies. Msg & data rates may apply. Reply HELP for help, DISCONNECT to unlink, STOP to opt out.';
 
 export interface PhoneEntry {
   number: string;
