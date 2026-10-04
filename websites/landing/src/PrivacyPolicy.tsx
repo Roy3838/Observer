@@ -18,7 +18,7 @@ const PrivacyPolicy = () => {
       <main className="py-16">
         <div className="container mx-auto px-6 max-w-4xl">
           <h1 className="text-4xl font-bold mb-4 text-black">Privacy Policy</h1>
-          <p className="text-black mb-8">Last updated: September 2026</p>
+          <p className="text-black mb-8">Last updated: October 2026</p>
 
           <div className="space-y-6 text-gray-700">
             {/* Privacy-First Option */}
@@ -140,6 +140,15 @@ const PrivacyPolicy = () => {
               <li>Telegram Bot API</li>
               <li>Discord (direct from client to Discord servers)</li>
             </ul>
+
+            <h3 className="text-lg font-medium mt-6 mb-2 text-gray-800">SMS and Mobile Information</h3>
+            <p>
+              When you connect a phone for SMS and call alerts, we store its phone number and your consent to
+              receive alerts, and use them only to deliver the alerts your agents send. No mobile information
+              will be shared with third parties or affiliates for marketing or promotional purposes. Text
+              messaging opt-in data and consent will not be shared with any third parties. Phone numbers are
+              passed to Twilio solely to deliver your messages and calls.
+            </p>
 
             <h3 className="text-lg font-medium mt-6 mb-2 text-gray-800">Other Providers</h3>
             <ul className="list-disc pl-6 space-y-1">

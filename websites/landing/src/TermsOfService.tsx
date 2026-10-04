@@ -18,7 +18,7 @@ const TermsOfService = () => {
       <main className="py-16">
         <div className="container mx-auto px-6 max-w-4xl">
           <h1 className="text-4xl font-bold mb-4 text-black">Terms of Service</h1>
-          <p className="text-black mb-8">Last updated: September 2026</p>
+          <p className="text-black mb-8">Last updated: October 2026</p>
 
           <div className="space-y-6 text-gray-700">
             <p>
@@ -224,9 +224,22 @@ const TermsOfService = () => {
 
             <h3 className="text-lg font-medium mt-6 mb-2 text-gray-800">Connecting a Phone for Notifications</h3>
             <ul className="list-disc pl-6 space-y-1">
-              <li>SMS, WhatsApp and voice notifications are only sent to a phone you have connected by sending your 4-word Observer code to the Observer bot on WhatsApp. Notifications cannot be sent to arbitrary phone numbers.</li>
+              <li>Notifications are only sent to a phone you have connected yourself with the 4-word Observer code shown in the app. Notifications cannot be sent to arbitrary phone numbers.</li>
+              <li>Each channel is connected separately. Texting your code to Observer by SMS connects SMS and call alerts; sending it to the Observer bot on WhatsApp connects WhatsApp and call alerts.</li>
               <li>By connecting a phone, you confirm that it is your phone (or that you have its owner's permission) and consent to receive notifications from your agents on it.</li>
               <li>WhatsApp only allows us to message you within 24 hours of your last message to the Observer bot. After that, send the bot any message to resume WhatsApp notifications.</li>
+            </ul>
+
+            <h3 className="text-lg font-medium mt-6 mb-2 text-gray-800">SMS Alerts Program</h3>
+            <ul className="list-disc pl-6 space-y-1">
+              <li><strong>Program:</strong> Observer AI alerts. Text messages sent by the AI agents you configure, to a phone you connected, such as "Observer: your simulation failed."</li>
+              <li><strong>How to opt in:</strong> In the Observer app, open SMS setup and text the 4-word code it shows to Observer at +1 (863) 208-5341. You will receive a confirmation message.</li>
+              <li><strong>Message frequency:</strong> Message frequency varies and depends on the agents you run.</li>
+              <li><strong>Cost:</strong> Message and data rates may apply.</li>
+              <li><strong>Opt out:</strong> Reply STOP to stop all messages, or DISCONNECT to unlink the phone from your account. You can reconnect at any time with a new code.</li>
+              <li><strong>Help:</strong> Reply HELP for help, or contact <a href="mailto:help@observer-ai.com" className="text-blue-600 hover:underline">help@observer-ai.com</a>.</li>
+              <li>Carriers are not liable for delayed or undelivered messages.</li>
+              <li>See our <Link to="/privacy" className="text-blue-600 hover:underline">Privacy Policy</Link> for how we handle your phone number. We do not share mobile information or SMS opt-in data with third parties for marketing purposes.</li>
             </ul>
 
             <p className="mt-4 text-sm text-gray-600">
