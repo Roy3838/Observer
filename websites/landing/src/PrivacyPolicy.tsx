@@ -144,7 +144,9 @@ const PrivacyPolicy = () => {
             <h3 className="text-lg font-medium mt-6 mb-2 text-gray-800">SMS and Mobile Information</h3>
             <p>
               When you connect a phone for SMS and call alerts, we store its phone number and your consent to
-              receive alerts, and use them only to deliver the alerts your agents send. No mobile information
+              receive alerts, and use them only to deliver the alerts your agents send.{' '}
+              <strong>We do not sell or share your SMS opt-in data or personal information with third parties
+              for marketing purposes.</strong> No mobile information
               will be shared with third parties or affiliates for marketing or promotional purposes. Text
               messaging opt-in data and consent will not be shared with any third parties. Phone numbers are
               passed to Twilio solely to deliver your messages and calls.

@@ -230,7 +230,7 @@ const TermsOfService = () => {
               <li>WhatsApp only allows us to message you within 24 hours of your last message to the Observer bot. After that, send the bot any message to resume WhatsApp notifications.</li>
             </ul>
 
-            <h3 className="text-lg font-medium mt-6 mb-2 text-gray-800">SMS Alerts Program</h3>
+            <h3 className="text-lg font-medium mt-6 mb-2 text-gray-800">SMS Terms</h3>
             <ul className="list-disc pl-6 space-y-1">
               <li><strong>Program:</strong> Observer AI alerts. Text messages sent by the AI agents you configure, to a phone you connected, such as "Observer: your simulation failed."</li>
               <li><strong>How to opt in:</strong> In the Observer app, open SMS setup and text the 4-word code it shows to Observer at +1 (863) 208-5341. You will receive a confirmation message.</li>
