@@ -86,11 +86,11 @@ MCP: start_agent`;
 
 
   const recropFlow = desktop
-    ? `MCP: stop_agent
+    ? `MCP: stop_agent // always stop agent when re-cropping or re-editing before starting again
 MCP: capture_screen 'target_id' // restart the stream on the target and read the corrected box_2d off this fresh frame
 MCP: set_screen_crop 'agent_id'
 MCP: start_agent // reuses the stream capture_screen started`
-    : `MCP: stop_agent
+    : `MCP: stop_agent // always stop agent when re-cropping or re-editing before starting again
 MCP: capture_screen // share again and read the corrected box_2d off this fresh frame
 MCP: set_screen_crop 'agent_id'
 MCP: start_agent`;
