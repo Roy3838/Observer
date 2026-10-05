@@ -566,7 +566,7 @@ export const TOOLS: ToolDefinition[] = [
       type: 'object',
       properties: {
         code: { type: 'string', description: "The 4-word Observer code the agent passes to the phone tool (e.g. \"tree-book-shower-golden\"). Omit to use the user's saved code for the channel." },
-        channel: { type: 'string', enum: ['sms', 'voice', 'whatsapp'], description: "Which tool the code is used with: sms (sendSms), voice (call), or whatsapp (sendWhatsapp). WhatsApp also needs WhatsApp's 24h window to be open. Defaults to sms." },
+        channel: { type: 'string', enum: ['sms', 'voice', 'whatsapp'], description: "Which tool the code is used with: sms (sendSms), voice (call), or whatsapp (sendWhatsapp). WhatsApp also needs WhatsApp's 24h window to be open. Defaults to whatsapp." },
       },
     },
     multimodal: false,
@@ -638,7 +638,7 @@ export const TOOLS: ToolDefinition[] = [
       }
 
       const channel = kind === 'phone'
-        ? (args.channel === 'whatsapp' ? 'whatsapp' : args.channel === 'voice' ? 'voice' : 'sms')
+        ? (args.channel === 'sms' ? 'sms' : args.channel === 'voice' ? 'voice' : 'whatsapp')
         : undefined;
 
       let response;

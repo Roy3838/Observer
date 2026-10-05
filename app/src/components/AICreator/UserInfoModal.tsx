@@ -36,7 +36,7 @@ import {
   normalizeContact,
 } from '@utils/contactInfo';
 
-/** The channel to actually test send through — defaults to SMS when unspecified. */
+/** The channel to actually test send through — defaults to WhatsApp when unspecified. */
 const CHANNEL_TEST_LABEL: Record<'sms' | 'voice' | 'whatsapp', string> = {
   whatsapp: 'Test WhatsApp',
   sms: 'Test SMS',
@@ -145,8 +145,8 @@ const PairingToggle: React.FC<{ value: PhoneChannel; onChange: (c: PhoneChannel)
   return (
     <div className="flex justify-center">
       <div className="inline-flex p-1 rounded-full bg-gray-100">
-        {option('sms', 'SMS', <MessageSquare className="h-3.5 w-3.5" />)}
         {option('whatsapp', 'WhatsApp', <FaWhatsapp className="h-3.5 w-3.5" />)}
+        {option('sms', 'SMS', <MessageSquare className="h-3.5 w-3.5" />)}
       </div>
     </div>
   );
@@ -223,7 +223,7 @@ const ConfirmExistingCodePanel: React.FC<{
   const [toolTest, setToolTest] = useState<TestState>('idle');
   const [toolTestError, setToolTestError] = useState('');
 
-  const testChannel: 'sms' | 'voice' | 'whatsapp' = channel ?? 'sms';
+  const testChannel: 'sms' | 'voice' | 'whatsapp' = channel ?? 'whatsapp';
 
   const testWhitelist = async () => {
     setWhitelistTest('testing');
@@ -337,7 +337,7 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
   // confirm/test/rotate instead of assuming), 'qr' (not connected yet, or just rotated).
   const savedCodes = useMemo(() => {
     if (kind !== 'phone') return [];
-    const order: PhoneChannel[] = channel === 'whatsapp' ? ['whatsapp'] : channel === 'voice' ? ['sms', 'whatsapp'] : ['sms'];
+    const order: PhoneChannel[] = channel === 'sms' ? ['sms'] : channel === 'voice' ? ['whatsapp', 'sms'] : ['whatsapp'];
     return order.map(c => SensorSettings.getPhoneCode(c)).filter((c): c is string => !!c);
   }, [kind, channel]);
   const hadExistingCode = savedCodes.length > 0;

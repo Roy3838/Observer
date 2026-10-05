@@ -306,23 +306,23 @@ class SettingsManager {
 
     /**
      * Which pairing a phone tool's code needs: sendSms pairs by SMS, sendWhatsapp on WhatsApp,
-     * and a call takes either, so it goes by which saved code `code` is (SMS by default).
+     * and a call takes either, so it goes by which saved code `code` is (WhatsApp by default).
      */
     public pairingChannelFor(code: string | null | undefined, channel?: WhitelistChannel): PhoneChannel {
         if (channel === 'sms' || channel === 'whatsapp') return channel;
-        return code && code === this.getPhoneCode('whatsapp') ? 'whatsapp' : 'sms';
+        return code && code === this.getPhoneCode('sms') ? 'sms' : 'whatsapp';
     }
 
     /**
-     * The user's code for a phone tool (sms when unspecified), generating one if needed. A call
-     * reuses whichever code they already have, SMS first, before minting a new SMS one.
+     * The user's code for a phone tool (whatsapp when unspecified), generating one if needed. A call
+     * reuses whichever code they already have, WhatsApp first, before minting a new WhatsApp one.
      */
     public defaultPhoneCode(channel?: WhitelistChannel): string {
-        if (channel === 'whatsapp') return this.ensurePhoneCode('whatsapp');
+        if (channel === 'sms') return this.ensurePhoneCode('sms');
         if (channel === 'voice') {
-            return this.getPhoneCode('sms') ?? this.getPhoneCode('whatsapp') ?? this.ensurePhoneCode('sms');
+            return this.getPhoneCode('whatsapp') ?? this.getPhoneCode('sms') ?? this.ensurePhoneCode('whatsapp');
         }
-        return this.ensurePhoneCode('sms');
+        return this.ensurePhoneCode('whatsapp');
     }
 
     /** The persisted Telegram code, generating and storing one on first use. */
