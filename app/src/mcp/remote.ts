@@ -22,8 +22,15 @@ export interface RemoteMessage {
 }
 
 const MAX_BACKOFF_MS = 15_000;   // stay under the server's 45s "session active" TTL
-const IDLE_RECHECK_MS = 10_000;  // no code / not logged in yet
 const NOT_OWNER_RECHECK_MS = 60_000;
+
+/** Fired by the pairing UIs the moment they see a phone/chat link, so remote control starts
+ *  listening right away instead of on its next status poll. */
+export const REMOTE_LINKED_EVENT = 'observer:remote-linked';
+
+export function notifyRemoteLinked(): void {
+  window.dispatchEvent(new Event(REMOTE_LINKED_EVENT));
+}
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise(resolve => {
@@ -43,36 +50,40 @@ function authHeaders(channel: RemoteChannel, token?: string): Record<string, str
   return channel === 'whatsapp' && token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+/** The code to listen on, per channel. Only channels with a linked phone/chat belong here. */
+export type RemoteSessions = Partial<Record<RemoteChannel, string>>;
+
 /**
- * Long-poll one channel's inbox until `signal` aborts. Each request also tells the server this
- * session is active; while no tab is polling, the phone gets "no Observer session is active"
- * instead. `getCode` is re-read every loop so a code minted or rotated later is picked up.
+ * Long-poll the inboxes of `sessions` in one request until `signal` aborts. Each request also
+ * tells the server those sessions are active; while no tab is polling, the phone gets "no
+ * Observer session is active" instead. WhatsApp is skipped while there is no token.
  */
 export async function listenInbox(opts: {
-  channel: RemoteChannel;
-  getCode: () => string | null;
+  sessions: RemoteSessions;
   getToken: TokenProvider;
   signal: AbortSignal;
   onMessage: (message: RemoteMessage) => void;
 }): Promise<void> {
-  const { channel, getCode, getToken, signal, onMessage } = opts;
+  const { sessions, getToken, signal, onMessage } = opts;
   let backoff = 1000;
 
   while (!signal.aborted) {
-    const code = getCode();
-    const token = code && channel === 'whatsapp' ? await getToken().catch(() => undefined) : undefined;
-    if (!code || (channel === 'whatsapp' && !token)) {
-      await sleep(IDLE_RECHECK_MS, signal);
+    const token = sessions.whatsapp ? await getToken().catch(() => undefined) : undefined;
+    const params = new URLSearchParams();
+    if (sessions.whatsapp && token) params.set('whatsapp', sessions.whatsapp);
+    if (sessions.telegram) params.set('telegram', sessions.telegram);
+    if (!params.toString()) {
+      await sleep(backoff, signal);
+      backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
       continue;
     }
 
     try {
-      const response = await fetch(`${API_HOST}${routes[channel]}/inbox?code=${encodeURIComponent(code)}`, {
-        headers: authHeaders(channel, token),
+      const response = await fetch(`${API_HOST}/remote/listen?${params}`, {
+        headers: params.has('whatsapp') ? authHeaders('whatsapp', token) : {},
         signal,
       });
-      // 403: the WhatsApp code hasn't been claimed by this account yet (it is claimed the first
-      // time the whitelist modal polls it). Nothing to receive until then.
+      // 403: the WhatsApp code isn't this account's. Nothing to receive until that changes.
       if (response.status === 403) {
         await sleep(NOT_OWNER_RECHECK_MS, signal);
         continue;
@@ -80,7 +91,11 @@ export async function listenInbox(opts: {
       if (!response.ok) throw new Error(`Inbox poll failed: ${response.status}`);
 
       const data = await response.json();
-      for (const m of data.messages ?? []) onMessage({ code, channel, text: m.text });
+      for (const m of data.messages ?? []) {
+        const channel = m.channel as RemoteChannel;
+        const code = sessions[channel];
+        if (code) onMessage({ code, channel, text: m.text });
+      }
       backoff = 1000;
     } catch {
       if (signal.aborted) return;
@@ -125,17 +140,23 @@ export interface RemoteStatus {
 
 const NOT_LINKED: RemoteStatus = { linked: false, name: null, revoked: false };
 
-/** Whether the code is paired on `channel`. Any failure (e.g. 403, not this account's WhatsApp
- *  code) reads as "not linked". */
-export async function fetchStatus(channel: RemoteChannel, code: string, token?: string): Promise<RemoteStatus> {
+/** Whether the code is paired on `channel`, or null when the server couldn't say (network error,
+ *  5xx, expired token). A refusal (e.g. 403, not this account's WhatsApp code) reads as "not linked". */
+export async function tryFetchStatus(channel: RemoteChannel, code: string, token?: string): Promise<RemoteStatus | null> {
   try {
     const response = await fetch(`${API_HOST}${routes[channel]}/status?code=${encodeURIComponent(code)}`, {
       headers: authHeaders(channel, token),
     });
-    return response.ok ? await response.json() : NOT_LINKED;
+    if (response.ok) return await response.json();
+    return response.status >= 500 || response.status === 401 ? null : NOT_LINKED;
   } catch {
-    return NOT_LINKED;
+    return null;
   }
+}
+
+/** Whether the code is paired on `channel`. Any failure reads as "not linked". */
+export async function fetchStatus(channel: RemoteChannel, code: string, token?: string): Promise<RemoteStatus> {
+  return (await tryFetchStatus(channel, code, token)) ?? NOT_LINKED;
 }
 
 /** Strip a data-URL's `data:image/...;base64,` prefix — the API wants raw base64, like every

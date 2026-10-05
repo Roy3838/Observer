@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { WhitelistChannel } from '@utils/logging';
 import { openExternal } from '@utils/platform';
 import { SensorSettings } from '@utils/settings';
-import { fetchStatus, type RemoteStatus } from '../../mcp/remote';
+import { fetchStatus, notifyRemoteLinked, type RemoteStatus } from '../../mcp/remote';
 
 export const OBSERVER_WHATSAPP = '+1 (555) 783-4727';
 export const OBSERVER_WHATSAPP_PLAIN = '15557834727';
@@ -110,6 +110,7 @@ export function useWhitelistPolling(
       if (checks.every(p => p.isWhitelisted)) {
         setStatus('success');
         clearInterval(intervalId);
+        notifyRemoteLinked();
       } else {
         setStatus('idle');
       }
@@ -147,7 +148,10 @@ export function useTelegramStatus(enabled = true) {
         return;
       }
       setStatus(next);
-      if (next.linked) clearInterval(intervalId);
+      if (next.linked) {
+        clearInterval(intervalId);
+        notifyRemoteLinked();
+      }
     };
 
     check();
