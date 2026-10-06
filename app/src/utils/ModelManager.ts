@@ -473,9 +473,11 @@ export class ModelManager {
         error: `Server responded with status ${response.status}`
       };
     } catch (error) {
+      const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      console.error(`[ModelManager] checkServer(${address}) failed:`, error);
       return {
         status: 'offline',
-        error: 'Could not connect to server'
+        error: `Could not connect to server (${detail})`
       };
     }
   }

@@ -122,63 +122,63 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
               {hasPendingImport ? 'Sign In to Import Agent' : 'Sign In to Start Creating Agents'}
             </button>
           </div>
+        </div>
+      </div>
 
-          {/* Other options: intentionally de-emphasized. Skipping sign in requires a working
-              v1 inference server. */}
-          {onServerConnected && !hasPendingImport && (
-            <div className="mt-5 pt-4 border-t border-gray-100 text-left">
-              <button
-                onClick={() => setShowServerInput(v => !v)}
-                className="mx-auto flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                Use your own inference server
-                <ChevronDown size={13} className={`transition-transform ${showServerInput ? 'rotate-180' : ''}`} />
-              </button>
-              {showServerInput && (
-                <div className="mt-3 space-y-2">
-                  <p className="text-xs text-gray-400">
-                    Enter your v1/chat/completions server (e.g. Ollama, LM Studio, vLLM) to skip sign in.
-                    The agent creator needs a capable model.
-                  </p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={serverAddress}
-                      onChange={(e) => { setServerAddress(e.target.value); setServerError(''); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleCheckServer(); }}
-                      placeholder="http://localhost:11434"
-                      disabled={isChecking || countdown !== null}
-                      autoFocus
-                      className="flex-1 min-w-0 p-2 text-sm border border-gray-200 rounded-md disabled:bg-gray-50"
-                    />
-                    <RowButtonPrimary
-                      onClick={handleCheckServer}
-                      disabled={isChecking || countdown !== null}
-                      className="px-3 py-2"
-                    >
-                      {isChecking ? 'Checking…' : 'Check'}
-                    </RowButtonPrimary>
-                  </div>
-                  {serverError && <p className="text-xs text-red-500">{serverError}</p>}
-                  {countdown !== null && (
-                    <p className="text-xs text-green-600">Connected! Skipping sign in in {countdown}…</p>
-                  )}
-                  <div className="text-xs text-gray-500 space-y-1 pt-1">
-                    <p className="flex items-start gap-1.5">
-                      <XCircle size={14} className="text-red-400 flex-shrink-0 mt-px" />
-                      SMS, WhatsApp, Telegram, Email and Voice calling won't work without an account.
-                    </p>
-                    <p className="flex items-start gap-1.5">
-                      <CheckCircle2 size={14} className="text-green-600 flex-shrink-0 mt-px" />
-                      Discord notifications and Memory logging/recording work!
-                    </p>
-                  </div>
-                </div>
+      {/* Other options: intentionally de-emphasized, outside the white card. Skipping sign in requires a working
+          v1 inference server. */}
+      {onServerConnected && !hasPendingImport && (
+        <div className="mt-4 max-w-md w-full text-left">
+          <button
+            onClick={() => setShowServerInput(v => !v)}
+            className="mx-auto flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-gray-300 transition-colors"
+          >
+            Use your own inference server
+            <ChevronDown size={13} className={`transition-transform ${showServerInput ? 'rotate-180' : ''}`} />
+          </button>
+          {showServerInput && (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-gray-300">
+                Enter your v1/chat/completions server (e.g. Ollama, LM Studio, vLLM) to skip sign in.
+                The agent creator needs a capable model.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={serverAddress}
+                  onChange={(e) => { setServerAddress(e.target.value); setServerError(''); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleCheckServer(); }}
+                  placeholder="http://localhost:11434"
+                  disabled={isChecking || countdown !== null}
+                  autoFocus
+                  className="flex-1 min-w-0 p-2 text-sm border border-gray-200 rounded-md bg-white text-gray-900 disabled:bg-gray-100"
+                />
+                <RowButtonPrimary
+                  onClick={handleCheckServer}
+                  disabled={isChecking || countdown !== null}
+                  className="px-3 py-2"
+                >
+                  {isChecking ? 'Checking…' : 'Check'}
+                </RowButtonPrimary>
+              </div>
+              {serverError && <p className="text-xs text-red-400">{serverError}</p>}
+              {countdown !== null && (
+                <p className="text-xs text-green-400">Connected! Skipping sign in in {countdown}…</p>
               )}
+              <div className="text-xs text-gray-300 space-y-1 pt-1">
+                <p className="flex items-start gap-1.5">
+                  <XCircle size={14} className="text-red-400 flex-shrink-0 mt-px" />
+                  SMS, WhatsApp, Telegram, Email and Voice calling won't work without an account.
+                </p>
+                <p className="flex items-start gap-1.5">
+                  <CheckCircle2 size={14} className="text-green-600 flex-shrink-0 mt-px" />
+                  Discord notifications and Memory logging/recording work!
+                </p>
+              </div>
             </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 };
