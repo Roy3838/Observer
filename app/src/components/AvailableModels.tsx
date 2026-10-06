@@ -1391,7 +1391,7 @@ const AvailableModels: React.FC<AvailableModelsProps> = ({
       {/* Benchmark modal */}
       <Modal open={showBenchmark} onClose={() => setShowBenchmark(false)} className="w-full max-w-2xl">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <span className="text-sm font-semibold text-gray-800 flex items-center gap-2"><BarChart3 size={15} /> Performance Benchmark</span>
+          <span className="text-sm font-semibold text-gray-800 flex items-center gap-2"><BarChart3 size={15} /> Chat &amp; Benchmark</span>
           <button onClick={() => setShowBenchmark(false)} className="p-1 text-gray-400 hover:text-gray-700 rounded transition-colors"><X size={16} /></button>
         </div>
         <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(88vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))' }}>

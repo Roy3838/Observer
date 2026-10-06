@@ -3,15 +3,20 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Play,
+  Send,
+  Trash2,
   Camera,
   X,
-  Image as ImageIcon,
   AlertCircle,
   Cpu,
   StopCircle,
   CheckCircle,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
 import { GemmaModelManager } from '@utils/localLlm/GemmaModelManager';
 import { isTauri } from '@utils/platform';
@@ -29,15 +34,37 @@ interface BackendInfo {
   isMultimodal: boolean;
 }
 
+const mdComponents = {
+  p: ({ children }: any) => <p className="mb-2 last:mb-0">{children}</p>,
+  ul: ({ children }: any) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+  ol: ({ children }: any) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+  h1: ({ children }: any) => <h1 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h1>,
+  h2: ({ children }: any) => <h2 className="text-sm font-bold mb-2 mt-2 first:mt-0">{children}</h2>,
+  h3: ({ children }: any) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{children}</h3>,
+  pre: ({ children }: any) => <pre className="bg-gray-800 text-gray-100 rounded-md p-2 my-2 overflow-x-auto text-xs">{children}</pre>,
+  code: ({ className, children }: any) =>
+    className ? <code className={className}>{children}</code>
+      : <code className="bg-gray-200 text-gray-800 px-1 py-0.5 rounded text-xs">{children}</code>,
+  table: ({ children }: any) => <div className="overflow-x-auto my-2"><table className="min-w-full border border-gray-300 text-xs">{children}</table></div>,
+  th: ({ children }: any) => <th className="px-2 py-1 text-left font-semibold border-b border-gray-300 bg-gray-50">{children}</th>,
+  td: ({ children }: any) => <td className="px-2 py-1 border-b border-gray-200">{children}</td>,
+};
+
 const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
-  // Test generation state
-  const [testPrompt, setTestPrompt] = useState('Hello, how are you today?');
-  const [testResponse, setTestResponse] = useState('');
-  const [testMetrics, setTestMetrics] = useState<GenerationMetrics | null>(null);
+  // Conversation state
+  interface ChatMessage {
+    role: 'user' | 'assistant';
+    text: string;
+    image?: string;
+    metrics?: GenerationMetrics | null;
+    error?: boolean;
+  }
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Backend detection state
   const [backendInfo, setBackendInfo] = useState<BackendInfo>({ backend: null, modelName: '', isMultimodal: false });
@@ -101,13 +128,6 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
     };
   }, [isVisible, detectActiveBackend]);
 
-  // Suggest a vision prompt when image is first attached
-  useEffect(() => {
-    if (capturedImage && testPrompt === 'Hello, how are you today?') {
-      setTestPrompt('What do you see in this image? Describe it briefly.');
-    }
-  }, [capturedImage, testPrompt]);
-
   // Handle image capture from camera
   const handleImageCapture = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -143,90 +163,70 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
     setIsGenerating(false);
   }, [backendInfo.backend]);
 
-  // Run test generation using the active backend
-  const runTestGeneration = async () => {
-    if (!testPrompt.trim() || isGenerating || !backendInfo.backend) return;
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, [messages]);
 
-    // Create abort controller for this generation
+  const clearChat = () => {
+    if (isGenerating) stopGeneration();
+    setMessages([]);
+  };
+
+  // Send the whole conversation to the active backend; the reply streams into the last message
+  const sendMessage = async () => {
+    const text = input.trim();
+    if (!text || isGenerating || !backendInfo.backend) return;
+
+    const userMsg: ChatMessage = { role: 'user', text, image: capturedImage ?? undefined };
+    const history = [...messages.filter(m => !m.error), userMsg];
+    const payload = history.map(m => ({
+      role: m.role,
+      content: m.image
+        ? [{ type: 'image' as const, image: m.image }, { type: 'text' as const, text: m.text }]
+        : m.text,
+    }));
+
+    setMessages([...messages, userMsg, { role: 'assistant', text: '' }]);
+    setInput('');
+    setCapturedImage(null);
+    setIsGenerating(true);
     abortControllerRef.current = new AbortController();
 
-    setIsGenerating(true);
-    setTestResponse('');
-    setTestMetrics(null);
-    setError(null);
+    const patchReply = (patch: (m: ChatMessage) => ChatMessage) =>
+      setMessages(prev => prev.map((m, i) => (i === prev.length - 1 ? patch(m) : m)));
+    const onToken = (token: string) => patchReply(m => ({ ...m, text: m.text + token }));
 
     try {
       if (backendInfo.backend === 'llamacpp') {
-        // llama.cpp generation
-        if (capturedImage) {
-          const messages = [{
-            role: 'user',
-            content: [
-              { type: 'image' as const, image: capturedImage },
-              { type: 'text' as const, text: testPrompt },
-            ],
-          }];
-          await NativeLlmManager.getInstance().generate(
-            messages,
-            (token) => setTestResponse(prev => prev + token)
-          );
-          // Fetch metrics after generation
-          const info = await NativeLlmManager.getInstance().getDebugInfo();
-          setTestMetrics(info.engine.lastMetrics);
-        } else {
-          const result = await NativeLlmManager.getInstance().testGenerate(
-            testPrompt,
-            (token) => setTestResponse(prev => prev + token)
-          );
-          setTestMetrics(result.metrics);
-        }
+        await NativeLlmManager.getInstance().generate(payload, onToken);
+        const info = await NativeLlmManager.getInstance().getDebugInfo();
+        patchReply(m => ({ ...m, metrics: info.engine.lastMetrics }));
       } else if (backendInfo.backend === 'transformers') {
-        // Transformers.js generation
         const startTime = performance.now();
         let tokensGenerated = 0;
         let firstTokenTime = 0;
-
-        if (capturedImage) {
-          const messages = [{
-            role: 'user',
-            content: [
-              { type: 'image' as const, image: capturedImage },
-              { type: 'text' as const, text: testPrompt },
-            ],
-          }];
-          await GemmaModelManager.getInstance().generate(messages, (token) => {
-            if (tokensGenerated === 0) {
-              firstTokenTime = performance.now() - startTime;
-            }
-            tokensGenerated++;
-            setTestResponse(prev => prev + token);
-          });
-        } else {
-          const messages = [{ role: 'user', content: testPrompt }];
-          await GemmaModelManager.getInstance().generate(messages, (token) => {
-            if (tokensGenerated === 0) {
-              firstTokenTime = performance.now() - startTime;
-            }
-            tokensGenerated++;
-            setTestResponse(prev => prev + token);
-          });
-        }
-
-        const totalTime = performance.now() - startTime;
-        setTestMetrics({
-          tokensGenerated,
-          promptTokens: 0, // Not available from Transformers.js
-          timeToFirstTokenMs: firstTokenTime,
-          totalGenerationTimeMs: totalTime,
-          tokensPerSecond: tokensGenerated / (totalTime / 1000),
+        await GemmaModelManager.getInstance().generate(payload, (token) => {
+          if (tokensGenerated === 0) firstTokenTime = performance.now() - startTime;
+          tokensGenerated++;
+          onToken(token);
         });
+        const totalTime = performance.now() - startTime;
+        patchReply(m => ({
+          ...m,
+          metrics: {
+            tokensGenerated,
+            promptTokens: 0, // Not available from Transformers.js
+            timeToFirstTokenMs: firstTokenTime,
+            totalGenerationTimeMs: totalTime,
+            tokensPerSecond: tokensGenerated / (totalTime / 1000),
+          },
+        }));
       }
       // TODO: Add Ollama support
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
       if (errorMessage !== 'Aborted') {
-        setError(errorMessage);
-        setTestResponse(`Error: ${errorMessage}`);
+        patchReply(m => ({ ...m, text: `Error: ${errorMessage}`, error: true }));
       }
     } finally {
       setIsGenerating(false);
@@ -236,8 +236,10 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
 
   if (!isVisible) return null;
 
+  const disabled = !backendInfo.backend;
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Active model info or no model warning */}
       {backendInfo.backend ? (
         <div className="flex items-center gap-3 px-4 py-3 bg-green-50 border border-green-200 rounded-xl">
@@ -266,139 +268,127 @@ const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ isVisible }) => {
           </div>
           <div className="flex-1">
             <span className="font-medium text-gray-700">No model loaded</span>
-            <p className="text-xs text-gray-500 mt-0.5">Load a model from llama.cpp or Transformers.js tabs to run benchmarks.</p>
+            <p className="text-xs text-gray-500 mt-0.5">Load a local model to chat with it and see its speed.</p>
           </div>
         </div>
       )}
 
-      {/* Test Generation Section */}
-      <div className="space-y-4 border border-gray-200 rounded-xl p-5 bg-white">
-        {/* Image capture section */}
-        <div className="flex items-center gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleImageCapture}
-            className="hidden"
-            id="benchmark-camera-input"
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isGenerating || !backendInfo.backend}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg font-medium transition-colors ${
-              capturedImage
-                ? 'bg-purple-100 text-purple-700 border border-purple-300'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            <Camera size={14} />
-            {capturedImage ? 'Change Image' : 'Add Image'}
-          </button>
-          {capturedImage && (
+      {/* Conversation */}
+      <div ref={scrollRef} className="border border-gray-200 rounded-xl bg-white p-3 h-80 overflow-y-auto space-y-3">
+        {messages.length === 0 && (
+          <div className="h-full flex items-center justify-center text-sm text-gray-400">
+            Say hi to your model 👋
+          </div>
+        )}
+        {messages.map((m, i) => {
+          const isUser = m.role === 'user';
+          const isLast = i === messages.length - 1;
+          return (
+            <div key={i} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+              <div
+                className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm leading-relaxed ${isUser || m.error ? 'whitespace-pre-wrap' : ''} break-words ${
+                  isUser
+                    ? 'bg-purple-600 text-white'
+                    : m.error
+                      ? 'bg-red-50 border border-red-200 text-red-600'
+                      : 'bg-gray-100 text-gray-800'
+                }`}
+              >
+                {m.image && <img src={m.image} alt="Attached" className="mb-2 max-h-40 rounded-lg" />}
+                {isUser || m.error ? m.text : (
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={mdComponents}>
+                    {m.text}
+                  </ReactMarkdown>
+                )}
+                {!isUser && isLast && isGenerating && (
+                  <span className="inline-block w-2 h-4 bg-purple-600 ml-0.5 align-middle animate-pulse" />
+                )}
+              </div>
+              {m.metrics && (
+                <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-gray-400 font-mono">
+                  <span><span className="text-purple-600 font-semibold">{m.metrics.tokensPerSecond.toFixed(1)}</span> tok/s</span>
+                  <span>TTFT {m.metrics.timeToFirstTokenMs.toFixed(0)}ms</span>
+                  <span>{m.metrics.tokensGenerated} tokens</span>
+                  <span>{(m.metrics.totalGenerationTimeMs / 1000).toFixed(2)}s</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Composer */}
+      <div className="space-y-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleImageCapture}
+          className="hidden"
+        />
+        {capturedImage && (
+          <div className="relative inline-block">
+            <img src={capturedImage} alt="Captured" className="h-20 rounded-lg border border-purple-200 object-cover" />
             <button
               onClick={removeImage}
               disabled={isGenerating}
-              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+              className="absolute -top-1.5 -right-1.5 p-0.5 bg-white border border-gray-200 rounded-full text-gray-500 hover:text-red-500"
               title="Remove image"
             >
-              <X size={14} />
+              <X size={12} />
+            </button>
+          </div>
+        )}
+        <div className="flex items-end gap-2">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isGenerating || disabled}
+            className={`p-2.5 rounded-xl border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              capturedImage ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-gray-200'
+            }`}
+            title="Attach image"
+          >
+            <Camera size={16} />
+          </button>
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+              }
+            }}
+            placeholder={capturedImage ? 'Ask about the image...' : 'Type a message...'}
+            rows={1}
+            disabled={disabled}
+            className="flex-1 p-2.5 text-sm border border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+          {isGenerating ? (
+            <button onClick={stopGeneration} className="p-2.5 text-white rounded-xl bg-red-500 hover:bg-red-600 transition-colors" title="Stop">
+              <StopCircle size={16} />
+            </button>
+          ) : (
+            <button
+              onClick={sendMessage}
+              disabled={disabled || !input.trim()}
+              className="p-2.5 text-white rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Send"
+            >
+              <Send size={16} />
             </button>
           )}
+          <button
+            onClick={clearChat}
+            disabled={messages.length === 0}
+            className="p-2.5 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 transition-colors"
+            title="Clear conversation"
+          >
+            <Trash2 size={16} />
+          </button>
         </div>
-
-        {/* Image preview */}
-        {capturedImage && (
-          <div className="relative">
-            <img
-              src={capturedImage}
-              alt="Captured"
-              className="w-full h-36 object-cover rounded-xl border border-purple-200"
-            />
-            <div className="absolute bottom-2 right-2 flex items-center gap-1.5 px-2 py-1 bg-black/60 backdrop-blur-sm rounded-lg text-xs text-white">
-              <ImageIcon size={12} />
-              Image attached
-            </div>
-          </div>
-        )}
-
-        {/* Prompt input */}
-        <textarea
-          value={testPrompt}
-          onChange={(e) => setTestPrompt(e.target.value)}
-          placeholder={capturedImage ? "Describe what you want to know about the image..." : "Enter a test prompt..."}
-          rows={3}
-          disabled={isGenerating || !backendInfo.backend}
-          className="w-full p-3 text-sm border border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-        />
-
-        {/* Run/Stop button */}
-        {isGenerating ? (
-          <button
-            onClick={stopGeneration}
-            className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm text-white rounded-xl font-medium bg-red-500 hover:bg-red-600 transition-colors"
-          >
-            <StopCircle size={16} />
-            Stop Generation
-          </button>
-        ) : (
-          <button
-            onClick={runTestGeneration}
-            disabled={!backendInfo.backend || !testPrompt.trim()}
-            className={`w-full flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors ${
-              capturedImage
-                ? 'bg-purple-600 hover:bg-purple-700'
-                : 'bg-purple-600 hover:bg-purple-700'
-            }`}
-          >
-            {capturedImage && <ImageIcon size={14} />}
-            <Play size={14} />
-            Run Benchmark
-          </button>
-        )}
-
-        {/* Error display */}
-        {error && (
-          <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-            {error}
-          </div>
-        )}
-
-        {/* Response output */}
-        {testResponse && (
-          <div>
-            <div className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wide">Response</div>
-            <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">
-              {testResponse}
-              {isGenerating && <span className="inline-block w-2 h-4 bg-purple-600 ml-0.5 animate-pulse" />}
-            </div>
-          </div>
-        )}
-
-        {/* Metrics display */}
-        {testMetrics && (
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-            <div className="flex items-center gap-1">
-              <span className="text-gray-500">Tokens/sec:</span>
-              <span className="font-mono font-semibold text-purple-700">{testMetrics.tokensPerSecond.toFixed(1)}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-gray-500">TTFT:</span>
-              <span className="font-mono text-gray-700">{testMetrics.timeToFirstTokenMs.toFixed(0)}ms</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-gray-500">Tokens:</span>
-              <span className="font-mono text-gray-700">{testMetrics.tokensGenerated}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-gray-500">Total:</span>
-              <span className="font-mono text-gray-700">{(testMetrics.totalGenerationTimeMs / 1000).toFixed(2)}s</span>
-            </div>
-          </div>
-        )}
       </div>
-
     </div>
   );
 };
