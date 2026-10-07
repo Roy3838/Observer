@@ -161,7 +161,7 @@ const StartupDialog: React.FC<StartupDialogProps> = ({
                   {isChecking ? 'Checking…' : 'Check'}
                 </RowButtonPrimary>
               </div>
-              {serverError && <p className="text-xs text-red-400">{serverError}</p>}
+              {serverError && <p className="text-xs text-red-400 whitespace-pre-line">{serverError}</p>}
               {countdown !== null && (
                 <p className="text-xs text-green-400">Connected! Skipping sign in in {countdown}…</p>
               )}

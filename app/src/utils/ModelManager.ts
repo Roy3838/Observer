@@ -477,7 +477,7 @@ export class ModelManager {
       console.error(`[ModelManager] checkServer(${address}) failed:`, error);
       return {
         status: 'offline',
-        error: `Could not connect to server (${detail})`
+        error: `Could not connect to server (${detail})${error instanceof TypeError ? '\nMaybe check CORS?' : ''}`
       };
     }
   }
