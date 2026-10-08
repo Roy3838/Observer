@@ -30,10 +30,12 @@ interface EditableWheelProps<T extends WheelOption> {
   dark?: boolean;
   /** Tailwind text-size classes for the row labels. Defaults to the original splash size. */
   textClass?: string;
+  /** Pulse the wheel's up/down chevrons — see OptionWheel's `pulseChevrons`. */
+  pulseChevrons?: boolean;
 }
 
 function EditableWheel<T extends WheelOption>({
-  options, value, onChange, onCustom, onInteract, paused, ariaLabel, widthClass, tooltip, locked, spinOnExternalChange, dark = true, textClass = 'text-lg md:text-xl',
+  options, value, onChange, onCustom, onInteract, paused, ariaLabel, widthClass, tooltip, locked, spinOnExternalChange, dark = true, textClass = 'text-lg md:text-xl', pulseChevrons,
 }: EditableWheelProps<T>) {
   const displayText = options.find(o => o.id === value)?.label ?? '';
   const [editing, setEditing] = useState(false);
@@ -77,6 +79,7 @@ function EditableWheel<T extends WheelOption>({
         spinOnExternalChange={spinOnExternalChange}
         dark={dark}
         textClass={textClass}
+        pulseChevrons={pulseChevrons}
       />
     );
   }

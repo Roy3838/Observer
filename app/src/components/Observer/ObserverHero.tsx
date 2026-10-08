@@ -21,6 +21,8 @@ import { StreamManager } from '@utils/streamManager';
 import { useSubscriberText } from '@hooks/useTranscriptionState';
 import { Logger } from '@utils/logging';
 import { ModelManager, type Model } from '@utils/ModelManager';
+import TutorialBubble from './TutorialBubble';
+import TutorialSpotlight from './TutorialSpotlight';
 import RecipeInline, { type TutorialStep } from '../AICreator/RecipeInline';
 
 // Synthetic owner id for voice dictation on the hero splash screen — mirrors MCP.tsx's
@@ -187,6 +189,7 @@ const ObserverHero: React.FC = () => {
           <Info className="h-6 w-6" />
         </button>
       )}
+      <TutorialSpotlight spot={tutorialStep} />
       <h1 className="text-2xl md:text-3xl font-semibold text-gray-800 mb-6 text-center">
         What do you want me to Observe?
       </h1>
@@ -213,7 +216,7 @@ const ObserverHero: React.FC = () => {
           </select>
         </div>
       )}
-      <form onSubmit={handleSubmit} className="w-full max-w-2xl flex items-center gap-2 relative z-10">
+      <form onSubmit={handleSubmit} className={`w-full max-w-2xl flex items-center gap-2 relative z-10`}>
         <textarea
           ref={textareaRef}
           rows={1}
@@ -223,7 +226,7 @@ const ObserverHero: React.FC = () => {
           onKeyDown={handleKeyDown}
           placeholder="Describe what to monitor…"
           disabled={isRunning}
-          className="flex-1 min-w-0 p-4 md:p-5 text-left text-sm md:text-lg text-gray-700 bg-white border border-gray-200 rounded-3xl shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none leading-snug max-h-56 overflow-y-auto"
+          className={`flex-1 min-w-0 p-4 md:p-5 text-left text-sm md:text-lg text-gray-700 bg-white border border-gray-200 rounded-3xl shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none leading-snug max-h-56 overflow-y-auto`}
         />
         <button
           type="button"
@@ -242,18 +245,21 @@ const ObserverHero: React.FC = () => {
         <button
           type="submit"
           disabled={isRunning || !value.trim()}
-          className="p-4 md:p-5 bg-gray-700 text-white rounded-full hover:bg-gray-800 disabled:bg-gray-300 transition-colors flex items-center flex-shrink-0"
+          className={`p-4 md:p-5 bg-gray-700 text-white rounded-full hover:bg-gray-800 disabled:bg-gray-300 transition-colors flex items-center flex-shrink-0 ${tutorialStep === 'ready' ? 'animate-nudge-soft' : ''}`}
+          data-spot="ready"
           title="Send"
         >
           {isRunning ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
         </button>
         {tutorialStep === 'ready' && (
-          <div className="absolute -top-20 right-0 w-64 select-none flex flex-col items-end">
-            <div className="bg-slate-900 text-white rounded-2xl px-4 py-3 shadow-lg text-sm font-medium text-center">
-              Perfect! I have everything I need.
+          <TutorialBubble placement="above-right" anchorClass="absolute top-0 right-0">
+            <div className="w-64 flex flex-col items-end">
+              <div className="bg-slate-900 text-white rounded-2xl px-4 py-3 shadow-lg text-sm font-medium text-center">
+                Perfect! I have everything I need.
+              </div>
+              <div className="w-3 h-3 bg-slate-900 rotate-45 -mt-1.5 mr-6" />
             </div>
-            <div className="w-3 h-3 bg-slate-900 rotate-45 -mt-1.5 mr-6" />
-          </div>
+          </TutorialBubble>
         )}
       </form>
 

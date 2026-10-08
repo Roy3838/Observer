@@ -14,6 +14,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@contexts/AuthContext';
 import EditableWheel from './EditableWheel';
+import TutorialBubble from '../Observer/TutorialBubble';
 import { TRIGGERS, ACTIONS, composeRecipePrompt } from './RecipeSplash';
 
 export type TutorialStep = 'hello' | 'notify' | 'ready';
@@ -26,14 +27,17 @@ export interface RecipeTutorial {
 }
 
 // Light-theme speech bubble hanging BELOW the wheel (the textarea sits above the wheels).
+// Portaled above the grey mask (see TutorialBubble) rather than cut out of it.
 const bubble = (text: string, buttons?: React.ReactNode) => (
-  <div className="absolute top-1/2 mt-6 left-1/2 -translate-x-1/2 select-none z-20 flex flex-col items-center w-56 md:w-72">
-    <div className="w-3 h-3 bg-slate-900 rotate-45 -mb-1.5" />
-    <div className="bg-slate-900 text-white rounded-2xl px-4 py-3 shadow-lg text-center flex flex-col items-center gap-2.5">
-      <span className="text-sm font-medium">{text}</span>
-      {buttons}
+  <TutorialBubble placement="below-center" anchorClass="absolute top-1/2 mt-6 left-1/2">
+    <div className="flex flex-col items-center w-56 md:w-72">
+      <div className="w-3 h-3 bg-slate-900 rotate-45 -mb-1.5" />
+      <div className="bg-slate-900 text-white rounded-2xl px-4 py-3 shadow-lg text-center flex flex-col items-center gap-2.5">
+        <span className="text-sm font-medium">{text}</span>
+        {buttons}
+      </div>
     </div>
-  </div>
+  </TutorialBubble>
 );
 
 interface RecipeInlineProps {
@@ -104,6 +108,7 @@ const RecipeInline: React.FC<RecipeInlineProps> = ({ onPromptChange, tutorial })
 
   return (
     <div className="flex items-center justify-center gap-1.5 md:gap-2">
+      <div data-spot="hello" className="flex items-center gap-1.5 md:gap-2">
       <span className="text-xs md:text-base font-semibold text-slate-400 select-none pointer-events-none shrink-0">When</span>
       <EditableWheel
         options={triggerOptions}
@@ -125,6 +130,8 @@ const RecipeInline: React.FC<RecipeInlineProps> = ({ onPromptChange, tutorial })
         textClass="text-[10px] md:text-sm"
         dark={false}
       />
+      </div>
+      <div data-spot="notify ready" className="flex items-center gap-1.5 md:gap-2">
       <span className="text-xs md:text-base font-semibold text-slate-400 select-none pointer-events-none shrink-0">then</span>
       <EditableWheel
         options={actionOptions}
@@ -134,10 +141,12 @@ const RecipeInline: React.FC<RecipeInlineProps> = ({ onPromptChange, tutorial })
         onInteract={() => { markInteracted(); if (step === 'notify') tutorial!.onActionPicked(); }}
         ariaLabel="Choose an action"
         tooltip={step === 'notify' ? bubble('Which way should I notify you?') : undefined}
+        pulseChevrons={step === 'notify'}
         widthClass="w-[6.5rem] md:w-[12rem]"
         textClass="text-[10px] md:text-sm"
         dark={false}
       />
+      </div>
     </div>
   );
 };

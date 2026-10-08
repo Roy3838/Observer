@@ -15,6 +15,22 @@ export default {
         // Official Observer font; applied scoped (e.g. the onboarding splash), not globally.
         golos: ['"Golos Text"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
+      keyframes: {
+        // Grow-and-shrink "click me" cue used by the onboarding tutorial.
+        nudge: {
+          '0%, 100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.5)' },
+        },
+        // Half the growth — for big targets like the Send button.
+        'nudge-soft': {
+          '0%, 100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.25)' },
+        },
+      },
+      animation: {
+        nudge: 'nudge 1.1s ease-in-out infinite',
+        'nudge-soft': 'nudge-soft 1.1s ease-in-out infinite',
+      },
       colors: {
         // Observer teal-blue (#327e9c @ 500) replaces Tailwind's purple app-wide
         purple: {

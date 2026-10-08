@@ -59,6 +59,8 @@ interface OptionWheelProps {
   dark?: boolean;
   /** Tailwind text-size classes for the row labels. Defaults to the original splash size. */
   textClass?: string;
+  /** Grow/shrink the up/down chevrons to cue the user to click them (onboarding tutorial). */
+  pulseChevrons?: boolean;
 }
 
 const CYCLE_MS = 2100;         // auto-cycle cadence
@@ -103,6 +105,7 @@ const OptionWheel: React.FC<OptionWheelProps> = ({
   spinOnExternalChange = false,
   dark = true,
   textClass = 'text-lg md:text-xl',
+  pulseChevrons = false,
 }) => {
   const startIndex = Math.max(0, options.findIndex(o => o.id === value));
   const [index, setIndex] = useState(startIndex);
@@ -339,10 +342,10 @@ const OptionWheel: React.FC<OptionWheelProps> = ({
     <div className="flex items-center gap-1.5 md:gap-2" aria-label={ariaLabel} role="listbox">
       <div className="flex flex-col">
         <button type="button" disabled={locked} onClick={() => glide(-1)} className={`p-0.5 transition-colors disabled:opacity-20 ${dark ? 'text-white/40 hover:text-white disabled:hover:text-white/40' : 'text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 disabled:hover:text-slate-400'}`} aria-label="Previous">
-          <ChevronUp className="h-5 w-5" />
+          <ChevronUp className={`h-5 w-5 ${pulseChevrons ? 'animate-nudge text-slate-800' : ''}`} />
         </button>
         <button type="button" disabled={locked} onClick={() => glide(1)} className={`p-0.5 transition-colors disabled:opacity-20 ${dark ? 'text-white/40 hover:text-white disabled:hover:text-white/40' : 'text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 disabled:hover:text-slate-400'}`} aria-label="Next">
-          <ChevronDown className="h-5 w-5" />
+          <ChevronDown className={`h-5 w-5 ${pulseChevrons ? 'animate-nudge text-slate-800' : ''}`} />
         </button>
       </div>
 
