@@ -130,6 +130,19 @@ const ObserverHero: React.FC = () => {
     setTutorialStep('hello');
   };
 
+  // Clicking anything in the sidebar means the user is leaving — drop the tutorial rather than
+  // leave the app greyed out behind them (the hero stays mounted, just hidden, on tab switch).
+  useEffect(() => {
+    if (!tutorialStep) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if ((e.target as Element | null)?.closest?.('[data-app-sidebar]')) skipTutorial();
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+    // skipTutorial is recreated each render but only touches stable setters/storage.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tutorialStep, tutorialKey]);
+
   const tutorial = {
     step: tutorialStep,
     onOkay: () => { Analytics.tutorialStarted(); SensorSettings.setMcpTutorialMode(true); setTutorialStep('notify'); },

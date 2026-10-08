@@ -36,8 +36,11 @@ const TutorialSpotlight: React.FC<Props> = ({ spot, pad = 8, radius = 16 }) => {
     if (!spot) { setBoxes([]); return; }
     let raf: number;
     const loop = () => {
-      const next = Array.from(document.querySelectorAll(`[data-spot~="${spot}"]`)).map(el => {
-        const r = el.getBoundingClientRect();
+      // Zero-size = the tab is hidden (display:none), so there's nothing to light.
+      const rects = Array.from(document.querySelectorAll(`[data-spot~="${spot}"]`))
+        .map(el => el.getBoundingClientRect())
+        .filter(r => r.width > 0 && r.height > 0);
+      const next = rects.map(r => {
         return { x: Math.round(r.left - pad), y: Math.round(r.top - pad), w: Math.round(r.width + pad * 2), h: Math.round(r.height + pad * 2) };
       });
       setBoxes(prev => (sameBoxes(prev, next) ? prev : next));

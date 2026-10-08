@@ -163,6 +163,7 @@ const PersistentSidebar: React.FC<PersistentSidebarProps> = ({
           never needs to know or match its width by hand. Only on mobile is it a fixed
           off-canvas drawer, toggled by translate-x. */}
       <div
+        data-app-sidebar
         className={`${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
           fixed top-0 bottom-0 left-0 z-50 md:static md:z-auto
           bg-[#111827] border-r border-gray-700
