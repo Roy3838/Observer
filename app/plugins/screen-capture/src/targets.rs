@@ -89,17 +89,23 @@ pub fn get_all_targets(include_thumbnails: bool) -> Result<Vec<CaptureTarget>> {
     let windows = Window::all().map_err(|e| Error::Platform(format!("Failed to enumerate windows: {}", e)))?;
 
     for window in windows {
-        // Skip windows with no title or very small windows
-        let title = window.title().unwrap_or_default();
+        let app_name = window.app_name().unwrap_or_default();
+
+        // Untitled windows (e.g. Finder's copy-progress panel) are kept as long as we can
+        // name them by app; skip only if there's nothing to identify them with.
+        let mut title = window.title().unwrap_or_default();
         if title.is_empty() {
-            continue;
+            if app_name.is_empty() {
+                continue;
+            }
+            title = format!("{} (untitled)", app_name);
         }
 
         let width = window.width().unwrap_or(0);
         let height = window.height().unwrap_or(0);
 
-        // Skip tiny windows (likely hidden or utility windows)
-        if width < 100 || height < 100 {
+        // Skip tiny windows (likely hidden or utility slivers)
+        if width < 20 || height < 20 {
             continue;
         }
 
@@ -109,7 +115,6 @@ pub fn get_all_targets(include_thumbnails: bool) -> Result<Vec<CaptureTarget>> {
         }
 
         let id = format!("window:{}", window.id().unwrap_or(0));
-        let app_name = window.app_name().unwrap_or_default();
 
         let thumbnail = if include_thumbnails {
             capture_window_thumbnail(&window).ok()
