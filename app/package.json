@@ -1,7 +1,7 @@
 {
   "name": "@observer/webapp",
   "private": true,
-  "version": "3.0.5",
+  "version": "3.0.6",
   "type": "module",
   "packageManager": "pnpm@10.5.2",
   "scripts": {
