@@ -6,6 +6,7 @@ import { platformFetch, isTauri } from './platform';
 import { NativeLlmManager } from './localLlm/NativeLlmManager';
 import { GemmaModelManager } from './localLlm/GemmaModelManager';
 import { GemmaModelId, LocalLlmMessage } from './localLlm/types';
+import { prepareDecision, assembleDecision, Decision } from './localLlm/systemOne';
 import { InferenceParams, DEFAULT_INFERENCE_PARAMS } from '../config/inference-params';
 import { PreProcessorResult } from './pre-processor';
 import { UnauthorizedError } from './sendApi';
@@ -25,6 +26,16 @@ export interface Model {
   ownedBy?: string;
   status?: 'loaded' | 'loading' | 'unloaded' | 'unloading' | 'error';  // For local models
   localModelId?: string;  // For loading unloaded models (e.g., GemmaModelId or filename)
+  decision?: boolean;     // Decision model: answers System One questions instead of generating text
+}
+
+/**
+ * Output of one model call. LLMs produce `response`; decision models produce `decision`
+ * (System One answers, see localLlm/systemOne.ts). The other one is null.
+ */
+export interface ModelOutput {
+  response: string | null;
+  decision: Decision | null;
 }
 
 /**
@@ -235,6 +246,7 @@ export class ModelManager {
         multimodal: entry.isMultimodal,
         status: entry.status,
         localModelId: entry.id,
+        decision: entry.isDecision,
       });
     }
 
@@ -669,7 +681,7 @@ export class ModelManager {
     enableStreaming: boolean = false,
     onStreamChunk?: (chunk: string) => void,
     onReasoningChunk?: (chunk: string) => void
-  ): Promise<string> {
+  ): Promise<ModelOutput> {
     // Resolve model → server
     let modelsResponse = this.listModels();
     let model = modelsResponse.models.find(m => m.name === modelName);
@@ -680,6 +692,17 @@ export class ModelManager {
     if (!model) throw new Error(`Model '${modelName}' not found in available models`);
 
     const serverAddress = model.server;
+
+    // Decision models: the prompt is a System One question/request, the images are the state
+    if (model.decision) {
+      if (model.status !== 'loaded') {
+        throw new Error('Local model not loaded. Please load it from the Add Model panel.');
+      }
+      const images = (preprocessResult.images ?? []).map(img => `data:image/png;base64,${img}`);
+      const prepared = prepareDecision(preprocessResult.modifiedPrompt, images);
+      const logits = await GemmaModelManager.getInstance().decide(prepared.branches);
+      return { response: null, decision: assembleDecision(prepared, logits) };
+    }
 
     // Build messages from preprocessResult
     const hasImages = preprocessResult.images && preprocessResult.images.length > 0;
@@ -700,7 +723,8 @@ export class ModelManager {
       if (!this.isLocalModelReady(serverAddress)) {
         throw new Error('Local model not loaded. Please load it from the Add Model panel.');
       }
-      return this.generateWithLocalModel(serverAddress, messages, onStreamChunk, onReasoningChunk);
+      const response = await this.generateWithLocalModel(serverAddress, messages, onStreamChunk, onReasoningChunk);
+      return { response, decision: null };
     }
 
     // Remote models: attach per-model inference params
@@ -709,7 +733,8 @@ export class ModelManager {
     }
     const { fetchResponse } = await import('./sendApi');
     const params = { ...DEFAULT_INFERENCE_PARAMS, ...this.getModelParams(modelName) };
-    return fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, params, onReasoningChunk);
+    const response = await fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, params, onReasoningChunk);
+    return { response, decision: null };
   }
 
   // ===========================================================================
@@ -762,6 +787,10 @@ export class ModelManager {
     if (!model && !token) throw new Error(`Model '${modelName}' not found in available models`);
 
     const serverAddress = model ? model.server : 'https://api.observer-ai.com:443';
+
+    if (model?.decision) {
+      throw new Error(`'${modelName}' is a decision model: it answers agent questions and can't chat. Pick an LLM.`);
+    }
 
     if (this.isLocalModel(serverAddress)) {
       if (!this.isLocalModelReady(serverAddress)) {

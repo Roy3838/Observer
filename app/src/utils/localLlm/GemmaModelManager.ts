@@ -1,4 +1,5 @@
-import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaImageTokenBudget, GemmaModelState, GemmaProgressItem, GemmaMessage, GemmaLoadSettings, LocalModelEntry, GEMMA_DISPLAY_NAMES } from './types';
+import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaImageTokenBudget, GemmaModelState, GemmaProgressItem, GemmaMessage, GemmaLoadSettings, LocalModelEntry, GEMMA_DISPLAY_NAMES, isDecisionModelId } from './types';
+import type { DecisionBranch } from './systemOne';
 import { Logger } from '../logging';
 
 // Tracks which models have been downloaded, keyed by modelId → dtype.
@@ -32,6 +33,7 @@ export class GemmaModelManager {
   };
   private stateChangeListeners: Array<(state: GemmaModelState) => void> = [];
   private pendingGenerations = new Map<number, { resolve: (text: string) => void; reject: (err: Error) => void; onToken?: (t: string) => void; onReasoningToken?: (t: string) => void }>();
+  private pendingDecisions = new Map<number, { resolve: (logits: number[][]) => void; reject: (err: Error) => void }>();
   private nextGenerationId = 0;
   private autoLoadTriggered = false;
   private currentLoadSettings: GemmaLoadSettings | null = null;
@@ -115,6 +117,8 @@ export class GemmaModelManager {
 
     this.pendingGenerations.forEach(({ reject }) => reject(new Error('Model unloaded')));
     this.pendingGenerations.clear();
+    this.pendingDecisions.forEach(({ reject }) => reject(new Error('Model unloaded')));
+    this.pendingDecisions.clear();
 
     if (this.worker) {
       this.worker.terminate();
@@ -141,6 +145,23 @@ export class GemmaModelManager {
     return new Promise((resolve, reject) => {
       this.pendingGenerations.set(generationId, { resolve, reject, onToken, onReasoningToken });
       this.worker!.postMessage({ type: 'generate', data: { messages, generationId, enableThinking: !!enableThinking } });
+    });
+  }
+
+  /**
+   * Decision models: run each branch (one per question) and return the option-letter
+   * logits per branch. Prompt rendering and answer assembly live in ./systemOne.ts.
+   */
+  public async decide(branches: DecisionBranch[]): Promise<number[][]> {
+    if (this.state.status !== 'loaded' || !this.worker) {
+      throw new Error('Gemma model not loaded');
+    }
+
+    const generationId = this.nextGenerationId++;
+
+    return new Promise((resolve, reject) => {
+      this.pendingDecisions.set(generationId, { resolve, reject });
+      this.worker!.postMessage({ type: 'decide', data: { branches, generationId } });
     });
   }
 
@@ -185,11 +206,24 @@ export class GemmaModelManager {
         break;
       }
 
+      case 'decision-complete': {
+        const pending = this.pendingDecisions.get(data.generationId);
+        if (pending) {
+          this.pendingDecisions.delete(data.generationId);
+          pending.resolve(data.logits);
+        }
+        break;
+      }
+
       case 'error': {
         const msg = data.message as string;
         if (data.generationId !== undefined && this.pendingGenerations.has(data.generationId)) {
           const pending = this.pendingGenerations.get(data.generationId)!;
           this.pendingGenerations.delete(data.generationId);
+          pending.reject(new Error(msg));
+        } else if (data.generationId !== undefined && this.pendingDecisions.has(data.generationId)) {
+          const pending = this.pendingDecisions.get(data.generationId)!;
+          this.pendingDecisions.delete(data.generationId);
           pending.reject(new Error(msg));
         } else {
           Logger.error('GemmaModelManager', `Worker error: ${msg}`);
@@ -231,6 +265,8 @@ export class GemmaModelManager {
     Logger.error('GemmaModelManager', msg);
     this.pendingGenerations.forEach(({ reject }) => reject(new Error(msg)));
     this.pendingGenerations.clear();
+    this.pendingDecisions.forEach(({ reject }) => reject(new Error(msg)));
+    this.pendingDecisions.clear();
     this.setState({ status: 'error', error: msg });
   }
 
@@ -346,7 +382,7 @@ export class GemmaModelManager {
       const isCurrentModel = this.state.modelId === modelId;
       let status: LocalModelEntry['status'] = 'unloaded';
       if (isCurrentModel) status = this.state.status === 'error' ? 'error' : this.state.status;
-      entries.push({ id: modelId, name: displayName, status, isMultimodal: true });
+      entries.push({ id: modelId, name: displayName, status, isMultimodal: true, isDecision: isDecisionModelId(modelId) });
     }
     return entries;
   }

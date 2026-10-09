@@ -43,6 +43,7 @@ import { Logger } from '../logging';
 import { startAgentLoop, stopAgentLoop } from '../main_loop';
 import type { TokenProvider } from '../main_loop';
 import type { PreProcessorResult } from '../pre-processor';
+import type { Decision } from '../localLlm/systemOne';
 import { getAgentImageMemory } from '../agent_database';
 import { recordingManager } from '../recordingManager';
 
@@ -59,12 +60,13 @@ function extractErrorMessage(error: any): string {
  * Execute JavaScript handler for processing agent responses
  */
 export async function executeJavaScript(
-  response: string,
+  response: string | null,
   agentId: string,
   code: string,
   iterationId: string, // <-- New parameter
   getToken?: TokenProvider,
-  preprocessResult?: PreProcessorResult
+  preprocessResult?: PreProcessorResult,
+  decision: Decision | null = null
 ): Promise<boolean> {
   // Fetch current agent's image memory to make it always available
   const currentAgentImageMemory = await getAgentImageMemory(agentId);
@@ -72,6 +74,7 @@ export async function executeJavaScript(
   const context = {
       prompt: preprocessResult?.modifiedPrompt || "",
       response,
+      decision,
       agentId,
       // Image variables from preprocessing
       images: preprocessResult?.images || [],

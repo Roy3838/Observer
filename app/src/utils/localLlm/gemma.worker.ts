@@ -1,5 +1,6 @@
 import { env } from '@huggingface/transformers';
-import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaImageTokenBudget } from './types';
+import { GemmaModelId, GemmaDevice, GemmaDtype, GemmaImageTokenBudget, isDecisionModelId } from './types';
+import { LETTERS } from './systemOne';
 
 // Enable browser Cache API for model persistence
 env.useBrowserCache = true;
@@ -12,6 +13,7 @@ let load_image: any = null;
 let transformersModule: any = null;
 let currentImageTokenBudget: GemmaImageTokenBudget = 280;
 let currentFamily: ModelFamily | null = null;
+let slotTokenIds: number[] | null = null;  // token ids of the option letters A..Z, for decision models
 
 // Per-architecture differences, keyed by `config.model_type` from the model's config.json.
 // Model + processor classes are resolved by transformers.js itself (AutoModelForImageTextToText /
@@ -112,6 +114,79 @@ async function extractImages(messages: Array<{ role: string; content: any }>): P
   return images;
 }
 
+// Chat messages → model inputs (images, chat template, processor call for this family)
+async function buildInputs(messages: Array<{ role: string; content: any }>, family: ModelFamily, thinking: boolean) {
+  // Extract images from multimodal messages
+  const images = await extractImages(messages);
+
+  // Transform messages for chat template:
+  // Replace image_url/image content with simple { type: "image" } placeholders
+  const templateMessages = messages.map((msg: { role: string; content: any }) => {
+    if (Array.isArray(msg.content) && family.inlineImageToken) {
+      // Flatten to a string: image token (first image only) followed by the text parts
+      let imageEmitted = false;
+      const content = msg.content.map((part: any) => {
+        if (part.type === 'image_url' || part.type === 'image') {
+          if (imageEmitted) return '';
+          imageEmitted = true;
+          return family.inlineImageToken;
+        }
+        return part.text ?? '';
+      }).join('');
+      return { ...msg, content };
+    }
+    if (Array.isArray(msg.content)) {
+      return {
+        ...msg,
+        content: msg.content.map((part: any) => {
+          // Convert image_url or image parts to simple placeholder
+          if (part.type === 'image_url' || part.type === 'image') {
+            return { type: 'image' };
+          }
+          return part;
+        })
+      };
+    }
+    return msg;
+  });
+
+  console.log('[Gemma Worker] Template messages:', JSON.stringify(templateMessages, null, 2).slice(0, 500));
+  console.log('[Gemma Worker] Images extracted:', images.length);
+
+  const prompt = processor.apply_chat_template(templateMessages, {
+    enable_thinking: thinking,
+    add_generation_prompt: true,
+  });
+
+  console.log('[Gemma Worker] Generated prompt length:', prompt.length);
+
+  // For multimodal, the processor call signature depends on the model family
+  // For text-only, use tokenizer directly
+  if (images.length > 0) {
+    console.log('[Gemma Worker] Processing with image, token budget:', currentImageTokenBudget);
+    return family.buildImageInputs(processor, prompt, images, currentImageTokenBudget);
+  }
+  console.log('[Gemma Worker] Processing text-only...');
+  return processor.tokenizer(prompt, { add_special_tokens: false, return_tensors: 'pt' });
+}
+
+// Token ids for the option letters, each of which must be a single token that decodes back to
+// itself (qev engine._verify_slots) — otherwise the letter logits don't mean what we read.
+function getSlotTokenIds(): number[] {
+  if (slotTokenIds) return slotTokenIds;
+  const tokenizer = processor.tokenizer;
+  const ids = LETTERS.map(letter => {
+    const enc: number[] = tokenizer.encode(letter, { add_special_tokens: false });
+    if (enc.length !== 1 || tokenizer.decode(enc) !== letter) {
+      throw new Error(`Option letter '${letter}' is not a single token in this tokenizer`);
+    }
+    return enc[0];
+  });
+  if (new Set(ids).size !== ids.length) throw new Error('Option letter tokens collide');
+  slotTokenIds = ids;
+  return ids;
+}
+
 self.onmessage = async (event: MessageEvent) => {
   const { type, data } = event.data;
 
@@ -125,6 +200,7 @@ self.onmessage = async (event: MessageEvent) => {
         processor = null;
         model = null;
         currentFamily = null;
+        slotTokenIds = null;
 
         console.log('[Gemma Worker] Loading model:', modelId, 'device:', device, 'dtype:', dtype, 'imageTokenBudget:', currentImageTokenBudget);
 
@@ -153,9 +229,15 @@ self.onmessage = async (event: MessageEvent) => {
 
         family.configureProcessor?.(processor, currentImageTokenBudget);
 
+        // Matches OneJev's own browser demo, which keeps the vision encoder at fp16 on WebGPU
+        // (its model card reports the q4f16 text model within 0.025 of the original).
+        const sessionDtype = isDecisionModelId(modelId) && dtype === 'q4f16' && device === 'webgpu'
+          ? { embed_tokens: dtype, decoder_model_merged: dtype, vision_encoder: 'fp16' }
+          : dtype;
+
         model = await AutoModelForImageTextToText.from_pretrained(modelId, {
           config,
-          dtype,
+          dtype: sessionDtype,
           device,
           progress_callback: progressCallback,
         });
@@ -176,64 +258,8 @@ self.onmessage = async (event: MessageEvent) => {
 
         console.log('[Gemma Worker] Received messages:', JSON.stringify(messages, null, 2).slice(0, 500));
 
-        // Extract images from multimodal messages
-        const images = await extractImages(messages);
-
-        // Transform messages for chat template:
-        // Replace image_url/image content with simple { type: "image" } placeholders
-        const templateMessages = messages.map((msg: { role: string; content: any }) => {
-          if (Array.isArray(msg.content) && family.inlineImageToken) {
-            // Flatten to a string: image token (first image only) followed by the text parts
-            let imageEmitted = false;
-            const content = msg.content.map((part: any) => {
-              if (part.type === 'image_url' || part.type === 'image') {
-                if (imageEmitted) return '';
-                imageEmitted = true;
-                return family.inlineImageToken;
-              }
-              return part.text ?? '';
-            }).join('');
-            return { ...msg, content };
-          }
-          if (Array.isArray(msg.content)) {
-            return {
-              ...msg,
-              content: msg.content.map((part: any) => {
-                // Convert image_url or image parts to simple placeholder
-                if (part.type === 'image_url' || part.type === 'image') {
-                  return { type: 'image' };
-                }
-                return part;
-              })
-            };
-          }
-          return msg;
-        });
-
-        console.log('[Gemma Worker] Template messages:', JSON.stringify(templateMessages, null, 2).slice(0, 500));
-        console.log('[Gemma Worker] Images extracted:', images.length);
-
         const thinking = enableThinking && family.supportsThinking;
-
-        const prompt = processor.apply_chat_template(templateMessages, {
-          enable_thinking: thinking,
-          add_generation_prompt: true,
-        });
-
-        console.log('[Gemma Worker] Generated prompt length:', prompt.length);
-
-        // For multimodal, the processor call signature depends on the model family
-        // For text-only, use tokenizer directly
-        let inputs;
-        if (images.length > 0) {
-          console.log('[Gemma Worker] Processing with image, token budget:', currentImageTokenBudget);
-          inputs = await family.buildImageInputs(processor, prompt, images, currentImageTokenBudget);
-          console.log('[Gemma Worker] Inputs created with image');
-        } else {
-          console.log('[Gemma Worker] Processing text-only...');
-          inputs = processor.tokenizer(prompt, { add_special_tokens: false, return_tensors: 'pt' });
-          console.log('[Gemma Worker] Inputs created text-only');
-        }
+        const inputs = await buildInputs(messages, family, thinking);
 
         let fullText = '';
 
@@ -337,6 +363,58 @@ self.onmessage = async (event: MessageEvent) => {
         }
 
         self.postMessage({ type: 'generation-complete', data: { text: fullText, generationId } });
+        break;
+      }
+
+      // Decision models: one forward pass per branch (question), reading the logits of the option
+      // letters at the answer position. Generating a single token lets transformers.js build the
+      // multimodal position ids; a logits processor captures the raw scores before sampling.
+      case 'decide': {
+        const { branches, generationId } = data as {
+          branches: Array<{ messages: Array<{ role: string; content: any }>; nSlots: number }>;
+          generationId: number;
+        };
+
+        if (!processor || !model || !currentFamily) {
+          throw new Error('Model not loaded');
+        }
+        const family = currentFamily;
+        const slots = getSlotTokenIds();
+        const { LogitsProcessor, LogitsProcessorList } = await loadTransformers();
+
+        const logits: number[][] = [];
+        for (const branch of branches) {
+          if (branch.nSlots > slots.length) {
+            throw new Error(`Question has ${branch.nSlots} options, maximum is ${slots.length}`);
+          }
+          const branchSlots = slots.slice(0, branch.nSlots);
+          const capture: { logits: number[] | null } = { logits: null };
+
+          class CaptureSlotLogits extends LogitsProcessor {
+            _call(_inputIds: bigint[][], scores: any) {
+              // scores: [batch=1, vocab] float32
+              const row = scores.data as Float32Array;
+              capture.logits = branchSlots.map(id => row[id]);
+              return scores;
+            }
+          }
+          const processors = new LogitsProcessorList();
+          processors.push(new CaptureSlotLogits());
+
+          const inputs = await buildInputs(branch.messages, family, false);
+          await model.generate({
+            ...inputs,
+            max_new_tokens: 1,
+            do_sample: false,
+            repetition_penalty: 1.0,  // the prompt itself contains the letters; never penalise them
+            logits_processor: processors,
+          });
+
+          if (!capture.logits) throw new Error('Decision forward pass produced no logits');
+          logits.push(capture.logits);
+        }
+
+        self.postMessage({ type: 'decision-complete', data: { logits, generationId } });
         break;
       }
 

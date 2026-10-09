@@ -118,6 +118,13 @@ export const MODEL_CATALOG: CatalogModel[] = [
     },
     transformers: { hfModelId: 'onnx-community/LFM2.5-VL-450M-ONNX' },
   },
+  {
+    // Decision model: answers System One questions (agent code gets `decision`), see localLlm/systemOne.ts
+    name: 'OneJev',
+    params: '0.8B',
+    size: '0.8 GB',
+    transformers: { hfModelId: 'onnx-community/OneJev-0.8B-ONNX', dtypes: ['q4f16', 'fp16', 'fp32'] },
+  },
 ];
 
 export const MODEL_PRESETS: ModelPreset[] = MODEL_CATALOG.flatMap(m => [

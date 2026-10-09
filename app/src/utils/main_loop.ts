@@ -2,7 +2,8 @@
 
 import { getAgent, getAgentCode } from './agent_database';
 import { UnauthorizedError } from './ModelManager';
-import { ModelManager } from './ModelManager';
+import { ModelManager, ModelOutput } from './ModelManager';
+import { formatDecision } from './localLlm/systemOne';
 import { Logger } from './logging';
 import { preProcess } from './pre-processor';
 import { postProcess } from './post-processor';
@@ -32,7 +33,7 @@ const activeLoops: Record<string, {
   isExecuting: boolean,
   intervalMs: number,
   getToken?: TokenProvider;
-  lastResponse?: string;
+  lastOutput?: ModelOutput;
   sleepUntil?: number | null;
 }> = {};
 
@@ -285,8 +286,8 @@ export async function executeAgentIteration(agentId: string): Promise<void> {
 
     const preprocessResult = await preProcess(agentId, agent.system_prompt, iterationId);
 
-    // Determine response source: cached or from model
-    let response: string;
+    // Determine output source: cached or from model
+    let output: ModelOutput;
     let fromCache = false;
 
     // Check if we should use cached response (no significant change detected)
@@ -294,12 +295,12 @@ export async function executeAgentIteration(agentId: string): Promise<void> {
                           !(await detectSignificantChange(agentId, preprocessResult));
 
     if (shouldUseCache) {
-      // Use cached response
-      const cachedResponse = activeLoops[agentId]?.lastResponse;
-      if (!cachedResponse) {
+      // Use cached output
+      const cachedOutput = activeLoops[agentId]?.lastOutput;
+      if (!cachedOutput) {
         throw new Error("No cached response available - this shouldn't happen after first iteration");
       }
-      response = cachedResponse;
+      output = cachedOutput;
       fromCache = true;
     } else {
       // Call the model
@@ -339,11 +340,11 @@ export async function executeAgentIteration(agentId: string): Promise<void> {
         }
       };
 
-      response = await ModelManager.getInstance().sendPrompt(agent.model_name, preprocessResult, token, true, onStreamChunk, onReasoningChunk);
+      output = await ModelManager.getInstance().sendPrompt(agent.model_name, preprocessResult, token, true, onStreamChunk, onReasoningChunk);
 
-      // Cache new response for potential reuse on next iteration
+      // Cache new output for potential reuse on next iteration
       if (activeLoops[agentId]) {
-        activeLoops[agentId].lastResponse = response;
+        activeLoops[agentId].lastOutput = output;
       }
     }
 
@@ -355,11 +356,13 @@ export async function executeAgentIteration(agentId: string): Promise<void> {
         content: { usingCache: true }
       });
     } else {
-      Logger.info(agentId, `Response`, { logType: 'model-response', iterationId, content: response });
+      // Decision models log a one-line summary so every response surface (cards, history, get_runs) shows it
+      const displayResponse = output.response ?? (output.decision ? formatDecision(output.decision) : '');
+      Logger.info(agentId, `Response`, { logType: 'model-response', iterationId, content: displayResponse });
     }
 
     try {
-      await postProcess(agentId, response, agentCode, iterationId, loopData.getToken, preprocessResult);
+      await postProcess(agentId, output.response, agentCode, iterationId, loopData.getToken, preprocessResult, output.decision);
       Logger.debug(agentId, `postProcess completed successfully`, { iterationId });
 
       // Clear subscriber transcripts for next loop window
@@ -487,13 +490,14 @@ export async function executeTestIteration(
 
     // Send the prompt to inference server and get response
     Logger.info(agentId, `Sending prompt to inference server (model: ${modelName})`);
-    const response = await ModelManager.getInstance().sendPrompt(modelName, processedPrompt, token);
+    const { response, decision } = await ModelManager.getInstance().sendPrompt(modelName, processedPrompt, token);
     // Since this is a one-off test, we don't use the StreamManager and just stop the capture.
     // This assumes the pre-processor for tests might call startScreenCapture directly.
     // If test logic changes, this might need updating.
     // stopScreenCapture(); // Note: This might need re-evaluation based on test flow.
 
-    return response;
+    // Decision models: show the full System One answer(s) in the test panel
+    return response ?? JSON.stringify(decision, null, 2);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     Logger.error(agentId, `Error in test iteration: ${errorMessage}`, error);
