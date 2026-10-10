@@ -122,7 +122,7 @@ export const MODEL_CATALOG: CatalogModel[] = [
     // Decision model: answers System One questions (agent code gets `decision`), see localLlm/systemOne.ts
     name: 'OneJev',
     params: '0.8B',
-    size: '0.8 GB',
+    size: '1.0 GB',   // q4f16 text model + fp32 vision encoder (see gemma.worker.ts)
     transformers: { hfModelId: 'onnx-community/OneJev-0.8B-ONNX', dtypes: ['q4f16', 'fp16', 'fp32'] },
   },
 ];

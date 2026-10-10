@@ -229,10 +229,11 @@ self.onmessage = async (event: MessageEvent) => {
 
         family.configureProcessor?.(processor, currentImageTokenBudget);
 
-        // Matches OneJev's own browser demo, which keeps the vision encoder at fp16 on WebGPU
-        // (its model card reports the q4f16 text model within 0.025 of the original).
-        const sessionDtype = isDecisionModelId(modelId) && dtype === 'q4f16' && device === 'webgpu'
-          ? { embed_tokens: dtype, decoder_model_merged: dtype, vision_encoder: 'fp16' }
+        // OneJev only publishes f16 weights below fp32, and an f16 vision encoder on WebGPU leaves the
+        // model blind (same answers for any image, on an Intel Gen 9 GPU). An fp32 vision encoder
+        // (~400 MB) with the f16 text model matches qev's reference answers.
+        const sessionDtype = isDecisionModelId(modelId) && dtype !== 'fp32' && device === 'webgpu'
+          ? { embed_tokens: dtype, decoder_model_merged: dtype, vision_encoder: 'fp32' }
           : dtype;
 
         model = await AutoModelForImageTextToText.from_pretrained(modelId, {
