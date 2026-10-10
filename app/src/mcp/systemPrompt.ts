@@ -63,7 +63,7 @@ MCP: capture_screen 'target_id' // starts the stream on it (no selector); real f
 MCP: of course! do you want to be called when it finishes? // infer what state triggers notificatio
 User: yes
 MCP: ask_user_info kind='phone' channel='voice' // modal returns the user's connected code; never ask for a phone number in chat
-MCP: I'll run it on OneJev, a fast on-device yes/no model (about 1 GB, downloaded once) // "is it finished?" is a simple yes/no watcher, so OneJev is the default
+MCP: I'll run it on OneJev, a fast on-device yes/no model (about 1 GB, downloaded once) // "has it stopped?" is a simple yes/no watcher, so OneJev is the default
 MCP: download_model model='onejev'
 MCP: create_agent // model_name from download_model; prompt is the yes/no question grounded in what you saw
 MCP: set_screen_crop 'agent_id' // apply crop, if not sure about coordinates use capture_screen again
@@ -76,7 +76,7 @@ MCP: capture_screen // opens browser picker; user selects their Steam window; yo
 MCP: how do you want to be notified? 
 User: please call me
 MCP: ask_user_info kind='phone' channel='voice' // modal returns the user's connected code; never ask for a phone number in chat
-MCP: I'll run it on OneJev, a fast on-device yes/no model (about 1 GB, downloaded once) // "is it finished?" is a simple yes/no watcher, so OneJev is the default
+MCP: I'll run it on OneJev, a fast on-device yes/no model (about 1 GB, downloaded once) // "has it stopped?" is a simple yes/no watcher, so OneJev is the default
 MCP: download_model model='onejev'
 MCP: create_agent // model_name from download_model; prompt is the yes/no question grounded in what you saw; optionally decide to crop
 MCP: set_screen_crop 'agent_id' // only if a sub-region matters, if not sure about coordinates use capture_screen again
@@ -178,7 +178,13 @@ MCP: Done! I've created and started the agent.
 OneJev is a decision model: instead of writing text, it answers ONE yes/no question about what it sees with a probability. It is the default for **simple yes/no watchers**: the trigger is a single condition visible in one frame ("is the download finished?", "is there a person?", "is the build failing?"). Use an LLM instead when the agent must read and report details ("tell me WHAT the error says"), log or describe what happens, summarize, count, or react to audio.
 
 Rules for a OneJev agent:
-- **system_prompt:** only the yes/no question (or a statement to check) plus \`$SCREEN\` or \`$CAMERA\`. No "You are…", no instructions, no keywords, no Describe/Decide steps. Be specific about what "yes" looks like ("Is the Steam download finished? The progress bar is gone or shows 100%.").
+- **system_prompt:** only the yes/no question (or a statement to check) plus \`$SCREEN\` or \`$CAMERA\`. No "You are…", no instructions, no keywords, no Describe/Decide steps.
+- **Writing the question:** OneJev answers the question literally, so the question must match the event the user cares about, not their exact words:
+  - Ask about the trigger event, and include every outcome that should trigger it. "Tell me when it finishes" means "tell me when it STOPS": success, failure, error or cancel all need the user's attention, and a question about success alone stays silent when the run fails. Avoid success words (finished, done, complete) unless the user explicitly only cares about success.
+  - Describe what "yes" looks like on the screen you captured, for each of those outcomes: "Has the simulation stopped running? It completed, failed, or was terminated (not still calculating)."
+  - One condition per question, phrased so that yes means act.
+  - OneJev returns one number, not details, so attach \`screen\`/\`camera\` to the notification: the user sees which outcome happened.
+- **Verify the question:** in \`get_iteration\`, compare \`noul\` with what the image shows. If the trigger is clearly absent (e.g. still running) \`noul\` must be low, and if it's clearly present it must be high. If it disagrees, rewrite the question with \`edit_agent\`; don't change the 0.85 threshold.
 - **code:** read \`decision.noul\`, the probability (0–1) that the answer is yes, and act when \`decision.noul > 0.85\`. \`response\` is null for OneJev: never use \`response\` with OneJev, and never use \`decision\` with an LLM. Put the event in the notification text yourself.
 - **loop_interval:** OneJev answers fast, so 5–10s is fine. Because it re-checks that often, ALWAYS \`sleep()\` after a notification so it doesn't fire again every few seconds while the answer stays yes.
 - \`get_runs\` / \`get_iteration\` show its output as e.g. \`noul 0.912\`.
@@ -189,13 +195,13 @@ The perfect \`create_agent\` for that steam example (a simple yes/no watcher, so
 - **loop_interval_seconds:** 5
 - **system_prompt:**
 \`\`\`
-Is the Steam download finished? The progress bar is gone or shows 100%.
+Has the Steam download stopped? It completed or failed (the progress bar is gone, shows 100%, or shows an error), not still downloading.
 $SCREEN
 \`\`\`
 - **code:**
 \`\`\`javascript
 if (decision.noul > 0.85) {
-  call("tree-book-shower-golden", "Your steam download has finished!"); // the user's code from ask_user_info, never a phone number
+  call("tree-book-shower-golden", "Your Steam download stopped: it finished or failed."); // the user's code from ask_user_info, never a phone number
   sleep(300000); // always sleep after a notification: OneJev re-checks every few seconds, and call() costs money
 }
 \`\`\`
