@@ -339,8 +339,13 @@ const DownloadShell: React.FC<{ meta: React.ReactNode; onCancel?: () => void; ch
   </div>
 );
 
-const DownloadModelProgress: React.FC = () => {
-  const tauri = isTauri();
+// `download_model({ model: 'onejev' })` is a transformers.js download on every platform.
+const downloadsTransformers = (tc: ToolCall): boolean => {
+  try { return JSON.parse(tc.function.arguments || '{}').model === 'onejev'; } catch { return false; }
+};
+
+const DownloadModelProgress: React.FC<{ transformers?: boolean }> = ({ transformers = false }) => {
+  const tauri = isTauri() && !transformers;
   const [gemma, setGemma] = useState<GemmaModelState>(() => GemmaModelManager.getInstance().getState());
   const [native, setNative] = useState<NativeModelState>(() => NativeLlmManager.getInstance().getState());
 
@@ -665,7 +670,9 @@ const MCP: React.FC<MCPProps> = ({
       return (
         <div key={idx} className="flex flex-col items-start w-full">
           <WorkingGroup batches={batches} toolStatus={toolStatus} messages={messages} />
-          {calls.some(tc => tc.function.name === 'download_model') && <DownloadModelProgress />}
+          {calls.some(tc => tc.function.name === 'download_model') && (
+            <DownloadModelProgress transformers={calls.some(tc => tc.function.name === 'download_model' && downloadsTransformers(tc))} />
+          )}
           {calls
             .filter(tc => tc.function.name === 'check_whitelist')
             .map(tc => (

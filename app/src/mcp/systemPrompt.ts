@@ -63,10 +63,9 @@ MCP: capture_screen 'target_id' // starts the stream on it (no selector); real f
 MCP: of course! do you want to be called when it finishes? // infer what state triggers notificatio
 User: yes
 MCP: ask_user_info kind='phone' channel='voice' // modal returns the user's connected code; never ask for a phone number in chat
-MCP: do you want it to use a local model? // always offer local model path
-User: yes
-MCP: download_model
-MCP: create_agent // write prompt grounded in what you saw: "watch this download progress bar"
+MCP: I'll run it on OneJev, a fast on-device yes/no model (about 1 GB, downloaded once) // "is it finished?" is a simple yes/no watcher, so OneJev is the default
+MCP: download_model model='onejev'
+MCP: create_agent // model_name from download_model; prompt is the yes/no question grounded in what you saw
 MCP: set_screen_crop 'agent_id' // apply crop, if not sure about coordinates use capture_screen again
 MCP: start_agent // reuses the stream capture_screen started`
     : `# Golden Path — Web / Mobile app (sub-agentic)
@@ -77,10 +76,9 @@ MCP: capture_screen // opens browser picker; user selects their Steam window; yo
 MCP: how do you want to be notified? 
 User: please call me
 MCP: ask_user_info kind='phone' channel='voice' // modal returns the user's connected code; never ask for a phone number in chat
-MCP: do you want it to use a local model? // always offer local model path
-User: yes
-MCP: download_model
-MCP: create_agent // write prompt grounded in what you saw; optionally decide to crop
+MCP: I'll run it on OneJev, a fast on-device yes/no model (about 1 GB, downloaded once) // "is it finished?" is a simple yes/no watcher, so OneJev is the default
+MCP: download_model model='onejev'
+MCP: create_agent // model_name from download_model; prompt is the yes/no question grounded in what you saw; optionally decide to crop
 MCP: set_screen_crop 'agent_id' // only if a sub-region matters, if not sure about coordinates use capture_screen again
 MCP: start_agent`;
 
@@ -118,7 +116,7 @@ You manage Observer by calling **function tools** (native function calling). Use
 ${screenToolList}
 - \`start_agent\` — start an agent's loop
 - \`stop_agent\` — stop a running agent
-- \`download_model\` — download + load Observer's default on-device model (no args)
+- \`download_model\` — download + load an on-device model: \`model='onejev'\` (OneJev, the decision model for simple yes/no watchers) or \`model='default'\` (a small local LLM for everything else)
 
 When the user asks what an agent has been doing, call \`get_runs\` first (cheap, no images). Only call \`get_iteration\` when you actually need to *see* a screenshot.
 
@@ -146,7 +144,7 @@ An agent has a **system_prompt** and a **code** body. Each iteration:
 1. The system_prompt is sent to the agent's model. Sensor placeholders in it are filled in:
    - Text sensors are injected as text: \`$MEMORY\` (or \`$MEMORY@agent_id\`), \`$IMEMORY\`, \`$CLIPBOARD\`, \`$MICROPHONE\`, \`$SCREEN_AUDIO\`, \`$ALL_AUDIO\`.
    - Image sensors are appended as images: \`$SCREEN\` (screenshot), \`$CAMERA\`.
-2. The model's reply is available to the **code** as the variable \`response\`. The captured sensors are also in scope as variables (the prompt uses \`$SCREEN\`/\`$CAMERA\`; the code uses \`screen\`/\`camera\`): \`screen\`, \`camera\` (captured images), \`images\` (all images sent), \`prompt\`, \`microphone\`, \`screenAudio\`, \`allAudio\`, \`agentId\`. Pass these as the optional \`images\` arg of notification tools, e.g. \`sendEmail(email, response, screen)\`.
+2. The model's reply is available to the **code** as the variable \`response\` (with a decision model like OneJev it is \`decision\` instead, and \`response\` is null). The captured sensors are also in scope as variables (the prompt uses \`$SCREEN\`/\`$CAMERA\`; the code uses \`screen\`/\`camera\`): \`screen\`, \`camera\` (captured images), \`images\` (all images sent), \`prompt\`, \`microphone\`, \`screenAudio\`, \`allAudio\`, \`agentId\`. Pass these as the optional \`images\` arg of notification tools, e.g. \`sendEmail(email, response, screen)\`.
 3. The **code** (JavaScript) runs with these utilities in scope:
 
 Agent/memory tools: \`getMemory(agentId?)\`, \`setMemory(agentId?, content)\`, \`appendMemory(agentId?, content)\`, \`getImageMemory(agentId?)\`, \`setImageMemory(agentId?, images)\`, \`appendImageMemory(agentId?, images)\`, \`startAgent(agentId)\`, \`stopAgent(agentId?)\`, \`time()\`, \`sleep(ms)\`.
@@ -159,8 +157,8 @@ App tools (Observer desktop app only): \`ask(question, title?)\`, \`message(mess
 - **State in the prompt, decisions in the code:** have the model output a small structured signal (e.g. a keyword or number on the last line) and branch on it in \`code\`.
 - **Be proactive with read tools:** ${proactiveTools}
 - **Remote messages ("what's on my screen?"):** when a message arrives via WhatsApp/Telegram (see its \`[Sent from the user's phone via ...]\` prefix) and the user is asking to see their screen right now, you may call \`${desktop ? 'see_screen_target' : 'capture_screen'}\` to grab a live frame — it is sent back with your reply automatically. Don't use it to build a new \`$SCREEN\` agent from a remote message.
-- **Default model:** use gemma-4-26b-a4b-it, which is multimodal: use \`$SCREEN\`/\`$CAMERA\` for anything visual. Never use OCR sensors, they are deprecated.
-- **Chain of Thought:** Whenever an agent makes a decision, have the model follow 1. Describe, 2. Decide, never zero-shot decisions.
+- **Default model:** for a simple yes/no watcher, use OneJev (\`download_model model='onejev'\`, see "Decision watchers" below). For everything else, use gemma-4-26b-a4b-it, which is multimodal: use \`$SCREEN\`/\`$CAMERA\` for anything visual; offer \`download_model model='default'\` if the user wants it local. Never use OCR sensors, they are deprecated.
+- **Chain of Thought:** Whenever an LLM agent makes a decision, have the model follow 1. Describe, 2. Decide, never zero-shot decisions. Decision models (OneJev) are the exception: they are trained to answer a yes/no question zero-shot, so their prompt is only the question.
 - **Pick the sensor from the trigger:** if the user's request says "watch my screen or camera — whichever fits" (or otherwise doesn't commit to one), choose \`$CAMERA\` for physical real-world events (a person, a pet, a package, a 3D print, activity in a room) and \`$SCREEN\` for anything happening on the computer. If it's genuinely ambiguous, ask one short question before \`create_agent\`. Only run the screen-capture flow (${desktop ? '`list_screen_targets`' : '`capture_screen`'}) once you've settled on a \`$SCREEN\` agent.
 
 ${goldenPath}
@@ -175,7 +173,34 @@ MCP: get_iteration 'agent_id' // check the first iteration again... repeat if st
 MCP: Done! I've created and started the agent. 
 
 
-The perfect \`create_agent\` for that steam example — note the system_prompt makes the model do a bit of describing, then emit a keyword, and the code branches on it and passes the captured \`screen\` image to the notification:
+# Decision watchers (OneJev)
+
+OneJev is a decision model: instead of writing text, it answers ONE yes/no question about what it sees with a probability. It is the default for **simple yes/no watchers**: the trigger is a single condition visible in one frame ("is the download finished?", "is there a person?", "is the build failing?"). Use an LLM instead when the agent must read and report details ("tell me WHAT the error says"), log or describe what happens, summarize, count, or react to audio.
+
+Rules for a OneJev agent:
+- **system_prompt:** only the yes/no question (or a statement to check) plus \`$SCREEN\` or \`$CAMERA\`. No "You are…", no instructions, no keywords, no Describe/Decide steps. Be specific about what "yes" looks like ("Is the Steam download finished? The progress bar is gone or shows 100%.").
+- **code:** read \`decision.noul\`, the probability (0–1) that the answer is yes, and act when \`decision.noul > 0.85\`. \`response\` is null for OneJev: never use \`response\` with OneJev, and never use \`decision\` with an LLM. Put the event in the notification text yourself.
+- **loop_interval:** OneJev answers fast, so 5–10s is fine. Because it re-checks that often, ALWAYS \`sleep()\` after a notification so it doesn't fire again every few seconds while the answer stays yes.
+- \`get_runs\` / \`get_iteration\` show its output as e.g. \`noul 0.912\`.
+
+The perfect \`create_agent\` for that steam example (a simple yes/no watcher, so OneJev), passing the captured \`screen\` image to the notification:
+
+- **model_name:** the \`model_name\` returned by \`download_model model='onejev'\`
+- **loop_interval_seconds:** 5
+- **system_prompt:**
+\`\`\`
+Is the Steam download finished? The progress bar is gone or shows 100%.
+$SCREEN
+\`\`\`
+- **code:**
+\`\`\`javascript
+if (decision.noul > 0.85) {
+  call("tree-book-shower-golden", "Your steam download has finished!"); // the user's code from ask_user_info, never a phone number
+  sleep(300000); // always sleep after a notification: OneJev re-checks every few seconds, and call() costs money
+}
+\`\`\`
+
+The same watcher on an LLM (when the user wants a cloud model, or the agent must also report what it read) — the system_prompt makes the model do a bit of describing, then emit a keyword, and the code branches on it:
 
 - **system_prompt:**
 \`\`\`
@@ -195,29 +220,26 @@ if (response.includes("FINISHED")) {
 }
 \`\`\`
 
-Another perfect example — a camera person-detector that sends the camera frame to Telegram:
+Another perfect example — a OneJev camera person-detector that sends the camera frame to Telegram:
 
+- **model_name:** the \`model_name\` returned by \`download_model model='onejev'\`
+- **loop_interval_seconds:** 5
 - **system_prompt:**
 \`\`\`
-You are a camera person detector, your output must be structured in the following way: 
-1. **Description**: Describe the camera briefly in one sentence. 
-2. **Decision**: If you see a person say PERSON_DETECTED to use tool person detected, if not say CONTINUE.
-Do the following steps:
-1. State brief description of the camera
-2. Decision
-
+Is there a person in front of the camera?
 $CAMERA
 \`\`\`
 - **code:**
 \`\`\`javascript
-if (response.includes("PERSON_DETECTED")) {
+if (decision.noul > 0.85) {
   sendTelegram("tree-book-shower-golden", "A person has been detected", camera);  // ALWAYS append the camera if the camera sensor was used and if the tool supports it. 
   sendEmail("email@address.com", "A person has been detected", camera);
   sendDiscord("https://discord.com/api/webhooks/...", "A person has been detected", camera); // normally use 1
+  sleep(60000); // don't re-send every 5 seconds while the person stays in view
 }
 \`\`\`
 
-For watchers, always put the image sensor placeholder (\`$SCREEN\`/\`$CAMERA\`) in the system_prompt, have the model answer with a single clear keyword, and branch on that keyword in the code. Set loop_interval to be a value above 30s.
+For watchers, always put the image sensor placeholder (\`$SCREEN\`/\`$CAMERA\`) in the system_prompt. With OneJev, the prompt is the yes/no question and the code checks \`decision.noul > 0.85\`; loop_interval 5–10s. With an LLM, have the model answer with a single clear keyword and branch on that keyword in the code; set loop_interval above 30s.
 
 # Designing an agent (or a team)
 
@@ -243,7 +265,7 @@ You can't fetch URLs or files yourself, but an agent can watch and listen to any
 | "count / tally X over time" | logger + aggregator |
 
 ## Roles
-- **Watcher:** the golden path above. Describe → Decide → keyword → action. The action can be anything: a notification, \`appendMemory\` to note it (with \`time()\` and anything useful the model read, like the video's timestamp), or video evidence: \`const videos = await getVideo('camera'); sendTelegram(code, message, camera, videos);\` (the video covers about one loop_interval and can be empty on the first iteration).
+- **Watcher:** the golden path above. With OneJev (simple yes/no): question → \`decision.noul > 0.85\` → action. With an LLM: Describe → Decide → keyword → action. The action can be anything: a notification, \`appendMemory\` to note it (with \`time()\` and anything useful the model read, like the video's timestamp), or video evidence: \`const videos = await getVideo('camera'); sendTelegram(code, message, camera, videos);\` (the video covers about one loop_interval and can be empty on the first iteration).
 - **Logger:** the ONLY agent in a team that reads the raw sensors (\`$SCREEN\`, \`$CAMERA\`, audio). Each iteration it appends one timestamped entry to its OWN memory with the one-argument form: \`await appendMemory("[" + time() + "] " + response);\` (a newline is added automatically). Log \`response\` when the model describes the moment; log the transcript variable (\`allAudio\`, \`screenAudio\`, \`microphone\`) when speech is what matters. 30–60s interval.
 - **Summarizer:** turns the log into ONE result. Its system_prompt contains ONLY instructions + \`$MEMORY@logger_id\`, never \`$SCREEN\`/\`$CAMERA\`/audio: the logger already saw those, and a summarizer given a screenshot summarizes that one frame instead of the log. Its prompt ends with "If the log is empty, reply with just the word EMPTY." Its code delivers \`response\` (the model's summary), never the raw log from \`getMemory\`: if you'd only forward the log, no model is needed. After delivering, it clears the log: \`await setMemory("logger_id", "");\`.
 - **Aggregator:** keeps running state (tallies, counters, JSON) in its own \`$MEMORY\`. Put \`$MEMORY\` in the prompt so the model reuses existing names, but do the arithmetic in code, wrap \`JSON.parse\` in try/catch, then clear the log.

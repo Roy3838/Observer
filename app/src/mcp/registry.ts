@@ -23,7 +23,7 @@ import { IterationStore, type IterationData } from '@utils/IterationStore';
 import { ModelManager } from '@utils/ModelManager';
 import type { TokenProvider } from '@utils/main_loop';
 import { checkPhoneWhitelist } from '@utils/pre-flight';
-import { downloadDefaultLocalModel } from './localModel';
+import { downloadLocalModel, LOCAL_MODEL_CHOICES, type LocalModelChoice } from './localModel';
 import { tauriStreamCapture } from '@utils/tauriStreamCapture';
 import { setAgentCrop } from '@utils/screenCapture';
 import { isDesktop, isWeb } from '@utils/platform';
@@ -469,7 +469,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'list_models',
-    description: 'List the inference models available to power agents, with their server and multimodal capability.',
+    description: 'List the inference models available to power agents, with their server and multimodal capability. `decision: true` marks a decision model (OneJev): it answers a yes/no question instead of writing text, so its agent code reads `decision.noul`, never `response`.',
     parameters: { type: 'object', properties: {} },
     multimodal: false,
     execute: async (): Promise<ToolResult> => {
@@ -478,6 +478,7 @@ export const TOOLS: ToolDefinition[] = [
         data: models.map(m => ({
           name: m.name,
           multimodal: m.multimodal ?? false,
+          decision: m.decision ?? false,
           pro: m.pro ?? false,
           server: m.server,
         })),
@@ -498,7 +499,7 @@ export const TOOLS: ToolDefinition[] = [
         model_name: { type: 'string', description: 'Model to power the agent (see list_models).' },
         system_prompt: { type: 'string', description: 'The system prompt, including any $SENSOR placeholders ($SCREEN, $MEMORY, $CLIPBOARD, ...).' },
         loop_interval_seconds: { type: 'number', description: 'Seconds between agent iterations. Optional — defaults to 30. Use shorter (~5–15s) for live screen/camera watchers, longer for periodic checks.' },
-        code: { type: 'string', description: 'JavaScript run after each model response (agent-code API: response, sendEmail(), appendMemory(), overlay(), startAgent(), stopAgent(), ...).' },
+        code: { type: 'string', description: 'JavaScript run after each model response (agent-code API: response, or decision.noul for a decision model, sendEmail(), appendMemory(), overlay(), startAgent(), stopAgent(), ...).' },
       },
       required: ['id', 'name', 'model_name', 'system_prompt', 'code'],
     },
@@ -897,12 +898,19 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'download_model',
-    description: 'Download and load the default on-device model so agents can run locally with NO cloud and NO API key. Takes no arguments — Observer picks the right Qwen3.5 0.8B build for the platform (a transformers.js ONNX model in the browser, a llama.cpp GGUF in the desktop app). This BLOCKS while it downloads (under 1 GB) and loads; progress bars are shown to the user. When it resolves, the returned `model_name` is immediately usable as a `create_agent` model_name. Only one local model is needed; call list_models afterward to confirm.',
-    parameters: { type: 'object', properties: {} },
+    description: 'Download and load an on-device model so agents can run locally with NO cloud and NO API key. `model`: "onejev" (OneJev 0.8B, the decision model for simple yes/no watchers; returns `decision: true`) or "default" (Qwen3.5 0.8B, a general LLM for everything else: Observer picks a transformers.js ONNX build in the browser, a llama.cpp GGUF in the desktop app). This BLOCKS while it downloads (about 1 GB) and loads; progress bars are shown to the user. When it resolves, the returned `model_name` is immediately usable as a `create_agent` model_name. In the browser only one on-device model is loaded at a time, so loading one unloads the other.',
+    parameters: {
+      type: 'object',
+      properties: {
+        model: { type: 'string', enum: LOCAL_MODEL_CHOICES, description: '"onejev" for simple yes/no watchers, "default" for everything else. Defaults to "default".' },
+      },
+    },
     multimodal: false,
-    execute: async (): Promise<ToolResult> => {
+    execute: async (args): Promise<ToolResult> => {
+      const choice: LocalModelChoice = args.model ?? 'default';
+      if (!LOCAL_MODEL_CHOICES.includes(choice)) return { error: `Unknown model '${args.model}'. Use one of: ${LOCAL_MODEL_CHOICES.join(', ')}.` };
       try {
-        const result = await downloadDefaultLocalModel();
+        const result = await downloadLocalModel(choice);
         return { data: result };
       } catch (e) {
         return { error: e instanceof Error ? e.message : String(e) };
