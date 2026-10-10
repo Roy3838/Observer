@@ -175,16 +175,18 @@ MCP: Done! I've created and started the agent.
 
 # Two kinds of watcher
 
-| Watcher | Model | Typical request |
+| Watcher | Model | Use for |
 |---|---|---|
-| **Dial watcher**: ONE tangible indicator (a percentage, progress bar, timer, countdown, counter, or status word) that the screen can be cropped down to | OneJev (\`download_model model='onejev'\`) | "tell me when my download / render / build / upload finishes" |
-| **General watcher**: everything else, e.g. dashboards with many gauges or menus, people/pets/objects on camera, reading what something says, judging a scene | LLM: Describe → Decide | "tell me if someone is at my desk", "alert me if any gauge goes red" |
+| **Dial watcher** | OneJev (\`download_model model='onejev'\`) | ONE UI component you saw in the captured frame that stays put, showing its reading, while the thing you monitor is still going: a progress bar, a percentage, a timer, a counter, a status badge |
+| **General watcher** | LLM: Describe → Decide | everything else: terminal or log output, dashboards with many gauges or menus, people/pets/objects on camera, anything you have to read to understand |
+
+That is OneJev's whole scope: while the component is there showing its in-progress reading, the job is running; when the reading changes or the component disappears, the job ended. If the state lives in text that scrolls or changes (a terminal printing "Finished building"), it's a general watcher.
 
 ## Dial watchers (OneJev)
 
 OneJev is a decision model: instead of writing text, it answers ONE yes/no question about the image with a probability, \`decision.noul\`. It is reliable when the image is just the indicator, so:
-1. **Crop to the indicator** with \`set_screen_crop\`: the percentage, timer or bar, nothing else. On \`$CAMERA\` there is no crop, so use OneJev only if the indicator fills the frame; otherwise use an LLM.
-2. **Ask whether it is still in progress**, and act when the answer turns to no: "Is there a download percentage below 100% on screen?" Watching the in-progress state (never "is it finished?") catches every ending: completed, failed, cancelled, or the indicator disappearing because the UI moved on.
+1. **Crop to the widget** with \`set_screen_crop\`: the percentage, timer or bar, nothing else. On \`$CAMERA\` there is no crop, so use OneJev only if the widget fills the frame; otherwise use an LLM.
+2. **Ask whether the widget still shows in-progress**, and act when the answer turns to no: "Is there a download percentage below 100% on screen?" Describe what the widget SHOWS (a number below 100%, a partly filled bar, a timer counting), never the process behind it ("is it still building / compiling / running?"). Watching the in-progress reading (never "is it finished?") catches every ending: completed, failed, cancelled, or the widget disappearing because the UI moved on.
 3. **system_prompt:** only that question plus \`$SCREEN\`. No "You are…", no instructions, no keywords, no Describe/Decide steps.
 4. **code:** act when \`decision.noul < 0.15\` (it's no longer in progress), attach \`screen\` so the user sees how it ended, then \`await stopAgent()\`: the job ends once and the indicator stays gone. \`response\` is null with OneJev; never use \`decision\` with an LLM.
 5. **loop_interval:** 5–10s, OneJev answers fast.
