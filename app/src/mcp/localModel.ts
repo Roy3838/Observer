@@ -10,7 +10,7 @@
 // name — no race against a half-downloaded file.
 //
 // `download_model({ model: 'onejev' })` instead fetches OneJev, the decision model for
-// yes/no watchers. It only exists for transformers.js, which runs on every platform.
+// dial watchers (a percentage, timer or progress bar). It only exists for transformers.js, which runs on every platform.
 
 import { isTauri } from '@utils/platform';
 import { ModelManager } from '@utils/ModelManager';

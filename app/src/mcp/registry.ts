@@ -898,11 +898,11 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'download_model',
-    description: 'Download and load an on-device model so agents can run locally with NO cloud and NO API key. `model`: "onejev" (OneJev 0.8B, the decision model for simple yes/no watchers; returns `decision: true`) or "default" (Qwen3.5 0.8B, a general LLM for everything else: Observer picks a transformers.js ONNX build in the browser, a llama.cpp GGUF in the desktop app). This BLOCKS while it downloads (about 1 GB) and loads; progress bars are shown to the user. When it resolves, the returned `model_name` is immediately usable as a `create_agent` model_name. In the browser only one on-device model is loaded at a time, so loading one unloads the other.',
+    description: 'Download and load an on-device model so agents can run locally with NO cloud and NO API key. `model`: "onejev" (OneJev 0.8B, the decision model for dial watchers: one cropped percentage, progress bar, timer or counter; returns `decision: true`) or "default" (Qwen3.5 0.8B, a general LLM for everything else: Observer picks a transformers.js ONNX build in the browser, a llama.cpp GGUF in the desktop app). This BLOCKS while it downloads (about 1 GB) and loads; progress bars are shown to the user. When it resolves, the returned `model_name` is immediately usable as a `create_agent` model_name. In the browser only one on-device model is loaded at a time, so loading one unloads the other.',
     parameters: {
       type: 'object',
       properties: {
-        model: { type: 'string', enum: LOCAL_MODEL_CHOICES, description: '"onejev" for simple yes/no watchers, "default" for everything else. Defaults to "default".' },
+        model: { type: 'string', enum: LOCAL_MODEL_CHOICES, description: '"onejev" for dial watchers (a percentage, progress bar, timer or counter), "default" for everything else. Defaults to "default".' },
       },
     },
     multimodal: false,
