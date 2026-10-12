@@ -17,7 +17,9 @@ import {
   LocalModelEntry,
   LocalFileState,
   NativeLocalModel,
+  isDecisionModelId,
 } from './types';
+import type { DecisionBranch } from './systemOne';
 
 const NATIVE_LLM_STORAGE_KEY = 'observer-native-llm-settings';
 const NATIVE_LLM_GGUF_CACHE_KEY = 'observer-native-llm-gguf-cache';
@@ -375,6 +377,7 @@ export class NativeLlmManager {
         status,
         sizeBytes: m.modelFile.kind === 'absent' ? undefined : m.modelFile.bytes,
         isMultimodal: m.isMultimodal,
+        isDecision: isDecisionModelId(m.id),
       };
     });
   }
@@ -660,6 +663,23 @@ export class NativeLlmManager {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       Logger.error('NativeLlmManager', `Generation failed: ${msg}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Decision models (OneJev): one forward pass per branch, returning the raw logits of the
+   * option letters A.. — the same numbers GemmaModelManager.decide reads with transformers.js.
+   */
+  public async decide(branches: DecisionBranch[]): Promise<number[][]> {
+    if (this.state.status !== 'loaded') {
+      throw new Error('Native model not loaded');
+    }
+    try {
+      return await invoke<number[][]>('llm_decide', { branches });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      Logger.error('NativeLlmManager', `Decision failed: ${msg}`);
       throw error;
     }
   }

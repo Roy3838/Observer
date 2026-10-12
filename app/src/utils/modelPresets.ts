@@ -122,7 +122,12 @@ export const MODEL_CATALOG: CatalogModel[] = [
     // Decision model: answers System One questions (agent code gets `decision`), see localLlm/systemOne.ts
     name: 'OneJev',
     params: '0.8B',
-    size: '1.0 GB',   // q4f16 text model + fp32 vision encoder (see gemma.worker.ts)
+    size: '1.3 GB',   // Q8_0 gguf + f16 mmproj (transformers.js: q4f16 text + fp32 vision, ~1.0 GB)
+    llamacpp: {
+      repo: 'Roy3838/OneJev-0.8B-GGUF',
+      ggufUrl: 'https://huggingface.co/Roy3838/OneJev-0.8B-GGUF/resolve/main/OneJev-0.8B-Q8_0.gguf',
+      mmprojUrl: 'https://huggingface.co/Roy3838/OneJev-0.8B-GGUF/resolve/main/mmproj-OneJev-0.8B-F16.gguf',
+    },
     transformers: { hfModelId: 'onnx-community/OneJev-0.8B-ONNX', dtypes: ['q4f16', 'fp16', 'fp32'] },
   },
 ];

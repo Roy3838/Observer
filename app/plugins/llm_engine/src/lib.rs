@@ -40,13 +40,15 @@ macro_rules! llm_log {
 }
 
 use llama_cpp_2::context::params::LlamaContextParams;
+use llama_cpp_2::context::LlamaContext;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::{AddBos, LlamaModel};
+use llama_cpp_2::token::LlamaToken;
 use llama_cpp_2::openai::OpenAIChatTemplateParams;
 use llama_cpp_2::sampling::LlamaSampler;
-use llama_cpp_2::mtmd::{MtmdContext, MtmdContextParams, MtmdBitmap, MtmdInputText, mtmd_default_marker};
+use llama_cpp_2::mtmd::{MtmdContext, MtmdContextParams, MtmdBitmap, MtmdInputChunks, MtmdInputText, mtmd_default_marker};
 
 /// Generation metrics for debugging and performance monitoring
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -149,6 +151,15 @@ pub enum ChatContent {
 pub struct ChatMessage {
     pub role: String,
     pub content: ChatContent,
+}
+
+/// One System One question rendered as a chat (DecisionBranch in app/src/utils/localLlm/systemOne.ts).
+/// The model answers by putting probability mass on the option letters A.. at the answer position.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionBranch {
+    pub messages: Vec<ChatMessage>,
+    pub n_slots: usize, // option letters to read: A..
 }
 
 /// LLM Engine state - holds the loaded model and context
@@ -354,7 +365,7 @@ impl LlmEngine {
 
         llm_log!("generate: multimodal={} enable_thinking={}", use_multimodal, enable_thinking);
 
-        let prompt = self.build_prompt_with_template(model, &messages, enable_thinking)
+        let prompt = self.build_prompt_with_template(model, &messages, enable_thinking, false)
             .unwrap_or_else(|e| {
                 llm_log!(warn, "Chat template failed ({}), falling back to simple template", e);
                 self.build_chat_prompt(&messages).unwrap_or_default()
@@ -363,84 +374,14 @@ impl LlmEngine {
         let generation_start = Instant::now();
         let mut first_token_time: Option<Instant> = None;
 
-        let cp = &self.context_params;
-        let (n_ctx, n_batch) = if use_multimodal {
-            (cp.n_ctx_multimodal, cp.n_batch_multimodal)
-        } else {
-            (cp.n_ctx, cp.n_batch)
-        };
-        let n_threads = if cp.n_threads > 0 { cp.n_threads } else { -1 }; // -1 = llama.cpp auto
-
-        // n_ubatch=0 means match n_batch (no micro-batch splitting).
-        // Required for multimodal+thinking: non-causal vision attention needs
-        // all image tokens in one physical batch (see llama.cpp issue #21338).
-        let n_ubatch = if cp.n_ubatch == 0 { n_batch } else { cp.n_ubatch };
-
-        if use_multimodal && n_ubatch < cp.image_max_tokens as u32 {
-            llm_log!(warn, "n_ubatch ({}) < image_max_tokens ({}) — will crash during vision encoding; increase n_batch_multimodal or lower image_max_tokens",
-                n_ubatch, cp.image_max_tokens);
-        }
-
-        llm_log!("Context: n_ctx={} n_batch={} n_ubatch={} n_threads={}", n_ctx, n_batch, n_ubatch, n_threads);
-
-        let ctx_params = LlamaContextParams::default()
-            .with_n_ctx(std::num::NonZeroU32::new(n_ctx))
-            .with_n_batch(n_batch)
-            .with_n_ubatch(n_ubatch)
-            .with_n_threads(n_threads);
-
-        let mut ctx = model
-            .new_context(&self.backend, ctx_params)
-            .map_err(|e| format!("Failed to create context: {}", e))?;
-
         // ── Context setup ────────────────────────────────────────────────────
         // After this block: context is fully populated, batch is empty, n_cur is set.
         // Sampling starts at logit index -1 (last populated position in context).
 
+        let (mut ctx, n_batch) = self.new_context(model, use_multimodal, None)?;
         let mut batch = LlamaBatch::new(n_batch as usize, 1);
-        let prompt_tokens: u32;
-        let mut n_cur: usize;
-
-        if use_multimodal {
-            let mtmd_ctx = self.mtmd_ctx.as_ref().unwrap();
-
-            let mut bitmaps: Vec<MtmdBitmap> = Vec::new();
-            for (i, img_data) in images.iter().enumerate() {
-                let bitmap = MtmdBitmap::from_buffer(mtmd_ctx, img_data)
-                    .map_err(|e| format!("Failed to decode image {}: {:?}", i, e))?;
-                bitmaps.push(bitmap);
-            }
-
-            let input_text = MtmdInputText { text: prompt.clone(), add_special: true, parse_special: true };
-            let bitmap_refs: Vec<&MtmdBitmap> = bitmaps.iter().collect();
-            let input_chunks = mtmd_ctx
-                .tokenize(input_text, &bitmap_refs)
-                .map_err(|e| format!("Failed to tokenize multimodal input: {:?}", e))?;
-
-            let n_past = input_chunks
-                .eval_chunks(mtmd_ctx, &ctx, 0, 0, 512, true)
-                .map_err(|e| format!("Failed to evaluate multimodal input: {:?}", e))?;
-
-            prompt_tokens = n_past as u32;
-            n_cur = n_past as usize;
-        } else {
-            let tokens = model
-                .str_to_token(&prompt, AddBos::Always)
-                .map_err(|e| format!("Failed to tokenize: {}", e))?;
-
-            let last_idx = tokens.len() - 1;
-            for (i, token) in tokens.iter().enumerate() {
-                batch
-                    .add(*token, i as i32, &[0], i == last_idx)
-                    .map_err(|e| format!("Failed to add token to batch: {}", e))?;
-            }
-            ctx.decode(&mut batch)
-                .map_err(|e| format!("Failed to decode prompt: {}", e))?;
-
-            prompt_tokens = tokens.len() as u32;
-            n_cur = tokens.len();
-            batch.clear();
-        }
+        let mut n_cur = self.prefill(model, &mut ctx, &prompt, &images, use_multimodal, &mut batch, n_batch)?;
+        let prompt_tokens = n_cur as u32;
 
         // ── Shared token generation loop ─────────────────────────────────────
         let params = &self.sampler_params;
@@ -521,6 +462,216 @@ impl LlmEngine {
         Ok(full_response)
     }
 
+    /// Score System One decision branches (OneJev-style decision models): one forward pass per
+    /// branch, returning the raw logits of the option letters A.. at the answer position.
+    /// Prompt rendering and the softmax/answers live in the frontend (systemOne.ts); this mirrors
+    /// the transformers.js 'decide' path in gemma.worker.ts so both engines read the same numbers.
+    pub fn decide<F>(&self, branches: &[DecisionBranch], mut is_cancelled: F) -> Result<Vec<Vec<f32>>, String>
+    where
+        F: FnMut() -> bool,
+    {
+        let model = self.model.as_ref().ok_or("No model loaded")?;
+        let slots = Self::slot_token_ids(model)?;
+        let start = Instant::now();
+
+        let mut logits = Vec::with_capacity(branches.len());
+        for branch in branches {
+            if is_cancelled() {
+                return Err("Decision cancelled".to_string());
+            }
+            if branch.n_slots == 0 || branch.n_slots > slots.len() {
+                return Err(format!("Question has {} options, maximum is {}", branch.n_slots, slots.len()));
+            }
+
+            // Unlike generate(), never drop images: a decision about a screen we didn't see is wrong
+            let images = self.extract_images(&branch.messages);
+            if !images.is_empty() && self.mtmd_ctx.is_none() {
+                return Err("This decision has an image but the model has no mmproj loaded".to_string());
+            }
+            let use_multimodal = !images.is_empty();
+
+            // No fallback template: the prompt must match what the model was trained on.
+            // Images stay inline where the request placed them (<image:N>), like the Qwen template does.
+            let prompt = self.build_prompt_with_template(model, &branch.messages, false, true)?;
+
+            if use_multimodal {
+                // Tokenize first so the context fits what the images really became: the projector
+                // can exceed image_max_tokens (300 for a 640x200 screenshot at 280), and an image
+                // larger than n_batch aborts inside llama_decode where catch_unwind can't reach.
+                let chunks = self.tokenize_media(&prompt, &images)?;
+                let largest_image = (0..chunks.len())
+                    .filter_map(|i| chunks.get(i))
+                    .filter(|c| c.text_tokens().is_none())
+                    .map(|c| c.n_tokens())
+                    .max()
+                    .unwrap_or(0) as u32;
+                let need_ctx = chunks.total_tokens().max(chunks.total_positions().max(0) as usize) as u32 + 8;
+                let (mut ctx, n_batch) = self.new_context(model, true, Some((need_ctx, largest_image)))?;
+                self.eval_media(&mut ctx, &chunks, n_batch)?;
+                logits.push(Self::read_slots(&ctx, &slots[..branch.n_slots])?);
+                continue;
+            }
+
+            let (mut ctx, n_batch) = self.new_context(model, false, None)?;
+            let mut batch = LlamaBatch::new(n_batch as usize, 1);
+            self.prefill(model, &mut ctx, &prompt, &images, false, &mut batch, n_batch)?;
+
+            logits.push(Self::read_slots(&ctx, &slots[..branch.n_slots])?);
+        }
+
+        llm_log!("decide: {} branch(es) in {:.1}ms", branches.len(), start.elapsed().as_secs_f64() * 1000.0);
+        Ok(logits)
+    }
+
+    /// The logits of the option letters at the last prompt token. Only that token computes logits,
+    /// so the logits buffer holds just its row. (get_logits_ith can't be used: the wrapper doesn't
+    /// track outputs produced by mtmd eval_chunks.)
+    fn read_slots(ctx: &LlamaContext, slots: &[LlamaToken]) -> Result<Vec<f32>, String> {
+        let row = ctx.get_logits();
+        let scores: Vec<f32> = slots.iter().map(|t| row[t.0 as usize]).collect();
+        if scores.iter().any(|v| !v.is_finite()) {
+            return Err("Decision forward pass produced non-finite logits".to_string());
+        }
+        Ok(scores)
+    }
+
+    /// Token ids for the option letters A..Z, each of which must be a single token that decodes
+    /// back to itself (qev engine._verify_slots) — otherwise the letter logits don't mean what we read.
+    fn slot_token_ids(model: &LlamaModel) -> Result<Vec<LlamaToken>, String> {
+        let mut ids: Vec<LlamaToken> = Vec::with_capacity(26);
+        for letter in ('A'..='Z').map(String::from) {
+            let tokens = model
+                .str_to_token(&letter, AddBos::Never)
+                .map_err(|e| format!("Failed to tokenize '{}': {}", letter, e))?;
+            let mut decoder = encoding_rs::UTF_8.new_decoder();
+            let round_trip = match tokens.as_slice() {
+                [t] => model.token_to_piece(*t, &mut decoder, false, None).ok(),
+                _ => None,
+            };
+            if round_trip.as_deref() != Some(letter.as_str()) {
+                return Err(format!("Option letter '{}' is not a single token in this model's vocabulary — is it a decision model?", letter));
+            }
+            if ids.contains(&tokens[0]) {
+                return Err("Option letter tokens collide".to_string());
+            }
+            ids.push(tokens[0]);
+        }
+        Ok(ids)
+    }
+
+    /// Create a fresh context sized for a text or multimodal prompt. Returns it with its n_batch.
+    /// `fit` = (tokens the prompt needs, largest image chunk) grows the context and batches to hold
+    /// a prompt measured up front; None keeps the configured sizes (what generate() does).
+    fn new_context<'m>(&self, model: &'m LlamaModel, use_multimodal: bool, fit: Option<(u32, u32)>) -> Result<(LlamaContext<'m>, u32), String> {
+        let cp = &self.context_params;
+        let (mut n_ctx, mut n_batch) = if use_multimodal {
+            (cp.n_ctx_multimodal, cp.n_batch_multimodal)
+        } else {
+            (cp.n_ctx, cp.n_batch)
+        };
+        let n_threads = if cp.n_threads > 0 { cp.n_threads } else { -1 }; // -1 = llama.cpp auto
+
+        // n_ubatch=0 means match n_batch (no micro-batch splitting).
+        // Required for multimodal+thinking: non-causal vision attention needs
+        // all image tokens in one physical batch (see llama.cpp issue #21338).
+        let mut n_ubatch = if cp.n_ubatch == 0 { n_batch } else { cp.n_ubatch };
+
+        if let Some((need_ctx, largest_image)) = fit {
+            // Non-causal vision attention needs each image in one physical batch
+            n_batch = n_batch.max(largest_image);
+            n_ubatch = n_ubatch.max(largest_image);
+            n_ctx = n_ctx.max(need_ctx);
+        }
+
+        if use_multimodal && n_ubatch < cp.image_max_tokens as u32 {
+            llm_log!(warn, "n_ubatch ({}) < image_max_tokens ({}) — will crash during vision encoding; increase n_batch_multimodal or lower image_max_tokens",
+                n_ubatch, cp.image_max_tokens);
+        }
+
+        llm_log!("Context: n_ctx={} n_batch={} n_ubatch={} n_threads={}", n_ctx, n_batch, n_ubatch, n_threads);
+
+        let ctx_params = LlamaContextParams::default()
+            .with_n_ctx(std::num::NonZeroU32::new(n_ctx))
+            .with_n_batch(n_batch)
+            .with_n_ubatch(n_ubatch)
+            .with_n_threads(n_threads);
+
+        let ctx = model
+            .new_context(&self.backend, ctx_params)
+            .map_err(|e| format!("Failed to create context: {}", e))?;
+        Ok((ctx, n_batch))
+    }
+
+    /// Tokenize a prompt with media markers and its images into mtmd chunks.
+    fn tokenize_media(&self, prompt: &str, images: &[Vec<u8>]) -> Result<MtmdInputChunks, String> {
+        let mtmd_ctx = self.mtmd_ctx.as_ref().ok_or("No mmproj loaded")?;
+
+        let mut bitmaps: Vec<MtmdBitmap> = Vec::new();
+        for (i, img_data) in images.iter().enumerate() {
+            let bitmap = MtmdBitmap::from_buffer(mtmd_ctx, img_data)
+                .map_err(|e| format!("Failed to decode image {}: {:?}", i, e))?;
+            bitmaps.push(bitmap);
+        }
+
+        let input_text = MtmdInputText { text: prompt.to_string(), add_special: true, parse_special: true };
+        let bitmap_refs: Vec<&MtmdBitmap> = bitmaps.iter().collect();
+        mtmd_ctx
+            .tokenize(input_text, &bitmap_refs)
+            .map_err(|e| format!("Failed to tokenize multimodal input: {:?}", e))
+    }
+
+    /// Evaluate mtmd chunks into an empty context, logits for the last token only. Returns n_past.
+    fn eval_media(&self, ctx: &mut LlamaContext, chunks: &MtmdInputChunks, n_batch: u32) -> Result<usize, String> {
+        let mtmd_ctx = self.mtmd_ctx.as_ref().ok_or("No mmproj loaded")?;
+        let n_past = chunks
+            .eval_chunks(mtmd_ctx, ctx, 0, 0, n_batch as i32, true)
+            .map_err(|e| format!("Failed to evaluate multimodal input: {:?}", e))?;
+        Ok(n_past as usize)
+    }
+
+    /// Evaluate the prompt (and its images, via mtmd) into an empty context, computing logits only
+    /// for the last prompt token. Leaves `batch` empty. Returns the number of positions filled.
+    fn prefill(
+        &self,
+        model: &LlamaModel,
+        ctx: &mut LlamaContext,
+        prompt: &str,
+        images: &[Vec<u8>],
+        use_multimodal: bool,
+        batch: &mut LlamaBatch,
+        n_batch: u32,
+    ) -> Result<usize, String> {
+        if use_multimodal {
+            let input_chunks = self.tokenize_media(prompt, images)?;
+            self.eval_media(ctx, &input_chunks, 512)
+        } else {
+            let tokens = model
+                .str_to_token(prompt, AddBos::Always)
+                .map_err(|e| format!("Failed to tokenize: {}", e))?;
+            if tokens.is_empty() {
+                return Err("Prompt tokenized to nothing".to_string());
+            }
+
+            // Decode in batch-sized chunks so prompts longer than n_batch still fit
+            let chunk = (n_batch as usize).max(1);
+            let last_idx = tokens.len() - 1;
+            for (c, piece) in tokens.chunks(chunk).enumerate() {
+                batch.clear();
+                for (j, token) in piece.iter().enumerate() {
+                    let i = c * chunk + j;
+                    batch
+                        .add(*token, i as i32, &[0], i == last_idx)
+                        .map_err(|e| format!("Failed to add token to batch: {}", e))?;
+                }
+                ctx.decode(batch)
+                    .map_err(|e| format!("Failed to decode prompt: {}", e))?;
+            }
+            batch.clear();
+
+            Ok(tokens.len())
+        }
+    }
+
     /// Extract image data from multimodal messages
     fn extract_images(&self, messages: &[ChatMessage]) -> Vec<Vec<u8>> {
         let mut images = Vec::new();
@@ -569,6 +720,18 @@ impl LlmEngine {
         }
     }
 
+    /// Extract text content keeping each image's media marker exactly where its part sits, with
+    /// nothing added between parts — what the Qwen-VL templates render for content parts.
+    fn extract_text_content_inline(content: &ChatContent) -> String {
+        match content {
+            ChatContent::Text(text) => text.clone(),
+            ChatContent::Parts(parts) => parts.iter().map(|part| match part {
+                ChatContentPart::Text { text } => text.as_str(),
+                ChatContentPart::Image { .. } => mtmd_default_marker(),
+            }).collect(),
+        }
+    }
+
     /// Build a prompt using the model's own Jinja chat template via the llama-cpp-2 API.
     /// Falls back to `build_chat_prompt` if the model has no embedded template.
     fn build_prompt_with_template(
@@ -576,6 +739,7 @@ impl LlmEngine {
         model: &LlamaModel,
         messages: &[ChatMessage],
         enable_thinking: bool,
+        inline_media: bool, // true: media markers where the image parts are; false: all at the top
     ) -> Result<String, String> {
         // Serialise messages to OpenAI JSON format
         // For the Jinja template we pass text-only content: images are replaced by
@@ -583,7 +747,11 @@ impl LlmEngine {
         // the mtmd pipeline separately. Passing image_url parts causes FfiError(-3)
         // because Gemma 4's embedded template doesn't understand that content type.
         let messages_json: Vec<serde_json::Value> = messages.iter().map(|m| {
-            let text = Self::extract_text_content_with_markers(&m.content);
+            let text = if inline_media {
+                Self::extract_text_content_inline(&m.content)
+            } else {
+                Self::extract_text_content_with_markers(&m.content)
+            };
             serde_json::json!({ "role": m.role, "content": text })
         }).collect();
 
@@ -820,6 +988,8 @@ pub fn model_has_mmproj(model_path: &PathBuf) -> bool {
 mod multimodal_thinking_repro;
 #[cfg(test)]
 mod multimodal_thinking_confirm;
+#[cfg(test)]
+mod decision_parity;
 
 #[cfg(test)]
 mod tests {

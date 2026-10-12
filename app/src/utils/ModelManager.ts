@@ -260,6 +260,7 @@ export class ModelManager {
           multimodal: entry.isMultimodal,
           status: entry.status,
           localModelId: entry.id,
+          decision: entry.isDecision,
         });
       }
     }
@@ -712,7 +713,9 @@ export class ModelManager {
       }
       const images = (preprocessResult.images ?? []).map(img => `data:image/png;base64,${img}`);
       const prepared = prepareDecision(preprocessResult.modifiedPrompt, images);
-      const logits = await GemmaModelManager.getInstance().decide(prepared.branches);
+      const logits = serverAddress === ModelManager.LLAMA_CPP_LOCAL
+        ? await NativeLlmManager.getInstance().decide(prepared.branches)
+        : await GemmaModelManager.getInstance().decide(prepared.branches);
       return { response: null, decision: assembleDecision(prepared, logits) };
     }
 

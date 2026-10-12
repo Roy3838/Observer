@@ -727,6 +727,43 @@ async fn llm_generate(
     }
 }
 
+/// Score System One decision branches (decision models like OneJev): returns the raw logits of
+/// the option letters per branch. Prompts and answers are built in the frontend (systemOne.ts).
+#[tauri::command]
+async fn llm_decide(
+    branches: Vec<tauri_plugin_llm_engine::DecisionBranch>,
+) -> Result<Vec<Vec<f32>>, String> {
+    use tauri_plugin_llm_engine::with_engine;
+
+    if branches.is_empty() {
+        return Err("No decision branches provided".to_string());
+    }
+
+    GENERATION_CANCELLED.store(false, Ordering::SeqCst);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        with_engine(|engine| {
+            if !engine.is_loaded() {
+                return Err("No model loaded - please load a model first".to_string());
+            }
+            engine.decide(&branches, || GENERATION_CANCELLED.load(Ordering::SeqCst))
+        })
+    }));
+
+    match result {
+        Ok(r) => r,
+        Err(panic_info) => {
+            let panic_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Unknown panic".to_string()
+            };
+            Err(format!("Panic during decision: {}", panic_msg))
+        }
+    }
+}
+
 /// Unload the current model to free memory
 #[tauri::command]
 async fn llm_unload_model() -> Result<(), String> {
@@ -1143,6 +1180,7 @@ pub fn run() {
             llm_delete_model,
             llm_load_model,
             llm_generate,
+            llm_decide,
             llm_unload_model,
             llm_is_loaded,
             llm_is_multimodal,
