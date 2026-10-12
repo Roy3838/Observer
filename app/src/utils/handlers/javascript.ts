@@ -230,19 +230,21 @@ export async function executeJavaScript(
           throw error;
         }
       },
-      notify: (title: string, message: string) => {
+      notify: (title: string, message: string | { body?: string } = '') => {
+        // Also accept the Notification API's options object, notify(title, { body }): models write it often.
+        const body = typeof message === 'object' && message !== null ? String(message.body ?? '') : String(message);
         try {
-          utils.notify(title, message);
+          utils.notify(title, body);
           Logger.info(agentId, `Notification sent: ${title}`, {
             logType: 'tool-success',
             iterationId,
-            content: { tool: 'notify', params: { title, message: message.slice(0, 100) } }
+            content: { tool: 'notify', params: { title, message: body.slice(0, 100) } }
           });
         } catch (error) {
           Logger.error(agentId, `Failed to send notification`, {
             logType: 'tool-error',
             iterationId,
-            content: { tool: 'notify', params: { title, message: message.slice(0, 100) }, error: extractErrorMessage(error) }
+            content: { tool: 'notify', params: { title, message: body.slice(0, 100) }, error: extractErrorMessage(error) }
           });
           throw error;
         }

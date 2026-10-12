@@ -166,6 +166,15 @@ class Manager {
     }
   }
 
+  /**
+   * Keep the screen stream alive for a holder that isn't an agent (an MCP turn), so an agent
+   * stopped and restarted inside it reuses the stream instead of calling getDisplayMedia
+   * again, which needs a user gesture. Opens nothing; release it with releaseStreamsForAgent.
+   */
+  public holdScreen(holderId: string): void {
+    this.userSets.get('screenVideo')?.add(holderId);
+  }
+
   /** Releases all streams used by a specific agent. */
   public releaseStreamsForAgent(agentId: string): void {
     Logger.debug("StreamManager", `Releasing all streams for agent '${agentId}'`);

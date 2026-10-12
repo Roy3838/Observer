@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TokenProvider } from '@utils/main_loop';
 import { ModelManager } from '@utils/ModelManager';
 import { Logger } from '@utils/logging';
+import { StreamManager } from '@utils/streamManager';
 import type { WireMessage, ToolCallStatus, UserInfoRequest, UserInfoResponse } from './types';
 import { getTool, getToolSpecs } from './registry';
 import getMcpSystemPrompt from './systemPrompt';
@@ -43,6 +44,9 @@ const LOG_SOURCE = 'MCP';
 
 /** Tools that change the dashboard's agent list / running state. */
 const MUTATING_TOOLS = new Set(['create_agent', 'edit_agent', 'start_agent', 'stop_agent']);
+
+/** Holds the screen stream during a turn, so stopping and restarting an agent there reuses it. */
+const STREAM_HOLDER = '__mcp_turn__';
 
 /** The last non-empty assistant prose in `messages` (the runner pads empty turns with U+200B). */
 function finalAssistantText(messages: WireMessage[]): string | undefined {
@@ -239,6 +243,7 @@ export function useMCP(options: UseMCPOptions) {
     };
 
     const runPromise = (async () => {
+      StreamManager.holdScreen(STREAM_HOLDER);
       try {
         await runConversation(wireRef.current, {
           send: sendToModel,
@@ -279,6 +284,7 @@ export function useMCP(options: UseMCPOptions) {
           syncMessages();
         }
       } finally {
+        StreamManager.releaseStreamsForAgent(STREAM_HOLDER);
         if (abortRef.current === controller) abortRef.current = null;
         setIsRunning(false);
         setStreamingText('');

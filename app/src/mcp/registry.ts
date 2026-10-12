@@ -454,6 +454,17 @@ export const TOOLS: ToolDefinition[] = [
           const current = IterationStore.getIterationsForAgent(args.agent_id);
           const settled = [...current].reverse().find(isIterationSettled);
           if (settled) return iterationToResult(settled);
+          // Stopped (its code called stopAgent(), or an error stopped it): the session was
+          // moved to IndexedDB, so nothing new will appear in memory. Return its last iteration.
+          if (!isAgentLoopRunning(args.agent_id)) {
+            const [session] = await IterationStore.getHistoricalSessions(args.agent_id);
+            const last = session && [...session.iterations].reverse().find(isIterationSettled);
+            if (last) {
+              const result = iterationToResult(last);
+              const stopped = `The agent is STOPPED (since ${session.endTime ?? 'its last iteration'}): its code called stopAgent() or an error stopped it. This is its last iteration. If it stopped on the very first iterations while the job is still going, its condition is wrong: fix it before start_agent again.`;
+              return { ...result, data: { ...result.data, stopped } };
+            }
+          }
           if (Date.now() >= deadline) {
             return { error: `No completed iteration for agent '${args.agent_id}' after waiting 2 min. The agent may be stuck or its loop_interval may be longer than that — call get_status, then stop_agent if it's wedged.` };
           }

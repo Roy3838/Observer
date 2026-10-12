@@ -149,6 +149,9 @@ const SOUND_LIBRARY: Record<string, string> = Object.fromEntries(
   ])
 );
 
+// Other names models reach for, mapped to the bundled sound that fits.
+const SOUND_ALIASES: Record<string, string> = { bell: 'ping' };
+
 // Agents run on a loop, so a condition that stays true would otherwise fire every
 // iteration. This only stops a burst; the real fix is stopAgent() after the sound.
 const SOUND_COOLDOWN_MS = 3000;
@@ -168,7 +171,7 @@ export async function sound(name: string = 'ping', volume: number = 0.5): Promis
   lastSoundPlayedAt = now;
 
   const isUrl = /^(https?:|data:|blob:|\/)/.test(name);
-  const src = SOUND_LIBRARY[name] ?? (isUrl ? name : null);
+  const src = SOUND_LIBRARY[SOUND_ALIASES[name] ?? name] ?? (isUrl ? name : null);
   if (!src) {
     throw new Error(
       `Unknown sound "${name}". Available: ${Object.keys(SOUND_LIBRARY).join(', ')} (or pass a URL).`

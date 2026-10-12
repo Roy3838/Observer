@@ -51,6 +51,9 @@ export interface SystemOneRequest {
 export interface NoulAnswer {
   type: 'noul';
   noul: number;                       // P(yes)
+  // Set by the agent loop on a plain-text prompt's answer (see withNoulTrend):
+  start?: number;                     // mean noul of the run's first iterations
+  dropped?: boolean;                  // noul has stayed well below `start` for a few iterations
 }
 
 export interface ChoiceAnswer {
@@ -372,4 +375,37 @@ function isAnswer(d: Decision): d is Answer {
 export function formatDecision(decision: Decision): string {
   if (isAnswer(decision)) return formatAnswer(decision);
   return Object.entries(decision).map(([id, a]) => `${id}: ${formatAnswer(a)}`).join(' | ');
+}
+
+// ============================================================================
+// Run trend
+// ============================================================================
+
+// A watched job can end on a screen that still looks a bit like the running one (a full red
+// bar, a "can't join" card where the spinner was), so noul settles mid-range instead of near
+// 0. Staying well below where the run started still means it ended. Measured on the e2e
+// runs: endings sat 0.21+ below the start, stable dials never 0.15 below for 3 in a row.
+const START_ITERATIONS = 3;   // their mean noul is the run's start level
+const DROP = 0.15;            // this far below the start counts as down
+const HOLD = 3;               // iterations in a row down before `dropped`
+
+const trends = new Map<string, { first: number[]; down: number }>();
+
+/** Forget an agent's trend: call when its run starts or stops. */
+export function resetNoulTrend(agentId: string): void {
+  trends.delete(agentId);
+}
+
+/** Add `start` and `dropped` to a plain-text prompt's answer; JSON-prompt answers pass through. */
+export function withNoulTrend<D extends Decision | null | undefined>(agentId: string, decision: D): D {
+  if (!decision || !isAnswer(decision) || decision.type !== 'noul') return decision;
+  const trend = trends.get(agentId) ?? { first: [], down: 0 };
+  trends.set(agentId, trend);
+  if (trend.first.length < START_ITERATIONS) {
+    trend.first.push(decision.noul);
+    return { ...decision, dropped: false };
+  }
+  const start = trend.first.reduce((a, b) => a + b, 0) / trend.first.length;
+  trend.down = decision.noul < start - DROP ? trend.down + 1 : 0;
+  return { ...decision, start: round6(start), dropped: trend.down >= HOLD };
 }

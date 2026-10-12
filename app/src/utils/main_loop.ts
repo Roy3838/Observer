@@ -3,7 +3,7 @@
 import { getAgent, getAgentCode } from './agent_database';
 import { UnauthorizedError } from './ModelManager';
 import { ModelManager, ModelOutput } from './ModelManager';
-import { formatDecision } from './localLlm/systemOne';
+import { formatDecision, withNoulTrend, resetNoulTrend } from './localLlm/systemOne';
 import { Logger } from './logging';
 import { preProcess } from './pre-processor';
 import { postProcess } from './post-processor';
@@ -119,6 +119,7 @@ export async function startAgentLoop(agentId: string, getToken?: TokenProvider, 
 
     // Clear any previous change detection data for fresh start
     clearAgentChangeData(agentId);
+    resetNoulTrend(agentId);
 
     const intervalMs = agent.loop_interval_seconds * 1000;
     activeLoops[agentId] = {
@@ -226,6 +227,7 @@ export async function stopAgentLoop(agentId: string): Promise<void> {
 
     // Clear change detection data
     clearAgentChangeData(agentId);
+    resetNoulTrend(agentId);
 
     // Note: Agent crop configurations are preserved across stop/start cycles
 
@@ -362,7 +364,7 @@ export async function executeAgentIteration(agentId: string): Promise<void> {
     }
 
     try {
-      await postProcess(agentId, output.response, agentCode, iterationId, loopData.getToken, preprocessResult, output.decision);
+      await postProcess(agentId, output.response, agentCode, iterationId, loopData.getToken, preprocessResult, withNoulTrend(agentId, output.decision));
       Logger.debug(agentId, `postProcess completed successfully`, { iterationId });
 
       // Clear subscriber transcripts for next loop window
