@@ -6,7 +6,7 @@ import { platformFetch, isTauri } from './platform';
 import { NativeLlmManager } from './localLlm/NativeLlmManager';
 import { GemmaModelManager } from './localLlm/GemmaModelManager';
 import { GemmaModelId, LocalLlmMessage } from './localLlm/types';
-import { prepareDecision, assembleDecision, Decision } from './localLlm/systemOne';
+import { prepareDecision, assembleDecision, buildCloudRequest, cloudDecision, Decision } from './localLlm/systemOne';
 import { InferenceParams, DEFAULT_INFERENCE_PARAMS } from '../config/inference-params';
 import { PreProcessorResult } from './pre-processor';
 import { UnauthorizedError } from './sendApi';
@@ -327,7 +327,8 @@ export class ModelManager {
         multimodal: model.multimodal ?? false,
         pro: model.pro ?? false,
         server: address,
-        ownedBy: model.owned_by
+        ownedBy: model.owned_by,
+        decision: model.decision ?? false,
       }));
     } catch (error) {
       return [];
@@ -694,6 +695,17 @@ export class ModelManager {
     const serverAddress = model.server;
 
     // Decision models: the prompt is a System One question/request, the images are the state
+    if (model.decision && !this.isLocalModel(serverAddress)) {
+      // Hosted decision model (cloud Jev): the server answers; images ride inside the state
+      if (serverAddress.includes('api.observer-ai.com') && token) {
+        this.optimisticUpdateQuota(1);  // a decision costs 1 credit, an LLM call 4
+      }
+      const images = (preprocessResult.images ?? []).map(img => `data:image/png;base64,${img}`);
+      const request = buildCloudRequest(modelName, preprocessResult.modifiedPrompt, images);
+      const { fetchDecision } = await import('./sendApi');
+      const answers = await fetchDecision(serverAddress, request, token);
+      return { response: null, decision: cloudDecision(answers, request.single) };
+    }
     if (model.decision) {
       if (model.status !== 'loaded') {
         throw new Error('Local model not loaded. Please load it from the Add Model panel.');
@@ -846,14 +858,14 @@ export class ModelManager {
     return fetchResponse(serverAddress, messages, modelName, token, enableStreaming, onStreamChunk, params, onReasoningChunk, tools);
   }
 
-  private optimisticUpdateQuota(): void {
+  private optimisticUpdateQuota(credits: number = 4): void {
     try {
       const key = 'observer-quota-remaining';
       const current = localStorage.getItem(key);
       if (current !== null) {
         const n = parseInt(current, 10);
         if (!isNaN(n)) {
-          localStorage.setItem(key, (n - 1).toString());
+          localStorage.setItem(key, (n - credits).toString());
           window.dispatchEvent(new CustomEvent('quotaUpdated'));
         }
       }

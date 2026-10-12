@@ -298,6 +298,39 @@ async function handleStreamingResponseWithTools(
   return finalize();
 }
 
+/**
+ * Hosted System One call (cloud Jev): POST {server}/v1/systemone. Returns the `answers` map.
+ * Same auth and error contract as fetchResponse: 429 → UnauthorizedError.
+ */
+export async function fetchDecision(
+  serverAddress: string,
+  request: { model: string; state: unknown; questions: unknown },
+  token?: string,
+): Promise<Record<string, any>> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (serverAddress.includes('api.observer-ai.com') && token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await platformFetch(`${serverAddress}/v1/systemone`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ model: request.model, state: request.state, questions: request.questions }),
+  });
+
+  if (response.status === 429) {
+    throw new UnauthorizedError('Access denied. Quota may be exceeded.');
+  }
+  if (!response.ok) {
+    const body = await response.text();
+    let detail = '';
+    try { detail = JSON.parse(body).detail ?? ''; } catch { if (body.length < 200) detail = body; }
+    throw new Error(`API error: ${response.status}${detail ? ` - ${detail}` : ''}`);
+  }
+  const data = await response.json();
+  return data.answers;
+}
+
 export class UnauthorizedError extends Error {
   constructor(message: string) {
     super(message);

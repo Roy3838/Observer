@@ -244,11 +244,8 @@ export interface PreparedDecision {
   branches: DecisionBranch[];
 }
 
-/**
- * Turn a pre-processed agent prompt and its captured images (data URLs) into
- * one chat request per question, in the exact format OneJev was trained on.
- */
-export function prepareDecision(prompt: string, images: string[]): PreparedDecision {
+// Agent prompt (+ images) → the System One request, and the state text with images placed.
+function parsePrompt(prompt: string, images: string[]): { single: boolean; request: SystemOneRequest; stateText: string } {
   const trimmed = prompt.trim();
   const single = !trimmed.startsWith('{');
 
@@ -266,6 +263,15 @@ export function prepareDecision(prompt: string, images: string[]): PreparedDecis
     const markers = images.map((_, i) => `<image:${i + 1}>`).join('\n');
     stateText = stateText ? `${markers}\n${stateText}` : markers;
   }
+  return { single, request, stateText };
+}
+
+/**
+ * Turn a pre-processed agent prompt and its captured images (data URLs) into
+ * one chat request per question, in the exact format OneJev was trained on.
+ */
+export function prepareDecision(prompt: string, images: string[]): PreparedDecision {
+  const { single, request, stateText } = parsePrompt(prompt, images);
   const stateBlock = `<state>\n${stateText}\n</state>\n\n`;
 
   const ids = Object.keys(request.questions);
@@ -279,6 +285,38 @@ export function prepareDecision(prompt: string, images: string[]): PreparedDecis
   }));
 
   return { single, ids, rendered, branches };
+}
+
+// ============================================================================
+// Cloud System One (POST /v1/systemone on the Observer API)
+// ============================================================================
+
+export type CloudStatePart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
+
+export interface CloudSystemOneRequest {
+  model: string;
+  state: string | CloudStatePart[];       // images sit in the state where <image:N> was
+  questions: Record<string, Question>;
+  single: boolean;                        // plain-text prompt → decision is one answer
+}
+
+/** The same agent prompt, as a hosted System One request (the server does the prompt rendering). */
+export function buildCloudRequest(model: string, prompt: string, images: string[]): CloudSystemOneRequest {
+  const { single, request, stateText } = parsePrompt(prompt, images);
+  const parts = contentParts(stateText, images);
+  const state = typeof parts === 'string' ? parts : parts.map((part): CloudStatePart =>
+    part.type === 'image' ? { type: 'image_url', image_url: { url: part.image } } : { type: 'text', text: part.text });
+  return { model, state, questions: request.questions, single };
+}
+
+/** The agent's `decision` from a hosted response's `answers` map. */
+export function cloudDecision(answers: Record<string, Answer>, single: boolean): Decision {
+  if (!answers || typeof answers !== 'object') throw new Error('Unexpected System One response: no answers');
+  if (single) {
+    if (!answers.decision) throw new Error('Unexpected System One response: missing answer');
+    return answers.decision;
+  }
+  return answers;
 }
 
 // ============================================================================
