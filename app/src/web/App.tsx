@@ -963,6 +963,10 @@ function AppContent() {
   useEffect(() => {
     if (!isLoading && isAuthenticated && user && 'sub' in user && user.sub) {
       const sub = user.sub as string;
+      // The MCP end-to-end suite (app/e2e) skips onboarding so nothing covers the app.
+      if (import.meta.env.VITE_E2E === '1') {
+        localStorage.setItem(`observer_onboarding_complete_${sub}`, 'true');
+      }
       const onboardingComplete = localStorage.getItem(`observer_onboarding_complete_${sub}`);
 
       if (!onboardingComplete) {

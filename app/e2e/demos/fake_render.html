@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<!-- Copied from video/demos/quick_fake_render.html and reworked for app/e2e: holds in progress until the suite starts it, then ends by ?outcome=. -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Premiere Pro - Fake Render Failure</title>
+    <style>
+        :root {
+            --bg-color: #333;
+            --window-bg: #2a2a2a;
+            --header-bg: #383838;
+            --text-color: #ddd;
+            --text-color-light: #fff;
+            --border-color: #1a1a1a;
+            --progress-bar-bg: #1e1e1e;
+            --progress-color-good: #0078d4;
+            --progress-color-bad: #e74c3c;
+            --button-color-good: #0078d4;
+            --button-color-bad: #c0392b;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: var(--text-color);
+            margin: 0;
+        }
+        
+        .render-window {
+            width: 700px;
+            background-color: var(--window-bg);
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .render-window.shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        .header {
+            background-color: var(--header-bg);
+            padding: 10px 15px;
+            font-weight: bold;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .content {
+            padding: 25px;
+            text-align: center; /* Center buttons */
+        }
+        
+        /* Render Progress Layout (Thumbnail + Details) */
+        #render-progress-layout {
+            display: flex;
+            gap: 25px;
+            text-align: left; /* Reset text-align for this section */
+        }
+
+        .thumbnail-preview {
+            width: 280px;
+            height: 158px; /* 16:9 aspect ratio */
+            background: linear-gradient(170deg, #1e3a5f, #7e9ecf);
+            border: 1px solid #111;
+            border-radius: 4px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: flex-start;
+            padding: 8px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.7);
+            flex-shrink: 0;
+        }
+
+        .render-details {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .render-details p {
+            margin: 0;
+            font-size: 14px;
+            color: #aaa;
+        }
+
+        .render-details h1 {
+            font-size: 2.2em;
+            margin: 4px 0 15px 0;
+            color: var(--text-color-light);
+            min-height: 1.2em;
+        }
+        
+        .progress-bar-container {
+            width: 100%;
+            height: 16px;
+            background-color: var(--progress-bar-bg);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #111;
+        }
+        
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: var(--progress-color-good);
+            transition: width 0.5s ease-out, background-color 0.3s ease;
+        }
+        
+        .sub-details {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        /* Button Styling */
+        .action-button {
+            margin-top: 25px;
+            padding: 12px 30px;
+            font-size: 16px;
+            border: none;
+            color: #fff;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #render-button { background-color: var(--button-color-good); }
+        #render-button:hover { background-color: #005a9e; }
+
+        /* Failure State */
+        #failure-area {
+            padding: 20px 0 0 0;
+        }
+        #failure-icon svg { width: 60px; height: 60px; fill: var(--progress-color-bad); }
+        #failure-area h2 { font-size: 2em; color: var(--progress-color-bad); margin: 10px 0 5px 0; }
+        #failure-area p { font-size: 1em; color: #bdc3c7; margin: 0 0 0 0; }
+        #retry-button { background-color: var(--button-color-bad); }
+        #retry-button:hover { background-color: #e74c3c; }
+
+        /* Success State */
+        #success-area { padding: 20px 0 0 0; }
+        #success-icon svg { width: 60px; height: 60px; fill: #2ecc71; }
+        #success-area h2 { font-size: 2em; color: #2ecc71; margin: 10px 0 5px 0; }
+        #success-area p { font-size: 1em; color: #bdc3c7; margin: 0; }
+        #done-button { background-color: #27ae60; }
+        #done-button:hover { background-color: #2ecc71; }
+
+        .hidden { display: none; }
+    </style>
+    <script src="demo-contract.js"></script>
+</head>
+<body>
+
+    <div id="render-window" class="render-window">
+        <div class="header">
+            <span>Video Editor</span>
+        </div>
+        <div class="content">
+            
+            <!-- Progress State -->
+            <div id="render-progress-layout">
+                <div class="thumbnail-preview">
+                    <span>Frame Preview</span>
+                </div>
+                <div class="render-details">
+                    <p>Encoding: Observer_AI_Promo_v1.mp4</p>
+                    <h1 id="time-display">Calculating...</h1>
+                    <div class="progress-bar-container">
+                        <div id="progress-bar" class="progress-bar"></div>
+                    </div>
+                    <div id="sub-details" class="sub-details">Frame: 0 of 17280</div>
+                </div>
+            </div>
+
+            <!-- Failure State -->
+            <div id="failure-area" class="hidden">
+                <div id="failure-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                        <path d="M256 32c14.2 0 27.3 7.5 34.5 19.8l216 368c7.3 12.4 7.3 27.7 .2 40.1S486.3 480 472 480H40c-14.3 0-27.6-7.7-34.7-20.1s-7-27.8 .2-40.1l216-368C228.7 39.5 241.8 32 256 32zm0 128c-13.3 0-24 10.7-24 24V296c0 13.3 10.7 24 24 24s24-10.7 24-24V184c0-13.3-10.7-24-24-24zm32 224c0-17.7-14.3-32-32-32s-32 14.3-32 32s14.3 32 32 32s32-14.3 32-32z"/>
+                    </svg>
+                </div>
+                <h2>Render Failed</h2>
+                <p>Unable to produce frame. (Error code: -1609629695)</p>
+                <button id="retry-button" class="action-button">Retry</button>
+            </div>
+
+            <!-- Success State -->
+            <div id="success-area" class="hidden">
+                <div id="success-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                        <path d="M470.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L192 338.7 425.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"/>
+                    </svg>
+                </div>
+                <h2>Render Complete</h2>
+                <p>Observer_AI_Promo_v1.mp4 exported successfully.</p>
+                <button id="done-button" class="action-button">Done</button>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const TOTAL_FRAMES = 17280;
+        const renderWindow = document.getElementById('render-window');
+        const progressLayout = document.getElementById('render-progress-layout');
+        const failureArea = document.getElementById('failure-area');
+        const successArea = document.getElementById('success-area');
+        const timeDisplay = document.getElementById('time-display');
+        const progressBar = document.getElementById('progress-bar');
+        const subDetails = document.getElementById('sub-details');
+
+        const loadedAt = Date.now();
+        let pct = 0;
+        let run = null; // { from, at, durationMs } once the suite starts the run
+
+        const formatRemaining = seconds => {
+            const s = Math.max(1, Math.round(seconds));
+            const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+            if (h) return `${h} hr ${m} min ${s % 60} s remaining`;
+            if (m) return `${m} min ${s % 60} s remaining`;
+            return `${s} s remaining`;
+        };
+
+        const tick = () => {
+            let remaining;
+            if (!run) {
+                // Holding: creeps from 6% toward 30% with a long ETA, for as long as setup takes.
+                const t = (Date.now() - loadedAt) / 1000;
+                pct = 30 - 24 * Math.exp(-t / 600);
+                remaining = 6 * 3600 - t * 4;
+            } else {
+                const f = Math.min((Date.now() - run.at) / run.durationMs, 1);
+                pct = run.from + (99.8 - run.from) * f;
+                remaining = (run.durationMs - (Date.now() - run.at)) / 1000;
+                if (f >= 1) return finish();
+            }
+            progressBar.style.width = `${pct}%`;
+            timeDisplay.textContent = formatRemaining(remaining);
+            subDetails.textContent = `Frame: ${Math.floor(TOTAL_FRAMES * pct / 100)} of ${TOTAL_FRAMES}`;
+        };
+
+        const interval = setInterval(tick, 500);
+        tick();
+
+        const finish = () => {
+            clearInterval(interval);
+            progressLayout.classList.add('hidden');
+            if (demo.outcome === 'success') {
+                successArea.classList.remove('hidden');
+            } else {
+                renderWindow.classList.add('shake');
+                failureArea.classList.remove('hidden');
+            }
+            demo.trigger();
+        };
+
+        demo.onStart = durationMs => {
+            run = { from: pct, at: Date.now(), durationMs };
+        };
+    </script>
+
+</body>
+</html>

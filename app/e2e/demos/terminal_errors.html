@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<!-- A Next.js dev server (`pnpm dev`) in a macOS Terminal window, logging requests. Holds on normal
+     traffic until the suite starts it; then five different errors print over the run (plus a
+     warning and a slow compile, which aren't errors), and the trigger fires when the run's time is up
+     (nothing changes on screen). Each error scrolls away after ~40 lines. Marks each error as it
+     prints ('error', { key }); demo.truth.errors has the keys the suite looks for. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>acme-store — pnpm dev</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; background: #1d1f21; display: flex; overflow: hidden;
+         font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+  .win { flex: 1; display: flex; flex-direction: column; background: #161616; }
+  .titlebar { height: 28px; flex: none; background: linear-gradient(#3a3a3a, #2f2f2f); border-bottom: 1px solid #111;
+              display: flex; align-items: center; justify-content: center; position: relative; color: #b5b5b5; font-size: 13px; }
+  .lights { position: absolute; left: 10px; display: flex; gap: 8px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+  .term { flex: 1; overflow: hidden; padding: 6px 10px 8px; color: #e6e6e6; display: flex; flex-direction: column;
+          font: 13px/1.38 Menlo, "SF Mono", Monaco, monospace; }
+  #log { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+  #log > div { white-space: pre-wrap; }
+  .dim { color: #8a8a8a; } .green { color: #4eba65; } .red { color: #ff6b80; } .yellow { color: #ffc107; } .cyan { color: #6fd3e8; } .bold { font-weight: bold; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar"><div class="lights"><i></i><i></i><i></i></div>acme-store — node · pnpm dev — 158×46</div>
+  <div class="term"><div id="log"></div></div>
+</div>
+
+<script>
+  const log = document.getElementById('log');
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const line = (html = ' ') => {
+    const d = document.createElement('div');
+    d.innerHTML = html;
+    log.appendChild(d);
+    while (log.children.length > 200) log.firstChild.remove();
+  };
+
+  // The errors the run prints, each a few lines, and what identifies it in the agent's notes.
+  const ERRORS = [
+    { key: ['econnrefused', '5432'], lines: [
+      `<span class="red"> ⨯ Error: connect ECONNREFUSED 127.0.0.1:5432</span>`,
+      `<span class="dim">    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1555:16)</span>`,
+      `<span class="dim">    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17) {</span>`,
+      `<span class="dim">  errno: -61, code: 'ECONNREFUSED', syscall: 'connect', address: '127.0.0.1', port: 5432</span>`,
+      `<span class="dim">}</span>`] },
+    { key: ['customerid'], lines: [
+      `<span class="red"> ⨯ TypeError: Cannot read properties of undefined (reading 'customerId')</span>`,
+      `<span class="dim">    at getOrderSummary (./src/lib/orders.ts:42:31)</span>`,
+      `<span class="dim">    at GET (./src/app/api/orders/[id]/route.ts:18:22)</span>`,
+      ` GET /api/orders/1043 <span class="red">500</span> in 96ms`] },
+    { key: ['429', 'too many requests', 'rate limit'], lines: [
+      `<span class="red"> ⨯ Error: Stripe API error: Too many requests (status 429)</span>`,
+      `<span class="dim">    at StripeClient.request (./src/lib/stripe.ts:88:13)</span>`,
+      `<span class="dim">    at async createPaymentIntent (./src/app/api/checkout/route.ts:31:19)</span>`,
+      ` POST /api/checkout <span class="red">500</span> in 1204ms`] },
+    { key: ['enoent', 'invoice-2231', 'no such file'], lines: [
+      `<span class="red"> ⨯ [Error: ENOENT: no such file or directory, open '/app/uploads/invoice-2231.pdf']</span>`,
+      `<span class="dim">  { errno: -2, code: 'ENOENT', syscall: 'open', path: '/app/uploads/invoice-2231.pdf' }</span>`,
+      ` GET /api/invoices/2231/download <span class="red">500</span> in 12ms`] },
+    { key: ['not valid json', 'unexpected token', 'syntaxerror', 'shipping'], lines: [
+      `<span class="red"> ⨯ SyntaxError: Unexpected token '&lt;', "&lt;!DOCTYPE "... is not valid JSON</span>`,
+      `<span class="dim">    at JSON.parse (&lt;anonymous&gt;)</span>`,
+      `<span class="dim">    at fetchShippingRates (./src/lib/shipping.ts:27:24)</span>`,
+      ` GET /api/shipping/rates?zip=94107 <span class="red">500</span> in 341ms`] },
+  ];
+  demo.truth = { errors: ERRORS.map(e => e.key) };
+  // When each error prints, as a fraction of the run; the warning and slow compile in between.
+  const AT = [0.1, 0.3, 0.5, 0.68, 0.86];
+
+  const ROUTES = [
+    ['GET', '/api/products?category=outdoor'], ['GET', '/api/cart'], ['POST', '/api/cart/items'], ['GET', '/products/trail-runner-2'],
+    ['GET', '/api/orders?page=1'], ['GET', '/'], ['GET', '/api/session'], ['GET', '/checkout'], ['GET', '/api/products/4412/reviews'],
+    ['PATCH', '/api/cart/items/88'], ['GET', '/account/orders'], ['GET', '/api/recommendations?for=4412'],
+  ];
+  const request = () => {
+    const [m, p] = ROUTES[Math.floor(Math.random() * ROUTES.length)];
+    const code = m === 'POST' ? 201 : 200;
+    line(` ${m} ${esc(p)} <span class="green">${code}</span> in ${Math.round(8 + Math.random() * 180)}ms`);
+  };
+
+  // The dev server's banner and a screenful of traffic already on screen.
+  line(`<span class="dim">&gt; acme-store@0.1.0 dev /Users/roy/code/acme-store</span>`);
+  line(`<span class="dim">&gt; next dev --turbo</span>`);
+  line();
+  line(`   <span class="bold">▲ Next.js 15.1.4</span> (Turbopack)`);
+  line(`   - Local:        http://localhost:3000`);
+  line(`   - Environments: .env.local`);
+  line();
+  line(` <span class="green">✓</span> Starting...`);
+  line(` <span class="green">✓</span> Ready in 1342ms`);
+  line(` <span class="green">○</span> Compiling / ...`);
+  line(` <span class="green">✓</span> Compiled / in 2.1s`);
+  for (let i = 0; i < 26; i++) request();
+
+  let run = null, next = 0;
+  const tick = () => {
+    request();
+    if (Math.random() < 0.15) line(` <span class="green">✓</span> Compiled ${esc(ROUTES[Math.floor(Math.random() * 4)][1].split('?')[0])} in ${Math.round(80 + Math.random() * 400)}ms`);
+    if (!run) return;
+    const f = (Date.now() - run.at) / run.durationMs;
+    if (next < ERRORS.length && f >= AT[next]) {
+      ERRORS[next].lines.forEach(l => line(l));
+      demo.mark('error', { index: next, key: ERRORS[next].key });
+      next++;
+    }
+    if (!run.warned && f >= 0.4) { run.warned = true; line(`<span class="yellow"> ⚠ Fast Refresh had to perform a full reload due to a runtime error.</span>`); }
+    if (!run.slow && f >= 0.76) { run.slow = true; line(`<span class="yellow"> ⚠ Slow filesystem detected. The compile took 4.2s.</span>`); }
+    if (f >= 1 && !run.done) { run.done = true; demo.trigger(); }
+  };
+  // Requests come in at an uneven pace, about one a second.
+  const loop = () => { tick(); setTimeout(loop, 600 + Math.random() * 1000); };
+  loop();
+
+  demo.onStart = durationMs => { run = { at: Date.now(), durationMs }; };
+</script>
+</body>
+</html>

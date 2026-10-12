@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<!-- A Google Colab notebook training a model on a T4. Holds mid-training (epochs keep ticking, far
+     from the last one) until the suite starts it; then it ends by ?outcome=: success finishes all
+     epochs, fail dies with a CUDA out-of-memory traceback. Google Sans/Roboto/Material from fonts/. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>train_resnet.ipynb - Colab</title>
+<link rel="stylesheet" href="fonts/google-sans.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #fff; color: #1f1f1f; font-family: 'Google Sans Text', Roboto, sans-serif; font-size: 14px; display: flex; flex-direction: column; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 20px; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20; color: #444746; }
+  /* Header */
+  .hdr { height: 56px; display: flex; align-items: center; padding: 0 12px 0 14px; gap: 12px; flex: none; }
+  .logo { width: 40px; height: 24px; }
+  .title { display: flex; flex-direction: column; justify-content: center; }
+  .title .name { font-family: 'Google Sans', sans-serif; font-size: 18px; display: flex; align-items: center; gap: 6px; }
+  .menu { display: flex; gap: 2px; font-size: 14px; color: #1f1f1f; margin-top: 2px; }
+  .menu span { padding: 1px 7px; border-radius: 4px; }
+  .hdr .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .share { height: 36px; padding: 0 16px; border-radius: 18px; background: #c2e7ff; color: #001d35; font-family: 'Google Sans'; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: #7b5ea7; color: #fff; display: grid; place-items: center; font-family: 'Google Sans'; font-weight: 500; }
+  /* Toolbar */
+  .tools { height: 40px; display: flex; align-items: center; padding: 0 12px 0 64px; gap: 6px; border-bottom: 1px solid #e3e3e3; flex: none; }
+  .tbtn { height: 32px; padding: 0 12px; border-radius: 16px; display: flex; align-items: center; gap: 6px; font-family: 'Google Sans'; font-weight: 500; color: #444746; font-size: 14px; }
+  .tools .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .res { height: 30px; border: 1px solid #c4c7c5; border-radius: 15px; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 8px; font-size: 12px; color: #444746; }
+  .res .ok { color: #188038; font-size: 18px; }
+  .gauge { display: flex; flex-direction: column; gap: 3px; }
+  .gauge i { display: block; width: 46px; height: 4px; background: #e3e3e3; border-radius: 2px; overflow: hidden; }
+  .gauge i b { display: block; height: 100%; background: #188038; }
+  .gauge i.ram b { width: 41%; } .gauge i.disk b { width: 28%; }
+  /* Body */
+  .main { flex: 1; display: flex; min-height: 0; }
+  .rail { width: 52px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 22px; padding-top: 14px; border-right: 1px solid #e3e3e3; }
+  .nb { flex: 1; overflow: hidden; padding: 12px 24px 0 8px; display: flex; flex-direction: column; gap: 10px; }
+  .cell { display: flex; gap: 6px; }
+  .gutter { width: 44px; flex: none; display: flex; flex-direction: column; align-items: center; padding-top: 6px; gap: 2px; font-size: 11px; color: #5f6368; }
+  .run { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; position: relative; }
+  .run .ms { font-size: 22px; }
+  .run.busy::before { content: ''; position: absolute; inset: -1px; border-radius: 50%; border: 2px solid #c4c7c5; border-top-color: #1a73e8; animation: spin 1s linear infinite; }
+  .run.busy .ms { font-size: 16px; color: #1a73e8; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .exec-ok { color: #188038; font-size: 16px; } .exec-bad { color: #d93025; font-size: 18px; }
+  .body { flex: 1; min-width: 0; }
+  .code { background: #f7f7f7; border-radius: 4px; padding: 8px 12px; font: 13.5px/20px Menlo, monospace; white-space: pre; color: #1f1f1f; overflow: hidden; }
+  .k { color: #0000ff; } .s { color: #a31515; } .n { color: #098658; } .f { color: #795e26; } .c { color: #008000; } .b { color: #267f99; }
+  .out { font: 13px/19px Menlo, monospace; white-space: pre; padding: 6px 4px 0 12px; color: #1f1f1f; overflow: hidden; }
+  .tqdm { display: flex; align-items: center; gap: 8px; font: 13px/20px Menlo, monospace; padding: 2px 0 0 12px; white-space: pre; }
+  .tqdm .bar { width: 240px; height: 14px; background: #e3e3e3; border-radius: 2px; overflow: hidden; }
+  .tqdm .bar b { display: block; height: 100%; width: 0; background: #1a73e8; }
+  .tb { background: #fce8e6; border-left: 3px solid #d93025; margin: 6px 0 0 12px; padding: 6px 10px; font: 13px/19px Menlo, monospace; white-space: pre; color: #1f1f1f; }
+  .tb .e { color: #c5221f; font-weight: bold; } .tb .g { color: #188038; } .tb .cy { color: #00838f; }
+  .xbtn { display: inline-flex; align-items: center; gap: 6px; margin: 8px 0 0 12px; height: 32px; padding: 0 14px; border: 1px solid #c4c7c5; border-radius: 16px; font-family: 'Google Sans'; font-weight: 500; color: #0b57d0; }
+  /* Status bar */
+  .status { height: 30px; flex: none; border-top: 1px solid #e3e3e3; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; color: #444746; }
+  .status .ok { color: #188038; font-size: 18px; } .status .bad { color: #d93025; font-size: 18px; }
+  .hidden { display: none !important; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="hdr">
+  <svg class="logo" viewBox="0 0 40 24"><path fill="#F9AB00" d="M8.5 4.5a7.5 7.5 0 0 0 0 15c2 0 3.8-.8 5.2-2.1l-2.6-2.6a3.8 3.8 0 1 1 0-5.6l2.6-2.6A7.4 7.4 0 0 0 8.5 4.5z"/><path fill="#E8710A" d="M31.5 4.5c-2 0-3.8.8-5.2 2.1l2.6 2.6a3.8 3.8 0 1 1 0 5.6l-2.6 2.6a7.5 7.5 0 1 0 5.2-12.9z"/><path fill="#F9AB00" d="M13.7 6.6l2.6 2.6 5.8 5.8 2.6 2.6 2.6-2.6-11-11z" opacity=".9"/></svg>
+  <div class="title">
+    <div class="name"><span class="ms" style="color:#444746">description</span>train_resnet.ipynb <span class="ms">star</span></div>
+    <div class="menu"><span>File</span><span>Edit</span><span>View</span><span>Insert</span><span>Runtime</span><span>Tools</span><span>Help</span></div>
+  </div>
+  <div class="right"><span class="ms">comment</span><span class="share"><span class="ms" style="color:#001d35">lock</span>Share</span><span class="ms" style="color:#0b57d0">auto_awesome</span><span class="avatar">R</span></div>
+</div>
+<div class="tools">
+  <span class="tbtn"><span class="ms">search</span>Commands</span>
+  <span class="tbtn"><span class="ms">add</span>Code</span>
+  <span class="tbtn"><span class="ms">add</span>Text</span>
+  <span class="tbtn"><span class="ms">play_arrow</span>Run all <span class="ms">arrow_drop_down</span></span>
+  <div class="right">
+    <div class="res"><span class="ms ok">check</span>T4<div class="gauge"><i class="ram"><b></b></i><i class="disk"><b></b></i></div><span>RAM<br>Disk</span><span class="ms">arrow_drop_down</span></div>
+    <span class="ms">expand_less</span>
+  </div>
+</div>
+<div class="main">
+  <div class="rail"><span class="ms">toc</span><span class="ms">search</span><span class="ms">data_object</span><span class="ms">key</span><span class="ms">folder</span></div>
+  <div class="nb" id="nb">
+    <div class="cell">
+      <div class="gutter"><span class="ms exec-ok">check</span>2s</div>
+      <div class="body">
+        <div class="code"><span class="k">from</span> torchvision.datasets <span class="k">import</span> CIFAR100
+train_loader, val_loader = <span class="f">make_loaders</span>(CIFAR100, batch_size=<span class="n">64</span>, root=<span class="s">'/content/data'</span>)
+<span class="b">print</span>(<span class="b">len</span>(train_loader.dataset), <span class="b">len</span>(val_loader.dataset))</div>
+        <div class="out">Files already downloaded and verified
+50000 10000</div>
+      </div>
+    </div>
+    <div class="cell">
+      <div class="gutter" id="gutter"><span class="run busy" id="runbtn"><span class="ms">stop</span></span></div>
+      <div class="body">
+        <div class="code">model = <span class="f">resnet50</span>(weights=<span class="k">None</span>, num_classes=<span class="n">100</span>).<span class="f">to</span>(<span class="s">'cuda'</span>)
+optimizer = torch.optim.<span class="f">AdamW</span>(model.<span class="f">parameters</span>(), lr=<span class="n">3e-4</span>, weight_decay=<span class="n">0.05</span>)
+EPOCHS = <span class="n">20</span>
+
+<span class="k">for</span> epoch <span class="k">in</span> <span class="b">range</span>(<span class="n">1</span>, EPOCHS + <span class="n">1</span>):
+    train_loss, train_acc = <span class="f">train_one_epoch</span>(model, train_loader, optimizer, epoch)   <span class="c"># tqdm bar per epoch</span>
+    val_loss, val_acc = <span class="f">evaluate</span>(model, val_loader)
+    <span class="b">print</span>(<span class="s">f"Epoch </span>{epoch}<span class="s">/</span>{EPOCHS}<span class="s"> - loss </span>{train_loss:.4f}<span class="s"> - acc </span>{train_acc:.4f}<span class="s"> - val_loss </span>{val_loss:.4f}<span class="s"> - val_acc </span>{val_acc:.4f}<span class="s">"</span>)
+
+torch.<span class="f">save</span>(model.<span class="f">state_dict</span>(), <span class="s">'/content/drive/MyDrive/checkpoints/resnet50_cifar100.pt'</span>)
+<span class="b">print</span>(<span class="s">"Training complete."</span>)</div>
+        <div class="out" id="epochs"></div>
+        <div class="tqdm" id="tqdm"><span id="tq-l">Epoch 7/20:  12%</span><span class="bar"><b id="tq-bar"></b></span><span id="tq-r"></span></div>
+        <div id="end"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="status" id="status"><span>Executing (<span id="exec-t">41m 12s</span>)</span><span>&lt;cell line: 5&gt; &gt; train_one_epoch() &gt; _next_data() &gt; recv()</span></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const EPOCHS = 20, STEPS = 782;
+  const t0 = Date.now() - (41 * 60 + 12) * 1000;
+  const loadedAt = Date.now();
+  // Training curve: what each finished epoch prints.
+  const stats = e => {
+    const loss = 4.1 * Math.exp(-e / 6.5) + 0.32, acc = 0.94 - 0.82 * Math.exp(-e / 5.5);
+    return { loss, acc, vloss: loss * 1.12 + 0.05, vacc: acc - 0.035 };
+  };
+  const line = e => { const s = stats(e); return `Epoch ${e}/${EPOCHS} - loss ${s.loss.toFixed(4)} - acc ${s.acc.toFixed(4)} - val_loss ${s.vloss.toFixed(4)} - val_acc ${s.vacc.toFixed(4)}`; };
+  const fmt = s => { s = Math.max(0, Math.round(s)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+  const fmtLong = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}m ${s % 60}s`; };
+
+  let p = 6.12; // epochs done, fractional
+  let run = null; // { from, at, durationMs, to }
+  let shownDone = -1;
+
+  const paint = () => {
+    const done = Math.floor(p);
+    if (done !== shownDone) {
+      $('epochs').textContent = Array.from({ length: done }, (_, i) => line(i + 1)).slice(-9).join('\n');
+      shownDone = done;
+    }
+    const frac = p - done, step = Math.floor(frac * STEPS), s = stats(done + frac);
+    const pct = Math.floor(frac * 100);
+    $('tq-l').textContent = `Epoch ${done + 1}/${EPOCHS}: ${String(pct).padStart(3)}%`;
+    $('tq-bar').style.width = `${frac * 100}%`;
+    const elapsed = frac * 71, left = (1 - frac) * 71;
+    $('tq-r').textContent = `${step}/${STEPS} [${fmt(elapsed)}<${fmt(left)}, ${(6.4 + Math.random() * 0.9).toFixed(2)}it/s, loss=${(s.loss + (Math.random() - 0.5) * 0.06).toFixed(3)}, acc=${s.acc.toFixed(3)}]`;
+    $('exec-t').textContent = fmtLong(Date.now() - t0);
+  };
+
+  const tick = () => {
+    if (!run) {
+      // Holding: epochs keep finishing, creeping from 6 toward 12 of 20.
+      p = 12 - 5.88 * Math.exp(-(Date.now() - loadedAt) / 1200_000);
+    } else {
+      const f = Math.min((Date.now() - run.at) / run.durationMs, 1);
+      p = run.from + (run.to - run.from) * f;
+      if (f >= 1) return finish();
+    }
+    paint();
+  };
+  const timer = setInterval(tick, 400);
+  tick();
+
+  const finish = () => {
+    clearInterval(timer);
+    $('tqdm').classList.add('hidden');
+    const total = fmtLong(Date.now() - t0);
+    if (demo.outcome === 'success') {
+      $('epochs').textContent = Array.from({ length: EPOCHS }, (_, i) => line(i + 1)).slice(-9).join('\n') + '\nTraining complete.';
+      $('gutter').innerHTML = `<span class="ms exec-ok">check</span>${Math.round((Date.now() - t0) / 60000)}m`;
+      $('status').innerHTML = `<span class="ms ok">check</span><span>${total} completed at 3:12 AM</span>`;
+    } else {
+      $('gutter').innerHTML = '<span class="ms exec-bad">error</span>';
+      $('end').innerHTML =
+        '<div class="tb"><span class="e">OutOfMemoryError</span>                          Traceback (most recent call last)\n' +
+        '<span class="g">/tmp/ipython-input-4-2581036297.py</span> in <span class="cy">&lt;cell line: 0&gt;</span>()\n' +
+        '      5 <span class="k">for</span> epoch <span class="k">in</span> range(1, EPOCHS + 1):\n' +
+        '<span class="g">----&gt; 6</span>     train_loss, train_acc = train_one_epoch(model, train_loader, optimizer, epoch)\n' +
+        '      <span class="g">… 3 frames …</span>\n' +
+        '<span class="e">OutOfMemoryError</span>: CUDA out of memory. Tried to allocate 2.00 GiB. GPU 0 has a total capacity of 14.74 GiB of which 1.06 GiB is free.\n' +
+        'Process has 13.68 GiB memory in use. Of the allocated memory 12.91 GiB is allocated by PyTorch.</div>' +
+        '<span class="xbtn"><span class="ms" style="color:#0b57d0">auto_awesome</span>Explain error</span>';
+      $('status').innerHTML = `<span class="ms bad">error</span><span>${total} completed at 3:12 AM</span>`;
+    }
+    $('nb').scrollTop = $('nb').scrollHeight; // the end of the output, as Colab follows a running cell
+    demo.trigger();
+  };
+
+  demo.onStart = durationMs => {
+    // Success runs to the last epoch; a crash comes partway through the remaining ones.
+    const to = demo.outcome === 'success' ? EPOCHS : p + (EPOCHS - p) * 0.55;
+    run = { from: p, at: Date.now(), durationMs, to };
+  };
+</script>
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<!-- A YouTube watch page playing a conference talk: one slide per chapter, narrated (media/talk.js).
+     Holds paused at 0:00 until the suite starts it; then it plays through and ends on YouTube's end
+     screen (the trigger). Marks each chapter as its slide appears ('chapter', { index, start, title },
+     start in seconds of video time). The player shows no chapter names: the slides and the speech
+     are the only way to know them. The narration plays out loud; the tab capture hears it. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>How We Cut Our Cloud Bill in Half | Platform Engineering Day 2026 - YouTube</title>
+<link rel="stylesheet" href="fonts/google-sans.css">
+<link rel="stylesheet" href="fonts/youtube-sans.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #fff; color: #0f0f0f; font-family: Roboto, Arial, sans-serif; font-size: 14px; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 24px; line-height: 1; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  .mso { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  .head { height: 56px; display: flex; align-items: center; padding: 0 16px; gap: 16px; }
+  .logo { display: flex; align-items: center; gap: 2px; font-family: 'YouTube Sans', 'Google Sans', sans-serif; font-weight: 700; font-size: 20px; letter-spacing: -0.6px; }
+  .logo svg { width: 30px; height: 21px; }
+  .search { margin: 0 auto; display: flex; width: 540px; }
+  .search .in { flex: 1; height: 40px; border: 1px solid #ccc; border-right: 0; border-radius: 20px 0 0 20px; padding: 0 16px; display: flex; align-items: center; color: #888; }
+  .search .go { width: 64px; height: 40px; border: 1px solid #ccc; border-radius: 0 20px 20px 0; background: #f8f8f8; display: grid; place-items: center; }
+  .head .r { display: flex; align-items: center; gap: 18px; }
+  .av { border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 500; }
+  .page { display: flex; gap: 24px; padding: 8px 24px 0 24px; }
+  .main { width: 832px; flex: none; }
+  .player { width: 832px; height: 468px; background: #000; position: relative; border-radius: 12px; overflow: hidden; }
+  /* The slide being presented */
+  .slide { position: absolute; inset: 0; background: #fff; display: flex; flex-direction: column; padding: 46px 56px; }
+  .slide .kick { font-family: 'Google Sans'; color: #ff6a13; font-weight: 700; letter-spacing: 1.5px; font-size: 13px; text-transform: uppercase; }
+  .slide h2 { font-family: 'Google Sans'; font-size: 40px; font-weight: 700; margin: 14px 0 26px; color: #12263f; line-height: 1.1; max-width: 560px; }
+  .slide ul { margin: 0; padding-left: 26px; font-size: 22px; line-height: 1.7; color: #33475b; max-width: 520px; }
+  .slide .foot { margin-top: auto; display: flex; justify-content: space-between; color: #8a99a8; font-size: 13px; }
+  .cam { position: absolute; right: 22px; bottom: 54px; width: 210px; height: 140px; border-radius: 8px; background: radial-gradient(circle at 50% 38%, #e5b89c 0 17%, transparent 18%), radial-gradient(ellipse at 50% 100%, #2f3e57 0 44%, transparent 45%), linear-gradient(180deg, #c9d3dc, #8d9aa6); box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+  .cam span { position: absolute; left: 8px; bottom: 6px; color: #fff; font-size: 11px; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
+  /* Paused at the start */
+  .big { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 68px; height: 48px; display: none; }
+  .paused .big { display: block; }
+  /* Controls */
+  .ctl { position: absolute; left: 0; right: 0; bottom: 0; height: 48px; padding: 0 12px; background: linear-gradient(transparent, rgba(0,0,0,.6)); color: #fff; display: flex; align-items: center; gap: 14px; }
+  .prog { position: absolute; left: 12px; right: 12px; bottom: 46px; height: 3px; background: rgba(255,255,255,.3); }
+  .prog i { position: absolute; left: 0; top: 0; bottom: 0; background: #f00; }
+  .prog b { position: absolute; top: -5px; width: 13px; height: 13px; border-radius: 50%; background: #f00; transform: translateX(-50%); }
+  .ctl .time { font-size: 13px; font-variant-numeric: tabular-nums; }
+  .ctl .r { margin-left: auto; display: flex; gap: 14px; }
+  /* End screen */
+  .endscreen { position: absolute; inset: 0; background: rgba(0,0,0,.85); display: none; padding: 40px 60px 70px; }
+  .ended .endscreen { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .endscreen .card { border-radius: 8px; overflow: hidden; position: relative; background: #222 center/cover; }
+  .endscreen .card span { position: absolute; left: 0; right: 0; bottom: 0; padding: 8px 10px; background: linear-gradient(transparent, rgba(0,0,0,.85)); color: #fff; font-size: 14px; font-weight: 500; }
+  h1 { font-size: 20px; font-weight: 700; margin: 12px 0 8px; line-height: 28px; }
+  .chan { display: flex; align-items: center; gap: 12px; }
+  .chan .n { font-weight: 500; font-size: 16px; } .chan small { display: block; color: #606060; font-size: 12px; }
+  .sub { background: #0f0f0f; color: #fff; border-radius: 18px; padding: 0 16px; height: 36px; display: grid; place-items: center; font-weight: 500; margin-left: 12px; }
+  .acts { margin-left: auto; display: flex; gap: 8px; }
+  .pill { background: #f2f2f2; border-radius: 18px; height: 36px; padding: 0 14px; display: flex; align-items: center; gap: 6px; font-weight: 500; }
+  .pill .ms { font-size: 20px; }
+  .desc { background: #f2f2f2; border-radius: 12px; padding: 12px; margin-top: 12px; line-height: 20px; }
+  .desc b { font-weight: 500; }
+  .side { flex: 1; min-width: 0; }
+  .rec { display: flex; gap: 8px; margin-bottom: 8px; }
+  .rec .th { width: 168px; height: 94px; border-radius: 8px; background: #ddd center/cover; flex: none; position: relative; }
+  .rec .th i { position: absolute; right: 4px; bottom: 4px; background: rgba(0,0,0,.8); color: #fff; font-style: normal; font-size: 12px; font-weight: 500; padding: 1px 4px; border-radius: 4px; }
+  .rec .t { font-weight: 500; line-height: 20px; max-height: 40px; overflow: hidden; }
+  .rec small { display: block; color: #606060; font-size: 12px; margin-top: 4px; line-height: 18px; }
+</style>
+<script src="demo-contract.js"></script>
+<script src="media/talk.js"></script>
+</head>
+<body id="body" class="paused">
+<div class="head">
+  <span class="ms mso">menu</span>
+  <span class="logo"><svg viewBox="0 0 30 21"><rect width="30" height="21" rx="6" fill="#f00"/><path d="M12 6v9l8-4.5z" fill="#fff"/></svg>YouTube</span>
+  <div class="search"><div class="in">Search</div><div class="go"><span class="ms mso">search</span></div></div>
+  <div class="r"><span class="ms mso">video_call</span><span class="ms mso">notifications</span><div class="av" style="width:32px;height:32px;background:#7b5ea7">R</div></div>
+</div>
+<div class="page">
+  <div class="main">
+    <div class="player">
+      <div class="slide">
+        <div class="kick">Platform Engineering Day 2026</div>
+        <h2 id="s-title"></h2>
+        <ul id="s-bullets"></ul>
+        <div class="foot"><span>Maya Chen · Staff Engineer, Ledgerly</span><span id="s-num"></span></div>
+      </div>
+      <div class="cam"><span>Maya Chen</span></div>
+      <svg class="big" viewBox="0 0 68 48"><path d="M66.5 7.7c-.8-2.9-3-5.2-5.9-6C55.3.2 34 .2 34 .2S12.7.2 7.4 1.7c-2.9.8-5.1 3.1-5.9 6C0 13 0 24 0 24s0 11 1.5 16.3c.8 2.9 3 5.2 5.9 6C12.7 47.8 34 47.8 34 47.8s21.3 0 26.6-1.5c2.9-.8 5.1-3.1 5.9-6C68 35 68 24 68 24s0-11-1.5-16.3z" fill="#f00"/><path d="M27 14v20l18-10z" fill="#fff"/></svg>
+      <div class="endscreen">
+        <div class="card" style="background-image:url('youtube_assets/sddefault(1).jpg')"><span>Kubernetes Cost Allocation in Practice</span></div>
+        <div class="card" style="background-image:url('youtube_assets/sddefault(2).jpg')"><span>FinOps for Startups: The First 90 Days</span></div>
+        <div class="card" style="background-image:url('youtube_assets/sddefault(3).jpg')"><span>Postgres at Scale Without the Bill</span></div>
+        <div class="card" style="background-image:url('youtube_assets/sddefault(4).jpg')"><span>Platform Engineering Day 2026 – Keynote</span></div>
+      </div>
+      <div class="prog"><i id="played"></i><b id="scrub"></b></div>
+      <div class="ctl">
+        <span class="ms" id="pp">play_arrow</span><span class="ms">skip_next</span><span class="ms">volume_up</span>
+        <span class="time" id="time">0:00 / 0:00</span>
+        <div class="r"><span class="ms mso">closed_caption</span><span class="ms mso">settings</span><span class="ms mso">picture_in_picture_alt</span><span class="ms mso">fullscreen</span></div>
+      </div>
+    </div>
+    <h1>How We Cut Our Cloud Bill in Half | Platform Engineering Day 2026</h1>
+    <div class="chan">
+      <div class="av" style="width:40px;height:40px;background:#ff6a13">P</div>
+      <div><div class="n">Platform Engineering Day</div><small>48.2K subscribers</small></div>
+      <span class="sub">Subscribe</span>
+      <div class="acts"><span class="pill"><span class="ms mso">thumb_up</span>1.4K</span><span class="pill"><span class="ms mso">share</span>Share</span><span class="pill"><span class="ms mso">download</span>Download</span></div>
+    </div>
+    <div class="desc"><b>23,418 views · 3 weeks ago</b><br>Our cloud bill doubled in six months. Maya Chen, Staff Engineer at Ledgerly, shares what her team changed to bring it back down, with the numbers behind each step. ...more</div>
+  </div>
+  <div class="side">
+    <div class="rec"><div class="th" style="background-image:url('youtube_assets/sddefault.jpg')"><i>18:42</i></div><div><div class="t">Kubernetes Cost Allocation in Practice</div><small>Platform Engineering Day<br>9.1K views · 3 weeks ago</small></div></div>
+    <div class="rec"><div class="th" style="background-image:url('youtube_assets/sddefault(1).jpg')"><i>24:05</i></div><div><div class="t">FinOps for Startups: The First 90 Days</div><small>Cloud Native Weekly<br>41K views · 2 months ago</small></div></div>
+    <div class="rec"><div class="th" style="background-image:url('youtube_assets/sddefault(2).jpg')"><i>31:17</i></div><div><div class="t">Postgres at Scale Without the Bill</div><small>DataTalks<br>112K views · 1 year ago</small></div></div>
+    <div class="rec"><div class="th" style="background-image:url('youtube_assets/sddefault(3).jpg')"><i>12:58</i></div><div><div class="t">Spot Instances: What Nobody Tells You</div><small>Infra Notes<br>7.8K views · 5 months ago</small></div></div>
+    <div class="rec"><div class="th" style="background-image:url('youtube_assets/sddefault(4).jpg')"><i>45:30</i></div><div><div class="t">Platform Engineering Day 2026 – Keynote</div><small>Platform Engineering Day<br>61K views · 3 weeks ago</small></div></div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const BULLETS = [
+    ['Bill: 2× in 6 months', 'Traffic: +20%', 'No single culprit'],
+    ['Cost allocation tags: service + owner', 'One Cost Explorer dashboard per team', '40% of spend had no owner'],
+    ['2 weeks of CPU & memory metrics', 'Under 20% used → one size down', '−18% on the total bill'],
+    ['Pipelines, reports, CI runners', 'Retries + checkpoints', 'Batch cost −66%'],
+    ['30 days → Infrequent Access', '90 days → Glacier', 'Logs deleted after 1 year'],
+    ['Tagging found the waste', 'Compute: right-size + spot', 'Cost is a habit, not a project'],
+  ];
+  const PAD = 2; // seconds of slide after its narration ends
+  // Chapter starts in video time, from the narration's lengths.
+  let at = 0;
+  const CHAPTERS = TALK.lines.map((line, i) => { const c = { index: i, start: Math.round(at), title: line.who }; at += line.duration + PAD; return c; });
+  const DURATION = Math.round(at);
+  demo.truth = { chapters: CHAPTERS, duration: DURATION };
+
+  const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  let shown = -1;
+  const showSlide = i => {
+    if (i === shown) return;
+    shown = i;
+    $('s-title').textContent = CHAPTERS[i].title;
+    $('s-bullets').innerHTML = BULLETS[i].map(b => `<li>${b}</li>`).join('');
+    $('s-num').textContent = `${i + 1} / ${CHAPTERS.length}`;
+  };
+  const paint = t => {
+    $('time').textContent = `${fmt(t)} / ${fmt(DURATION)}`;
+    const f = Math.min(t / DURATION, 1);
+    $('played').style.width = `${f * 100}%`;
+    $('scrub').style.left = `${f * 100}%`;
+  };
+  showSlide(0);
+  paint(0);
+
+  // Plays slide by slide: each one's narration, then a short pause on the slide.
+  demo.onStart = async () => {
+    $('body').classList.remove('paused');
+    $('pp').textContent = 'pause';
+    const t0 = Date.now();
+    const clock = setInterval(() => paint((Date.now() - t0) / 1000), 250);
+    for (const c of CHAPTERS) {
+      // Wait for this chapter's start in video time, so slides follow the clock.
+      await new Promise(r => setTimeout(r, Math.max(0, t0 + c.start * 1000 - Date.now())));
+      showSlide(c.index);
+      demo.mark('chapter', c);
+      const audio = new Audio(TALK.lines[c.index].file);
+      audio.play().catch(() => {});
+    }
+    await new Promise(r => setTimeout(r, Math.max(0, t0 + DURATION * 1000 - Date.now())));
+    clearInterval(clock);
+    paint(DURATION);
+    $('pp').textContent = 'replay';
+    $('body').classList.add('ended');
+    demo.trigger();
+  };
+</script>
+</body>
+</html>

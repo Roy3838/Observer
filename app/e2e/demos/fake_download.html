@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<!-- Copied from video/demos/fake_download.html and reworked for app/e2e: holds in progress until the suite starts it, then ends by ?outcome=. -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Fake Download Failure</title>
+    <style>
+        :root {
+            --bg-color: #2c3e50;
+            --window-bg: #34495e;
+            --header-bg: #233140;
+            --text-color: #ecf0f1;
+            --border-color: #2c3e50;
+            --progress-bar-bg: #2c3e50;
+            --progress-color-good: #2ecc71; /* Green */
+            --progress-color-bad: #e74c3c;  /* Red */
+            --button-color-good: #27ae60;
+            --button-color-bad: #c0392b;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: var(--text-color);
+            margin: 0;
+        }
+
+        .download-window {
+            width: 550px;
+            background-color: var(--window-bg);
+            border-radius: 8px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+            overflow: hidden;
+            border: 1px solid var(--header-bg);
+            transition: transform 0.1s ease-in-out;
+        }
+
+        .download-window.shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        .header {
+            background-color: var(--header-bg);
+            padding: 12px 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .content {
+            padding: 25px 30px;
+        }
+        
+        /* Start Button Area */
+        #start-area {
+            text-align: center;
+        }
+
+        .download-button {
+            margin-top: 10px;
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            background-color: var(--button-color-good);
+            border: none;
+            color: #fff;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .download-button:hover {
+            background-color: #2ecc71;
+        }
+        
+        .download-button svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Progress Area */
+        #progress-area h2 {
+            margin: 0 0 5px 0;
+            font-size: 1.4em;
+            color: #fff;
+            text-align: center;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 12px;
+            background-color: var(--progress-bar-bg);
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: var(--progress-color-good);
+            transition: width 0.5s ease-out, background-color 0.3s ease;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: #bdc3c7;
+        }
+
+        /* Failure Area */
+        #failure-area {
+            text-align: center;
+            padding: 20px 0;
+        }
+        
+        #failure-icon svg {
+            width: 80px;
+            height: 80px;
+            color: var(--progress-color-bad);
+            stroke-width: 8;
+            stroke-linecap: round;
+            animation: draw-in 0.5s ease-out;
+        }
+
+        @keyframes draw-in {
+            from {
+                stroke-dasharray: 1000;
+                stroke-dashoffset: 1000;
+            }
+            to {
+                stroke-dasharray: 1000;
+                stroke-dashoffset: 0;
+            }
+        }
+
+        #failure-area h2 {
+            font-size: 2em;
+            color: var(--progress-color-bad);
+            margin: 10px 0 5px 0;
+        }
+
+        #failure-area p {
+            font-size: 1em;
+            color: #bdc3c7;
+            margin: 0 0 25px 0;
+        }
+        
+        #retry-button {
+            background-color: var(--button-color-bad);
+        }
+        #retry-button:hover {
+            background-color: #e74c3c;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Success Area */
+        #success-area {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        #success-icon svg {
+            width: 80px;
+            height: 80px;
+            color: var(--progress-color-good);
+            stroke-width: 8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+            stroke: currentColor;
+            animation: draw-in 0.5s ease-out;
+        }
+
+        #failure-icon svg line {
+            stroke: currentColor;
+        }
+
+        #success-area h2 {
+            font-size: 2em;
+            color: var(--progress-color-good);
+            margin: 10px 0 5px 0;
+        }
+
+        #success-area p {
+            font-size: 1em;
+            color: #bdc3c7;
+            margin: 0 0 25px 0;
+        }
+    </style>
+    <script src="demo-contract.js"></script>
+</head>
+<body>
+
+    <div id="download-window" class="download-window">
+        <div class="header">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+              <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+            </svg>
+            <span>system_update_package_v3.iso</span>
+        </div>
+        <div class="content">
+
+            <!-- 1. Progress State (the page loads mid-download) -->
+            <div id="progress-area">
+                <h2 id="progress-status">Downloading...</h2>
+                <div class="progress-bar-container">
+                    <div id="progress-bar" class="progress-bar"></div>
+                </div>
+                <div class="stats">
+                    <span id="progress-details">0.0 MB / 250.0 MB</span>
+                    <span id="progress-eta">ETA: Calculating...</span>
+                </div>
+            </div>
+
+            <!-- 2a. Success State -->
+            <div id="success-area" class="hidden">
+                <div id="success-icon">
+                    <svg viewBox="0 0 100 100">
+                        <polyline points="20,52 42,74 80,30"/>
+                    </svg>
+                </div>
+                <h2>Download Complete</h2>
+                <p>250.0 MB saved to Downloads.</p>
+                <button class="download-button">Open Folder</button>
+            </div>
+
+            <!-- 2b. Failure State -->
+            <div id="failure-area" class="hidden">
+                <div id="failure-icon">
+                     <svg viewBox="0 0 100 100">
+                        <line x1="20" y1="20" x2="80" y2="80"/>
+                        <line x1="80" y1="20" x2="20" y2="80"/>
+                    </svg>
+                </div>
+                <h2>Download Failed</h2>
+                <p>Network connection was lost.</p>
+                <button id="retry-button" class="download-button">Retry</button>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const TOTAL_MB = 250;
+        const downloadWindow = document.getElementById('download-window');
+        const progressArea = document.getElementById('progress-area');
+        const successArea = document.getElementById('success-area');
+        const failureArea = document.getElementById('failure-area');
+        const progressBar = document.getElementById('progress-bar');
+        const progressDetails = document.getElementById('progress-details');
+        const progressEta = document.getElementById('progress-eta');
+
+        const loadedAt = Date.now();
+        let pct = 0;
+        let run = null; // { from, at, durationMs } once the suite starts the run
+
+        const formatEta = seconds => {
+            const s = Math.max(0, Math.round(seconds));
+            return s >= 60 ? `ETA: ${Math.floor(s / 60)}m ${s % 60}s` : `ETA: ${s}s`;
+        };
+
+        const tick = () => {
+            let etaSeconds;
+            if (!run) {
+                // Holding: creeps from 8% toward 40%, never near the end, for as long as setup takes.
+                const t = (Date.now() - loadedAt) / 1000;
+                pct = 40 - 32 * Math.exp(-t / 600);
+                etaSeconds = 900 - 300 * (1 - Math.exp(-t / 600));
+            } else {
+                const f = Math.min((Date.now() - run.at) / run.durationMs, 1);
+                pct = run.from + (99.6 - run.from) * f;
+                etaSeconds = (run.durationMs - (Date.now() - run.at)) / 1000;
+                if (f >= 1) return finish();
+            }
+            progressBar.style.width = `${pct}%`;
+            progressDetails.textContent = `${(TOTAL_MB * pct / 100).toFixed(1)} MB / ${TOTAL_MB.toFixed(1)} MB`;
+            progressEta.textContent = formatEta(etaSeconds);
+        };
+
+        const interval = setInterval(tick, 500);
+        tick();
+
+        const finish = () => {
+            clearInterval(interval);
+            progressArea.classList.add('hidden');
+            if (demo.outcome === 'success') {
+                successArea.classList.remove('hidden');
+            } else {
+                downloadWindow.classList.add('shake');
+                failureArea.classList.remove('hidden');
+            }
+            demo.trigger();
+        };
+
+        demo.onStart = durationMs => {
+            run = { from: pct, at: Date.now(), durationMs };
+        };
+    </script>
+
+</body>
+</html>

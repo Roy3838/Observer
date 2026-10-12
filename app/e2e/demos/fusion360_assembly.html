@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<!-- Autodesk Fusion opening a large assembly from the cloud. Holds on the "Opening…" progress dialog
+     (components loading, far from done) until the suite starts it; then it ends by ?outcome=: success,
+     the dialog closes and the assembly appears; fail, an error dialog says the design couldn't be opened.
+     Fusion's own font (Artifakt) isn't public, so Open Sans (fonts/) stands in. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Autodesk Fusion - Gearbox_Assembly v14</title>
+<link rel="stylesheet" href="fonts/open-sans.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #f5f5f5; color: #3c3c3c; font-family: 'Open Sans', 'Segoe UI', Arial, sans-serif; font-size: 12px; display: flex; flex-direction: column; user-select: none; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 18px; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20; color: #555; }
+  /* Application bar + document tabs */
+  .appbar { height: 36px; background: #e8e8e8; border-bottom: 1px solid #cfcfcf; display: flex; align-items: center; gap: 4px; padding: 0 8px; flex: none; }
+  .appbar .ib { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 3px; }
+  .doc { height: 30px; margin-top: 6px; background: #fff; border: 1px solid #cfcfcf; border-bottom: 0; border-radius: 4px 4px 0 0; display: flex; align-items: center; gap: 8px; padding: 0 10px; margin-left: 10px; font-size: 13px; min-width: 240px; }
+  .doc .x { margin-left: auto; }
+  .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #c8dcf0; border-top-color: #0696d7; animation: spin .9s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .appbar .r { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .avatar { width: 24px; height: 24px; border-radius: 50%; background: #7b5ea7; color: #fff; display: grid; place-items: center; font-size: 11px; font-weight: 600; margin-left: 6px; }
+  /* Toolbar */
+  .toolbar { height: 86px; background: #fff; border-bottom: 1px solid #d9d9d9; display: flex; flex-direction: column; flex: none; }
+  .ttabs { height: 28px; display: flex; align-items: flex-end; gap: 2px; padding-left: 8px; }
+  .ws { height: 26px; padding: 0 10px; border: 1px solid #c4c4c4; border-radius: 3px; display: flex; align-items: center; gap: 4px; font-weight: 700; font-size: 12px; margin-right: 8px; margin-bottom: 2px; }
+  .ttab { padding: 0 12px 4px; font-size: 12px; font-weight: 600; color: #6a6a6a; letter-spacing: .3px; }
+  .ttab.on { color: #0696d7; box-shadow: inset 0 -2px #0696d7; }
+  .groups { flex: 1; display: flex; align-items: center; padding: 0 8px; gap: 2px; }
+  .grp { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 10px; border-right: 1px solid #ececec; }
+  .grp .icons { display: flex; gap: 4px; }
+  .grp .icons .ms { font-size: 26px; color: #4a7aa8; }
+  .grp .icons .ms.o { color: #d07a22; } .grp .icons .ms.g { color: #4b9a5b; }
+  .grp .lbl { font-size: 11px; font-weight: 600; color: #555; }
+  .dim .groups { opacity: .45; }
+  /* Body */
+  .bodywrap { flex: 1; position: relative; display: flex; min-height: 0; }
+  .browser { position: absolute; left: 10px; top: 10px; width: 260px; background: rgba(255,255,255,.96); border: 1px solid #d0d0d0; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,.12); z-index: 2; }
+  .browser .h { height: 26px; display: flex; align-items: center; padding: 0 8px; font-weight: 700; font-size: 11px; letter-spacing: .5px; color: #555; border-bottom: 1px solid #e3e3e3; }
+  .browser .h .ms { margin-left: auto; font-size: 16px; }
+  .tree { padding: 4px 0; max-height: 470px; overflow: hidden; }
+  .tree div { height: 22px; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .tree .ms { font-size: 15px; }
+  .tree .eye { color: #777; }
+  .tree .comp { color: #3a6ea5; font-variation-settings: 'FILL' 1, 'wght' 400; }
+  .tree .loading { color: #999; }
+  .viewport { flex: 1; background: linear-gradient(#ffffff, #e9edf1 55%, #d9dfe6); position: relative; overflow: hidden; }
+  .viewport svg.scene { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .viewcube { position: absolute; right: 26px; top: 18px; width: 86px; height: 86px; }
+  .navbar { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); height: 30px; background: rgba(255,255,255,.95); border: 1px solid #d0d0d0; border-radius: 3px; display: flex; align-items: center; gap: 8px; padding: 0 10px; z-index: 2; }
+  .navbar .ms { font-size: 18px; }
+  .timeline { position: absolute; left: 0; right: 0; bottom: 0; height: 34px; background: #f0f0f0; border-top: 1px solid #d0d0d0; display: flex; align-items: center; gap: 6px; padding: 0 10px; z-index: 2; }
+  .timeline .feat { width: 18px; height: 18px; border-radius: 2px; background: #c7d9ea; border: 1px solid #8fb0cf; }
+  .timeline .feat.j { background: #f0d4b4; border-color: #d39b5c; }
+  /* Dialogs */
+  .dlg { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: 420px; background: #fff; border: 1px solid #bdbdbd; border-radius: 4px; box-shadow: 0 6px 24px rgba(0,0,0,.25); z-index: 5; }
+  .dlg .t { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 14px; font-weight: 700; font-size: 13px; border-bottom: 1px solid #e3e3e3; background: #fafafa; border-radius: 4px 4px 0 0; }
+  .dlg .b { padding: 16px 16px 6px; font-size: 13px; line-height: 19px; }
+  .bar { height: 8px; background: #e6e6e6; border-radius: 4px; overflow: hidden; margin: 12px 0 8px; }
+  .bar i { display: block; height: 100%; background: #0696d7; transition: width .4s linear; }
+  .sub { color: #6a6a6a; font-size: 12px; display: flex; justify-content: space-between; }
+  .dlg .f { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px 14px; }
+  .btn { height: 28px; padding: 0 16px; border: 1px solid #b0b0b0; border-radius: 3px; display: inline-grid; place-items: center; font-weight: 600; font-size: 12px; background: #fff; }
+  .btn.p { background: #0696d7; border-color: #0696d7; color: #fff; }
+  .err { display: none; }
+  .failed .err { display: block; } .failed .open { display: none; }
+  .loaded .open { display: none; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body id="body" class="dim">
+<div class="appbar">
+  <span class="ib"><span class="ms">apps</span></span><span class="ib"><span class="ms">description</span></span><span class="ib"><span class="ms">save</span></span><span class="ib"><span class="ms">undo</span></span><span class="ib"><span class="ms">redo</span></span>
+  <div class="doc"><span class="spin" id="tabspin"></span><span id="tabicon" class="ms" style="display:none;font-size:16px;color:#d07a22">deployed_code</span>Gearbox_Assembly v14<span class="ms x" style="font-size:16px">close</span></div>
+  <span class="ib"><span class="ms">add</span></span>
+  <span class="r"><span class="ib"><span class="ms">extension</span></span><span class="ib"><span class="ms">schedule</span></span><span class="ib"><span class="ms">notifications</span></span><span class="ib"><span class="ms">help</span></span><span class="avatar">R</span></span>
+</div>
+<div class="toolbar">
+  <div class="ttabs"><span class="ws">DESIGN <span class="ms" style="font-size:14px">arrow_drop_down</span></span><span class="ttab on">SOLID</span><span class="ttab">SURFACE</span><span class="ttab">MESH</span><span class="ttab">SHEET METAL</span><span class="ttab">PLASTIC</span><span class="ttab">UTILITIES</span><span class="ttab">MANAGE</span></div>
+  <div class="groups">
+    <div class="grp"><div class="icons"><span class="ms o">add_box</span><span class="ms">edit_square</span><span class="ms">view_in_ar</span></div><span class="lbl">CREATE ▾</span></div>
+    <div class="grp"><div class="icons"><span class="ms">open_with</span><span class="ms">rounded_corner</span><span class="ms">content_cut</span></div><span class="lbl">MODIFY ▾</span></div>
+    <div class="grp"><div class="icons"><span class="ms o">join_inner</span><span class="ms o">link</span></div><span class="lbl">ASSEMBLE ▾</span></div>
+    <div class="grp"><div class="icons"><span class="ms">layers</span><span class="ms">architecture</span></div><span class="lbl">CONSTRUCT ▾</span></div>
+    <div class="grp"><div class="icons"><span class="ms">straighten</span><span class="ms">insights</span></div><span class="lbl">INSPECT ▾</span></div>
+    <div class="grp"><div class="icons"><span class="ms g">image</span><span class="ms g">download</span></div><span class="lbl">INSERT ▾</span></div>
+    <div class="grp" style="border:0"><div class="icons"><span class="ms">arrow_selector_tool</span></div><span class="lbl">SELECT ▾</span></div>
+  </div>
+</div>
+<div class="bodywrap">
+  <div class="browser">
+    <div class="h">BROWSER<span class="ms">remove</span></div>
+    <div class="tree" id="tree"></div>
+  </div>
+  <div class="viewport">
+    <svg class="scene" id="scene"></svg>
+    <svg class="viewcube" viewBox="0 0 86 86">
+      <polygon points="43,8 76,26 43,44 10,26" fill="#f4f6f8" stroke="#9aa5b1"/>
+      <polygon points="10,26 43,44 43,80 10,62" fill="#e3e8ee" stroke="#9aa5b1"/>
+      <polygon points="43,44 76,26 76,62 43,80" fill="#d3dae2" stroke="#9aa5b1"/>
+      <text x="43" y="29" font-size="9" text-anchor="middle" fill="#56616d" font-family="Open Sans">TOP</text>
+      <text x="26" y="58" font-size="9" text-anchor="middle" fill="#56616d" font-family="Open Sans" transform="rotate(28 26 58)">FRONT</text>
+      <text x="60" y="58" font-size="9" text-anchor="middle" fill="#56616d" font-family="Open Sans" transform="rotate(-28 60 58)">RIGHT</text>
+    </svg>
+    <div class="navbar"><span class="ms">open_with</span><span class="ms">pan_tool</span><span class="ms">zoom_in</span><span class="ms">fit_screen</span><span class="ms">grid_on</span><span class="ms">visibility</span></div>
+    <div class="timeline"><span class="ms">skip_previous</span><span class="ms">fast_rewind</span><span class="ms">play_arrow</span><span class="ms">fast_forward</span><span class="ms">skip_next</span><span id="feats" style="display:flex;gap:4px;margin-left:8px"></span></div>
+
+    <div class="dlg open">
+      <div class="t"><span class="spin"></span>Opening</div>
+      <div class="b">
+        Opening <b>Gearbox_Assembly v14</b> and its referenced components…
+        <div class="bar"><i id="fill"></i></div>
+        <div class="sub"><span id="what">Loading components (412 of 1,206)</span><span id="pct">34%</span></div>
+      </div>
+      <div class="f"><span class="btn">Cancel</span></div>
+    </div>
+    <div class="dlg err">
+      <div class="t"><span class="ms" style="color:#d93025;font-variation-settings:'FILL' 1">cancel</span>Error</div>
+      <div class="b">
+        <b>Gearbox_Assembly v14</b> could not be opened.<br><br>
+        <span id="errmsg">294 referenced components failed to download.</span> Check your connection and try again. If the problem persists, the referenced designs may have been moved or deleted.
+      </div>
+      <div class="f"><span class="btn">Details</span><span class="btn p">Retry</span><span class="btn">Close</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const TOTAL = 1206;
+  const COMPONENTS = ['Housing_Lower', 'Housing_Upper', 'Input_Shaft', 'Output_Shaft', 'Gear_Stage1_Pinion', 'Gear_Stage1_Wheel', 'Gear_Stage2_Pinion', 'Gear_Stage2_Wheel',
+    'Bearing_6205 (4)', 'Bearing_6207 (4)', 'Oil_Seal_35x52 (2)', 'Motor_Flange', 'Servo_Motor_1kW', 'Coupling_Jaw', 'Fasteners (612)', 'Cover_Plate', 'Breather_Plug'];
+
+  // The tree fills in as components load; the last ones still show a spinner.
+  const tree = (loaded, failed = false) => {
+    const shown = Math.round(loaded / TOTAL * COMPONENTS.length);
+    $('tree').innerHTML = [
+      '<div style="padding-left:6px"><span class="ms">expand_more</span><span class="ms comp">deployed_code</span><b>Gearbox_Assembly v14</b></div>',
+      '<div style="padding-left:24px"><span class="ms">chevron_right</span><span class="ms eye">visibility</span><span class="ms">settings</span>Document Settings</div>',
+      '<div style="padding-left:24px"><span class="ms">chevron_right</span><span class="ms eye">visibility</span><span class="ms">folder</span>Named Views</div>',
+      '<div style="padding-left:24px"><span class="ms">chevron_right</span><span class="ms eye">visibility_off</span><span class="ms">folder</span>Origin</div>',
+      '<div style="padding-left:24px"><span class="ms">chevron_right</span><span class="ms eye">visibility</span><span class="ms">folder</span>Joints</div>',
+      ...COMPONENTS.map((c, i) => i < shown
+        ? `<div style="padding-left:24px"><span class="ms">chevron_right</span><span class="ms eye">visibility</span><span class="ms comp">deployed_code</span>${c}:1</div>`
+        : failed
+          ? `<div style="padding-left:24px" class="loading"><span class="ms" style="opacity:0">chevron_right</span><span class="ms" style="color:#d93025;font-variation-settings:'FILL' 1">error</span><span class="ms loading">deployed_code</span>${c}:1</div>`
+          : `<div style="padding-left:24px" class="loading"><span class="ms" style="opacity:0">chevron_right</span><span class="spin" style="width:11px;height:11px"></span><span class="ms loading">deployed_code</span>${c}:1</div>`),
+    ].join('');
+  };
+
+  // An isometric gearbox, drawn from boxes and toothed discs.
+  const scene = () => {
+    const vp = document.querySelector('.viewport');
+    const cx = vp.clientWidth * 0.56, cy = vp.clientHeight * 0.52, s = 34;
+    const P = (x, y, z) => [cx + (x - y) * 0.866 * s, cy + (x + y) * 0.5 * s - z * s];
+    const poly = (pts, fill, stroke = '#5b6570') => `<polygon points="${pts.map(p => P(...p).map(v => v.toFixed(1)).join(',')).join(' ')}" fill="${fill}" stroke="${stroke}" stroke-width="0.8" stroke-linejoin="round"/>`;
+    const box = (x0, y0, z0, x1, y1, z1, c) =>
+      poly([[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]], c[1]) +
+      poly([[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]], c[2]) +
+      poly([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], c[0]);
+    const gear = (x, y, z0, z1, r, teeth, c) => {
+      const ring = z => Array.from({ length: teeth * 4 }, (_, i) => {
+        const a = i / (teeth * 4) * Math.PI * 2, rr = (i % 4 < 2) ? r : r * 0.86;
+        return [x + rr * Math.cos(a), y + rr * Math.sin(a), z];
+      });
+      const top = ring(z1), bottom = ring(z0);
+      // Side band: the front half of the rim, as quads.
+      let side = '';
+      for (let i = 0; i < top.length; i++) {
+        const j = (i + 1) % top.length, a = i / top.length * Math.PI * 2;
+        if (Math.cos(a - Math.PI / 4) > -0.1) side += poly([bottom[i], bottom[j], top[j], top[i]], c[1], 'none');
+      }
+      return side + poly(top, c[0]) + poly(Array.from({ length: 24 }, (_, i) => { const a = i / 24 * Math.PI * 2; return [x + 0.42 * Math.cos(a), y + 0.42 * Math.sin(a), z1 + 0.01]; }), '#3d4652');
+    };
+    const shaft = (x, y, z0, z1) => box(x - 0.3, y - 0.3, z0, x + 0.3, y + 0.3, z1, ['#59636e', '#4a535d', '#3e464f']);
+    const STEEL = ['#d6dbe1', '#b7bec6', '#9ca5ae'], BRASS = ['#e3c35d', '#c7a43a', '#a8892c'], DARK = ['#8c97a3', '#717c88', '#5d6773'];
+    return box(-1, -1, -0.8, 11, 7, 0, STEEL) +
+      box(8.4, 0.4, 0, 10.6, 2.9, 2.6, DARK) + box(8.6, 0.6, 2.6, 10.4, 2.7, 2.9, ['#3f8bc9', '#2f73ad', '#265f8f']) +
+      shaft(3, 3, 0, 3.4) + gear(3, 3, 0.4, 1.0, 2.3, 26, BRASS) +
+      shaft(6.7, 4.3, 0, 3.0) + gear(6.7, 4.3, 0.4, 1.0, 1.5, 17, STEEL) +
+      gear(6.7, 4.3, 1.4, 2.0, 0.9, 11, BRASS) + gear(3, 3, 1.4, 2.0, 1.2, 14, STEEL) +
+      box(0.2, 5.6, 0, 1.4, 6.8, 1.6, DARK);
+  };
+  const grid = () => {
+    const vp = document.querySelector('.viewport');
+    const cx = vp.clientWidth * 0.56, cy = vp.clientHeight * 0.52, s = 34;
+    const P = (x, y) => [cx + (x - y) * 0.866 * s, cy + (x + y) * 0.5 * s + 0.8 * s];
+    let g = '';
+    for (let i = -6; i <= 16; i += 2) {
+      const a = P(i, -6), b = P(i, 14), c = P(-6, i), d = P(16, i);
+      g += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#c9d1da" stroke-width="0.7"/><line x1="${c[0]}" y1="${c[1]}" x2="${d[0]}" y2="${d[1]}" stroke="#c9d1da" stroke-width="0.7"/>`;
+    }
+    return g;
+  };
+  $('scene').innerHTML = grid();
+  $('feats').innerHTML = Array.from({ length: 22 }, (_, i) => `<span class="feat ${i % 4 === 3 ? 'j' : ''}"></span>`).join('');
+
+  const loadedAt = Date.now();
+  let run = null, done = false;
+  // Components loaded: creeps from 412 toward ~640 while holding; the run takes it the rest of the way.
+  const count = () => run
+    ? Math.round(run.from + (run.to - run.from) * Math.min((Date.now() - run.at) / run.durationMs, 1))
+    : Math.round(640 - 228 * Math.exp(-(Date.now() - loadedAt) / 600_000));
+  const tick = () => {
+    if (done) return;
+    const n = count();
+    $('fill').style.width = `${n / TOTAL * 100}%`;
+    $('pct').textContent = `${Math.round(n / TOTAL * 100)}%`;
+    $('what').textContent = `Loading components (${n.toLocaleString('en-US')} of ${TOTAL.toLocaleString('en-US')})`;
+    tree(n);
+    if (run && Date.now() - run.at >= run.durationMs) finish();
+  };
+  const timer = setInterval(tick, 1000);
+  tick();
+
+  const finish = () => {
+    done = true;
+    clearInterval(timer);
+    const ok = demo.outcome === 'success';
+    $('tabspin').style.display = 'none';
+    if (ok) {
+      tree(TOTAL);
+      $('scene').innerHTML = grid() + scene();
+      $('body').classList.remove('dim');
+      $('body').classList.add('loaded');
+      $('tabicon').style.display = '';
+    } else {
+      tree(run.to, true);
+      $('errmsg').textContent = `${TOTAL - run.to} referenced components failed to download.`;
+      $('body').classList.add('failed');
+    }
+    demo.trigger();
+  };
+  // Success loads every component; fail gives up with about a quarter still missing.
+  demo.onStart = durationMs => {
+    const from = count();
+    run = { from, at: Date.now(), durationMs, to: demo.outcome === 'success' ? TOTAL : 912 };
+  };
+</script>
+</body>
+</html>

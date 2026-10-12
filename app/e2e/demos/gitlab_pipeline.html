@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<!-- A GitLab CI/CD pipeline running on main. Holds "Running" (tests in progress, later stages
+     waiting) until the suite starts it; then it ends by ?outcome=: success, every job passes and the
+     pipeline is "Passed"; fail, e2e-firefox fails, later jobs are skipped and the pipeline is "Failed".
+     GitLab Sans/Mono and GitLab's own icons (gitlab_assets/, from @gitlab/fonts and @gitlab/svgs). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pipeline · acme / web-app · GitLab</title>
+<style>
+  @font-face { font-family: 'GitLab Sans'; src: url(gitlab_assets/GitLabSans.woff2) format('woff2'); font-weight: 100 900; font-display: block; }
+  @font-face { font-family: 'GitLab Mono'; src: url(gitlab_assets/GitLabMono.woff2) format('woff2'); font-weight: 100 900; font-display: block; }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #fff; color: #3a383f; font-family: 'GitLab Sans', -apple-system, Arial, sans-serif; font-size: 14px; display: flex; }
+  svg { fill: currentColor; display: block; flex: none; }
+  .ic { width: 16px; height: 16px; color: #626168; }
+  /* Sidebar */
+  .side { width: 256px; background: #fbfafd; border-right: 1px solid #ececef; display: flex; flex-direction: column; flex: none; font-size: 14px; }
+  .side .top { height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 12px; }
+  .side .top .sp { margin-left: auto; display: flex; gap: 6px; }
+  .side .top .sp span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 4px; }
+  .search { margin: 0 12px 8px; height: 32px; border: 1px solid #dcdcde; border-radius: 4px; background: #fff; display: flex; align-items: center; gap: 8px; padding: 0 8px; color: #737278; }
+  .sec { padding: 8px 12px 4px; color: #626168; font-size: 12px; font-weight: 600; }
+  .proj { margin: 0 8px 4px; display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-weight: 600; }
+  .pa { width: 24px; height: 24px; border-radius: 4px; background: #e1d8f9; color: #5943b6; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+  .item { margin: 0 8px; padding: 6px 8px 6px 12px; display: flex; align-items: center; gap: 10px; border-radius: 4px; color: #3a383f; }
+  .item.sub { padding-left: 40px; }
+  .item.on { background: #ececef; font-weight: 600; box-shadow: inset 3px 0 #6e49cb; }
+  /* Main */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .crumbs { height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 24px; color: #626168; border-bottom: 1px solid #ececef; flex: none; }
+  .crumbs b { color: #3a383f; font-weight: 400; }
+  .page { padding: 16px 24px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .ph { display: flex; align-items: flex-start; gap: 12px; }
+  .ph h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #18171d; }
+  .ph .btns { margin-left: auto; display: flex; gap: 8px; }
+  .btn { height: 32px; padding: 0 12px; border: 1px solid #bfbfc3; border-radius: 4px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: #3a383f; background: #fff; }
+  .btn.danger { border-color: #dd2b0e; color: #c91c00; }
+  .meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: #626168; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 12px; font-size: 13px; font-weight: 600; }
+  .badge.running { background: #cbe2f9; color: #0b5cad; }
+  .badge.passed { background: #c3e6cd; color: #24663b; }
+  .badge.failed { background: #fdd4cd; color: #ae1800; }
+  .badge.gray { background: #ececef; color: #535158; font-weight: 400; }
+  .av { width: 20px; height: 20px; border-radius: 50%; background: #7b5ea7; color: #fff; display: inline-grid; place-items: center; font-size: 11px; font-weight: 600; }
+  .mono { font-family: 'GitLab Mono', monospace; font-size: 13px; color: #3a383f; }
+  .facts { display: flex; gap: 16px; align-items: center; margin-top: 10px; color: #626168; }
+  .facts span { display: inline-flex; align-items: center; gap: 6px; }
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid #dcdcde; margin-top: 16px; }
+  .tab { padding: 10px 14px; color: #626168; display: flex; align-items: center; gap: 6px; }
+  .tab.on { color: #18171d; font-weight: 600; box-shadow: inset 0 -2px #1f75cb; }
+  .cnt { background: #ececef; border-radius: 10px; padding: 0 6px; font-size: 12px; color: #535158; font-weight: 400; }
+  .group { display: flex; align-items: center; gap: 10px; padding: 14px 0; color: #626168; }
+  .seg { display: flex; border: 1px solid #bfbfc3; border-radius: 4px; overflow: hidden; }
+  .seg span { padding: 5px 12px; } .seg .on { background: #ececef; color: #18171d; font-weight: 600; }
+  .graph { flex: 1; background: #fbfafd; border-radius: 4px; padding: 20px 20px; display: flex; gap: 36px; overflow: hidden; }
+  .stage h4 { margin: 0 0 14px 12px; font-size: 14px; font-weight: 600; color: #18171d; text-transform: lowercase; }
+  .job { width: 196px; height: 40px; border: 1px solid #dcdcde; border-radius: 20px; background: #fff; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 10px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(5,5,6,.06); }
+  .job .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #3a383f; }
+  .job .act { width: 26px; height: 26px; border-radius: 50%; border: 1px solid #dcdcde; display: grid; place-items: center; color: #626168; }
+  .st-success { color: #108548; } .st-failed { color: #dd2b0e; } .st-running { color: #1f75cb; }
+  .st-created, .st-skipped, .st-manual { color: #737278; } .st-pending { color: #c17d10; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="side">
+  <div class="top"><img src="gitlab_assets/gitlab_logo.svg" alt="" style="width:25px;height:24px">
+    <span class="sp"><span id="i-plus"></span><span id="i-issues"></span><span id="i-mr"></span><span id="i-todo"></span></span></div>
+  <div class="search"><span id="i-search"></span>Search or go to…</div>
+  <div class="sec">Project</div>
+  <div class="proj"><span class="pa">W</span>web-app</div>
+  <div class="item"><span data-i="project"></span>Manage</div>
+  <div class="item"><span data-i="issues"></span>Plan</div>
+  <div class="item"><span data-i="commit"></span>Code</div>
+  <div class="item"><span data-i="rocket"></span>Build</div>
+  <div class="item sub on">Pipelines</div>
+  <div class="item sub">Jobs</div>
+  <div class="item sub">Pipeline editor</div>
+  <div class="item sub">Pipeline schedules</div>
+  <div class="item sub">Artifacts</div>
+  <div class="item"><span data-i="clock"></span>Secure</div>
+  <div class="item"><span data-i="download"></span>Deploy</div>
+  <div class="item"><span data-i="calendar"></span>Operate</div>
+  <div class="item"><span data-i="timer"></span>Monitor</div>
+  <div class="item"><span data-i="branch"></span>Analyze</div>
+</div>
+<div class="main">
+  <div class="crumbs">acme<span>/</span>web-app<span>/</span>Pipelines<span>/</span><b>#1284093</b></div>
+  <div class="page">
+    <div class="ph">
+      <div>
+        <h1>feat(billing): migrate payments to the Stripe client</h1>
+        <div class="meta"><span class="badge running" id="status"></span>
+          <span>Pipeline <b style="color:#3a383f">#1284093</b> triggered 14 minutes ago by</span><span class="av">R</span><b style="color:#3a383f">Roy</b>
+          <span class="badge gray">latest</span><span class="badge gray">branch</span></div>
+      </div>
+      <div class="btns"><span class="btn danger" id="cancelbtn">Cancel pipeline</span><span class="btn">Delete</span></div>
+    </div>
+    <div class="facts">
+      <span><span data-i="branch"></span><span class="mono">main</span></span>
+      <span><span data-i="commit"></span><span class="mono">4f2c9a1b</span></span>
+      <span><span data-i="project"></span>11 jobs</span>
+      <span><span data-i="timer"></span><span id="dur">13 minutes 02 seconds</span></span>
+    </div>
+    <div class="tabs"><span class="tab on">Pipeline</span><span class="tab">Needs</span><span class="tab">Jobs <span class="cnt">11</span></span><span class="tab">Tests <span class="cnt" id="tests">0</span></span></div>
+    <div class="group">Group jobs by<span class="seg"><span class="on">Stage</span><span>Job dependencies</span></span><span style="margin-left:10px">Show dependencies</span></div>
+    <div class="graph" id="graph"></div>
+  </div>
+</div>
+
+<script>
+  const ICONS = {"branch":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M11.5 4.5a1 1 0 100-2 1 1 0 000 2zm2.5-1a2.501 2.501 0 01-1.872 2.42A3.502 3.502 0 018.75 8.5h-1.5a2 2 0 00-1.965 1.626 2.501 2.501 0 11-1.535-.011v-4.23a2.501 2.501 0 111.5 0v1.742a3.484 3.484 0 012-.627h1.5a2 2 0 001.823-1.177A2.5 2.5 0 1114 3.5zm-8.5 9a1 1 0 11-2 0 1 1 0 012 0zm0-9a1 1 0 11-2 0 1 1 0 012 0z\"/></svg>","calendar":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M4.75 1a.75.75 0 01.75.75V3h5V1.75a.75.75 0 011.5 0V3h2a1 1 0 011 1v10a1 1 0 01-1 1H2a1 1 0 01-1-1V4a1 1 0 011-1h2V1.75A.75.75 0 014.75 1zM2.5 4.5V6h11V4.5h-11zm0 9v-6h11v6h-11zM11 11a1 1 0 100-2 1 1 0 000 2z\"/></svg>","cancel":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M12.035 13.096a6.5 6.5 0 01-9.131-9.131l9.131 9.131zm1.061-1.06L3.965 2.903a6.5 6.5 0 019.131 9.131zM16 8A8 8 0 110 8a8 8 0 0116 0z\"/></svg>","chevron-lg-right":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M5.22 2.22a.75.75 0 011.06 0l5.252 5.252a.75.75 0 010 1.06L6.28 13.784a.75.75 0 11-1.06-1.06l4.72-4.723L5.22 3.28a.75.75 0 010-1.06z\"/></svg>","clock":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M14.5 8a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0zM16 8A8 8 0 110 8a8 8 0 0116 0zM8.75 3.75a.75.75 0 00-1.5 0v4.56l.22.22 2.254 2.254a.75.75 0 101.06-1.06L8.75 7.689V3.75z\"/></svg>","commit":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M8 10.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM8 12c1.953 0 3.579-1.4 3.93-3.25h3.32a.75.75 0 000-1.5h-3.32a4.001 4.001 0 00-7.86 0H.75a.75.75 0 000 1.5h3.32A4.001 4.001 0 008 12z\"/></svg>","download":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M11.78 7.159a.75.75 0 00-1.06 0l-1.97 1.97V1.75a.75.75 0 00-1.5 0v7.379l-1.97-1.97a.75.75 0 00-1.06 1.06l3.25 3.25L8 12l.53-.53 3.25-3.25a.75.75 0 000-1.061zM2.5 9.75a.75.75 0 00-1.5 0V13a2 2 0 002 2h10a2 2 0 002-2V9.75a.75.75 0 00-1.5 0V13a.5.5 0 01-.5.5H3a.5.5 0 01-.5-.5V9.75z\"/></svg>","ellipsis_v":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M8 12a2 2 0 110 4 2 2 0 010-4zm0-6a2 2 0 110 4 2 2 0 010-4zm2-4a2 2 0 10-4 0 2 2 0 004 0z\"/></svg>","hamburger":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M0 3.75A.75.75 0 01.75 3h14.5a.75.75 0 010 1.5H.75A.75.75 0 010 3.75zM0 8a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H.75A.75.75 0 010 8zm.75 3.5a.75.75 0 000 1.5h14.5a.75.75 0 000-1.5H.75z\"/></svg>","issues":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M3 2.5h6a.5.5 0 01.5.5v10a.5.5 0 01-.5.5H3a.5.5 0 01-.5-.5V3a.5.5 0 01.5-.5zM1 3a2 2 0 012-2h6a2 2 0 011.97 1.658l2.913 1.516a1.75 1.75 0 01.744 2.36l-3.878 7.45a.753.753 0 01-.098.145c-.36.526-.965.871-1.651.871H3a2 2 0 01-2-2V3zm10 7.254l2.297-4.413a.25.25 0 00-.106-.337L11 4.364v5.89z\"/></svg>","merge-request":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M10.34 1.22a.75.75 0 00-1.06 0L7.53 2.97 7 3.5l.53.53 1.75 1.75a.75.75 0 101.06-1.06l-.47-.47h.63c.69 0 1.25.56 1.25 1.25v4.614a2.501 2.501 0 101.5 0V5.5a2.75 2.75 0 00-2.75-2.75h-.63l.47-.47a.75.75 0 000-1.06zM13.5 12.5a1 1 0 11-2 0 1 1 0 012 0zm-9 0a1 1 0 11-2 0 1 1 0 012 0zm1.5 0a2.5 2.5 0 11-3.25-2.386V5.886a2.501 2.501 0 111.5 0v4.228A2.501 2.501 0 016 12.5zm-1.5-9a1 1 0 11-2 0 1 1 0 012 0z\"/></svg>","play":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M11.629 7.306a.835.835 0 010 1.388l-6.401 4.177C4.695 13.218 4 12.825 4 12.176V3.824c0-.649.695-1.042 1.228-.695l6.4 4.177z\"/></svg>","plus-square-o":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M4 3.5h8a.5.5 0 01.5.5v8a.5.5 0 01-.5.5H4a.5.5 0 01-.5-.5V4a.5.5 0 01.5-.5zM2 4a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V4zm6 7a.75.75 0 01-.75-.75v-1.5h-1.5a.75.75 0 010-1.5h1.5v-1.5a.75.75 0 011.5 0v1.5h1.5a.75.75 0 010 1.5h-1.5v1.5A.75.75 0 018 11z\"/></svg>","project":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M9.5 14.5l-6-2.5V4l6-2.5v13zm-6.885-1.244A1 1 0 012 12.333V3.667a1 1 0 01.615-.923L8.923.115A1.5 1.5 0 0111 1.5V2h1.25c.966 0 1.75.783 1.75 1.75v8.5A1.75 1.75 0 0112.25 14H11v.5a1.5 1.5 0 01-2.077 1.385l-6.308-2.629zM11 12.5h1.25a.25.25 0 00.25-.25v-8.5a.25.25 0 00-.25-.25H11v9z\"/></svg>","retry":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M7.32.029a8 8 0 017.18 3.307V1.75a.75.75 0 011.5 0V6h-4.25a.75.75 0 010-1.5h1.727A6.5 6.5 0 001.694 6.424.75.75 0 11.239 6.06 8 8 0 017.319.03zm-3.4 14.852A8 8 0 0015.76 9.94a.75.75 0 00-1.455-.364A6.5 6.5 0 012.523 11.5H4.25a.75.75 0 000-1.5H0v4.25a.75.75 0 001.5 0v-1.586a8 8 0 002.42 2.217z\"/></svg>","rocket":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M16 .776l.027-.803-.803.027-1.309.046A10.75 10.75 0 005.753 4.25H3.667A2.75 2.75 0 00.962 6.504l-.8 4.36L0 11.75h2.69l1.56 1.56V16l.885-.162 4.36-.8a2.75 2.75 0 002.255-2.705v-2.086a10.75 10.75 0 004.204-8.162L16 .775zM9.348 9.988l-4.2 2.1-1.235-1.236 2.1-4.2a9.25 9.25 0 017.954-5.107l.506-.018-.018.506a9.25 9.25 0 01-5.107 7.955zM5.75 14.2v-.736l4.268-2.135.232-.116v1.12a1.25 1.25 0 01-1.025 1.23L5.75 14.2zm-3.214-3.95l2.135-4.268.115-.232h-1.12a1.25 1.25 0 00-1.229 1.025L1.8 10.25h.736zM10.5 6a.5.5 0 11-1 0 .5.5 0 011 0zM12 6a2 2 0 11-4 0 2 2 0 014 0z\"/></svg>","search":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M11.5 7a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zm-.82 4.74a6 6 0 111.06-1.06l3.04 3.04a.75.75 0 11-1.06 1.06l-3.04-3.04z\"/></svg>","status_created":"<svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" xmlns=\"http://www.w3.org/2000/svg\"><g fill-rule=\"evenodd\"><path d=\"M0 7a7 7 0 1114 0A7 7 0 010 7z\"/><path d=\"M13 7A6 6 0 101 7a6 6 0 0012 0z\" fill=\"var(--svg-status-bg, #fff)\"/><circle cx=\"7\" cy=\"7\" r=\"3.25\"/></g></svg>","status_failed":"<svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" xmlns=\"http://www.w3.org/2000/svg\"><g fill-rule=\"evenodd\"><path d=\"M0 7a7 7 0 1114 0A7 7 0 010 7z\"/><path d=\"M13 7A6 6 0 101 7a6 6 0 0012 0z\" fill=\"var(--svg-status-bg, #fff)\"/><path d=\"M7 5.969L5.599 4.568a.29.29 0 00-.413.004l-.614.614a.294.294 0 00-.004.413L5.968 7l-1.4 1.401a.29.29 0 00.004.413l.614.614c.113.114.3.117.413.004L7 8.032l1.401 1.4a.29.29 0 00.413-.004l.614-.614a.294.294 0 00.004-.413L8.032 7l1.4-1.401a.29.29 0 00-.004-.413l-.614-.614a.294.294 0 00-.413-.004L7 5.968z\"/></g></svg>","status_manual":"<svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" xmlns=\"http://www.w3.org/2000/svg\"><g fill-rule=\"evenodd\"><path d=\"M0 7a7 7 0 1114 0A7 7 0 010 7z\"/><path d=\"M13 7A6 6 0 101 7a6 6 0 0012 0z\" fill=\"var(--svg-status-bg, #fff)\"/><path d=\"M10.5 7.63V6.37l-.787-.13c-.044-.175-.132-.349-.263-.61l.481-.652-.918-.913-.657.478a2.346 2.346 0 00-.612-.26L7.656 3.5H6.388l-.132.783c-.219.043-.394.13-.612.26l-.657-.478-.918.913.437.652c-.131.218-.175.392-.262.61l-.744.086v1.261l.787.13c.044.218.132.392.263.61l-.438.651.92.913.655-.434c.175.086.394.173.613.26l.131.783h1.313l.131-.783c.219-.043.394-.13.613-.26l.656.478.918-.913-.48-.652c.13-.218.218-.435.262-.61l.656-.13zM7 8.283a1.285 1.285 0 01-1.313-1.305c0-.739.57-1.304 1.313-1.304.744 0 1.313.565 1.313 1.304 0 .74-.57 1.305-1.313 1.305z\"/></g></svg>","status_pending":"<svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" xmlns=\"http://www.w3.org/2000/svg\"><g fill-rule=\"evenodd\"><path d=\"M0 7a7 7 0 1114 0A7 7 0 010 7z\"/><path d=\"M13 7A6 6 0 101 7a6 6 0 0012 0z\" fill=\"var(--svg-status-bg, #fff)\"/><path d=\"M4.7 5.3c0-.2.1-.3.3-.3h.9c.2 0 .3.1.3.3v3.4c0 .2-.1.3-.3.3H5c-.2 0-.3-.1-.3-.3V5.3m3 0c0-.2.1-.3.3-.3h.9c.2 0 .3.1.3.3v3.4c0 .2-.1.3-.3.3H8c-.2 0-.3-.1-.3-.3V5.3\"/></g></svg>","status_running":"<svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" xmlns=\"http://www.w3.org/2000/svg\"><g fill-rule=\"evenodd\"><path d=\"M0 7a7 7 0 1114 0A7 7 0 010 7z\"/><path d=\"M13 7A6 6 0 101 7a6 6 0 0012 0z\" fill=\"var(--svg-status-bg, #fff)\"/><path d=\"M7 3c2.2 0 4 1.8 4 4s-1.8 4-4 4c-1.3 0-2.5-.7-3.3-1.7L7 7V3\"/></g></svg>","status_skipped":"<svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M7 14A7 7 0 117 0a7 7 0 010 14z\"/><path d=\"M7 13A6 6 0 107 1a6 6 0 000 12z\" fill=\"var(--svg-status-bg, #fff)\"/><path d=\"M6.415 7.04L4.579 5.203a.295.295 0 01.004-.416l.349-.349a.29.29 0 01.416-.004l2.214 2.214a.289.289 0 01.019.021l.132.133c.11.11.108.291 0 .398L5.341 9.573a.282.282 0 01-.398 0l-.331-.331a.285.285 0 010-.399L6.415 7.04zm2.54 0L7.119 5.203a.295.295 0 01.004-.416l.349-.349a.29.29 0 01.416-.004l2.214 2.214a.289.289 0 01.019.021l.132.133c.11.11.108.291 0 .398L7.881 9.573a.282.282 0 01-.398 0l-.331-.331a.285.285 0 010-.399L8.955 7.04z\"/></svg>","status_success":"<svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" xmlns=\"http://www.w3.org/2000/svg\"><g fill-rule=\"evenodd\"><path d=\"M0 7a7 7 0 1114 0A7 7 0 010 7z\"/><path d=\"M13 7A6 6 0 101 7a6 6 0 0012 0z\" fill=\"var(--svg-status-bg, #fff)\"/><path d=\"M6.278 7.697L5.045 6.464a.296.296 0 00-.42-.002l-.613.614a.298.298 0 00.002.42l1.91 1.909a.5.5 0 00.703.005l.265-.265L9.997 6.04a.291.291 0 00-.009-.408l-.614-.614a.29.29 0 00-.408-.009L6.278 7.697z\"/></g></svg>","tanuki":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M14.329 6.922l-.02-.053-1.239-3.232-.668 2.044-.337 1.035H3.936L3.598 5.68l-.667-2.043-1.24 3.237-.005.01-.004.01-.018.045a2.543 2.543 0 00.848 2.93l.005.004.01.008.01.008.009.006 3.302 2.474.004.004 1.644 1.242.5.379.501-.379 1.644-1.242.006-.004 3.325-2.489.007-.005.009-.007a2.543 2.543 0 00.844-2.939l-.003-.008zm.053 4.152l-3.337 2.497-1.643 1.242-.999.755a.675.675 0 01-.813 0l-.999-.755-1.643-1.242-3.313-2.483-.018-.014-.008-.006A4.043 4.043 0 01.267 6.395l.023-.057 1.9-4.963.013-.033.081-.212.023-.06.158-.413A.565.565 0 012.941.3a.576.576 0 01.613.415l.134.41.005.017.078.239.011.033 1.242 3.802h5.953l1.241-3.802.011-.033.078-.24.006-.016.133-.41a.575.575 0 011.088-.058l.157.409.025.064.08.211.013.033 1.903 4.963.022.058a4.043 4.043 0 01-1.343 4.671l-.01.008z\"/></svg>","timer":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M6 1a1 1 0 011-1h2a1 1 0 010 2v.07a6.958 6.958 0 012.812 1.058l.908-.908a.75.75 0 111.06 1.06l-.8.8A7 7 0 117 2.07V2a1 1 0 01-1-1zm7.5 8a5.5 5.5 0 11-11 0 5.5 5.5 0 0111 0zM8.75 5.75a.75.75 0 00-1.5 0v3.56l.22.22 2.254 2.254a.75.75 0 101.06-1.06L8.75 8.689V5.75z\"/></svg>","todo-done":"<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M3 13.5a.5.5 0 01-.5-.5V3a.5.5 0 01.5-.5h9.25a.75.75 0 000-1.5H3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V9.75a.75.75 0 00-1.5 0V13a.5.5 0 01-.5.5H3zm12.78-8.82a.75.75 0 00-1.06-1.06L9.162 9.177 7.289 7.241a.75.75 0 10-1.078 1.043l2.403 2.484a.75.75 0 001.07.01L15.78 4.68z\"/></svg>"};
+  const icon = (name, cls = 'ic') => ICONS[name].replace('<svg ', `<svg class="${cls}" `);
+  document.querySelectorAll('[data-i]').forEach(el => { el.outerHTML = icon(el.dataset.i); });
+  [['i-plus', 'plus-square-o'], ['i-issues', 'issues'], ['i-mr', 'merge-request'], ['i-todo', 'todo-done'], ['i-search', 'search']]
+    .forEach(([id, n]) => { document.getElementById(id).innerHTML = icon(n); });
+
+  const STAGES = [
+    ['build', ['compile', 'docker-build']],
+    ['test', ['unit-tests', 'lint', 'integration-tests', 'e2e-chrome', 'e2e-firefox']],
+    ['security', ['sast', 'dependency_scanning']],
+    ['deploy', ['deploy-staging', 'deploy-production']],
+  ];
+  const state = {
+    compile: 'success', 'docker-build': 'success', 'unit-tests': 'success', lint: 'success',
+    'integration-tests': 'running', 'e2e-chrome': 'running', 'e2e-firefox': 'running',
+    sast: 'created', dependency_scanning: 'created', 'deploy-staging': 'created', 'deploy-production': 'created',
+  };
+  const ACT = { success: 'retry', failed: 'retry', running: 'cancel', created: 'play', skipped: 'retry', pending: 'cancel' };
+  const render = () => {
+    document.getElementById('graph').innerHTML = STAGES.map(([stage, jobs]) => `<div class="stage"><h4>${stage}</h4>${
+      jobs.map(j => `<div class="job">${icon(`status_${state[j]}`, `ic st-${state[j]}`)}<span class="nm">${j}</span><span class="act">${icon(ACT[state[j]])}</span></div>`).join('')
+    }</div>`).join('');
+  };
+  const setStatus = s => {
+    const el = document.getElementById('status');
+    el.className = `badge ${s}`;
+    el.innerHTML = icon(`status_${s === 'passed' ? 'success' : s}`, 'ic') + s[0].toUpperCase() + s.slice(1);
+    el.querySelector('svg').style.color = 'currentColor';
+  };
+  setStatus('running');
+  render();
+
+  const loadedAt = Date.now();
+  const BASE_S = 13 * 60 + 2;
+  let stopped = false;
+  const clock = () => {
+    if (stopped) return;
+    const s = BASE_S + Math.floor((Date.now() - loadedAt) / 1000);
+    document.getElementById('dur').textContent = `${Math.floor(s / 60)} minutes ${String(s % 60).padStart(2, '0')} seconds`;
+  };
+  setInterval(clock, 1000);
+
+  // The rest of the pipeline in order; the fail run breaks at e2e-firefox and skips what's left.
+  const PLAN = [
+    ['integration-tests', 'success'], ['e2e-chrome', 'success'], ['e2e-firefox', 'success'],
+    ['sast', 'running'], ['dependency_scanning', 'running'], ['sast', 'success'], ['dependency_scanning', 'success'],
+    ['deploy-staging', 'running'], ['deploy-staging', 'success'], ['deploy-production', 'running'], ['deploy-production', 'success'],
+  ];
+  const finish = ok => {
+    stopped = true;
+    setStatus(ok ? 'passed' : 'failed');
+    document.getElementById('cancelbtn').textContent = 'Retry';
+    document.getElementById('cancelbtn').className = 'btn';
+    document.getElementById('tests').textContent = ok ? '1,284' : '1,279';
+    demo.trigger();
+  };
+  demo.onStart = durationMs => {
+    const ok = demo.outcome === 'success';
+    const steps = ok ? PLAN : PLAN.slice(0, 2).concat([['e2e-firefox', 'failed']]);
+    steps.forEach(([job, st], i) => setTimeout(() => {
+      state[job] = st;
+      if (!ok && i === steps.length - 1) for (const j of Object.keys(state)) if (state[j] === 'created') state[j] = 'skipped';
+      render();
+      if (i === steps.length - 1) finish(ok);
+    }, durationMs * (i + 1) / steps.length));
+  };
+</script>
+</body>
+</html>

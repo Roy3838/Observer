@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<!-- Claude Code working in a macOS Terminal window. Holds mid-task (tool calls keep streaming in)
+     until the suite starts it; then it ends by ?outcome=: success finishes the task and returns to an
+     empty prompt, fail stops on a permission prompt waiting for the user. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>claude</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; background: #1d1f21; display: flex; overflow: hidden;
+         font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+  .win { flex: 1; display: flex; flex-direction: column; background: #161616; }
+  .titlebar { height: 28px; flex: none; background: linear-gradient(#3a3a3a, #2f2f2f); border-bottom: 1px solid #111;
+              display: flex; align-items: center; justify-content: center; position: relative; color: #b5b5b5; font-size: 13px; }
+  .lights { position: absolute; left: 10px; display: flex; gap: 8px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+  .term { flex: 1; overflow: hidden; padding: 6px 10px 8px; color: #e6e6e6; display: flex; flex-direction: column;
+          font: 13px/1.38 Menlo, "SF Mono", Monaco, monospace; }
+  #log > div, #spinner, .box { white-space: pre-wrap; }
+  #log { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+  .dim { color: #8a8a8a; } .bold { font-weight: bold; } .orange { color: #d77757; } .green { color: #4eba65; }
+  .red { color: #ff6b80; } .blue { color: #b1b9f9; } .yellow { color: #ffc107; }
+  .user { background: #373737; color: #e6e6e6; display: inline-block; padding: 0 1ch; }
+  .add { background: #1f3d27; color: #c8f0d0; } .del { background: #4a2228; color: #f5c6cc; }
+  .box { border: 1px solid #888; border-radius: 6px; padding: 0 1ch; margin-top: 4px; }
+  .box.perm { border-color: #d77757; }
+  .hint { color: #8a8a8a; padding: 0 2ch; display: flex; justify-content: space-between; }
+  .cursor { background: #e6e6e6; color: #161616; }
+  .hidden { display: none !important; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar"><div class="lights"><i></i><i></i><i></i></div>acme-dashboard — ✳ claude — 158×46</div>
+  <div class="term">
+    <div id="log"></div>
+    <div id="spinner" class="orange"></div>
+    <div id="input">
+      <div class="box"><span class="dim">&gt; </span><span class="cursor"> </span></div>
+      <div class="hint"><span id="hint-left">⏵⏵ accept edits on <span class="dim">(shift+tab to cycle)</span></span><span></span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const log = document.getElementById('log');
+  const spinner = document.getElementById('spinner');
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const line = (html, cls = '') => {
+    const d = document.createElement('div');
+    if (cls) d.className = cls;
+    d.innerHTML = html;
+    log.appendChild(d);
+    while (log.children.length > 400) log.firstChild.remove();
+  };
+  const gap = () => line(' ');
+
+  // Session header and the user's request, as Claude Code prints them.
+  line('<span class="orange"> ▐▛███▜▌</span>   <span class="bold">Claude Code</span> <span class="dim">v2.1.12</span>');
+  line('<span class="orange">▝▜█████▛▘</span>  <span class="dim">Opus 5.5 · Claude Max</span>');
+  line('<span class="orange">  ▘▘ ▝▝ </span>   <span class="dim">~/repos/acme-dashboard</span>');
+  gap();
+  line('<span class="user">&gt; Migrate the billing module from the old payments SDK to the new Stripe client, update the tests and make sure everything passes</span>');
+  gap();
+
+  // Tool calls Claude makes while it works. While holding they cycle forever; none of them ends the task.
+  const tool = (name, arg, result) => () => {
+    line(`<span class="green">⏺</span> <span class="bold">${name}</span>${arg ? `(${esc(arg)})` : ''}`);
+    result.forEach((r, i) => line(`  <span class="dim">${i ? '   ' : '⎿ '} </span>${r}`));
+    gap();
+  };
+  const say = text => () => { line(`<span>⏺</span> ${esc(text)}`); gap(); };
+  const diff = (file, adds, dels, rows) => () => {
+    line(`<span class="green">⏺</span> <span class="bold">Update</span>(${file})`);
+    line(`  <span class="dim">⎿ </span> Updated <span class="bold">${file}</span> with ${adds} additions and ${dels} removals`);
+    rows.forEach(([n, kind, text]) => line(`      <span class="dim">${String(n).padStart(3)}</span> <span class="${kind === '+' ? 'add' : kind === '-' ? 'del' : ''}">${kind === ' ' ? ' ' : kind} ${esc(text)}</span>`));
+    gap();
+  };
+  const STEPS = [
+    say("I'll start by mapping where the old payments SDK is used."),
+    tool('Search', 'pattern: "from \'@acme/payments-sdk\'"', ['Found 14 files']),
+    tool('Read', 'src/billing/client.ts', ['Read 186 lines']),
+    tool('Read', 'src/billing/invoices.ts', ['Read 241 lines']),
+    tool('Update Todos', '', ['☐ Swap PaymentsClient for the Stripe client', '☐ Port invoice + subscription calls', '☐ Update webhook signature checks', '☐ Fix and run the billing tests']),
+    diff('src/billing/client.ts', 12, 9, [[3, '-', "import { PaymentsClient } from '@acme/payments-sdk';"], [3, '+', "import Stripe from 'stripe';"], [11, '-', 'export const payments = new PaymentsClient(env.PAYMENTS_KEY);'], [11, '+', "export const stripe = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: '2026-08-27' });"]]),
+    tool('Read', 'src/billing/subscriptions.ts', ['Read 312 lines']),
+    diff('src/billing/subscriptions.ts', 38, 27, [[54, '-', 'const sub = await payments.subscriptions.create({ customer, plan });'], [54, '+', 'const sub = await stripe.subscriptions.create({ customer, items: [{ price }] });'], [55, ' ', ''], [56, '-', 'return { id: sub.subscription_id, status: sub.state };'], [56, '+', 'return { id: sub.id, status: sub.status };']]),
+    tool('Bash', 'npx tsc --noEmit -p .', ['<span class="red">src/billing/invoices.ts(88,23): error TS2339: Property \'lineItems\' does not exist on type \'Invoice\'.</span>', '<span class="red">src/billing/webhooks.ts(41,9): error TS2554: Expected 3 arguments, but got 2.</span>', '<span class="dim">… +4 lines (ctrl+r to expand)</span>']),
+    say('Two type errors from the API differences. Stripe calls them `lines`, and webhook verification needs the signing secret.'),
+    diff('src/billing/invoices.ts', 9, 9, [[88, '-', 'for (const item of invoice.lineItems) {'], [88, '+', 'for (const item of invoice.lines.data) {']]),
+    diff('src/billing/webhooks.ts', 6, 4, [[41, '-', 'const event = payments.webhooks.verify(body, signature);'], [41, '+', 'const event = stripe.webhooks.constructEvent(body, signature, env.STRIPE_WEBHOOK_SECRET);']]),
+    tool('Bash', 'npm test -- src/billing', ['<span class="red">FAIL</span> src/billing/subscriptions.test.ts', '  ● createSubscription › maps the plan to a price', '<span class="dim">… +38 lines (ctrl+r to expand)</span>']),
+    tool('Read', 'src/billing/__mocks__/payments.ts', ['Read 97 lines']),
+    say("The tests still mock the old SDK. I'll replace that mock with a Stripe one."),
+    tool('Write', 'src/billing/__mocks__/stripe.ts', ['Wrote 84 lines to src/billing/__mocks__/stripe.ts']),
+    diff('src/billing/subscriptions.test.ts', 21, 18, [[2, '-', "jest.mock('@acme/payments-sdk');"], [2, '+', "jest.mock('stripe');"]]),
+    tool('Bash', 'npm test -- src/billing', ['<span class="green">PASS</span> src/billing/client.test.ts', '<span class="red">FAIL</span> src/billing/invoices.test.ts', '<span class="dim">… +22 lines (ctrl+r to expand)</span>']),
+    tool('Read', 'src/billing/invoices.test.ts', ['Read 158 lines']),
+    diff('src/billing/invoices.test.ts', 14, 11, [[37, '-', 'expect(invoice.lineItems).toHaveLength(2);'], [37, '+', 'expect(invoice.lines.data).toHaveLength(2);']]),
+    tool('Search', 'pattern: "payments\\." path: src/', ['Found 6 files']),
+    tool('Read', 'src/routes/api/checkout.ts', ['Read 128 lines']),
+    diff('src/routes/api/checkout.ts', 17, 15, [[22, '-', 'const session = await payments.checkout.start({ items, successUrl });'], [22, '+', "const session = await stripe.checkout.sessions.create({ line_items: items, mode: 'subscription', success_url: successUrl });"]]),
+  ];
+
+  // Spinner, timer and token count, like Claude Code's status line while it works.
+  const GLYPHS = ['·', '✢', '✳', '✶', '✻', '✽', '✻', '✶', '✳', '✢'];
+  const VERBS = ['Migrating…', 'Thinking…', 'Cogitating…', 'Refactoring…', 'Untangling…', 'Pondering…'];
+  const t0 = Date.now() - 6 * 60_000 - 42_000; // the task has been running ~6.7 min when the page loads
+  let tokens = 18400, verb = VERBS[0], g = 0, working = true;
+  const fmtT = ms => { const s = Math.floor(ms / 1000); return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`; };
+  const paintSpinner = () => {
+    if (!working) return;
+    g = (g + 1) % GLYPHS.length;
+    tokens += 3 + Math.floor(Math.random() * 9);
+    spinner.innerHTML = `${GLYPHS[g]} ${verb} <span class="dim">(esc to interrupt · ${fmtT(Date.now() - t0)} · ↓ ${(tokens / 1000).toFixed(1)}k tokens)</span>`;
+  };
+  const spinTimer = setInterval(paintSpinner, 120);
+
+  let step = 0;
+  const nextStep = () => {
+    STEPS[step % STEPS.length]();
+    step++;
+    verb = VERBS[Math.floor(Math.random() * VERBS.length)];
+  };
+  for (let i = 0; i < 9; i++) nextStep();
+  // A new tool call every 6–14 s, forever while holding and for the whole run.
+  let stepTimer;
+  const schedule = () => { stepTimer = setTimeout(() => { nextStep(); schedule(); }, 6000 + Math.random() * 8000); };
+  schedule();
+
+  const finish = () => {
+    clearTimeout(stepTimer);
+    clearInterval(spinTimer);
+    working = false;
+    spinner.innerHTML = '';
+    if (demo.outcome === 'success') {
+      tool('Bash', 'npm test', ['<span class="green">PASS</span> src/billing/client.test.ts', '<span class="green">PASS</span> src/billing/invoices.test.ts', '<span class="green">PASS</span> src/billing/subscriptions.test.ts', '<span class="green">PASS</span> src/billing/webhooks.test.ts', 'Tests:       <span class="green">212 passed</span>, 212 total'])();
+      tool('Update Todos', '', ['<span class="dim">☒ Swap PaymentsClient for the Stripe client</span>', '<span class="dim">☒ Port invoice + subscription calls</span>', '<span class="dim">☒ Update webhook signature checks</span>', '<span class="dim">☒ Fix and run the billing tests</span>'])();
+      line('<span>⏺</span> Done. The billing module now uses the Stripe client end to end:');
+      line('  - <span class="bold">client.ts</span>: one shared <span class="blue">Stripe</span> instance pinned to API version 2026-08-27');
+      line('  - <span class="bold">subscriptions/invoices/checkout</span>: ported to Stripe objects (<span class="blue">items[].price</span>, <span class="blue">lines.data</span>)');
+      line('  - <span class="bold">webhooks.ts</span>: verifies with <span class="blue">constructEvent</span> and STRIPE_WEBHOOK_SECRET (add it to .env)');
+      line('  - Tests: replaced the SDK mock with a Stripe mock; all 212 tests pass and <span class="blue">tsc</span> is clean.');
+      gap();
+      line(`<span class="dim">✻ Worked for ${fmtT(Date.now() - t0)}</span>`);
+      gap();
+    } else {
+      // Blocked: Claude needs the user's OK to run a destructive command.
+      line('<span>⏺</span> The integration tests need the new <span class="blue">stripe_customer_id</span> column, so I need to reset the dev database and re-run the migrations.');
+      gap();
+      document.getElementById('input').innerHTML =
+        '<div class="box perm"><span class="bold">Bash command</span>\n\n' +
+        '  npx prisma migrate reset --force\n' +
+        '  <span class="dim">Reset the dev database and re-apply all migrations</span>\n\n' +
+        'Do you want to proceed?\n' +
+        '<span class="orange">❯ 1. Yes</span>\n' +
+        '  2. Yes, and don\'t ask again for <span class="bold">npx prisma migrate reset</span> commands in <span class="bold">/Users/jay/repos/acme-dashboard</span>\n' +
+        '  3. No, and tell Claude what to do differently <span class="dim">(esc)</span></div>';
+    }
+    demo.trigger();
+  };
+
+  demo.onStart = durationMs => { setTimeout(finish, durationMs); };
+</script>
+</body>
+</html>

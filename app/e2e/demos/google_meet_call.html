@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<!-- A Google Meet call the user is in, heard through the tab's audio. Holds on Ana and Ben waiting
+     for Priya (two lines of small talk, then quiet) until the suite starts it; then Priya joins and
+     they hold the meeting in media/meeting.js (launch date, pricing, beta, then action items), and
+     the call ends on "You left the meeting". The speech plays out loud; the suite's tab capture
+     hears it. Marks each line as it starts ('line', its index). Meet's look as in google_meet.html. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Meet - Weekly launch sync</title>
+<link rel="stylesheet" href="fonts/google-sans.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #131314; color: #e3e3e3; font-family: 'Google Sans', Roboto, sans-serif; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 24px; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  .fill { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  .av { border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 500; }
+  .grid { position: absolute; left: 16px; right: 16px; top: 16px; bottom: 88px; display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); gap: 8px; }
+  .tile { border-radius: 12px; background: #3c4043; position: relative; overflow: hidden; display: grid; place-items: center; }
+  .tile .av { width: 104px; height: 104px; font-size: 44px; }
+  .tile .nm { position: absolute; left: 14px; bottom: 12px; font-size: 14px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+  .tile .mic { position: absolute; right: 12px; top: 12px; width: 26px; height: 26px; border-radius: 50%; background: rgba(32,33,36,.6); display: grid; place-items: center; }
+  .tile .mic .ms { font-size: 16px; }
+  .tile.speaking { box-shadow: inset 0 0 0 3px #8ab4f8; }
+  .tile.video { background: linear-gradient(160deg, #4a5a6a 0%, #2b3540 60%, #1f262d 100%); }
+  .tile.hidden { display: none; }
+  .three .grid { grid-template-columns: repeat(3, 1fr); grid-template-rows: 1fr; }
+  .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 80px; display: flex; align-items: center; padding: 0 24px; }
+  .bar .info { font-size: 16px; display: flex; gap: 14px; }
+  .bar .ctrls { position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
+  .cbtn { width: 48px; height: 40px; border-radius: 20px; background: #333537; display: grid; place-items: center; color: #e3e3e3; }
+  .cbtn.off { background: #f9dedc; color: #410e0b; }
+  .cbtn.end { width: 64px; background: #dc362e; color: #fff; }
+  .bar .r { margin-left: auto; display: flex; gap: 18px; align-items: center; }
+  .bar .count { position: relative; }
+  .bar .count b { position: absolute; top: -8px; right: -10px; font-size: 11px; background: #5f6368; border-radius: 8px; padding: 0 5px; font-weight: 500; }
+  .toast { position: absolute; left: 24px; bottom: 96px; background: #303134; color: #e3e3e3; padding: 14px 18px; border-radius: 8px; font-size: 14px; font-family: Roboto; display: none; }
+  /* After the call */
+  .left { display: none; position: fixed; inset: 0; background: #fff; color: #1f1f1f; }
+  .ended .left { display: block; } .ended .call { display: none; }
+  .left .top { height: 64px; display: flex; align-items: center; padding: 0 16px; gap: 8px; }
+  .left .top img { width: 40px; height: 40px; } .left .top .brand { font-size: 22px; color: #444746; }
+  .left .mid { position: absolute; top: 34%; left: 0; right: 0; text-align: center; }
+  .left h1 { font-size: 36px; font-weight: 400; margin: 0 0 22px; }
+  .left .btns { display: flex; justify-content: center; gap: 12px; }
+  .pill-btn { height: 40px; padding: 0 24px; border-radius: 20px; display: inline-grid; place-items: center; font-weight: 500; font-size: 14px; }
+  .pill-btn.p { background: #0b57d0; color: #fff; } .pill-btn.s { border: 1px solid #747775; color: #0b57d0; }
+  .left .back { margin-top: 22px; font-family: Roboto; font-size: 14px; color: #444746; }
+  .left .rate { margin: 64px auto 0; width: 420px; border: 1px solid #dadce0; border-radius: 8px; padding: 18px; font-size: 16px; }
+  .left .rate .faces { display: flex; justify-content: center; gap: 28px; margin-top: 14px; color: #444746; }
+</style>
+<script src="demo-contract.js"></script>
+<script src="media/meeting.js"></script>
+</head>
+<body id="body" class="three">
+<div class="call">
+  <div class="grid">
+    <div class="tile video" id="t-Ana"><span class="nm">Ana Torres</span><span class="mic"><span class="ms">mic_off</span></span></div>
+    <div class="tile" id="t-Ben"><div class="av" style="background:#188038">B</div><span class="nm">Ben Ortiz</span><span class="mic"><span class="ms">mic_off</span></span></div>
+    <div class="tile video hidden" id="t-Priya" style="background:linear-gradient(200deg,#5d4a3a,#2c241d)"><span class="nm">Priya Shah</span><span class="mic"><span class="ms">mic_off</span></span></div>
+    <div class="tile"><div class="av" style="background:#7b5ea7">R</div><span class="nm">You</span><span class="mic"><span class="ms">mic_off</span></span></div>
+  </div>
+  <div class="toast" id="toast">Priya Shah joined</div>
+  <div class="bar">
+    <div class="info"><span id="clock">10:02 AM</span><span>|</span><span>Weekly launch sync</span></div>
+    <div class="ctrls">
+      <div class="cbtn off"><span class="ms">mic_off</span></div><div class="cbtn off"><span class="ms">videocam_off</span></div>
+      <div class="cbtn"><span class="ms">closed_caption</span></div><div class="cbtn"><span class="ms">mood</span></div><div class="cbtn"><span class="ms">present_to_all</span></div>
+      <div class="cbtn"><span class="ms">back_hand</span></div><div class="cbtn"><span class="ms">more_vert</span></div><div class="cbtn end"><span class="ms fill">call_end</span></div>
+    </div>
+    <div class="r"><span class="ms">info</span><span class="count"><span class="ms">group</span><b id="people">3</b></span><span class="ms">chat</span><span class="ms">category</span></div>
+  </div>
+</div>
+<div class="left">
+  <div class="top"><img src="meet_assets/meet_logo.svg" alt=""><span class="brand">Google Meet</span></div>
+  <div class="mid">
+    <h1>You left the meeting</h1>
+    <div class="btns"><span class="pill-btn s">Rejoin</span><span class="pill-btn p">Return to home screen</span></div>
+    <div class="back">Returning to home screen in <span id="back">60</span></div>
+    <div class="rate">How was the audio and video?<div class="faces"><span class="ms">sentiment_very_dissatisfied</span><span class="ms">sentiment_neutral</span><span class="ms">sentiment_very_satisfied</span></div></div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const loadedAt = Date.now();
+  setInterval(() => {
+    const d = new Date(Date.UTC(2026, 9, 12, 10, 2) + (Date.now() - loadedAt));
+    $('clock').textContent = `${d.getUTCHours() % 12 || 12}:${String(d.getUTCMinutes()).padStart(2, '0')} AM`;
+  }, 1000);
+
+  const GAP_MS = 600; // between speakers
+  let playing = null;
+  const speaking = who => {
+    for (const name of ['Ana', 'Ben', 'Priya']) {
+      const tile = $(`t-${name}`), on = name === who;
+      tile.classList.toggle('speaking', on);
+      tile.querySelector('.mic').innerHTML = on ? '<span class="ms fill" style="color:#8ab4f8">graphic_eq</span>' : '<span class="ms">mic_off</span>';
+    }
+  };
+  // Plays lines back to back; resolves when the last one ends.
+  const say = (lines, onLine) => new Promise(resolve => {
+    let i = 0;
+    const next = () => {
+      if (i >= lines.length) { speaking(null); return resolve(); }
+      const line = lines[i];
+      onLine?.(i, line);
+      speaking(line.who);
+      playing = new Audio(line.file);
+      const idx = i++;
+      playing.onended = () => { speaking(null); setTimeout(next, GAP_MS); };
+      // Autoplay blocked (opened by hand without the suite's flag): move on after its duration.
+      playing.play().catch(() => setTimeout(playing.onended, line.duration * 1000));
+    };
+    next();
+  });
+
+  // Holding: two lines of small talk, then the room waits quietly for Priya.
+  say(MEETING.hold);
+
+  demo.onStart = async () => {
+    playing?.pause();
+    speaking(null);
+    $('body').classList.remove('three');
+    $('t-Priya').classList.remove('hidden');
+    $('people').textContent = '4';
+    $('toast').style.display = 'block';
+    setTimeout(() => { $('toast').style.display = 'none'; }, 5000);
+    await new Promise(r => setTimeout(r, 1500));
+    await say(MEETING.lines, i => demo.mark('line', { index: i }));
+    await new Promise(r => setTimeout(r, 1500));
+    $('body').classList.add('ended');
+    let back = 60;
+    setInterval(() => { $('back').textContent = String(Math.max(0, --back)); }, 1000);
+    demo.trigger();
+  };
+</script>
+</body>
+</html>

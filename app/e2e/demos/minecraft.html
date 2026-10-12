@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<!-- Minecraft gameplay, full window, from a recording: media/minecraft.mp4 with its timings in
+     media/minecraft.js (see that file). Holds looping a stretch with no deaths until the suite starts
+     it; then it plays on from there, marks each death as it happens ('death', { at }, seconds of
+     video), and the trigger fires when it reaches its end. The game's sound plays out loud. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Minecraft* 1.21.4 - Singleplayer</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  video { width: 100%; height: 100%; object-fit: cover; display: block; }
+</style>
+<script src="demo-contract.js"></script>
+<script src="media/minecraft.js"></script>
+</head>
+<body>
+<video id="v" src="media/minecraft.mp4" muted playsinline></video>
+<script>
+  const v = document.getElementById('v');
+  const { hold, deaths, end } = MINECRAFT;
+  demo.truth = { deaths };
+  let run = false, next = 0;
+
+  v.addEventListener('loadedmetadata', () => { v.currentTime = hold[0]; v.play().catch(() => {}); });
+  v.addEventListener('timeupdate', () => {
+    if (!run) { if (v.currentTime >= hold[1]) v.currentTime = hold[0]; return; }
+    while (next < deaths.length && v.currentTime >= deaths[next]) demo.mark('death', { at: deaths[next++] });
+    if (v.currentTime >= end) { run = false; v.pause(); demo.trigger(); }
+  });
+  demo.onStart = () => {
+    run = true;
+    v.currentTime = hold[1];
+    v.muted = false; // the game's sound from here on, like a real session
+    v.play().catch(() => {});
+  };
+</script>
+</body>
+</html>

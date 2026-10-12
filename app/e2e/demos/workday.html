@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<!-- A Mac desktop where the user works in one full-screen app at a time: VS Code, Gmail, Figma,
+     Slack. Holds in VS Code (typing) until the suite starts it; then the user switches apps on the
+     schedule in SCHEDULE (seconds into the run) and the trigger fires when the run's time is up.
+     Marks every switch ('app', { name }); demo.truth.schedule has the plan. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Desktop</title>
+<link rel="stylesheet" href="fonts/inter.css">
+<link rel="stylesheet" href="fonts/google-sans.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, Inter, sans-serif; font-size: 13px; background: #222; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 20px; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+  .menubar { height: 24px; background: rgba(30,30,30,.92); color: #eee; display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13px; }
+  .menubar b { font-weight: 700; }
+  .menubar .r { margin-left: auto; display: flex; gap: 14px; }
+  .app { position: absolute; top: 24px; left: 0; right: 0; bottom: 0; display: none; }
+  .app.on { display: flex; }
+  /* VS Code */
+  .vs { background: #1f1f1f; color: #ccc; font-size: 13px; }
+  .vs .act { width: 48px; background: #181818; display: flex; flex-direction: column; align-items: center; gap: 22px; padding-top: 12px; color: #858585; }
+  .vs .act .on { color: #fff; }
+  .vs .exp { width: 230px; background: #181818; border-right: 1px solid #2b2b2b; padding: 8px 0; }
+  .vs .exp .h { padding: 0 16px 8px; font-size: 11px; letter-spacing: .5px; color: #bbb; }
+  .vs .exp div.f { padding: 2px 16px; white-space: nowrap; } .vs .exp .sel { background: #37373d; color: #fff; }
+  .vs .ed { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .vs .tabs { height: 35px; background: #181818; display: flex; }
+  .vs .tabs span { padding: 0 14px; display: flex; align-items: center; border-right: 1px solid #2b2b2b; color: #9d9d9d; }
+  .vs .tabs .on { background: #1f1f1f; color: #fff; border-top: 1px solid #0078d4; }
+  .vs pre { margin: 0; padding: 8px 0; font: 13px/19px Menlo, Monaco, monospace; flex: 1; overflow: hidden; }
+  .vs pre .ln { display: inline-block; width: 48px; text-align: right; padding-right: 18px; color: #6e7681; }
+  .k { color: #569cd6; } .s { color: #ce9178; } .f { color: #dcdcaa; } .t { color: #4ec9b0; } .c { color: #6a9955; } .v { color: #9cdcfe; }
+  .vs .panel { height: 150px; border-top: 1px solid #2b2b2b; padding: 6px 14px; font: 12px/17px Menlo, monospace; color: #ccc; }
+  .vs .status { position: absolute; left: 0; right: 0; bottom: 0; height: 22px; background: #0078d4; color: #fff; display: flex; gap: 16px; align-items: center; padding: 0 10px; font-size: 12px; }
+  .caret { border-left: 2px solid #aeafad; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { border-color: transparent; } }
+  /* Gmail */
+  .gm { background: #f8fafd; color: #1f1f1f; font-family: 'Google Sans', Roboto, sans-serif; flex-direction: column; }
+  .gm .top { height: 64px; display: flex; align-items: center; gap: 16px; padding: 0 16px; }
+  .gm .logo { display: flex; align-items: center; gap: 8px; font-size: 22px; color: #5f6368; width: 220px; }
+  .gm .search { flex: 1; max-width: 720px; height: 48px; border-radius: 24px; background: #e9eef6; display: flex; align-items: center; gap: 12px; padding: 0 16px; color: #444746; }
+  .gm .body { flex: 1; display: flex; }
+  .gm .side { width: 256px; padding: 8px 12px; }
+  .gm .compose { width: 140px; height: 56px; border-radius: 16px; background: #c2e7ff; display: flex; align-items: center; gap: 12px; padding: 0 18px; font-weight: 500; margin-bottom: 16px; }
+  .gm .side div.i { height: 32px; border-radius: 16px; display: flex; align-items: center; gap: 16px; padding: 0 12px; font-size: 14px; }
+  .gm .side .on { background: #d3e3fd; font-weight: 700; }
+  .gm .side .i b { margin-left: auto; font-size: 12px; }
+  .gm .mail { flex: 1; background: #fff; border-radius: 16px; margin: 0 16px 16px 0; padding: 20px 28px; font-family: Roboto, sans-serif; }
+  .gm h2 { font-family: 'Google Sans'; font-weight: 400; font-size: 22px; margin: 0 0 18px; }
+  .gm .msg { display: flex; gap: 12px; margin-bottom: 18px; font-size: 14px; line-height: 20px; }
+  .gm .av { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex: none; }
+  .gm .reply { border: 1px solid #c4c7c5; border-radius: 8px; padding: 14px; min-height: 150px; font-size: 14px; line-height: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  .gm .send { margin-top: 12px; background: #0b57d0; color: #fff; border-radius: 18px; width: 90px; height: 36px; display: grid; place-items: center; font-weight: 500; }
+  /* Figma */
+  .fg { background: #1e1e1e; color: #fff; font-family: Inter, sans-serif; font-size: 11px; flex-direction: column; }
+  .fg .bar { height: 48px; background: #2c2c2c; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid #383838; }
+  .fg .bar .name { margin: 0 auto; font-size: 13px; color: #fff; } .fg .bar .name small { color: #9e9e9e; }
+  .fg .share { background: #0d99ff; border-radius: 6px; padding: 6px 12px; font-weight: 600; }
+  .fg .body { flex: 1; display: flex; }
+  .fg .layers { width: 240px; background: #2c2c2c; border-right: 1px solid #383838; padding: 10px 0; }
+  .fg .layers div { padding: 5px 16px; color: #e6e6e6; } .fg .layers .h { color: #9e9e9e; font-weight: 600; }
+  .fg .layers .sel { background: #0d99ff33; }
+  .fg .canvas { flex: 1; background: #1e1e1e; position: relative; }
+  .fg .frame { position: absolute; top: 90px; width: 220px; height: 440px; background: #fff; color: #111; border-radius: 4px; padding: 26px 18px; font-size: 13px; }
+  .fg .frame .lbl { position: absolute; top: -20px; left: 0; color: #9e9e9e; font-size: 11px; }
+  .fg .frame h3 { margin: 30px 0 10px; font-size: 20px; } .fg .frame p { color: #555; line-height: 18px; }
+  .fg .frame .cta { position: absolute; left: 18px; right: 18px; bottom: 26px; height: 40px; border-radius: 10px; background: #5b5bd6; color: #fff; display: grid; place-items: center; font-weight: 600; }
+  .fg .frame.sel { outline: 2px solid #0d99ff; }
+  .fg .props { width: 240px; background: #2c2c2c; border-left: 1px solid #383838; padding: 12px 16px; color: #e6e6e6; line-height: 26px; }
+  /* Slack */
+  .sl { background: #fff; color: #1d1c1d; font-family: Inter, sans-serif; font-size: 15px; flex-direction: column; }
+  .sl .top { height: 40px; background: #3f0e40; display: flex; align-items: center; justify-content: center; }
+  .sl .top span { width: 600px; height: 26px; border-radius: 6px; background: #5d3a5e; color: #ddd; display: flex; align-items: center; padding: 0 10px; font-size: 13px; }
+  .sl .body { flex: 1; display: flex; }
+  .sl .side { width: 260px; background: #3f0e40; color: #cfc3cf; padding: 12px 8px; }
+  .sl .side .ws { color: #fff; font-weight: 800; font-size: 18px; padding: 4px 10px 14px; }
+  .sl .side div.ch { padding: 4px 10px; border-radius: 6px; } .sl .side .on { background: #1164a3; color: #fff; } .sl .side .u { color: #fff; font-weight: 700; }
+  .sl .side .h { padding: 14px 10px 4px; font-size: 14px; }
+  .sl .chan { flex: 1; display: flex; flex-direction: column; }
+  .sl .chan .hd { height: 50px; border-bottom: 1px solid #ddd; display: flex; align-items: center; padding: 0 20px; font-weight: 800; font-size: 18px; }
+  .sl .msgs { flex: 1; padding: 10px 20px; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
+  .sl .m { display: flex; gap: 10px; padding: 8px 0; }
+  .sl .m .av { width: 36px; height: 36px; border-radius: 6px; flex: none; }
+  .sl .m b { font-weight: 800; } .sl .m small { color: #616061; font-size: 12px; margin-left: 6px; }
+  .sl .box { margin: 0 20px 20px; border: 1px solid #bbb; border-radius: 8px; height: 80px; padding: 12px; color: #616061; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="menubar"><b id="appname">Code</b><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Window</span><span>Help</span><div class="r"><span>Mon Oct 12</span><span id="clock">9:41 AM</span></div></div>
+
+<div class="app vs on" id="vscode">
+  <div class="act"><span class="ms on">description</span><span class="ms">search</span><span class="ms">account_tree</span><span class="ms">bug_report</span><span class="ms">extension</span></div>
+  <div class="exp"><div class="h">EXPLORER: ACME-STORE</div>
+    <div class="f">▾ src</div><div class="f">&nbsp;&nbsp;▾ lib</div><div class="f sel">&nbsp;&nbsp;&nbsp;&nbsp;checkout.ts</div><div class="f">&nbsp;&nbsp;&nbsp;&nbsp;orders.ts</div><div class="f">&nbsp;&nbsp;&nbsp;&nbsp;stripe.ts</div>
+    <div class="f">&nbsp;&nbsp;▸ app</div><div class="f">▸ tests</div><div class="f">package.json</div><div class="f">tsconfig.json</div></div>
+  <div class="ed">
+    <div class="tabs"><span class="on">checkout.ts</span><span>stripe.ts</span><span>orders.ts</span></div>
+<pre id="code"></pre>
+    <div class="panel"><div>TERMINAL</div><div>$ pnpm test checkout</div><div style="color:#4ec9b0"> ✓ tests/checkout.test.ts (7 tests) 412ms</div><div> Test Files  1 passed (1)</div></div>
+  </div>
+  <div class="status"><span>⎇ fix/checkout-tax</span><span>✓ 0 ⚠ 2</span><span style="margin-left:auto">Ln 24, Col 31</span><span>TypeScript</span></div>
+</div>
+
+<div class="app gm" id="gmail">
+  <div class="top"><div class="logo"><span class="ms">menu</span><svg width="30" height="22" viewBox="0 0 30 22"><path d="M2 3l13 9 13-9" stroke="#ea4335" stroke-width="3" fill="none"/><rect x="1" y="2" width="28" height="18" rx="2" fill="none" stroke="#4285f4" stroke-width="2"/></svg>Gmail</div><div class="search"><span class="ms">search</span>Search mail</div></div>
+  <div class="body">
+    <div class="side"><div class="compose"><span class="ms">edit</span>Compose</div>
+      <div class="i on"><span class="ms">inbox</span>Inbox<b>12</b></div><div class="i"><span class="ms">star</span>Starred</div><div class="i"><span class="ms">schedule</span>Snoozed</div><div class="i"><span class="ms">send</span>Sent</div><div class="i"><span class="ms">draft</span>Drafts<b>3</b></div></div>
+    <div class="mail">
+      <h2>Q3 invoice #INV-2231 — Northwind Logistics</h2>
+      <div class="msg"><div class="av" style="background:#e37400">N</div><div><b>Hannah Weber</b> &lt;billing@northwind-logistics.com&gt;<br>Hi Roy, attached is our Q3 invoice for warehousing and last-mile delivery ($14,820.00). Payment terms are net 30. Could you confirm the PO number on your side so we can match it? Thanks, Hannah</div></div>
+      <div class="reply"><span id="reply"></span><span class="caret"></span></div>
+      <div class="send">Send</div>
+    </div>
+  </div>
+</div>
+
+<div class="app fg" id="figma">
+  <div class="bar"><span class="ms">grid_view</span><span class="ms">near_me</span><span class="ms">crop_free</span><span class="ms">rectangle</span><span class="ms">edit</span><span class="ms">title</span>
+    <div class="name">Onboarding v2 <small>/ Mobile app</small></div><span class="share">Share</span></div>
+  <div class="body">
+    <div class="layers"><div class="h">Layers</div><div id="l0">▣ Welcome</div><div id="l1">▣ Pick a plan</div><div id="l2">▣ Connect your bank</div><div>▣ All set</div></div>
+    <div class="canvas">
+      <div class="frame" id="f0" style="left:60px"><span class="lbl">Welcome</span><h3>Welcome to Ledgerly</h3><p>Track every expense and invoice in one place.</p><div class="cta">Get started</div></div>
+      <div class="frame" id="f1" style="left:320px"><span class="lbl">Pick a plan</span><h3>Pick a plan</h3><p>Starter · $0<br>Growth · $29/mo<br>Scale · $79/mo</p><div class="cta">Continue</div></div>
+      <div class="frame" id="f2" style="left:580px"><span class="lbl">Connect your bank</span><h3>Connect your bank</h3><p>We use read-only access. You can disconnect at any time.</p><div class="cta">Connect</div></div>
+    </div>
+    <div class="props"><b>Frame</b><br>W 375 &nbsp; H 812<br><b>Auto layout</b><br>Gap 16 · Padding 24<br><b>Fill</b><br>#FFFFFF 100%</div>
+  </div>
+</div>
+
+<div class="app sl" id="slack">
+  <div class="top"><span>Search Acme</span></div>
+  <div class="body">
+    <div class="side"><div class="ws">Acme</div><div class="h">Channels</div><div class="ch"># general</div><div class="ch"># eng</div><div class="ch on"># launch</div><div class="ch u"># design</div><div class="h">Direct messages</div><div class="ch">Ana Torres</div><div class="ch">Ben Ortiz</div></div>
+    <div class="chan"><div class="hd"># launch</div>
+      <div class="msgs" id="msgs">
+        <div class="m"><div class="av" style="background:#e8710a"></div><div><b>Ana Torres</b><small>9:12 AM</small><br>Launch moved to March 14 — I'll update the timeline doc.</div></div>
+        <div class="m"><div class="av" style="background:#188038"></div><div><b>Ben Ortiz</b><small>9:20 AM</small><br>Webhook retry fix is in review: github.com/acme/store/pull/482</div></div>
+        <div class="m"><div class="av" style="background:#c5221f"></div><div><b>Priya Shah</b><small>9:26 AM</small><br>Launch email draft is in the doc, comments welcome. Subject line options at the top 👆</div></div>
+        <div class="m"><div class="av" style="background:#e8710a"></div><div><b>Ana Torres</b><small>9:31 AM</small><br>@Roy can you confirm checkout handles tax-exempt customers before we freeze?</div></div>
+        <div class="m"><div class="av" style="background:#7b5ea7"></div><div><b>Roy</b><small>9:38 AM</small><br>On it, adding it to checkout.ts now. Should have a PR by noon.</div></div>
+      </div>
+      <div class="box">Message #launch</div></div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const APPS = { vscode: ['Code', 'VS Code'], gmail: ['Google Chrome', 'Gmail'], figma: ['Figma', 'Figma'], slack: ['Slack', 'Slack'] };
+  // [seconds into the run, app]: who's on screen from then on.
+  const SCHEDULE = [[0, 'vscode'], [75, 'gmail'], [130, 'figma'], [220, 'slack'], [260, 'vscode'], [330, 'gmail']];
+  demo.truth = { schedule: SCHEDULE };
+
+  const CODE = [
+    '<span class="k">import</span> { <span class="v">stripe</span> } <span class="k">from</span> <span class="s">"./stripe"</span>;',
+    '<span class="k">import</span> <span class="k">type</span> { <span class="t">Cart</span>, <span class="t">Address</span> } <span class="k">from</span> <span class="s">"./types"</span>;',
+    '',
+    '<span class="c">// Sales tax by state, in basis points.</span>',
+    '<span class="k">const</span> <span class="v">TAX_BPS</span>: <span class="t">Record</span>&lt;<span class="t">string</span>, <span class="t">number</span>&gt; = { <span class="v">CA</span>: <span class="s">725</span>, <span class="v">NY</span>: <span class="s">400</span>, <span class="v">TX</span>: <span class="s">625</span> };',
+    '',
+    '<span class="k">export function</span> <span class="f">subtotal</span>(<span class="v">cart</span>: <span class="t">Cart</span>): <span class="t">number</span> {',
+    '  <span class="k">return</span> <span class="v">cart</span>.<span class="v">items</span>.<span class="f">reduce</span>((<span class="v">sum</span>, <span class="v">i</span>) =&gt; <span class="v">sum</span> + <span class="v">i</span>.<span class="v">price</span> * <span class="v">i</span>.<span class="v">qty</span>, <span class="s">0</span>);',
+    '}',
+    '',
+    '<span class="k">export function</span> <span class="f">salesTax</span>(<span class="v">cart</span>: <span class="t">Cart</span>, <span class="v">to</span>: <span class="t">Address</span>): <span class="t">number</span> {',
+    '  <span class="k">const</span> <span class="v">bps</span> = <span class="v">TAX_BPS</span>[<span class="v">to</span>.<span class="v">state</span>] ?? <span class="s">0</span>;',
+    '  <span class="k">return</span> <span class="t">Math</span>.<span class="f">round</span>((<span class="f">subtotal</span>(<span class="v">cart</span>) * <span class="v">bps</span>) / <span class="s">10_000</span>);',
+    '}',
+    '',
+    '<span class="k">export async function</span> <span class="f">createPaymentIntent</span>(<span class="v">cart</span>: <span class="t">Cart</span>, <span class="v">to</span>: <span class="t">Address</span>) {',
+    '  <span class="k">const</span> <span class="v">amount</span> = <span class="f">subtotal</span>(<span class="v">cart</span>) + <span class="f">salesTax</span>(<span class="v">cart</span>, <span class="v">to</span>) + <span class="v">cart</span>.<span class="v">shipping</span>;',
+    '  <span class="k">return</span> <span class="v">stripe</span>.<span class="v">paymentIntents</span>.<span class="f">create</span>({',
+    '    <span class="v">amount</span>,',
+    '    <span class="v">currency</span>: <span class="s">"usd"</span>,',
+    '    <span class="v">metadata</span>: { <span class="v">cartId</span>: <span class="v">cart</span>.<span class="v">id</span> },',
+    '  });',
+    '}',
+  ];
+  const TYPING = '<span class="c">// TODO: tax-exempt customers skip salesTax()</span>';
+  const REPLY = 'Hi Hannah, thanks for sending this over. Our PO number for Q3 is PO-7781. I\'ve forwarded the invoice to our finance team and it should be paid within the net 30 terms. Best, Roy';
+  let typed = 0, replied = 0;
+  const paintCode = () => {
+    const shownTyping = typed >= TYPING.length ? TYPING : TYPING.slice(0, typed).replace(/<[^>]*$/, '');
+    $('code').innerHTML = [...CODE, shownTyping + '<span class="caret"></span>'].map((l, i) => `<span class="ln">${i + 1}</span>${l}`).join('\n');
+  };
+  paintCode();
+
+  let current = null;
+  const show = name => {
+    if (name === current) return;
+    current = name;
+    for (const id of Object.keys(APPS)) $(id).classList.toggle('on', id === name);
+    $('appname').textContent = APPS[name][0];
+  };
+  show('vscode');
+
+  const loadedAt = Date.now();
+  let run = null, step = 0;
+  setInterval(() => {
+    const d = new Date(Date.UTC(2026, 9, 12, 9, 41) + (Date.now() - loadedAt));
+    $('clock').textContent = `${d.getUTCHours() % 12 || 12}:${String(d.getUTCMinutes()).padStart(2, '0')} AM`;
+    // A little activity in whichever app is open.
+    if (current === 'vscode' && typed < TYPING.length) { typed += 3; paintCode(); }
+    if (current === 'gmail' && replied < REPLY.length) { replied += 2; $('reply').textContent = REPLY.slice(0, replied); }
+    if (current === 'figma') { const i = Math.floor((Date.now() / 6000) % 3); [0, 1, 2].forEach(j => { $(`f${j}`).classList.toggle('sel', j === i); $(`l${j}`).classList.toggle('sel', j === i); }); }
+    if (!run) return;
+    const s = (Date.now() - run.at) / 1000;
+    while (step < SCHEDULE.length && s >= SCHEDULE[step][0]) {
+      show(SCHEDULE[step][1]);
+      demo.mark('app', { name: SCHEDULE[step][1] });
+      step++;
+    }
+    if (s * 1000 >= run.durationMs && !run.done) { run.done = true; demo.trigger(); }
+  }, 500);
+
+  demo.onStart = durationMs => { run = { at: Date.now(), durationMs }; };
+</script>
+</body>
+</html>

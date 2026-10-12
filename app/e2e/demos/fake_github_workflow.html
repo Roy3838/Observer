@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<!-- Copied from video/demos/fake_github_workflow.html and reworked for app/e2e: the run is already going on load, holds mid-build until the suite starts it, then ends by ?outcome=. -->
+<!-- saved from url=(0060)https://github.com/Roy3838/Observer/actions/runs/37359884122 -->
+<html lang="en" data-color-mode="light" data-light-theme="light_high_contrast" data-dark-theme="dark_high_contrast" data-a11y-animated-images="system" data-a11y-link-underlines="true" data-turbo-loaded="" class="js-focus-visible" data-js-focus-visible=""><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><style type="text/css">.turbo-progress-bar {
+  position: fixed;
+  display: block;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: #0076ff;
+  z-index: 2147483647;
+  transition:
+    width 300ms ease-out,
+    opacity 150ms 150ms ease-in;
+  transform: translate3d(0, 0, 0);
+}
+</style><style>
+:root {
+  --fontStack-monospace: "Monaspace Neon", ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace !important;
+}
+</style>
+
+
+
+
+  
+    
+  <link rel="dns-prefetch" href="https://github.githubassets.com/">
+  <link rel="dns-prefetch" href="https://avatars.githubusercontent.com/">
+  <link rel="dns-prefetch" href="https://github-cloud.s3.amazonaws.com/">
+  <link rel="dns-prefetch" href="https://user-images.githubusercontent.com/">
+  <link rel="preconnect" href="https://github.githubassets.com/">
+  <link rel="preconnect" href="https://avatars.githubusercontent.com/">
+
+
+<meta name="react-profiling" content="0" data-turbo-transient="true">
+<meta name="react-import-map" content="react,react-dom,react-dom/client,react-dom/profiling,react-is,react-reconciler,react/compiler-runtime,react/jsx-dev-runtime,react/jsx-runtime,scheduler@777f63f87cd0" data-turbo-track="reload">
+
+
+
+
+
+
+
+
+
+  
+
+  <link media="all" rel="stylesheet" href="./github_assets/light-5c4e9fc574bf49f3.css"><link media="all" rel="stylesheet" href="./github_assets/light_high_contrast-fb37c309e0603a69.css"><link media="all" rel="stylesheet" href="./github_assets/light_colorblind-0f910d8806d5761b.css"><link media="all" rel="stylesheet" href="./github_assets/light_colorblind_high_contrast-a7abd4d4c49ac593.css"><link media="all" rel="stylesheet" href="./github_assets/light_tritanopia-5fc4c4a9cb41e596.css"><link media="all" rel="stylesheet" href="./github_assets/light_tritanopia_high_contrast-ed0cee9214dedabd.css"><link media="all" rel="stylesheet" href="./github_assets/dark-afff6c53aef9b9d1.css"><link media="all" rel="stylesheet" href="./github_assets/dark_high_contrast-c409873d7987dffa.css"><link media="all" rel="stylesheet" href="./github_assets/dark_colorblind-78a2491d538dab5a.css"><link media="all" rel="stylesheet" href="./github_assets/dark_colorblind_high_contrast-c26b63d7c532d0a2.css"><link media="all" rel="stylesheet" href="./github_assets/dark_tritanopia-a6f60cea68c08405.css"><link media="all" rel="stylesheet" href="./github_assets/dark_tritanopia_high_contrast-f66faf28b2ea18b6.css"><link media="all" rel="stylesheet" href="./github_assets/dark_dimmed-6701f6218c53cf5b.css"><link media="all" rel="stylesheet" href="./github_assets/dark_dimmed_high_contrast-7037fa46ae124d97.css">
+
+  <style type="text/css">
+    :root {
+      --tab-size-preference: 4;
+    }
+
+    pre, code {
+      tab-size: var(--tab-size-preference);
+    }
+  </style>
+
+    <link media="all" rel="stylesheet" href="./github_assets/primer-primitives-97df7784617ce1ea.css">
+    <link media="all" rel="stylesheet" href="./github_assets/primer-tailwind-compatible-2c1fd7ca3364e935.css">
+    <link media="all" rel="stylesheet" href="./github_assets/global-f65d5aef412a9712.css">
+    <link media="all" rel="stylesheet" href="./github_assets/github-7a418ea859d1654d.css">
+    <link media="all" rel="stylesheet" href="./github_assets/tailwind-e606849b5ccd8654.css">
+  <link media="all" rel="stylesheet" href="./github_assets/repository-72bd7d974b5ac1cc.css">
+<link media="all" rel="stylesheet" href="./github_assets/actions-6cefe4854b532a8b.css">
+
+  
+
+  
+
+
+
+
+
+
+
+
+<link media="all" rel="stylesheet" href="./github_assets/app-runtime.a8c855b07bd678e0.module.css">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link media="all" rel="stylesheet" href="./github_assets/react-core.7d0e0dc3e63c3626.module.css">
+
+
+
+
+  
+
+  <title>SF Tech Week: cooking demo · Actions · Roy3838/Observer</title><script src="demo-contract.js"></script>
+
+
+
+  <meta name="route-pattern" content="/:user_id/:repository/actions/runs/:workflow_run_id(.:format)" data-turbo-transient="">
+  <meta name="route-controller" content="actions_workflow_runs" data-turbo-transient="">
+  <meta name="route-action" content="show" data-turbo-transient="">
+  <meta name="fetch-nonce" content="v2:2590b8fc-77ba-16f1-2df3-16c985c86faf">
+
+    
+  <meta name="current-catalog-service-hash" content="776eabee1ebf8339c7fce07f9b8b2a141015d7c4830e9ddca1dd4d0d1cfa83ca">
+
+
+  <meta name="request-id" content="C7B2:274A95:948316:BEF0BF:6AC52A38" data-turbo-transient="true"><meta name="html-safe-nonce" content="5434d7a27d89e698c1da43788e991ebb0930f936fb55e8408dc3b1586662850c" data-turbo-transient="true"><meta name="visitor-payload" content="eyJyZWZlcnJlciI6Imh0dHBzOi8vZ2l0aHViLmNvbS9Sb3kzODM4L09ic2VydmVyL2FjdGlvbnMiLCJyZXF1ZXN0X2lkIjoiQzdCMjoyNzRBOTU6OTQ4MzE2OkJFRjBCRjo2QUM1MkEzOCIsInZpc2l0b3JfaWQiOiI2NDA0OTQ5NjE1OTAzMzM5OSIsInJlZ2lvbl9lZGdlIjoiaWFkIiwicmVnaW9uX3JlbmRlciI6ImlhZCJ9" data-turbo-transient="true"><meta name="visitor-hmac" content="1895424dfd593581b8a03752263dc26d2738ca9ebc1c36ac5c8e52a5e0240108" data-turbo-transient="true">
+
+
+    <meta name="hovercard-subject-tag" content="repository:927847000" data-turbo-transient="">
+
+
+  <meta name="github-keyboard-shortcuts" content="repository,actions,copilot" data-turbo-transient="true">
+  
+
+  <meta name="selected-link" value="repo_actions" data-turbo-transient="">
+  <link rel="assets" href="https://github.githubassets.com/">
+
+    <meta name="google-site-verification" content="Apib7-x98H0j5cPqHWwSMm6dNU4GmODRoqxLiDzdx9I">
+
+<meta name="octolytics-url" content="https://collector.github.com/github/collect"><meta name="octolytics-actor-id" content="65318704"><meta name="octolytics-actor-login" content="Roy3838"><meta name="octolytics-actor-hash" content="a61862b99f5c3970bf256a5f34ab6d4e6168240b58b691278dcf3d070bce7b53">
+
+
+
+
+
+  <meta name="analytics-location" content="/&lt;user-name&gt;/&lt;repo-name&gt;/actions/workflow_runs/show" data-turbo-transient="true">
+
+  
+
+
+
+
+    <meta name="user-login" content="Roy3838">
+
+  <link rel="sudo-modal" href="https://github.com/sessions/sudo_modal">
+
+    <meta name="viewport" content="width=device-width">
+
+    
+
+      <meta name="description" content="Why observe computer if computer can observe for you - specify stopping before restarting in system prompt · Roy3838/Observer@1d78b2f">
+
+      <link rel="search" type="application/opensearchdescription+xml" href="https://github.com/opensearch.xml" title="GitHub">
+
+    <link rel="fluid-icon" href="https://github.com/fluidicon.png" title="GitHub">
+    <meta property="fb:app_id" content="1401488693436528">
+    <meta name="apple-itunes-app" content="app-id=1477376905, app-argument=https://github.com/Roy3838/Observer/actions/runs/37359884122">
+
+      <meta name="twitter:image" content="https://repository-images.githubusercontent.com/927847000/974ccb43-1dd7-4b89-892e-f22d74ec7d52"><meta name="twitter:site" content="@github"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="specify stopping before restarting in system prompt · Roy3838/Observer@1d78b2f"><meta name="twitter:description" content="Why observe computer if computer can observe for you - specify stopping before restarting in system prompt · Roy3838/Observer@1d78b2f">
+  <meta property="og:image" content="https://repository-images.githubusercontent.com/927847000/974ccb43-1dd7-4b89-892e-f22d74ec7d52"><meta property="og:image:alt" content="Why observe computer if computer can observe for you - specify stopping before restarting in system prompt · Roy3838/Observer@1d78b2f"><meta property="og:site_name" content="GitHub"><meta property="og:type" content="object"><meta property="og:title" content="specify stopping before restarting in system prompt · Roy3838/Observer@1d78b2f"><meta property="og:url" content="https://github.com/Roy3838/Observer"><meta property="og:description" content="Why observe computer if computer can observe for you - specify stopping before restarting in system prompt · Roy3838/Observer@1d78b2f">
+  
+
+
+      <link rel="shared-web-socket" href="wss://alive.github.com/_sockets/u/65318704/ws?session=eyJ2IjoiVjMiLCJ1Ijo2NTMxODcwNCwicyI6MjI4MDg5MDU4NCwiYyI6MzE4MjcxMzQ1MiwidCI6MTc5MTMwNjI5N30=--73cbbace19cd8c2fec24aab687ca37421b153cab556e99eb7e81357eeea8dfbb" data-refresh-url="/_alive" data-session-id="13d7d48ed0fc778e2bdcbacaa404200b736198b4b927d943841ab128d4e4db4c">
+
+
+      <meta name="hostname" content="github.com">
+
+
+      <meta name="keyboard-shortcuts-preference" content="all">
+      <meta name="hovercards-preference" content="true">
+      <meta name="announcement-preference-hovercard" content="true">
+
+        <meta name="expected-hostname" content="github.com">
+
+
+  <meta http-equiv="x-pjax-version" content="62dc615048f14f5bd7d49c3c8daa231cbc9c5715f66250d4cf7ee552cfb9172e" data-turbo-track="reload">
+  <meta http-equiv="x-pjax-csp-version" content="c4a65e47b0c850e1157ae8e66298070851d7e3b558038de5a3b4ff7a93e630ed" data-turbo-track="reload">
+  <meta http-equiv="x-pjax-css-version" content="c4d0e8c275605ef38c43e2be717931727fd93a93f2c788e65560d5c9d32dd988" data-turbo-track="reload">
+  <meta http-equiv="x-pjax-js-version" content="9764e4fad39da03c986aaf808eb2dc9a6eaadabfa01a1753063a63779267cf94" data-turbo-track="reload">
+
+  <meta name="turbo-cache-control" content="no-preview" data-turbo-transient="">
+
+      <meta name="go-import" content="github.com/Roy3838/Observer git https://github.com/Roy3838/Observer.git">
+
+  <meta name="octolytics-dimension-user_id" content="65318704"><meta name="octolytics-dimension-user_login" content="Roy3838"><meta name="octolytics-dimension-repository_id" content="927847000"><meta name="octolytics-dimension-repository_nwo" content="Roy3838/Observer"><meta name="octolytics-dimension-repository_public" content="true"><meta name="octolytics-dimension-repository_is_fork" content="false"><meta name="octolytics-dimension-repository_network_root_id" content="927847000"><meta name="octolytics-dimension-repository_network_root_nwo" content="Roy3838/Observer">
+  <meta name="current-repo-nwo" content="Roy3838/Observer">
+
+
+
+    
+
+    <meta name="turbo-body-classes" content="logged-in env-production page-responsive full-width full-width-p-0 text-rendering-optimize-speed">
+  <meta name="disable-turbo" content="false">
+
+
+  <meta name="browser-stats-url" content="https://api.github.com/_private/browser/stats">
+
+
+  <meta name="browser-errors-url" content="https://api.github.com/_private/browser/errors">
+
+  <meta name="release" content="a32b503cc3e1a04f7bafe0eee4a0b3e2e185c498" data-turbo-track="reload">
+  <meta name="ui-target" content="canary-2">
+
+  <link rel="mask-icon" href="https://github.githubassets.com/assets/pinned-octocat-093da3e6fa40.svg" color="#000000">
+  <link rel="alternate icon" class="js-site-favicon" type="image/png" href="https://github.githubassets.com/favicons/favicon-success.png">
+  <link rel="icon" class="js-site-favicon" type="image/svg+xml" href="https://github.githubassets.com/favicons/favicon-success.svg" data-base-href="https://github.githubassets.com/favicons/favicon">
+
+<meta name="theme-color" content="#1e2327">
+<meta name="color-scheme" content="light dark">
+
+
+  <link rel="manifest" href="https://github.com/manifest.json">
+
+  <link rel="stylesheet" type="text/css" href="./github_assets/xz.2c2935cac9a3bc0f.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/kq9.03341621f10414c2.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/bv.a3b30f0b70ef30ea.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/u2l.734a5f51056e244e.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/5j9.cdc7d849d275b646.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/5r.7190e3c5d6319d75.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/0l.dc32dcf7c52ae100.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/fg.336a5a0a771a156d.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/m4.d649f11277862432.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/t.e13b70f2264989bf.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/gc.a276fafbc69441d6.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/438.a10cdd3757f50edb.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/l.6cc0144ddf5e8809.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/2.3db33be2fbabda8b.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/u.81e7a8cf0543e2b3.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/s.d984982a1b69c9b5.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/0.3166191cee213b51.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/qt.2dfc02e954da001d.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/km.19cefb1b9f5da289.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/r.807d2cb9102a228e.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/7.6b45c946f05c2559.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/n.d2705a9e715885e0.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/2k.681744d78246fa83.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/sk.5d3eb4c4c43a441a.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/nc.a9c0a8c586f34cff.module.css"><link rel="stylesheet" type="text/css" href="./github_assets/v.63cee70a7cdc0281.module.css"><style>/* ---- Demo-only styles: job graph + log viewer, built on Primer variables ---- */
+.demo-graph { position: relative; padding: 8px 16px 24px; overflow-x: auto; }
+.graph-inner { position: relative; display: flex; gap: 24px; width: max-content; margin: 0 auto; align-items: center; }
+.demo-stage { display: flex; flex-direction: column; gap: 10px; position: relative; z-index: 1; }
+.demo-node { width: 200px; background: var(--bgColor-default); border: 1px solid var(--borderColor-default); border-radius: 6px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.demo-node:hover { border-color: var(--fgColor-muted); }
+.demo-node.selected { border-color: var(--fgColor-accent); box-shadow: 0 0 0 1px var(--fgColor-accent); }
+.demo-node .nname { flex: 1; min-width: 0; line-height: 1.4; }
+.demo-node .nname div:first-child { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--fgColor-default); }
+.demo-node .nname div:last-child { font-size: 12px; color: var(--fgColor-muted); }
+.demo-node .ntime { font-size: 12px; color: var(--fgColor-muted); font-variant-numeric: tabular-nums; }
+svg.edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+svg.edges path { fill: none; stroke: var(--borderColor-emphasis, #818b98); stroke-width: 1.5; }
+svg.edges path.done { stroke: var(--fgColor-success); }
+
+.ico { width: 16px; height: 16px; flex: none; display: inline-block; vertical-align: text-bottom; }
+#hdr-status .ico { width: 22px; height: 22px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; transform-origin: center; }
+
+.log-card { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 16px; }
+.log-head { background: #161b22; border-bottom: 1px solid #30363d; color: #e6edf3; padding: 12px 16px; display: flex; align-items: center; gap: 8px; border-radius: 6px 6px 0 0; }
+.log-head .jt { font-weight: 600; font-size: 16px; }
+.log-head .jm { color: #8b949e; font-size: 12px; margin-left: auto; font-variant-numeric: tabular-nums; }
+.demo-steps { max-height: 460px; overflow-y: auto; padding: 6px 0; font-family: var(--fontStack-monospace); font-size: 12px; scroll-behavior: smooth; }
+.step-head { display: flex; align-items: center; gap: 10px; padding: 5px 16px; color: #e6edf3; font-family: var(--fontStack-system); font-size: 13px; }
+.step-head .chev { width: 12px; color: #8b949e; font-size: 10px; }
+.step-head .stime { margin-left: auto; color: #8b949e; font-size: 12px; }
+.step-head.pending { color: #8b949e; }
+.step-lines { padding: 2px 16px 8px 54px; color: #e6edf3; }
+.step-lines div { white-space: pre-wrap; word-break: break-all; line-height: 1.55; }
+.step-lines .ts { color: #8b949e; margin-right: 10px; }
+.step-lines .ok { color: #56d364; } .step-lines .warn { color: #e3b341; } .step-lines .dim { color: #8b949e; } .step-lines .hot { color: #ffa657; } .step-lines .err { color: #ff7b72; font-weight: 600; }
+
+.demo-banner { display: none; margin-bottom: 16px; border: 1px solid var(--borderColor-success-emphasis); background: var(--bgColor-success-muted); color: var(--fgColor-success); border-radius: 6px; padding: 14px 16px; align-items: center; gap: 12px; font-size: 16px; font-weight: 600; }
+.demo-banner.show { display: flex; animation: pop .5s cubic-bezier(.2,1.4,.4,1); }
+.demo-banner.fail { border-color: var(--borderColor-danger-emphasis, #cf222e); background: var(--bgColor-danger-muted, #ffebe9); color: var(--fgColor-danger); }
+@keyframes pop { from { transform: scale(.96); opacity: 0; } to { transform: none; opacity: 1; } }
+.demo-banner small { font-weight: 400; font-size: 13px; opacity: .85; display: block; }
+</style></head>
+
+  <body class="logged-in env-production page-responsive full-width full-width-p-0 text-rendering-optimize-speed" style="word-wrap: break-word;">
+    <div data-turbo-body="" class="logged-in env-production page-responsive full-width full-width-p-0 text-rendering-optimize-speed" style="word-wrap: break-word;">
+      <div id="__primerPortalRoot__" style="z-index: 1000; position: absolute; width: 100%;" data-turbo-permanent=""></div>
+      
+
+    <div class="position-relative header-wrapper js-header-wrapper ">
+      <a href="https://github.com/Roy3838/Observer/actions/runs/37359884122#start-of-content" data-skip-target-assigned="false" class="tmp-p-3 color-bg-accent-emphasis color-fg-on-emphasis show-on-focus js-skip-to-content">Skip to content</a>
+
+      <span data-view-component="true" class="progress-pjax-loader Progress position-fixed width-full">
+    <span style="width: 0%;" data-view-component="true" class="Progress-item progress-pjax-loader-bar left-0 top-0 color-bg-accent-emphasis"></span>
+</span>      
+      
+
+
+
+
+<link media="all" rel="stylesheet" href="./github_assets/primer-react-css.e4334163c54cccf5.module.css">
+<link media="all" rel="stylesheet" href="./github_assets/keyboard-shortcuts-dialog.397873c1e6f46774.module.css">
+
+<react-partial partial-name="keyboard-shortcuts-dialog" data-ssr="false" data-attempted-ssr="false" data-react-profiling="false" data-catalyst="" class="loaded">
+  
+  
+  <div data-target="react-partial.reactRoot"><div class="d-none"></div></div>
+</react-partial>
+
+
+
+
+
+      
+
+          
+<link media="all" rel="stylesheet" href="./github_assets/primer-react-css.e4334163c54cccf5.module.css">
+<link media="all" rel="stylesheet" href="./github_assets/app-install-banner-partial.b0ad5fa3acd1d7e2.module.css">
+
+<react-partial partial-name="app-install-banner-partial" data-ssr="false" data-attempted-ssr="false" data-react-profiling="false" data-catalyst="" class="loaded">
+  
+  
+  <div data-target="react-partial.reactRoot"></div>
+</react-partial>
+
+
+          
+
+                  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link media="all" rel="stylesheet" href="./github_assets/primer-react-css.e4334163c54cccf5.module.css">
+<link media="all" rel="stylesheet" href="./github_assets/ql0.501e99879e15a48e.module.css">
+<link media="all" rel="stylesheet" href="./github_assets/global-nav-bar.b2dd5a3292c1221d.module.css">
+
+<react-partial partial-name="global-nav-bar" data-ssr="true" data-attempted-ssr="true" data-react-profiling="false" data-catalyst="" class="loaded">
+  
+  
+  <div data-target="react-partial.reactRoot"><header aria-label="Global navigation menu" data-component="Stack" class="GlobalNav styles-module__appHeader__YzYWk prc-Stack-Stack-UQ9k6" data-gap="none" data-direction="vertical" data-align="stretch" data-wrap="nowrap" data-justify="start" data-padding="none"><div data-component="Stack" class="prc-Stack-Stack-UQ9k6" data-direction="horizontal" data-align="center" data-wrap="nowrap" data-justify="center" data-padding="none"><div data-testid="top-nav-left" data-component="Stack" class="styles-module__left__Fylw7 styles-module__withLocalNavigation__rjTJ_ prc-Stack-Stack-UQ9k6" data-gap="condensed" data-direction="horizontal" data-align="stretch" data-wrap="nowrap" data-justify="start" data-padding="normal"><div data-loading-wrapper="true"><button data-component="IconButton" type="button" aria-haspopup="dialog" class="prc-Button-ButtonBase-9n-Xk styles-module__appHeaderButton__axedQ prc-Button-IconButton-fyge7" data-loading="false" data-no-visuals="true" data-size="medium" data-variant="invisible" aria-labelledby="_R_1b5_"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-three-bars" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M1 2.75A.75.75 0 0 1 1.75 2h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 2.75Zm0 5A.75.75 0 0 1 1.75 7h12.5a.75.75 0 0 1 0 1.5H1.75A.75.75 0 0 1 1 7.75ZM1.75 12h12.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Z"></path></svg></button></div><span class="prc-TooltipV2-Tooltip-tLeuB" data-direction="s" data-component="Tooltip" aria-hidden="true" id="_R_1b5_" popover="auto">Open menu</span><div class="d-none"></div><a data-component="IconButton" type="button" class="prc-Button-ButtonBase-9n-Xk styles-module__appHeaderHome__nkA_U prc-Button-IconButton-fyge7" data-loading="false" data-no-visuals="true" data-size="medium" data-variant="invisible" aria-labelledby="_R_1j5_" href="https://github.com/" data-discover="true"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-mark-github" viewBox="0 0 24 24" width="32" height="32" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943"></path></svg></a><span class="prc-TooltipV2-Tooltip-tLeuB" data-direction="s" data-component="Tooltip" aria-hidden="true" popover="auto"><span id="_R_1j5_">Homepage <span class="prc-src-InternalVisuallyHidden-2YaI6">(<!-- -->g then d<!-- -->)</span></span><span class="prc-TooltipV2-KeybindingHintContainer-Ymj-3 prc-TooltipV2-HasTextBefore-fdOXj" aria-hidden="true" data-component="Tooltip.KeybindingHintContainer"><kbd class="prc-KeybindingHint-KeybindingHint-qpYIs prc-Text-Text-9mHv3" data-component="KeybindingHint" data-testid="keybinding-hint"><span class="prc-components-Chord-DdhWN prc-components-ChordOnEmphasis-O-4BS prc-components-ChordSmall-c-P-x prc-Text-Text-9mHv3" data-component="Text" data-kbd-chord="true"> <span class="prc-src-InternalVisuallyHidden-2YaI6">g</span><span aria-hidden="true">G</span></span><span class="prc-src-InternalVisuallyHidden-2YaI6">then</span> <span class="prc-components-Chord-DdhWN prc-components-ChordOnEmphasis-O-4BS prc-components-ChordSmall-c-P-x prc-Text-Text-9mHv3" data-component="Text" data-kbd-chord="true"> <span class="prc-src-InternalVisuallyHidden-2YaI6">d</span><span aria-hidden="true">D</span></span></kbd></span></span><div class="d-none"></div></div><div data-testid="top-nav-center" data-component="Stack" class="styles-module__center__R3QRv styles-module__withLocalNavigation__rjTJ_ prc-Stack-Stack-UQ9k6" data-gap="condensed" data-direction="horizontal" data-align="stretch" data-wrap="nowrap" data-justify="start" data-padding="normal"><nav class="styles-module__contextRegion__VbSp2 prc-Breadcrumbs-BreadcrumbsBase-3Gb-B" aria-label="Breadcrumbs" data-overflow="menu" data-variant="normal" data-component="Breadcrumbs"><ol class="prc-Breadcrumbs-BreadcrumbsList-BKjpe"><li class="prc-Breadcrumbs-ItemWrapper-k0NLn"><a class="styles-module__contextCrumb__IzGIq prc-Breadcrumbs-Item-jcraJ" data-component="Breadcrumbs.Item" href="https://github.com/Roy3838" data-discover="true"><span class="">Roy3838</span></a></li><li class="prc-Breadcrumbs-ItemWrapper-k0NLn"><a class="styles-module__contextCrumb__IzGIq styles-module__contextCrumbLast__tI2e3 styles-module__repoPickerCrumb__dk81Q prc-Breadcrumbs-Item-jcraJ" data-component="Breadcrumbs.Item" href="https://github.com/Roy3838/Observer" data-discover="true">Observer</a><div class="d-none"></div><button data-component="IconButton" type="button" aria-haspopup="true" aria-expanded="false" tabindex="0" class="prc-Button-ButtonBase-9n-Xk styles-module__contextCrumb__IzGIq styles-module__repoPickerDropdownButton__WjHYX prc-Button-IconButton-fyge7" data-loading="false" data-no-visuals="true" data-size="small" data-variant="invisible" aria-labelledby="_R_3eqd5_" id="_R_eqd5_" style="anchor-name: --anchored-overlay-anchor-_R_eqd5H1_;"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-triangle-down" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="m4.427 7.427 3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427Z"></path></svg></button><span class="prc-TooltipV2-Tooltip-tLeuB" data-direction="s" data-component="Tooltip" aria-hidden="true" popover="auto"><span id="_R_3eqd5_">Switch repository<span class="prc-src-InternalVisuallyHidden-2YaI6">(<!-- -->option shift r<!-- -->)</span></span><span class="prc-TooltipV2-KeybindingHintContainer-Ymj-3 prc-TooltipV2-HasTextBefore-fdOXj" aria-hidden="true" data-component="Tooltip.KeybindingHintContainer"><kbd class="prc-KeybindingHint-KeybindingHint-qpYIs prc-Text-Text-9mHv3" data-component="KeybindingHint" data-testid="keybinding-hint"><span class="prc-components-Chord-DdhWN prc-components-ChordOnEmphasis-O-4BS prc-components-ChordSmall-c-P-x prc-Text-Text-9mHv3" data-component="Text" data-kbd-chord="true"> <span class="prc-src-InternalVisuallyHidden-2YaI6">option</span><span aria-hidden="true">⌥</span> <span class="prc-src-InternalVisuallyHidden-2YaI6">shift</span><span aria-hidden="true">⇧</span> <span class="prc-src-InternalVisuallyHidden-2YaI6">r</span><span aria-hidden="true">R</span></span></kbd></span></span></li></ol></nav><div class="Search-module__searchButtonGroup__aetw5 prc-ButtonGroup-ButtonGroup-vFUrY" data-component="ButtonGroup"><div class="prc-ButtonGroup-Item-PqvDl"><button data-component="Button" type="button" aria-label="Open quick search dialog, type / to search" class="prc-Button-ButtonBase-9n-Xk styles-module__appHeaderButton__axedQ Search-module__searchButton__aiE0a" data-loading="false" data-size="medium" data-variant="invisible"><span data-component="buttonContent" data-align="center" class="prc-Button-ButtonContent-Iohp5"><span data-component="leadingVisual" class="prc-Button-Visual-YNt2F prc-Button-LeadingVisual-UySKu prc-Button-VisualWrap-E4cnq"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-search" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"></path></svg></span><span data-component="text" class="prc-Button-Label-FWkx3"><span class="Search-module__placeholder__p9hbG Search-module__text__veSYi Search-module__value__TFoak">Type <kbd class="Search-module__kbd__WCskr">/</kbd> to search</span></span></span></button></div><div class="prc-ButtonGroup-Item-PqvDl"></div></div><button data-component="IconButton" type="button" class="prc-Button-ButtonBase-9n-Xk styles-module__appHeaderButton__axedQ Search-module__smallSearchButton___8Gvn prc-Button-IconButton-fyge7" data-loading="false" data-no-visuals="true" data-size="medium" data-variant="invisible" aria-labelledby="_R_al5_"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-search" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"></path></svg></button><span class="prc-TooltipV2-Tooltip-tLeuB" data-direction="s" data-component="Tooltip" aria-hidden="true" popover="auto"><span id="_R_al5_">Open quick search dialog, type / to search<span class="prc-src-InternalVisuallyHidden-2YaI6">(<!-- -->forward slash<!-- -->)</span></span><span class="prc-TooltipV2-KeybindingHintContainer-Ymj-3 prc-TooltipV2-HasTextBefore-fdOXj" aria-hidden="true" data-component="Tooltip.KeybindingHintContainer"><kbd class="prc-KeybindingHint-KeybindingHint-qpYIs prc-Text-Text-9mHv3" data-component="KeybindingHint" data-testid="keybinding-hint"><span class="prc-components-Chord-DdhWN prc-components-ChordOnEmphasis-O-4BS prc-components-ChordSmall-c-P-x prc-Text-Text-9mHv3" data-component="Text" data-kbd-chord="true"> <span class="prc-src-InternalVisuallyHidden-2YaI6">forward slash</span><span aria-hidden="true">/</span></span></kbd></span></span><div class="d-none"></div></div><div data-testid="top-nav-right" data-component="Stack" class="styles-module__right__mlBQg styles-module__withLocalNavigation__rjTJ_ styles-module__rightWithResponsiveCreateButton__SKn2W prc-Stack-Stack-UQ9k6" data-gap="condensed" data-direction="horizontal" data-align="center" data-wrap="nowrap" data-justify="start" data-padding="normal"><div data-testid="top-bar-actions" data-component="Stack" class="prc-Stack-Stack-UQ9k6" data-gap="condensed" data-direction="horizontal" data-align="center" data-wrap="nowrap" data-justify="start" data-padding="none"><div class="hide-sm hide-md"><div class="CopilotItems-module__Wrapper__BFG9q"><div class="prc-ButtonGroup-ButtonGroup-vFUrY" data-component="ButtonGroup"><div class="prc-ButtonGroup-Item-PqvDl"><a data-component="IconButton" type="button" class="prc-Button-ButtonBase-9n-Xk styles-module__appHeaderButton__axedQ prc-Button-IconButton-fyge7" data-loading="false" data-no-visuals="true" data-size="medium" data-variant="invisible" aria-labelledby="_R_1aif5_" href="https://github.com/copilot" data-discover="true"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-copilot" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M7.998 15.035c-4.562 0-7.873-2.914-7.998-3.749V9.338c.085-.628.677-1.686 1.588-2.065.013-.07.024-.143.036-.218.029-.183.06-.384.126-.612-.201-.508-.254-1.084-.254-1.656 0-.87.128-1.769.693-2.484.579-.733 1.494-1.124 2.724-1.261 1.206-.134 2.262.034 2.944.765.05.053.096.108.139.165.044-.057.094-.112.143-.165.682-.731 1.738-.899 2.944-.765 1.23.137 2.145.528 2.724 1.261.566.715.693 1.614.693 2.484 0 .572-.053 1.148-.254 1.656.066.228.098.429.126.612.012.076.024.148.037.218.924.385 1.522 1.471 1.591 2.095v1.872c0 .766-3.351 3.795-8.002 3.795Zm0-1.485c2.28 0 4.584-1.11 5.002-1.433V7.862l-.023-.116c-.49.21-1.075.291-1.727.291-1.146 0-2.059-.327-2.71-.991A3.222 3.222 0 0 1 8 6.303a3.24 3.24 0 0 1-.544.743c-.65.664-1.563.991-2.71.991-.652 0-1.236-.081-1.727-.291l-.023.116v4.255c.419.323 2.722 1.433 5.002 1.433ZM6.762 2.83c-.193-.206-.637-.413-1.682-.297-1.019.113-1.479.404-1.713.7-.247.312-.369.789-.369 1.554 0 .793.129 1.171.308 1.371.162.181.519.379 1.442.379.853 0 1.339-.235 1.638-.54.315-.322.527-.827.617-1.553.117-.935-.037-1.395-.241-1.614Zm4.155-.297c-1.044-.116-1.488.091-1.681.297-.204.219-.359.679-.242 1.614.091.726.303 1.231.618 1.553.299.305.784.54 1.638.54.922 0 1.28-.198 1.442-.379.179-.2.308-.578.308-1.371 0-.765-.123-1.242-.37-1.554-.233-.296-.693-.587-1.713-.7Z"></path><path d="M6.25 9.037a.75.75 0 0 1 .75.75v1.501a.75.75 0 0 1-1.5 0V9.787a.75.75 0 0 1 .75-.75Zm4.25.75v1.501a.75.75 0 0 1-1.5 0V9.787a.75.75 0 0 1 1.5 0Z"></path></svg></a><span class="prc-TooltipV2-Tooltip-tLeuB" data-direction="s" data-component="Tooltip" aria-hidden="true" id="_R_1aif5_" popover="auto">Chat with Copilot</span></div><div class="prc-ButtonGroup-Item-PqvDl"><div class="d-none"></div><button data-component="ActionMenu.Button" type="button" aria-label="Open Copilot…" aria-haspopup="true" aria-expanded="false" tabindex="0" class="prc-Button-ButtonBase-9n-Xk styles-module__appHeaderButton__axedQ CopilotItems-module__CopilotMenu__DVdfE" data-loading="false" data-size="medium" data-variant="invisible" id="_R_2iif5_" style="anchor-name: --anchored-overlay-anchor-_R_eiif5H1_;"><span data-component="buttonContent" data-align="center" class="prc-Button-ButtonContent-Iohp5"><span data-component="leadingVisual" class="prc-Button-Visual-YNt2F prc-Button-LeadingVisual-UySKu prc-Button-VisualWrap-E4cnq"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-copilot" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M7.998 15.035c-4.562 0-7.873-2.914-7.998-3.749V9.338c.085-.628.677-1.686 1.588-2.065.013-.07.024-.143.036-.218.029-.183.06-.384.126-.612-.201-.508-.254-1.084-.254-1.656 0-.87.128-1.769.693-2.484.579-.733 1.494-1.124 2.724-1.261 1.206-.134 2.262.034 2.944.765.05.053.096.108.139.165.044-.057.094-.112.143-.165.682-.731 1.738-.899 2.944-.765 1.23.137 2.145.528 2.724 1.261.566.715.693 1.614.693 2.484 0 .572-.053 1.148-.254 1.656.066.228.098.429.126.612.012.076.024.148.037.218.924.385 1.522 1.471 1.591 2.095v1.872c0 .766-3.351 3.795-8.002 3.795Zm0-1.485c2.28 0 4.584-1.11 5.002-1.433V7.862l-.023-.116c-.49.21-1.075.291-1.727.291-1.146 0-2.059-.327-2.71-.991A3.222 3.222 0 0 1 8 6.303a3.24 3.24 0 0 1-.544.743c-.65.664-1.563.991-2.71.991-.652 0-1.236-.081-1.727-.291l-.023.116v4.255c.419.323 2.722 1.433 5.002 1.433ZM6.762 2.83c-.193-.206-.637-.413-1.682-.297-1.019.113-1.479.404-1.713.7-.247.312-.369.789-.369 1.554 0 .793.129 1.171.308 1.371.162.181.519.379 1.442.379.853 0 1.339-.235 1.638-.54.315-.322.527-.827.617-1.553.117-.935-.037-1.395-.241-1.614Zm4.155-.297c-1.044-.116-1.488.091-1.681.297-.204.219-.359.679-.242 1.614.091.726.303 1.231.618 1.553.299.305.784.54 1.638.54.922 0 1.28-.198 1.442-.379.179-.2.308-.578.308-1.371 0-.765-.123-1.242-.37-1.554-.233-.296-.693-.587-1.713-.7Z"></path><path d="M6.25 9.037a.75.75 0 0 1 .75.75v1.501a.75.75 0 0 1-1.5 0V9.787a.75.75 0 0 1 .75-.75Zm4.25.75v1.501a.75.75 0 0 1-1.5 0V9.787a.75.75 0 0 1 1.5 0Z"></path></svg></span></span><span data-component="trailingAction" class="prc-Button-Visual-YNt2F prc-Button-VisualWrap-E4cnq"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-triangle-down" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="m4.427 7.427 3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427Z"></path></svg></span></button></div></div></div></div><div class="CopilotImmersiveEmbedded-module__CopilotChatContainer__Hqz45" data-testid="copilot-immersive-embedded-header-button"></div><div class="styles-module__itemDivider__nunbs hide-sm hide-md"></div><button data-component="ActionMenu.Button" type="button" aria-haspopup="true" aria-expanded="false" tabindex="0" class="prc-Button-ButtonBase-9n-Xk GlobalCreateMenu-module__actionMenuButton__Hj_iB GlobalCreateMenu-module__responsiveCreateMenu__zTmSP hide-sm" data-loading="false" data-size="medium" data-variant="invisible" aria-labelledby="global-create-menu-tooltip-_R_6f5_" id="_R_mf5_" style="anchor-name: --anchored-overlay-anchor-_R_bmf5H1_;"><span data-component="buttonContent" data-align="center" class="prc-Button-ButtonContent-Iohp5"><span data-component="leadingVisual" class="prc-Button-Visual-YNt2F prc-Button-LeadingVisual-UySKu prc-Button-VisualWrap-E4cnq"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-plus" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"></path></svg></span></span><span data-component="trailingAction" class="prc-Button-Visual-YNt2F prc-Button-VisualWrap-E4cnq"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-triangle-down" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="m4.427 7.427 3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427Z"></path></svg></span></button><span class="prc-TooltipV2-Tooltip-tLeuB" data-direction="s" data-component="Tooltip" aria-hidden="true" id="global-create-menu-tooltip-_R_6f5_" popover="auto">Create new...</span><div data-component="Stack" class="hide-sm hide-md prc-Stack-Stack-UQ9k6" data-gap="condensed" data-direction="horizontal" data-align="center" data-wrap="nowrap" data-justify="start" data-padding="none"><a data-component="IconButton" type="button" class="prc-Button-ButtonBase-9n-Xk styles-module__appHeaderButton__axedQ prc-Button-IconButton-fyge7" data-loading="false" data-no-visuals="true" data-size="medium" data-variant="invisible" aria-labelledby="_R_2of5_" href="https://github.com/issues" data-discover="true"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-issue-opened" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"></path></svg></a><span class="prc-TooltipV2-Tooltip-tLeuB" data-direction="s" data-component="Tooltip" aria-hidden="true" id="_R_2of5_" popover="auto" style="top: 51.9941px; left: 1117.48px;">All issues</span><a data-component="IconButton" type="button" class="prc-Button-ButtonBase-9n-Xk styles-module__appHeaderButton__axedQ prc-Button-IconButton-fyge7" data-loading="false" data-no-visuals="true" data-size="medium" data-variant="invisible" aria-labelledby="_R_38f5_" href="https://github.com/pulls" data-discover="true"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-git-pull-request" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"></path></svg></a><span class="prc-TooltipV2-Tooltip-tLeuB" data-direction="s" data-component="Tooltip" aria-hidden="true" id="_R_38f5_" popover="auto">All pull requests</span><a data-component="IconButton" type="button" class="prc-Button-ButtonBase-9n-Xk styles-module__appHeaderButton__axedQ prc-Button-IconButton-fyge7" data-loading="false" data-no-visuals="true" data-size="medium" data-variant="invisible" aria-labelledby="_R_3of5_" href="https://github.com/repos" data-discover="true"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-repo" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v3.25a.25.25 0 0 1-.4.2l-1.45-1.087a.249.249 0 0 0-.3 0L5.4 15.7a.25.25 0 0 1-.4-.2Z"></path></svg></a><span class="prc-TooltipV2-Tooltip-tLeuB" data-direction="s" data-component="Tooltip" aria-hidden="true" id="_R_3of5_" popover="auto">All repositories</span><div class="d-none"></div></div></div><a data-component="IconButton" type="button" class="prc-Button-ButtonBase-9n-Xk styles-module__appHeaderButton__axedQ styles-module__notificationIndicator__D_jL0 prc-Button-IconButton-fyge7" data-loading="false" data-no-visuals="true" data-size="medium" data-variant="invisible" aria-labelledby="_R_2n5_" href="https://github.com/notifications" data-discover="true"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-inbox" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M2.8 2.06A1.75 1.75 0 0 1 4.41 1h7.18c.7 0 1.333.417 1.61 1.06l2.74 6.395c.04.093.06.194.06.295v4.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25v-4.5c0-.101.02-.202.06-.295Zm1.61.44a.25.25 0 0 0-.23.152L1.887 8H4.75a.75.75 0 0 1 .6.3L6.625 10h2.75l1.275-1.7a.75.75 0 0 1 .6-.3h2.863L11.82 2.652a.25.25 0 0 0-.23-.152Zm10.09 7h-2.875l-1.275 1.7a.75.75 0 0 1-.6.3h-3.5a.75.75 0 0 1-.6-.3L4.375 9.5H1.5v3.75c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25Z"></path></svg></a><span class="prc-TooltipV2-Tooltip-tLeuB" data-direction="s" data-component="Tooltip" aria-hidden="true" popover="auto"><span id="_R_2n5_">You have unread notifications<span class="prc-src-InternalVisuallyHidden-2YaI6">(<!-- -->g then n<!-- -->)</span></span><span class="prc-TooltipV2-KeybindingHintContainer-Ymj-3 prc-TooltipV2-HasTextBefore-fdOXj" aria-hidden="true" data-component="Tooltip.KeybindingHintContainer"><kbd class="prc-KeybindingHint-KeybindingHint-qpYIs prc-Text-Text-9mHv3" data-component="KeybindingHint" data-testid="keybinding-hint"><span class="prc-components-Chord-DdhWN prc-components-ChordOnEmphasis-O-4BS prc-components-ChordSmall-c-P-x prc-Text-Text-9mHv3" data-component="Text" data-kbd-chord="true"> <span class="prc-src-InternalVisuallyHidden-2YaI6">g</span><span aria-hidden="true">G</span></span><span class="prc-src-InternalVisuallyHidden-2YaI6">then</span> <span class="prc-components-Chord-DdhWN prc-components-ChordOnEmphasis-O-4BS prc-components-ChordSmall-c-P-x prc-Text-Text-9mHv3" data-component="Text" data-kbd-chord="true"> <span class="prc-src-InternalVisuallyHidden-2YaI6">n</span><span aria-hidden="true">N</span></span></kbd></span></span><div class="d-none"></div><div class="GlobalNavUserMenu-module__container__NaVIt"><button data-component="IconButton" type="button" aria-haspopup="menu" data-login="Roy3838" class="prc-Button-ButtonBase-9n-Xk GlobalNavUserMenu-module__anchor__Dcej6 prc-Button-IconButton-fyge7" data-loading="false" data-no-visuals="true" data-size="medium" data-variant="invisible" aria-labelledby="_R_av5_"><img data-component="Avatar" class="prc-Avatar-Avatar-0xaUi" alt="Roy Medina" width="32" height="32" style="--avatarSize-regular:32px" src="./github_assets/65318704" data-testid="github-avatar"></button><span class="prc-TooltipV2-Tooltip-tLeuB" data-direction="s" data-component="Tooltip" aria-hidden="true" id="_R_av5_" popover="auto">Open user navigation menu</span></div></div></div><h2 class="prc-src-InternalVisuallyHidden-2YaI6">Repository navigation</h2><nav class="prc-components-UnderlineWrapper-eT-Yj prc-UnderlineNav-UnderlineWrapper-GWONT LocalNavigation-module__LocalNavigation__b0Xc0" aria-label="Repository" data-variant="inset" data-overflow-mode="wrap" data-hide-icons-breakpoint="medium"><ul class="prc-UnderlineNav-ItemsList-oj8gN prc-components-UnderlineItemList-xKlKC" role="list"><li role="presentation" aria-hidden="true" class="prc-UnderlineNav-WrapSpacer--aLgz"></li><li class="prc-UnderlineNav-UnderlineNavItem-syRjR"><a data-tab-item="code" data-react-nav="code-view" data-react-nav-anchor="code-view-repo-link" class="prc-components-UnderlineItem-7fP-n" href="https://github.com/Roy3838/Observer" data-discover="true"><span data-component="icon"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-code" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="m11.28 3.22 4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734L13.94 8l-3.72-3.72a.749.749 0 0 1 .326-1.275.749.749 0 0 1 .734.215Zm-6.56 0a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L2.06 8l3.72 3.72a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L.47 8.53a.75.75 0 0 1 0-1.06Z"></path></svg></span><span data-component="text" data-content="Code">Code</span></a></li><li class="prc-UnderlineNav-UnderlineNavItem-syRjR"><a data-tab-item="issues" data-react-nav="repo" data-turbo-frame="repo-content-turbo-frame" class="prc-components-UnderlineItem-7fP-n" href="https://github.com/Roy3838/Observer/issues" data-discover="true"><span data-component="icon"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-issue-opened" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"></path></svg></span><span data-component="text" data-content="Issues">Issues</span></a></li><li class="prc-UnderlineNav-UnderlineNavItem-syRjR"><a data-tab-item="pull-requests" data-react-nav="repo" data-turbo-frame="repo-content-turbo-frame" class="prc-components-UnderlineItem-7fP-n" href="https://github.com/Roy3838/Observer/pulls" data-discover="true"><span data-component="icon"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-git-pull-request" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"></path></svg></span><span data-component="text" data-content="Pull requests">Pull requests</span></a></li><li class="prc-UnderlineNav-UnderlineNavItem-syRjR"><a data-tab-item="agents" data-react-nav="repo" data-turbo-frame="repo-content-turbo-frame" class="prc-components-UnderlineItem-7fP-n" href="https://github.com/Roy3838/Observer/agents?author=Roy3838" data-discover="true"><span data-component="icon"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-agent" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M14.5 8.9v-.052A2.956 2.956 0 0 0 11.542 5.9a.815.815 0 0 1-.751-.501l-.145-.348A3.496 3.496 0 0 0 7.421 2.9h-.206a3.754 3.754 0 0 0-3.736 4.118l.011.121a.822.822 0 0 1-.619.879A1.81 1.81 0 0 0 1.5 9.773v.14c0 1.097.89 1.987 1.987 1.987H4.5a.75.75 0 0 1 0 1.5H3.487A3.487 3.487 0 0 1 0 9.913v-.14C0 8.449.785 7.274 1.963 6.75A5.253 5.253 0 0 1 7.215 1.4h.206a4.992 4.992 0 0 1 4.586 3.024A4.455 4.455 0 0 1 16 8.848V8.9a.75.75 0 0 1-1.5 0Z"></path><path d="m8.38 7.67 2.25 2.25a.749.749 0 0 1 0 1.061L8.38 13.23a.749.749 0 1 1-1.06-1.06l1.719-1.72L7.32 8.731A.75.75 0 0 1 8.38 7.67ZM15 13.45h-3a.75.75 0 0 1 0-1.5h3a.75.75 0 0 1 0 1.5Z"></path></svg></span><span data-component="text" data-content="Agents">Agents</span></a></li><li class="prc-UnderlineNav-UnderlineNavItem-syRjR"><a data-tab-item="discussions" data-turbo-frame="repo-content-turbo-frame" class="prc-components-UnderlineItem-7fP-n" href="https://github.com/Roy3838/Observer/discussions" data-discover="true"><span data-component="icon"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-comment-discussion" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M1.75 1h8.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 10.25 10H7.061l-2.574 2.573A1.458 1.458 0 0 1 2 11.543V10h-.25A1.75 1.75 0 0 1 0 8.25v-5.5C0 1.784.784 1 1.75 1ZM1.5 2.75v5.5c0 .138.112.25.25.25h1a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h3.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25Zm13 2a.25.25 0 0 0-.25-.25h-.5a.75.75 0 0 1 0-1.5h.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 14.25 12H14v1.543a1.458 1.458 0 0 1-2.487 1.03L9.22 12.28a.749.749 0 0 1 .326-1.275.749.749 0 0 1 .734.215l2.22 2.22v-2.19a.75.75 0 0 1 .75-.75h1a.25.25 0 0 0 .25-.25Z"></path></svg></span><span data-component="text" data-content="Discussions">Discussions</span></a></li><li class="prc-UnderlineNav-UnderlineNavItem-syRjR"><a aria-current="page" data-tab-item="actions" data-react-nav="actions-workflows" data-turbo-frame="repo-content-turbo-frame" class="prc-components-UnderlineItem-7fP-n" href="https://github.com/Roy3838/Observer/actions" data-discover="true"><span data-component="icon"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-play" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm4.879-2.773 4.264 2.559a.25.25 0 0 1 0 .428l-4.264 2.559A.25.25 0 0 1 6 10.559V5.442a.25.25 0 0 1 .379-.215Z"></path></svg></span><span data-component="text" data-content="Actions">Actions</span></a></li><li class="prc-UnderlineNav-UnderlineNavItem-syRjR"><a data-tab-item="projects" data-react-nav="repo" data-turbo-frame="repo-content-turbo-frame" class="prc-components-UnderlineItem-7fP-n" href="https://github.com/Roy3838/Observer/projects" data-discover="true"><span data-component="icon"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-table" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25ZM6.5 6.5v8h7.75a.25.25 0 0 0 .25-.25V6.5Zm8-1.5V1.75a.25.25 0 0 0-.25-.25H6.5V5Zm-13 1.5v7.75c0 .138.112.25.25.25H5v-8ZM5 5V1.5H1.75a.25.25 0 0 0-.25.25V5Z"></path></svg></span><span data-component="text" data-content="Projects">Projects</span></a></li><li class="prc-UnderlineNav-UnderlineNavItem-syRjR"><a data-tab-item="wiki" data-turbo-frame="repo-content-turbo-frame" class="prc-components-UnderlineItem-7fP-n" href="https://github.com/Roy3838/Observer/wiki" data-discover="true"><span data-component="icon"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-book" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-5.073-.002-2.253A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574ZM8.755 4.75l-.004 7.322a3.752 3.752 0 0 1 1.992-.572H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 2.25Z"></path></svg></span><span data-component="text" data-content="Wiki">Wiki</span></a></li><li class="prc-UnderlineNav-UnderlineNavItem-syRjR"><a data-tab-item="security-and-quality" data-turbo-frame="repo-content-turbo-frame" class="prc-components-UnderlineItem-7fP-n" href="https://github.com/Roy3838/Observer/security" data-discover="true"><span data-component="icon"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-shield" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M7.467.133a1.748 1.748 0 0 1 1.066 0l5.25 1.68A1.75 1.75 0 0 1 15 3.48V7c0 1.566-.32 3.182-1.303 4.682-.983 1.498-2.585 2.813-5.032 3.855a1.697 1.697 0 0 1-1.33 0c-2.447-1.042-4.049-2.357-5.032-3.855C1.32 10.182 1 8.566 1 7V3.48a1.75 1.75 0 0 1 1.217-1.667Zm.61 1.429a.25.25 0 0 0-.153 0l-5.25 1.68a.25.25 0 0 0-.174.238V7c0 1.358.275 2.666 1.057 3.86.784 1.194 2.121 2.34 4.366 3.297a.196.196 0 0 0 .154 0c2.245-.956 3.582-2.104 4.366-3.298C13.225 9.666 13.5 8.36 13.5 7V3.48a.251.251 0 0 0-.174-.237l-5.25-1.68ZM8.75 4.75v3a.75.75 0 0 1-1.5 0v-3a.75.75 0 0 1 1.5 0ZM9 10.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path></svg></span><span data-component="text" data-content="Security and quality">Security and quality</span></a></li><li class="prc-UnderlineNav-UnderlineNavItem-syRjR"><a data-tab-item="insights" data-turbo-frame="repo-content-turbo-frame" class="prc-components-UnderlineItem-7fP-n" href="https://github.com/Roy3838/Observer/pulse" data-discover="true"><span data-component="icon"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-graph" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M1.5 1.75V13.5h13.75a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75V1.75a.75.75 0 0 1 1.5 0Zm14.28 2.53-5.25 5.25a.75.75 0 0 1-1.06 0L7 7.06 4.28 9.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.25-3.25a.75.75 0 0 1 1.06 0L10 7.94l4.72-4.72a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z"></path></svg></span><span data-component="text" data-content="Insights">Insights</span></a></li><li class="prc-UnderlineNav-UnderlineNavItem-syRjR"><a data-tab-item="settings" data-turbo-frame="repo-content-turbo-frame" class="prc-components-UnderlineItem-7fP-n" href="https://github.com/Roy3838/Observer/settings" data-discover="true"><span data-component="icon"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-gear" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.088.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 0 1-.704 1.217c-.428.61-1.176.807-1.82.63l-1.102-.302c-.067-.019-.177-.011-.3.071a5.909 5.909 0 0 1-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 0 1-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 0 1-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 0 1 0-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 0 1 .704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071.214-.143.437-.272.668-.386.133-.066.194-.158.211-.224l.29-1.106C6.009.645 6.556.095 7.299.03 7.53.01 7.764 0 8 0Zm-.571 1.525c-.036.003-.108.036-.137.146l-.289 1.105c-.147.561-.549.967-.998 1.189-.173.086-.34.183-.5.29-.417.278-.97.423-1.529.27l-1.103-.303c-.109-.03-.175.016-.195.045-.22.312-.412.644-.573.99-.014.031-.021.11.059.19l.815.806c.411.406.562.957.53 1.456a4.709 4.709 0 0 0 0 .582c.032.499-.119 1.05-.53 1.456l-.815.806c-.081.08-.073.159-.059.19.162.346.353.677.573.989.02.03.085.076.195.046l1.102-.303c.56-.153 1.113-.008 1.53.27.161.107.328.204.501.29.447.222.85.629.997 1.189l.289 1.105c.029.109.101.143.137.146a6.6 6.6 0 0 0 1.142 0c.036-.003.108-.036.137-.146l.289-1.105c.147-.561.549-.967.998-1.189.173-.086.34-.183.5-.29.417-.278.97-.423 1.529-.27l1.103.303c.109.029.175-.016.195-.045.22-.313.411-.644.573-.99.014-.031.021-.11-.059-.19l-.815-.806c-.411-.406-.562-.957-.53-1.456a4.709 4.709 0 0 0 0-.582c-.032-.499.119-1.05.53-1.456l.815-.806c.081-.08.073-.159.059-.19a6.464 6.464 0 0 0-.573-.989c-.02-.03-.085-.076-.195-.046l-1.102.303c-.56.153-1.113.008-1.53-.27a4.44 4.44 0 0 0-.501-.29c-.447-.222-.85-.629-.997-1.189l-.289-1.105c-.029-.11-.101-.143-.137-.146a6.6 6.6 0 0 0-1.142 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM9.5 8a1.5 1.5 0 1 0-3.001.001A1.5 1.5 0 0 0 9.5 8Z"></path></svg></span><span data-component="text" data-content="Settings">Settings</span></a></li></ul><div class="prc-UnderlineNav-MoreButtonContainer-Dnrq6"><div class="prc-UnderlineNav-MoreButtonDivider-dN0a-"></div><button data-component="overflow-menu-button" type="button" aria-haspopup="true" aria-expanded="false" tabindex="0" class="prc-Button-ButtonBase-9n-Xk prc-UnderlineNav-MoreButton-Y8soj" data-loading="false" data-size="medium" data-variant="invisible" id="_R_1afl_" style="anchor-name: --anchored-overlay-anchor-_R_7aflH1_;"><span data-component="buttonContent" data-align="center" class="prc-Button-ButtonContent-Iohp5"><span data-component="text" class="prc-Button-Label-FWkx3"><span>More<span class="prc-src-InternalVisuallyHidden-2YaI6"> items</span></span></span></span><span data-component="trailingAction" class="prc-Button-Visual-YNt2F prc-Button-VisualWrap-E4cnq"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-triangle-down" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="m4.427 7.427 3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427Z"></path></svg></span></button></div></nav><div class="d-none"></div></header></div>
+</react-partial>
+
+
+
+
+      <div hidden="hidden" data-view-component="true" class="js-stale-session-flash stale-session-flash flash flash-warn flash-full">
+  
+        <svg aria-hidden="true" data-component="Octicon" height="16" viewBox="0 0 16 16" version="1.1" width="16" data-view-component="true" class="octicon octicon-alert">
+    <path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path>
+</svg>
+        <span class="js-stale-session-flash-signed-in" hidden="">You signed in with another tab or window. <a class="Link--inTextBlock" href="https://github.com/Roy3838/Observer/actions/runs/37359884122">Reload</a> to refresh your session.</span>
+        <span class="js-stale-session-flash-signed-out" hidden="">You signed out in another tab or window. <a class="Link--inTextBlock" href="https://github.com/Roy3838/Observer/actions/runs/37359884122">Reload</a> to refresh your session.</span>
+        <span class="js-stale-session-flash-switched" hidden="">You switched accounts on another tab or window. <a class="Link--inTextBlock" href="https://github.com/Roy3838/Observer/actions/runs/37359884122">Reload</a> to refresh your session.</span>
+
+    <button id="icon-button-a51b45a7-cf0b-445d-a2e5-f11541cec62a" aria-labelledby="tooltip-c110d5b1-bb77-4b6a-b4e1-2412d51fdd7b" type="button" data-view-component="true" class="Button Button--iconOnly Button--invisible Button--medium flash-close js-flash-close">  <svg aria-hidden="true" data-component="Octicon" height="16" viewBox="0 0 16 16" version="1.1" width="16" data-view-component="true" class="octicon octicon-x Button-visual">
+    <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
+</svg>
+</button><tool-tip id="tooltip-c110d5b1-bb77-4b6a-b4e1-2412d51fdd7b" for="icon-button-a51b45a7-cf0b-445d-a2e5-f11541cec62a" popover="manual" data-direction="s" data-type="label" data-view-component="true" class="sr-only position-absolute" aria-hidden="true" role="tooltip"><template shadowrootmode="open"><style>
+      :host {
+        --tooltip-top: var(--tool-tip-position-top, 0);
+        --tooltip-left: var(--tool-tip-position-left, 0);
+        padding: var(--overlay-paddingBlock-condensed) var(--overlay-padding-condensed) !important;
+        font: var(--text-body-shorthand-small);
+        color: var(--tooltip-fgColor, var(--fgColor-onEmphasis)) !important;
+        text-align: center;
+        text-decoration: none;
+        text-shadow: none;
+        text-transform: none;
+        letter-spacing: normal;
+        word-wrap: break-word;
+        white-space: pre;
+        background: var(--tooltip-bgColor, var(--bgColor-emphasis)) !important;
+        border-radius: var(--borderRadius-medium);
+        border: 0 !important;
+        opacity: 0;
+        max-width: min(var(--overlay-width-small), 100vw);
+        word-wrap: break-word;
+        white-space: normal;
+        width: max-content !important;
+        inset: var(--tooltip-top) auto auto var(--tooltip-left) !important;
+        overflow: visible !important;
+        text-wrap: balance;
+      }
+
+      :host(:is(.tooltip-n, .tooltip-nw, .tooltip-ne)) {
+        --tooltip-top: calc(var(--tool-tip-position-top, 0) - var(--overlay-offset, 0.25rem));
+        --tooltip-left: var(--tool-tip-position-left);
+      }
+
+      :host(:is(.tooltip-s, .tooltip-sw, .tooltip-se)) {
+        --tooltip-top: calc(var(--tool-tip-position-top, 0) + var(--overlay-offset, 0.25rem));
+        --tooltip-left: var(--tool-tip-position-left);
+      }
+
+      :host(.tooltip-w) {
+        --tooltip-top: var(--tool-tip-position-top);
+        --tooltip-left: calc(var(--tool-tip-position-left, 0) - var(--overlay-offset, 0.25rem));
+      }
+
+      :host(.tooltip-e) {
+        --tooltip-top: var(--tool-tip-position-top);
+        --tooltip-left: calc(var(--tool-tip-position-left, 0) + var(--overlay-offset, 0.25rem));
+      }
+
+      :host:after{
+        position: absolute;
+        display: block;
+        right: 0;
+        left: 0;
+        height: var(--overlay-offset, 0.25rem);
+        content: "";
+      }
+
+      :host(.tooltip-s):after,
+      :host(.tooltip-se):after,
+      :host(.tooltip-sw):after {
+        bottom: 100%
+      }
+
+      :host(.tooltip-n):after,
+      :host(.tooltip-ne):after,
+      :host(.tooltip-nw):after {
+        top: 100%;
+      }
+
+      @keyframes tooltip-appear {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      :host(:popover-open),
+      :host(:popover-open):before {
+        animation-name: tooltip-appear;
+        animation-duration: .1s;
+        animation-fill-mode: forwards;
+        animation-timing-function: ease-in;
+      }
+
+      :host(.\:popover-open) {
+        animation-name: tooltip-appear;
+        animation-duration: .1s;
+        animation-fill-mode: forwards;
+        animation-timing-function: ease-in;
+      }
+
+      @media (forced-colors: active) {
+        :host {
+          outline: solid 1px transparent;
+        }
+
+        :host:before {
+          display: none;
+        }
+      }
+    </style><slot></slot></template>Dismiss alert</tool-tip>
+
+
+  
+</div>
+        
+          
+          <include-fragment src="/in-product-messaging/code-scanning-ai-findings-preview-banner?page_path=%2FRoy3838%2FObserver%2Factions%2Fruns%2F37359884122" data-nonce="v2:2590b8fc-77ba-16f1-2df3-16c985c86faf" data-view-component="true" class="is-error"><template shadowrootmode="open"><style>:host {display: block;}</style><slot></slot></template>
+  
+  <div data-show-on-forbidden-error="" hidden="">
+    <div class="Box">
+  <div class="blankslate-container">
+    <div data-view-component="true" class="blankslate blankslate-spacious color-bg-default rounded-2">
+      
+
+      <h3 data-view-component="true" class="blankslate-heading">        Uh oh!
+</h3>
+      <p data-view-component="true" class="blankslate-description">        </p><p class="color-fg-muted my-2 mb-2 ws-normal">There was an error while loading. <a class="Link--inTextBlock" data-turbo="false" href="https://github.com/Roy3838/Observer/actions/runs/37359884122" aria-label="Please reload this page">Please reload this page</a>.</p>
+<p></p>
+
+</div>  </div>
+</div>  </div>
+</include-fragment>
+
+          
+    </div>
+
+  <div id="start-of-content" class="show-on-focus"></div>
+
+
+
+
+
+
+
+
+    <div id="js-flash-container" class="flash-container" data-turbo-replace="">
+
+
+
+
+
+
+  <template class="js-flash-template"></template>
+</div>
+
+
+    
+  <notification-shelf-watcher data-base-url="https://github.com/notifications/beta/shelf" data-channel="eyJjIjoibm90aWZpY2F0aW9uLWNoYW5nZWQ6NjUzMTg3MDQiLCJ0IjoxNzkxMzA2Mjk3fQ==--0504e2b8e469aa0d38137ede61689d926571cde5723ba25a708069496b91bf27" data-view-component="true" class="js-socket-channel" data-refresh-delay="500" data-catalyst="" data-throttle-delay="5000"></notification-shelf-watcher>
+  <div hidden="" data-initial="" data-target="notification-shelf-watcher.placeholder"></div>
+
+
+
+
+
+
+  <div class="application-main " data-commit-hovercards-enabled="" data-discussion-hovercards-enabled="" data-issue-and-pr-hovercards-enabled="" data-project-hovercards-enabled="">
+        <div itemscope="" itemtype="http://schema.org/SoftwareSourceCode" class="">
+    <main>
+      
+  
+
+
+
+
+
+
+<run-summary data-catalyst="">
+      
+
+
+
+
+
+
+
+
+    
+  <div id="repository-container-header" data-turbo-replace="" hidden=""></div>
+
+
+
+<turbo-frame id="repo-content-turbo-frame" target="_top" data-turbo-action="advance" class="">
+    <div class="repository-content ">
+    
+
+
+
+    
+      
+<div class="clearfix new-discussion-timeline container-xl tmp-px-3 tmp-px-md-4 tmp-px-lg-5">
+
+  <split-page-layout data-view-component="true" class="PageLayout PageLayout--columnGap-none PageLayout--rowGap-none PageLayout--responsive-separateRegions PageLayout--innerSpacing-normal PageLayout--responsive-primary-content PageLayout--panePos-start PageLayout--paneWidth-wide PageLayout--hasPaneDivider" data-catalyst="">
+  <div data-view-component="true" class="PageLayout-wrapper">
+    <div data-view-component="true" class=" PageLayout-header--hasDivider PageLayout-header PageLayout-region pr-3 tmp-pr-3 pr-sm-3 tmp-pr-sm-3 pr-md-3 tmp-pr-md-3 pr-lg-4 tmp-pr-lg-4 pr-xl-4 tmp-pr-xl-4 border-bottom-0">        
+  <div class="js-updatable-content js-socket-channel" data-url="/Roy3838/Observer/actions/runs/37359884122/header_partial" data-channel="eyJjIjoiY2hlY2tfc3VpdGVzOjEwMTE5NDQ3MjkxNyIsInQiOjE3OTEzMDYyOTd9--f4ee779a57478f0d843c00d35700cd675a9ea13eeb3cfc4a9d94e17a48e887f4">
+    <span data-favicon-override="https://github.githubassets.com/favicons/favicon-success.svg"></span>
+
+    <page-header data-view-component="true" class="PageHeader mb-0 tmp-mb-0 ml-0 tmp-ml-0 ml-sm-0 tmp-ml-sm-0 ml-md-3 tmp-ml-md-3">
+  <div class="PageHeader-contextBar">
+        <span class="PageHeader-parentLink">
+           <a href="https://github.com/Roy3838/Observer/actions/workflows/release.yml" data-view-component="true" class="Link"><svg aria-hidden="true" data-component="Octicon" height="16" viewBox="0 0 16 16" version="1.1" width="16" data-view-component="true" class="octicon octicon-arrow-left">
+    <path d="M7.78 12.53a.75.75 0 0 1-1.06 0L2.47 8.28a.75.75 0 0 1 0-1.06l4.25-4.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L4.81 7h7.44a.75.75 0 0 1 0 1.5H4.81l2.97 2.97a.75.75 0 0 1 0 1.06Z"></path>
+</svg>
+              <span class="PageHeader-parentLink-label"> Release: Build and Upload Tauri App</span></a>        </span>
+  </div>
+  <div class="PageHeader-titleBar">
+    <div class="PageHeader-titleWrap--hasLeadingVisual PageHeader-titleWrap PageHeader-titleWrap--medium">
+        <span data-view-component="true" class="PageHeader-leadingVisual actions-workflow-runs-status"><span class="hide-sm hide-md"><div class="d-flex flex-items-center height-full"><span id="hdr-status" class="d-flex"></span></div></span></span> <h1 data-view-component="true" class="PageHeader-title lh-default">        <span>
+          <span class="markdown-title">SF Tech Week: cooking demo</span>
+            <span class="color-fg-muted" style="font-weight: 400">#202</span>
+        </span>
+</h1>
+      </div>
+
+        <span data-view-component="true" class="PageHeader-actions"><div class="d-none d-md-flex flex-self-start ml-n1 ml-md-0"><div class="mr-2"><button id="rerun" type="button" data-view-component="true" class="Button--primary Button--medium Button"><span class="Button-content"><span class="Button-label">Run workflow</span></span></button></div></div></span></div></page-header>  </div>
+
+
+</div>
+      <div data-view-component="true" class="PageLayout-columns">
+          <div data-target="split-page-layout.pane" data-view-component="true" class="PageLayout-region PageLayout-pane PageLayout-region--dividerNarrow-none-after PageLayout-pane--sticky border-right-0">            
+
+
+
+
+
+<link media="all" rel="stylesheet" href="./github_assets/primer-react-css.e4334163c54cccf5.module.css">
+<link media="all" rel="stylesheet" href="./github_assets/actions-run-jobs-list.9e5b7088e2baef8e.module.css">
+
+<react-partial partial-name="actions-run-jobs-list" data-ssr="false" data-attempted-ssr="false" data-react-profiling="false" data-catalyst="" class="loaded">
+  
+  
+  <div data-target="react-partial.reactRoot"><div class="js-socket-channel" data-channel="eyJjIjoiY2hlY2tfc3VpdGVzOjEwMTE5NDQ3MjkxNyIsInQiOjE3OTEzMDYyOTd9--f4ee779a57478f0d843c00d35700cd675a9ea13eeb3cfc4a9d94e17a48e887f4"><div class="ActionsRunJobsList-module__container__kVRDk"><nav aria-label="Workflow run" data-component="NavList"><ul class="prc-ActionList-ActionList-rPFF2" data-component="ActionList" data-dividers="false" data-variant="inset"><li data-component="ActionList.Item" data-active="true" data-has-description="false" class="prc-ActionList-ActionListItem-So4vC"><a class="prc-ActionList-ActionListContent-KBb8- prc-Link-Link-9ZwDx" data-component="NavList.Item" tabindex="0" aria-labelledby="_r_2_--label" id="_r_2_" data-size="medium" aria-current="page" href="https://github.com/Roy3838/Observer/actions/runs/37359884122" data-test-selector="summary-link" data-turbo="false" style="--subitem-depth: 0;"><span class="prc-ActionList-Spacer-4tR2m"></span><span class="prc-ActionList-LeadingVisual-NBr28 prc-ActionList-VisualWrap-bdCsS" data-component="ActionList.LeadingVisual"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-home" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align: text-bottom;"><path d="M6.906.664a1.749 1.749 0 0 1 2.187 0l5.25 4.2c.415.332.657.835.657 1.367v7.019A1.75 1.75 0 0 1 13.25 15h-3.5a.75.75 0 0 1-.75-.75V9H7v5.25a.75.75 0 0 1-.75.75h-3.5A1.75 1.75 0 0 1 1 13.25V6.23c0-.531.242-1.034.657-1.366l5.25-4.2Zm1.25 1.171a.25.25 0 0 0-.312 0l-5.25 4.2a.25.25 0 0 0-.094.196v7.019c0 .138.112.25.25.25H5.5V8.25a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 .75.75v5.25h2.75a.25.25 0 0 0 .25-.25V6.23a.25.25 0 0 0-.094-.195Z"></path></svg></span><span class="prc-ActionList-ActionListSubContent-gKsFp" data-component="ActionList.Item--DividerContainer"><span id="_r_2_--label" class="prc-ActionList-ItemLabel-81ohH" data-component="ActionList.Item.Label">Summary</span></span></a></li><div class="ActionsRunJobsList-module__jobsHeader__iFl7t"><h4 class="ActionsRunJobsList-module__jobsHeading__WqGiW">All jobs</h4><button data-component="IconButton" type="button" aria-haspopup="true" aria-expanded="false" tabindex="0" class="prc-Button-ButtonBase-9n-Xk prc-Button-IconButton-fyge7" data-loading="false" data-no-visuals="true" data-size="small" data-variant="default" aria-labelledby="_r_6_" id="_r_3_" style="anchor-name: --anchored-overlay-anchor-_r_5_;"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-filter" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align: text-bottom;"><path d="M.75 3h14.5a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1 0-1.5ZM3 7.75A.75.75 0 0 1 3.75 7h8.5a.75.75 0 0 1 0 1.5h-8.5A.75.75 0 0 1 3 7.75Zm3 4a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button><span class="prc-TooltipV2-Tooltip-tLeuB" data-direction="s" data-component="Tooltip" aria-hidden="true" id="_r_6_" popover="auto">Filter by job status</span></div><li class="prc-ActionList-Divider-taVfb" aria-hidden="true" data-component="ActionList.Divider"></li><li class="prc-ActionList-Group-lMIPQ" data-component="ActionList.Group"><ul id="side-jobs" class="prc-ActionList-GroupList-V5B3-"></ul></li><li class="prc-ActionList-Divider-taVfb" aria-hidden="true" data-component="ActionList.Divider"></li><li class="prc-ActionList-Group-lMIPQ" data-component="ActionList.Group"><div data-variant="subtle" data-component="GroupHeadingWrap" class="prc-ActionList-GroupHeadingWrap-laXcX"><h3 class="prc-ActionList-GroupHeading-STzxi" id="_r_9_" data-component="ActionList.GroupHeading">Run details</h3></div><ul aria-labelledby="_r_9_" class="prc-ActionList-GroupList-V5B3-"><li data-component="ActionList.Item" data-has-description="false" class="prc-ActionList-ActionListItem-So4vC"><a class="prc-ActionList-ActionListContent-KBb8- prc-Link-Link-9ZwDx" data-component="NavList.Item" tabindex="0" aria-labelledby="_r_a_--label" id="_r_a_" data-size="medium" href="https://github.com/Roy3838/Observer/actions/runs/37359884122/usage" data-test-selector="usage-link" data-turbo="false" style="--subitem-depth: 0;"><span class="prc-ActionList-Spacer-4tR2m"></span><span class="prc-ActionList-LeadingVisual-NBr28 prc-ActionList-VisualWrap-bdCsS" data-component="ActionList.LeadingVisual"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-stopwatch" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align: text-bottom;"><path d="M5.75.75A.75.75 0 0 1 6.5 0h3a.75.75 0 0 1 0 1.5h-.75v1l-.001.041a6.724 6.724 0 0 1 3.464 1.435l.007-.006.75-.75a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734l-.75.75-.006.007a6.75 6.75 0 1 1-10.548 0L2.72 5.03l-.75-.75a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018l.75.75.007.006A6.72 6.72 0 0 1 7.25 2.541V1.5H6.5a.75.75 0 0 1-.75-.75ZM8 14.5a5.25 5.25 0 1 0-.001-10.501A5.25 5.25 0 0 0 8 14.5Zm.389-6.7 1.33-1.33a.75.75 0 1 1 1.061 1.06L9.45 8.861A1.503 1.503 0 0 1 8 10.75a1.499 1.499 0 1 1 .389-2.95Z"></path></svg></span><span class="prc-ActionList-ActionListSubContent-gKsFp" data-component="ActionList.Item--DividerContainer"><span id="_r_a_--label" class="prc-ActionList-ItemLabel-81ohH" data-component="ActionList.Item.Label">Usage</span></span></a></li><li data-component="ActionList.Item" data-has-description="false" class="prc-ActionList-ActionListItem-So4vC"><a class="prc-ActionList-ActionListContent-KBb8- prc-Link-Link-9ZwDx" data-component="NavList.Item" tabindex="0" aria-labelledby="_r_b_--label" id="_r_b_" data-size="medium" href="https://github.com/Roy3838/Observer/actions/runs/37359884122/workflow" data-test-selector="workflow-file-link" data-turbo="false" style="--subitem-depth: 0;"><span class="prc-ActionList-Spacer-4tR2m"></span><span class="prc-ActionList-LeadingVisual-NBr28 prc-ActionList-VisualWrap-bdCsS" data-component="ActionList.LeadingVisual"><svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-file-code" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align: text-bottom;"><path d="M4 1.75C4 .784 4.784 0 5.75 0h5.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v8.586A1.75 1.75 0 0 1 14.25 15h-9a.75.75 0 0 1 0-1.5h9a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 10 4.25V1.5H5.75a.25.25 0 0 0-.25.25v2.5a.75.75 0 0 1-1.5 0Zm1.72 4.97a.75.75 0 0 1 1.06 0l2 2a.75.75 0 0 1 0 1.06l-2 2a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734l1.47-1.47-1.47-1.47a.75.75 0 0 1 0-1.06ZM3.28 7.78 1.81 9.25l1.47 1.47a.751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018l-2-2a.75.75 0 0 1 0-1.06l2-2a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Zm8.22-6.218V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"></path></svg></span><span class="prc-ActionList-ActionListSubContent-gKsFp" data-component="ActionList.Item--DividerContainer"><span id="_r_b_--label" class="prc-ActionList-ItemLabel-81ohH" data-component="ActionList.Item.Label">Workflow file</span></span></a></li></ul></li></ul></nav></div><div hidden=""><a data-hotkey="g u" href="https://github.com/Roy3838/Observer/actions/runs/37359884122/usage">Usage</a><a data-hotkey="g f" href="https://github.com/Roy3838/Observer/actions/runs/37359884122/workflow">Workflow file</a></div></div></div>
+</react-partial>
+
+
+
+
+</div>
+          <div style="max-width: 100vw;" data-target="split-page-layout.content" data-view-component="true" class="PageLayout-region PageLayout-content">          
+<div class="flex-auto tmp-pb-5">
+<div role="region" aria-label="Workflow run summary" class="actions-workflow-stats actions-fullwidth-module color-bg-default Box color-shadow-small tmp-mb-3 tmp-pb-3 tmp-px-3 border border-top-0 border-md-top rounded">
+  <div class="p-md-1 d-flex flex-wrap">
+    <div class="col tmp-mt-md-3 tmp-mr-6">
+      <span class="mb-1 d-block text-small color-fg-muted">Triggered via push <span id="trig-time">just now</span></span>
+      <div class="d-flex flex-wrap col-triggered-content flex-items-center color-fg-muted">
+        <a class="Link--primary text-semibold mr-1 no-underline" href="#"><img class="avatar mr-1 avatar-user" style="margin-top: -2px;" src="./github_assets/65318704(1)" width="16" height="16" alt="@Roy3838">Roy3838</a>
+        <div class="d-flex flex-items-baseline color-fg-default mr-1"><span class="mr-1">pushed</span>
+          <a class="Link--primary text-small Link--inTextBlock ml-1" href="#"><svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16" class="octicon octicon-git-commit" fill="currentColor" style="vertical-align:text-bottom"><path d="M11.93 8.5a4.002 4.002 0 0 1-7.86 0H.75a.75.75 0 0 1 0-1.5h3.32a4.002 4.002 0 0 1 7.86 0h3.32a.75.75 0 0 1 0 1.5Zm-1.43-.75a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0Z"></path></svg> 3a9f1c7</a></div>
+        <a class="d-inline-block branch-name css-truncate css-truncate-target my-0 my-md-1" style="max-width: 200px;" href="#">v3.0.6</a>
+      </div>
+    </div>
+    <div class="col-12 d-md-none mt-2 pt-2 border-bottom"></div>
+    <div class="col tmp-mt-3 tmp-mr-3 tmp-mr-sm-6 tmp-ml-lg-3"><span class="mb-1 d-block text-small color-fg-muted">Status</span><span class="h4 color-fg-default" id="sum-text">Not started</span></div>
+    <div class="col tmp-mt-3 tmp-mr-3 tmp-mr-sm-6 tmp-ml-lg-3"><span class="mb-1 d-block text-small color-fg-muted">Total duration</span><span class="h4 color-fg-default" id="sum-time">–</span></div>
+    <div class="tmp-mt-3 tmp-ml-lg-3"><span class="mb-1 d-block text-small color-fg-muted">Artifacts</span><span class="h4 color-fg-default" id="sum-art">–</span></div>
+  </div>
+</div>
+
+<div class="demo-banner" id="banner">
+  <svg class="ico" style="width:24px;height:24px" viewBox="0 0 16 16" fill="currentColor"><path d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.751.751 0 0 0-.018-1.042.751.751 0 0 0-1.042-.018L6.75 9.19 5.28 7.72a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042l2 2a.75.75 0 0 0 1.06 0Z"/></svg>
+  <div><span id="banner-title">Workflow cooked</span><small id="banner-sub"></small></div>
+</div>
+
+<div role="region" aria-label="Workflow run graph">
+ <div class="actions-fullwidth-module WorkflowGraph color-shadow-small tmp-mb-3 border rounded color-bg-inset overflow-hidden position-relative p-2 border-top-0 border-md-top">
+  <div class="d-flex flex-items-center flex-justify-between position-relative p-md-1 pb-md-2">
+    <div class="p-2 color-bg-inset rounded position-relative" style="z-index: 1;">
+      <h2 class="d-flex flex-items-center h4"><a class="Link--primary no-underline" href="#">release.yml</a></h2>
+      <div class="text-small color-fg-muted">on: push</div>
+    </div>
+  </div>
+  <div class="demo-graph"><div class="graph-inner" id="graph"></div></div>
+ </div>
+</div>
+
+<div class="log-card" id="log-card" style="display:none">
+  <div class="log-head"><span id="log-ico"></span><span class="jt" id="log-title"></span><span class="jm" id="log-meta"></span></div>
+  <div class="demo-steps" id="steps"></div>
+</div>
+</div></div></div></div></split-page-layout></div></div></turbo-frame></run-summary></main></div></div><script>
+
+document.addEventListener('DOMContentLoaded', () => {
+    // e2e timing: sim-seconds advance slowly while the suite holds the run mid-build, then
+    // run to TOTAL (success) or FAIL_AT (fail, with the Windows build still going) over the
+    // duration demo.start() gives.
+    const HOLD_FROM = 20, HOLD_TO = 45, FAIL_AT = 95;
+    const loadedAt = performance.now();
+    let run = null;
+    let failedAt   = null;                                   // sim-seconds when "Workflow file" was clicked; freezes the run red
+    const TOTAL    = 120;                                    // seconds, whole run
+    const SVG_NS   = 'http://www.w3.org/2000/svg';
+    const SIDE_ITEM = "<li data-component=\"ActionList.Item\" data-has-description=\"false\" data-has-trailing-action=\"true\" class=\"prc-ActionList-ActionListItem-So4vC NavigationItem-module__itemWithTrailingAction__ox4sQ\"><a class=\"prc-ActionList-ActionListContent-KBb8- prc-Link-Link-9ZwDx\" data-component=\"NavList.Item\" tabindex=\"0\" data-size=\"medium\" href=\"#\" data-test-selector=\"job-link\" data-turbo=\"false\" style=\"--subitem-depth: 0;\"><span class=\"prc-ActionList-Spacer-4tR2m\"></span><span class=\"prc-ActionList-LeadingVisual-NBr28 prc-ActionList-VisualWrap-bdCsS\" data-component=\"ActionList.LeadingVisual\"></span><span class=\"prc-ActionList-ActionListSubContent-gKsFp\" data-component=\"ActionList.Item--DividerContainer\"><span class=\"prc-ActionList-ItemLabel-81ohH\" data-component=\"ActionList.Item.Label\">__LABEL__</span></span></a><span class=\"NavigationItem-module__rerunButton__i2fyk prc-ActionList-TrailingAction-dMRxe\" data-component=\"ActionList.TrailingAction\"><button data-component=\"IconButton\" type=\"button\" data-loading=\"false\" data-show-dialog-id=\"rerun-dialog-111931533810\" data-job-id=\"create-release\" data-action=\"mouseenter:run-summary#mouseEnterRerun mouseleave:run-summary#mouseLeaveRerun\" class=\"prc-Button-ButtonBase-9n-Xk prc-ActionList-TrailingActionButton-UUAk6 prc-Button-IconButton-fyge7\" data-no-visuals=\"true\" data-size=\"medium\" data-variant=\"invisible\"><svg data-component=\"Octicon\" aria-hidden=\"true\" focusable=\"false\" class=\"octicon octicon-sync\" viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"currentColor\" display=\"inline-block\" overflow=\"visible\" style=\"vertical-align: text-bottom;\"><path d=\"M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5Z\"></path></svg></button></span></li>";
+
+    const ICONS = {
+        success: '<svg class="ico" viewBox="0 0 16 16" fill="#1a7f37"><path d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.751.751 0 0 0-.018-1.042.751.751 0 0 0-1.042-.018L6.75 9.19 5.28 7.72a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042l2 2a.75.75 0 0 0 1.06 0Z"/></svg>',
+        fail:    '<svg class="ico" viewBox="0 0 16 16" fill="#cf222e"><path d="M2.343 13.657A8 8 0 1 1 13.658 2.343 8 8 0 0 1 2.343 13.657ZM6.03 4.97a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042L6.94 8 4.97 9.97a.749.749 0 0 0 .326 1.275.749.749 0 0 0 .734-.215L8 9.06l1.97 1.97a.749.749 0 0 0 1.275-.326.749.749 0 0 0-.215-.734L9.06 8l1.97-1.97a.749.749 0 0 0-.326-1.275.749.749 0 0 0-.734.215L8 6.94Z"/></svg>',
+        running: '<svg class="ico spin" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="#d4a72c" stroke-opacity=".35" stroke-width="2.5"/><path d="M8 1.5a6.5 6.5 0 0 1 6.5 6.5" fill="none" stroke="#bf8700" stroke-width="2.5" stroke-linecap="round"/></svg>',
+        queued:  '<svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="#8c959f" stroke-width="1.5"/><circle cx="8" cy="8" r="2" fill="#8c959f"/></svg>',
+        pending: '<svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#6e7681" stroke-width="1.5"/></svg>',
+        skipped: '<svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="#8c959f" stroke-width="1.5"/><path d="M5 8h6" stroke="#8c959f" stroke-width="1.5"/></svg>'
+    };
+
+    // ------------------------------------------------------------------
+    // Workflow definition. Times are seconds from run start. Step
+    // durations are given in weights and stretched to fill each job.
+    // ------------------------------------------------------------------
+    const BUILD_LINES = {
+        'Set up job': ['Current runner version: \'2.329.0\'', 'Runner Image: macos-15-arm64', 'Secret source: Actions', 'Prepare workflow directory', 'Prepare all required actions'],
+        'Checkout repository': ['Syncing repository: Roy3838/Observer', 'Fetching the repository', '  git -c protocol.version=2 fetch --depth=1 origin +refs/tags/v3.0.6', 'Checking out the ref', 'HEAD is now at 3a9f1c7 SF Tech Week cooking demo'],
+        'Setup Node.js': ['Attempting to download 22.x...', 'Acquiring 22.11.0 from https://github.com/actions/node-versions', 'Extracting ...', 'Adding to the cache ...', 'Done'],
+        'Install Rust stable': ['info: syncing channel updates for \'stable\'', 'info: latest update on 2026-09-18, rust version 1.90.0', 'info: downloading component \'cargo\'', 'info: downloading component \'rustc\'', 'info: installing component \'rust-std\'', 'info: default toolchain set to \'stable\''],
+        'Install Linux dependencies': ['Get:1 http://azure.archive.ubuntu.com noble InRelease [256 kB]', 'Reading package lists...', 'The following NEW packages will be installed:', '  libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf', 'Setting up libwebkit2gtk-4.1-dev ...'],
+        'Install pnpm': ['Running self-installer from "https://get.pnpm.io/v6.16.js"', 'Installing pnpm 9.15.0', 'Success! Added pnpm to PATH'],
+        'Install app dependencies': ['Lockfile is up to date, resolution step is skipped', 'Progress: resolved 1, reused 0, downloaded 0, added 0', 'Packages: +1412', '++++++++++++++++++++++++++++++++++++++++', 'Progress: resolved 1412, reused 1380, downloaded 32, added 1412, done', 'Done in 14.2s'],
+        'Build frontend': ['> observer-app@3.0.6 build', '> tsc && vite build', 'vite v6.2.0 building for production...', 'transforming...', '✓ 2417 modules transformed.', 'dist/assets/index-DbK3a1Qf.css    91.40 kB │ gzip:  14.02 kB', 'dist/assets/index-C8sP02xv.js  2,184.77 kB │ gzip: 611.30 kB', '✓ built in 12.84s'],
+        'Build observe CLI': ['   Compiling proc-macro2 v1.0.92', '   Compiling serde v1.0.215', '   Compiling tokio v1.42.0', '   Compiling reqwest v0.12.9', '   Compiling observe-cli v0.4.1', '    Finished `release` profile [optimized] target(s) in 41.8s'],
+        'Stage observe CLI sidecar': ['Copying observe → src-tauri/binaries/observe-${TARGET}', 'Sidecar staged'],
+        'Build and release Tauri app': ['   Compiling tauri v2.1.0', '   Compiling tauri-plugin-shell v2.0.2', '   Compiling observer v3.0.6', '    Finished `release` profile [optimized] target(s) in 3m 12s', '    Bundling Observer AI.app', '    Bundling Observer AI_3.0.6_aarch64.dmg', '    Finished 2 bundles', 'Uploading release asset Observer-AI_3.0.6.dmg', 'Uploaded 4 assets to release v3.0.6'],
+        'Post Setup Node.js': ['Post job cleanup.'],
+        'Complete job': ['Cleaning up orphan processes']
+    };
+
+    const buildSteps = (extraLinux, extraWin) => {
+        const s = [['Set up job', 3], ['Checkout repository', 4], ['Setup Node.js', 5], ['Install Rust stable', 8]];
+        if (extraLinux) s.push(['Install Linux dependencies', 9]);
+        s.push(['Install pnpm', 3], ['Install app dependencies', 11], ['Build frontend', 10], ['Build observe CLI', 17], ['Stage observe CLI sidecar', 2], ['Build and release Tauri app', 28]);
+        if (extraWin) s.push(['Upload unsigned Windows installers', 4]);
+        s.push(['Post Setup Node.js', 1], ['Complete job', 1]);
+        return s.map(([name, w]) => ({ name: name, w: w, lines: BUILD_LINES[name] || ['Uploading artifact unsigned-windows-installers', 'Artifact ID: 4417092113', 'Artifact download URL: https://github.com/Roy3838/Observer/actions/runs/…'] }));
+    };
+
+    const JOBS = [
+        {
+            id: 'create', name: 'create-release', sub: 'ubuntu-latest', stage: 0, needs: [],
+            start: 0, end: 15,
+            steps: [
+                { name: 'Set up job', w: 2, lines: ['Current runner version: \'2.329.0\'', 'Runner Image: ubuntu-24.04', 'GITHUB_TOKEN Permissions: contents: write'] },
+                { name: 'Run actions/checkout@v4', w: 3, lines: ['Syncing repository: Roy3838/Observer', 'HEAD is now at 3a9f1c7 SF Tech Week cooking demo'] },
+                { name: 'Create draft release', w: 8, lines: ['Looking for existing release v3.0.6…', 'No existing release found', 'POST /repos/Roy3838/Observer/releases', 'Created draft release "Observer AI v3.0.6"', 'release_id=214703390'] },
+                { name: 'Complete job', w: 1, lines: ['Cleaning up orphan processes'] }
+            ]
+        },
+        { id: 'mac-arm', name: 'build-tauri (macos-latest, aarch64-apple-darwin)', short: 'macOS · Apple Silicon', sub: 'macos-latest', stage: 1, needs: ['create'], start: 14, end: 84, steps: buildSteps(false, false) },
+        { id: 'mac-x86', name: 'build-tauri (macos-15-intel, x86_64-apple-darwin)', short: 'macOS · Intel', sub: 'macos-15-intel', stage: 1, needs: ['create'], start: 14, end: 92, steps: buildSteps(false, false) },
+        { id: 'linux', name: 'build-tauri (ubuntu-latest, x86_64-unknown-linux-gnu)', short: 'Linux · x86_64', sub: 'ubuntu-latest', stage: 1, needs: ['create'], start: 14, end: 79, steps: buildSteps(true, false) },
+        { id: 'win', name: 'build-tauri (windows-latest, x86_64-pc-windows-msvc)', short: 'Windows · x86_64', sub: 'windows-latest', stage: 1, needs: ['create'], start: 14, end: 100, steps: buildSteps(false, true) },
+        {
+            id: 'sign', name: 'Sign Windows Installers', sub: 'windows-latest', stage: 2, needs: ['create', 'win'],
+            start: 100, end: 112,
+            steps: [
+                { name: 'Set up job', w: 1, lines: ['Runner Image: windows-2025', 'Waiting for approval from environment "windows-signing"…', 'Approved by Roy3838'] },
+                { name: 'Checkout repository', w: 1, lines: ['HEAD is now at 3a9f1c7'] },
+                { name: 'Sign Windows installers with SignPath', w: 5, lines: ['Submitting signing request to SignPath…', 'Policy: release-signing', 'Request status: Processing', 'Request status: Completed', 'Downloaded 2 signed installers'] },
+                { name: 'Re-generate Tauri updater signatures', w: 2, lines: ['Installing tauri-cli v2.1.0', 'Signed Observer-AI_3.0.6_x64-setup.exe', 'Signed Observer-AI_3.0.6_x64_en-US.msi'] },
+                { name: 'Update latest.json with new Windows signatures', w: 1, lines: ['Patched platforms.windows-x86_64.signature'] },
+                { name: 'Upload signed installers and updated latest.json to release', w: 2, lines: ['Uploading 3 assets to release v3.0.6', 'Done'] }
+            ]
+        },
+        {
+            id: 'cook', name: 'cook-demo', sub: 'sf-tech-week-panel', stage: 3, needs: ['sign'],
+            start: 112, end: 119,
+            steps: [
+                { name: 'Warm up the audience', w: 1, lines: ['Panelists seated ✓', 'Mic check ✓', 'Hot take loaded 🔥'] },
+                { name: 'Ship it live on stage', w: 3, lines: ['Publishing release v3.0.6…', 'Observer AI is now running locally on 100% of your devices', 'Latency from idea to shipped: one workflow run'] },
+                { name: 'Mic drop', w: 1, lines: ['🎤 Demo is cooked.'] }
+            ]
+        }
+    ];
+
+    // Precompute absolute step windows and log line timestamps.
+    JOBS.forEach(job => {
+        const totalW = job.steps.reduce((a, s) => a + s.w, 0);
+        const span = job.end - job.start;
+        let t = job.start;
+        job.steps.forEach(step => {
+            step.start = t;
+            step.end = t + (step.w / totalW) * span;
+            t = step.end;
+        });
+    });
+
+    // ---------- helpers ----------
+    const $ = id => document.getElementById(id);
+    const fmt = s => {
+        s = Math.max(0, Math.floor(s));
+        return s >= 60 ? Math.floor(s / 60) + 'm ' + (s % 60) + 's' : s + 's';
+    };
+    // Banner glyphs: the success check it ships with, and the failure X lifted from ICONS.
+    const OK_ICON_D = document.querySelector('#banner svg path').getAttribute('d');
+    const FAIL_ICON_D = ICONS.fail.match(/<path d="([^"]+)"/)[1];
+    const OK_TITLE = $('banner-title').textContent;
+    const setHTML = (node, html) => { if (node._html !== html) { node._html = html; node.innerHTML = html; } };
+    const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+
+    const state = (job, now) => {
+        // Once the run has failed, jobs still in flight go red and jobs that never started are skipped.
+        if (now < job.start) return failedAt != null ? 'skipped' : 'queued';
+        if (now >= job.end) return 'success';
+        return failedAt != null ? 'fail' : 'running';
+    };
+    const stepState = (step, now, jobState) => {
+        if (now < step.start) return jobState === 'fail' ? 'skipped' : 'pending';
+        if (now >= step.end) return 'success';
+        return jobState === 'fail' ? 'fail' : 'running';
+    };
+
+    // ---------- build static DOM ----------
+    let selected = 'create';
+    let startedAt = null, raf = null, frozen = null;
+    const nodeEls = {}, sideEls = {};
+
+    const buildGraph = () => {
+        const g = $('graph');
+        g.innerHTML = '';
+        const edges = document.createElementNS(SVG_NS, 'svg');
+        edges.setAttribute('class', 'edges');
+        g.appendChild(edges);
+        for (let s = 0; s <= 3; s++) {
+            const col = el('div', 'demo-stage');
+            JOBS.filter(j => j.stage === s).forEach(job => {
+                const n = el('div', 'demo-node',
+                    '<span class="nicon"></span><div class="nname"><div>' + (job.short || job.name) + '</div><div>' + job.sub + '</div></div><span class="ntime"></span>');
+                n.addEventListener('click', () => { selected = job.id; autoFollow = false; renderAll(); });
+                nodeEls[job.id] = n;
+                col.appendChild(n);
+            });
+            g.appendChild(col);
+        }
+    };
+
+    const buildSide = () => {
+        const side = $('side-jobs');
+        side.innerHTML = '';
+        JOBS.forEach(job => {
+            // Real GitHub ActionList item markup, captured from the saved run page.
+            const wrap = document.createElement('div');
+            wrap.innerHTML = SIDE_ITEM.replace(/__LABEL__/g, job.name).replace(/__ID__/g, job.id);
+            const r = wrap.firstElementChild;
+            r.querySelector('a').addEventListener('click', e => { e.preventDefault(); selected = job.id; autoFollow = false; renderAll(); });
+            sideEls[job.id] = r;
+            side.appendChild(r);
+        });
+    };
+
+    const drawEdges = now => {
+        const g = $('graph');
+        const edges = g.querySelector('svg.edges');
+        edges.innerHTML = '';
+        const gr = g.getBoundingClientRect();
+        JOBS.forEach(job => {
+            // Only draw the direct dependency edges to keep the graph readable.
+            const direct = job.id === 'sign' ? ['win'] : job.needs;
+            direct.forEach(dep => {
+                const a = nodeEls[dep].getBoundingClientRect();
+                const b = nodeEls[job.id].getBoundingClientRect();
+                const x1 = a.right - gr.left, y1 = a.top + a.height / 2 - gr.top;
+                const x2 = b.left - gr.left,  y2 = b.top + b.height / 2 - gr.top;
+                const mx = (x1 + x2) / 2;
+                const p = document.createElementNS(SVG_NS, 'path');
+                p.setAttribute('d', 'M' + x1 + ',' + y1 + ' C' + mx + ',' + y1 + ' ' + mx + ',' + y2 + ' ' + x2 + ',' + y2);
+                if (now >= JOBS.find(j => j.id === dep).end) p.setAttribute('class', 'done');
+                edges.appendChild(p);
+            });
+        });
+    };
+
+    // ---------- log rendering ----------
+    let renderedKey = '';
+    const renderLog = now => {
+        if (startedAt == null) return;
+        const job = JOBS.find(j => j.id === selected);
+        const st = state(job, now);
+        setHTML($('log-ico'), ICONS[st]);
+        $('log-title').textContent = job.name;
+        $('log-meta').textContent = st === 'queued' ? 'Queued' : fmt(Math.min(now, job.end) - job.start);
+
+        const box = $('steps');
+        let html = '';
+        let activeSeen = false;
+        job.steps.forEach(step => {
+            const ss = stepState(step, now, st);
+            const idle = ss === 'pending' || ss === 'skipped';
+            const dur = fmt(Math.min(now, step.end) - step.start);
+            html += '<div class="step-head ' + (idle ? 'pending' : '') + '"><span class="chev">' + (ss === 'running' || ss === 'fail' ? '▼' : '▶') + '</span>' +
+                    ICONS[ss] + '<span>' + step.name + '</span><span class="stime">' + (idle ? '' : dur) + '</span></div>';
+            if (ss === 'running' || ss === 'fail') {
+                const frac = (now - step.start) / (step.end - step.start);
+                const n = Math.max(1, Math.ceil(frac * step.lines.length));
+                html += '<div class="step-lines">';
+                for (let i = 0; i < n; i++) {
+                    const lt = step.start + (i / step.lines.length) * (step.end - step.start);
+                    const stamp = '2026-10-06T19:' + String(Math.floor(lt / 60) + 12).padStart(2, '0') + ':' + String(Math.floor(lt % 60)).padStart(2, '0') + '.' + String(Math.floor((lt % 1) * 1000)).padStart(3, '0') + 'Z';
+                    const line = step.lines[i];
+                    let cls = '';
+                    if (/Finished|Done|Success|Completed|✓|Uploaded|Approved|Created/.test(line)) cls = 'ok';
+                    else if (/Waiting|Warning/.test(line)) cls = 'warn';
+                    else if (/Compiling|Bundling|Fetching/.test(line)) cls = 'dim';
+                    else if (/🔥|Mic drop|🎤/.test(line)) cls = 'hot';
+                    html += '<div><span class="ts">' + stamp + '</span><span class="' + cls + '">' + line.replace(/</g, '&lt;') + '</span></div>';
+                }
+                if (ss === 'fail') {
+                    const stamp = '2026-10-06T19:' + String(Math.floor(now / 60) + 12).padStart(2, '0') + ':' + String(Math.floor(now % 60)).padStart(2, '0') + '.' + String(Math.floor((now % 1) * 1000)).padStart(3, '0') + 'Z';
+                    html += '<div><span class="ts">' + stamp + '</span><span class="err">Error: Process completed with exit code 1.</span></div>';
+                }
+                html += '</div>';
+            }
+        });
+        const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+        setHTML(box, html);
+        if (atBottom) box.scrollTop = box.scrollHeight;
+    };
+
+    // ---------- main render ----------
+    let autoFollow = true;
+    const renderAll = () => {
+        const now = frozen != null ? frozen : (startedAt == null ? 0 : simNow());
+        const t = Math.min(now, failedAt != null ? failedAt : TOTAL);
+        const failed = failedAt != null;
+
+        // Follow whichever job is the most interesting while the user hasn't clicked one.
+        if (autoFollow && startedAt != null) {
+            const running = JOBS.filter(j => ['running', 'fail'].includes(state(j, t)));
+            const pick = running.find(j => j.id === 'cook') || running.find(j => j.id === 'sign') ||
+                         running.find(j => j.id === 'win') || running[0];
+            if (pick) selected = pick.id;
+        }
+
+        JOBS.forEach(job => {
+            const st = startedAt == null ? 'queued' : state(job, t);
+            const dur = (st === 'queued' || st === 'skipped') ? '' : fmt(Math.min(t, job.end) - job.start);
+            setHTML(nodeEls[job.id].querySelector('.nicon'), ICONS[st]);
+            nodeEls[job.id].querySelector('.ntime').textContent = dur;
+            nodeEls[job.id].classList.toggle('selected', job.id === selected);
+            setHTML(sideEls[job.id].querySelector('[data-component="ActionList.LeadingVisual"]'), ICONS[st]);
+            sideEls[job.id].toggleAttribute('data-active', job.id === selected);
+            sideEls[job.id].querySelector('a').toggleAttribute('aria-current', job.id === selected);
+        });
+
+        drawEdges(t);
+        renderLog(startedAt == null ? 0 : t);
+
+        const done = startedAt != null && (failed || t >= TOTAL);
+        const s = startedAt == null ? 'queued' : done ? (failed ? 'fail' : 'success') : 'running';
+        setHTML($('hdr-status'), s === 'queued' ? ICONS.queued : ICONS[s]);
+        $('sum-text').textContent = done ? (failed ? 'Failure' : 'Success') : (startedAt == null ? 'Not started' : 'In progress');
+        $('sum-time').textContent = startedAt == null ? '–' : fmt(t);
+
+        $('sum-art').textContent = done && !failed ? '1' : '–';
+        // Rebuilt spinners would restart at 0deg; pin them all to the document timeline so they stay in phase.
+        document.getAnimations().forEach(an => { if (an.animationName === 'spin') an.startTime = 0; });
+
+        if (done) {
+            const b = $('banner');
+            b.classList.add('show');
+            if (failed) {
+                const bad = JOBS.filter(j => state(j, t) === 'fail').map(j => j.name);
+                b.classList.add('fail');
+                b.querySelector('svg path').setAttribute('d', FAIL_ICON_D);
+                $('banner-title').textContent = 'Workflow is cooked';
+                $('banner-sub').textContent = (bad[0] || 'A job') + ' failed: Process completed with exit code 1.' + (bad.length > 1 ? ' (+' + (bad.length - 1) + ' more)' : '');
+            } else {
+                $('banner-sub').textContent = 'All 7 jobs completed successfully · SF Tech Week panel · Observer AI v3.0.6';
+            }
+        }
+    };
+
+    const simNow = () => {
+        if (!run) return HOLD_FROM + (HOLD_TO - HOLD_FROM) * (1 - Math.exp(-(performance.now() - loadedAt) / 600000));
+        const f = Math.min((performance.now() - run.at) / run.durationMs, 1);
+        return run.from + ((demo.outcome === 'success' ? TOTAL : FAIL_AT) - run.from) * f;
+    };
+    // A timer, not requestAnimationFrame: the suite captures this page from a background tab.
+    const tick = () => {
+        if (run && performance.now() - run.at >= run.durationMs) {
+            clearInterval(raf);
+            if (demo.outcome === 'success') frozen = TOTAL;
+            else frozen = failedAt = FAIL_AT;
+            renderAll();
+            demo.trigger();
+            return;
+        }
+        renderAll();
+    };
+    const loop = () => { raf = setInterval(tick, 100); };
+    demo.onStart = durationMs => { run = { from: simNow(), at: performance.now(), durationMs }; };
+
+    // "Workflow file" in the sidebar is the demo's kill switch: fail whatever is running right now.
+    const failRun = () => {
+        if (startedAt == null || failedAt != null) return;
+        const now = simNow();
+        if (now >= TOTAL) return;
+        failedAt = now;
+        clearInterval(raf);
+        renderAll();
+    };
+
+    const start = () => {
+        clearInterval(raf);
+        frozen = null;
+        failedAt = null;
+        autoFollow = true;
+        selected = 'create';
+        $('banner').classList.remove('show', 'fail');
+        $('banner').querySelector('svg path').setAttribute('d', OK_ICON_D);
+        $('banner-title').textContent = OK_TITLE;
+        startedAt = performance.now();
+        $('log-card').style.display = '';
+        $('rerun').querySelector('.Button-label').textContent = 'Re-run all jobs';
+        $('rerun').classList.remove('Button--primary');
+        $('rerun').classList.add('Button--secondary');
+        loop();
+    };
+
+    buildGraph();
+    buildSide();
+    renderAll();
+    $('rerun').addEventListener('click', start);
+    document.querySelector('a[data-test-selector="workflow-file-link"]').addEventListener('click', e => { e.preventDefault(); failRun(); });
+    window.addEventListener('resize', renderAll);
+
+    // The run is already in progress when the page loads.
+    start();
+});
+
+</script></body></html>

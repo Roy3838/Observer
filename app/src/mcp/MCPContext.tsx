@@ -9,7 +9,7 @@
 //
 // MCP.tsx is a pure consumer via useMCPContext().
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { TokenProvider } from '@utils/main_loop';
 import { useMCP, type UseMCPReturn } from './useMCP';
 import { useRemoteControl, type RemoteControlState } from './useRemoteControl';
@@ -41,6 +41,17 @@ export const MCPProvider: React.FC<MCPProviderProps> = ({ getToken, isUsingObSer
   });
   // Messages from the user's linked WhatsApp/Telegram land in this same conversation.
   const remote = useRemoteControl(mcp, getToken);
+  // End-to-end suite hooks (app/e2e), only when served with VITE_E2E=1. Refs so the hooks
+  // always reach this render's mcp and getToken.
+  const e2eRef = useRef({ mcp: { ...mcp, modelName }, getToken });
+  e2eRef.current = { mcp: { ...mcp, modelName }, getToken };
+  useEffect(() => {
+    if (import.meta.env.VITE_E2E !== '1') return;
+    import('./e2e').then(m => m.installE2EHooks({
+      mcp: () => e2eRef.current.mcp,
+      getToken: () => e2eRef.current.getToken,
+    }));
+  }, []);
   return (
     <MCPContext.Provider value={{ ...mcp, modelName, setModelName, remote }}>
       {children}

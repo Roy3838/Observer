@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<!-- Ticketmaster's Smart Queue for a big on-sale. Holds in line (people ahead keep dropping, far
+     from zero) until the suite starts it; then it ends by ?outcome=: success, it's your turn and the
+     ticket selection opens; fail, the event sells out while you're still in line. On success the
+     selection's hold timer counts down from 10:00, or from ?timer=<seconds> (the pattern scenarios
+     use a short one), and marks 'two_minutes_left' when it reaches 2:00. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ticketmaster Queue</title>
+<link rel="stylesheet" href="fonts/figtree.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #f6f6f6; color: #1f262d; font-family: Figtree, Arial, sans-serif; font-size: 15px; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 22px; line-height: 1; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  .nav { height: 64px; background: #024ddf; display: flex; align-items: center; padding: 0 32px; color: #fff; gap: 28px; }
+  .logo { font-size: 26px; font-weight: 700; font-style: italic; letter-spacing: -0.8px; }
+  .nav .r { margin-left: auto; display: flex; gap: 24px; align-items: center; font-weight: 600; font-size: 14px; }
+  .hero { height: 168px; background: linear-gradient(100deg, #1b0f3b 0%, #5b1f6b 45%, #c2366b 100%); color: #fff; display: flex; align-items: center; padding: 0 64px; gap: 28px; position: relative; overflow: hidden; }
+  .hero::after { content: ''; position: absolute; right: -60px; top: -80px; width: 420px; height: 420px; border-radius: 50%; background: radial-gradient(circle, rgba(255,214,120,.35), transparent 65%); }
+  .poster { width: 112px; height: 112px; border-radius: 8px; background: radial-gradient(circle at 35% 30%, #ffd27a, #e05d8f 50%, #2b1450 85%); flex: none; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+  .hero .d { font-size: 13px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; opacity: .85; }
+  .hero h1 { font-size: 30px; margin: 6px 0; font-weight: 800; }
+  .hero .v { font-size: 15px; opacity: .9; }
+  .wrap { display: flex; justify-content: center; padding-top: 28px; }
+  .card { width: 720px; background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.08); padding: 32px 40px 28px; }
+  .kicker { display: flex; align-items: center; gap: 8px; color: #024ddf; font-weight: 700; font-size: 13px; letter-spacing: .5px; text-transform: uppercase; }
+  .card h2 { font-size: 28px; font-weight: 800; margin: 10px 0 6px; }
+  .sub { color: #555f6a; font-size: 15px; }
+  .ahead { margin: 26px 0 10px; display: flex; align-items: baseline; gap: 10px; }
+  .ahead b { font-size: 40px; font-weight: 800; color: #1f262d; font-variant-numeric: tabular-nums; }
+  .ahead span { color: #555f6a; font-size: 16px; }
+  .track { position: relative; height: 10px; background: #e7e9ec; border-radius: 5px; margin: 34px 0 8px; }
+  .track i { position: absolute; left: 0; top: 0; bottom: 0; background: #024ddf; border-radius: 5px; transition: width .6s linear; }
+  .you { position: absolute; top: -34px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; color: #024ddf; font-size: 12px; font-weight: 700; transition: left .6s linear; }
+  .you .ms { font-size: 22px; }
+  .ends { display: flex; justify-content: space-between; color: #555f6a; font-size: 13px; }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; padding-top: 22px; border-top: 1px solid #e7e9ec; }
+  .fact .l { color: #555f6a; font-size: 13px; } .fact .v { font-weight: 700; font-size: 16px; margin-top: 4px; }
+  .note { margin-top: 22px; background: #f0f5ff; border-radius: 6px; padding: 12px 14px; display: flex; gap: 10px; color: #1f262d; font-size: 14px; }
+  .note .ms { color: #024ddf; }
+  .updated { color: #7b848c; font-size: 12px; margin-top: 14px; }
+  /* Ticket selection (your turn) */
+  .turn { display: none; }
+  .turn-on .queue { display: none; } .turn-on .turn { display: block; }
+  .banner { background: #e8f6ee; border: 1px solid #b7e3c7; color: #0b6b35; border-radius: 6px; padding: 14px 16px; display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; }
+  .banner .timer { margin-left: auto; background: #0b6b35; color: #fff; border-radius: 4px; padding: 4px 10px; font-variant-numeric: tabular-nums; }
+  .tix { margin-top: 18px; border: 1px solid #e7e9ec; border-radius: 6px; }
+  .tix .tr { display: flex; align-items: center; padding: 14px 16px; border-top: 1px solid #e7e9ec; }
+  .tix .tr:first-child { border-top: 0; }
+  .tix .tn { font-weight: 700; } .tix .ts { color: #555f6a; font-size: 13px; margin-top: 2px; }
+  .tix .price { margin-left: auto; font-weight: 800; font-size: 17px; margin-right: 18px; }
+  .qty { display: flex; align-items: center; gap: 12px; } .qty i { width: 32px; height: 32px; border: 1px solid #c8ccd0; border-radius: 50%; display: grid; place-items: center; font-style: normal; color: #024ddf; font-weight: 700; }
+  .cta { margin-top: 18px; height: 48px; border-radius: 4px; background: #024ddf; color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 16px; }
+  /* Sold out */
+  .soldout .queue .live { display: none; }
+  .so { display: none; text-align: center; padding: 10px 0 4px; }
+  .soldout .so { display: block; }
+  .soldout .ahead, .soldout .track, .soldout .ends, .soldout .facts, .soldout .note, .soldout .updated, .soldout .kicker, .soldout h2.live-h, .soldout .sub.live-s { display: none; }
+  .so .ms { font-size: 56px; color: #b3261e; }
+  .so h2 { margin: 8px 0 8px; }
+  .so .btns { display: flex; gap: 12px; justify-content: center; margin-top: 22px; }
+  .so .btn { height: 44px; padding: 0 22px; border-radius: 4px; display: grid; place-items: center; font-weight: 700; }
+  .so .btn.p { background: #024ddf; color: #fff; } .so .btn.s { border: 1px solid #024ddf; color: #024ddf; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body id="body">
+<div class="nav"><span class="logo">ticketmaster</span><span>Concerts</span><span>Sports</span><span>Arts &amp; Theater</span><span>Family</span>
+  <div class="r"><span class="ms">language</span>MX<span class="ms">account_circle</span>Roy</div></div>
+<div class="hero">
+  <div class="poster"></div>
+  <div><div class="d">Sat · Mar 14, 2027 · 8:00 PM</div><h1>Luna Vega: The Midnight Tour</h1><div class="v">Estadio GNP Seguros, Ciudad de México</div></div>
+</div>
+<div class="wrap">
+  <div class="card">
+    <div class="queue">
+      <div class="kicker"><span class="ms">schedule</span>Smart Queue</div>
+      <h2 class="live-h">You're in line</h2>
+      <div class="sub live-s">When it's your turn, you'll have 10 minutes to pick your tickets. Don't refresh the page or you could lose your spot.</div>
+      <div class="ahead"><b id="ahead">18,412</b><span>people ahead of you</span></div>
+      <div class="track"><i id="fill"></i><div class="you" id="you"><span class="ms">person</span>You</div></div>
+      <div class="ends"><span>Joined at 9:58 AM</span><span>Ticket selection</span></div>
+      <div class="facts">
+        <div class="fact"><div class="l">Estimated wait</div><div class="v" id="wait">More than an hour</div></div>
+        <div class="fact"><div class="l">Tickets</div><div class="v">Limit 4 per account</div></div>
+      </div>
+      <div class="note"><span class="ms">info</span>Demand for this event is very high. Your spot in line is saved — you can leave this tab open.</div>
+      <div class="updated" id="updated">Last updated: 10:41:07 AM</div>
+      <div class="so">
+        <span class="ms">sentiment_dissatisfied</span>
+        <h2>Tickets are no longer available</h2>
+        <div class="sub">All available tickets for this event have sold out. More tickets may be released — check back later or join the waitlist.</div>
+        <div class="btns"><span class="btn p">Join the Waitlist</span><span class="btn s">Find Other Events</span></div>
+      </div>
+    </div>
+    <div class="turn">
+      <div class="banner"><span class="ms">check_circle</span>It's your turn! Select your tickets.<span class="timer" id="timer">09:59</span></div>
+      <div class="tix">
+        <div class="tr"><div><div class="tn">General Admission – Floor</div><div class="ts">Standing · Includes fees</div></div><span class="price">$2,850</span><div class="qty"><i>−</i>0<i>+</i></div></div>
+        <div class="tr"><div><div class="tn">Platino – Section 102</div><div class="ts">Reserved seating · Includes fees</div></div><span class="price">$4,600</span><div class="qty"><i>−</i>0<i>+</i></div></div>
+        <div class="tr"><div><div class="tn">Preferente – Section 214</div><div class="ts">Reserved seating · Includes fees</div></div><span class="price">$1,920</span><div class="qty"><i>−</i>0<i>+</i></div></div>
+      </div>
+      <div class="cta">Next</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const START = 18412;
+  const loadedAt = Date.now();
+  let ahead = START, run = null;
+
+  const clock = () => {
+    const d = new Date(Date.UTC(2026, 9, 11, 10, 41, 7) + (Date.now() - loadedAt));
+    const h = d.getUTCHours();
+    return `${h % 12 || 12}:${String(d.getUTCMinutes()).padStart(2, '0')}:${String(d.getUTCSeconds()).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+  };
+  const paint = () => {
+    const n = Math.max(0, Math.round(ahead));
+    $('ahead').textContent = n.toLocaleString('en-US');
+    const f = 1 - n / 24000; // you joined with ~24,000 ahead
+    $('fill').style.width = `${f * 100}%`;
+    $('you').style.left = `${f * 100}%`;
+    const mins = n / 260;
+    $('wait').textContent = mins > 60 ? 'More than an hour' : mins > 2 ? `About ${Math.round(mins)} minutes` : 'Less than a minute';
+    $('updated').textContent = `Last updated: ${clock()}`;
+  };
+
+  const tick = () => {
+    if (!run) {
+      // Holding: the line moves, but slows down far from the front (18,412 → ~9,000).
+      ahead = 9000 + (START - 9000) * Math.exp(-(Date.now() - loadedAt) / 900_000);
+    } else {
+      const f = Math.min((Date.now() - run.at) / run.durationMs, 1);
+      ahead = run.from + (run.to - run.from) * f;
+      if (f >= 1) return finish();
+    }
+    paint();
+  };
+  // The queue page refreshes its count every couple of seconds, not continuously.
+  const timer = setInterval(tick, 2000);
+  tick();
+
+  const finish = () => {
+    clearInterval(timer);
+    if (demo.outcome === 'success') {
+      $('body').classList.add('turn-on');
+      let left = Number(new URLSearchParams(location.search).get('timer')) || 600;
+      const show = () => { $('timer').textContent = `${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}`; };
+      show();
+      setInterval(() => {
+        left = Math.max(0, left - 1);
+        show();
+        if (left === 120) demo.mark('two_minutes_left');
+      }, 1000);
+    } else {
+      $('body').classList.add('soldout');
+    }
+    demo.trigger();
+  };
+
+  // Success: the line reaches you. Fail: it sells out with ~1,400 still ahead.
+  demo.onStart = durationMs => { run = { from: ahead, at: Date.now(), durationMs, to: demo.outcome === 'success' ? 0 : 1400 }; };
+</script>
+</body>
+</html>

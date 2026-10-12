@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<!-- A Twitch stream with its chat. Holds with chat trickling in (filler that isn't scored) until the
+     suite starts it; then the scripted messages in CHAT arrive one every few seconds, scroll up and
+     out of the chat panel after ~20 newer ones, and the trigger fires when the run's time is up.
+     Marks each scripted message as it appears ('chat', { index }); demo.truth.chat has them all. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KiraPlays - Twitch</title>
+<link rel="stylesheet" href="fonts/inter.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #0e0e10; color: #efeff1; font-family: Inter, Roobert, Helvetica, sans-serif; font-size: 13px; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 20px; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+  .top { height: 50px; background: #18181b; display: flex; align-items: center; gap: 18px; padding: 0 14px; box-shadow: 0 1px 2px rgba(0,0,0,.6); position: relative; z-index: 2; }
+  .glitch { width: 28px; height: 30px; }
+  .top .nav { font-weight: 600; font-size: 16px; }
+  .top .search { margin: 0 auto; width: 380px; height: 36px; border-radius: 6px; background: #2b2b2e; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; color: #adadb8; }
+  .top .r { display: flex; gap: 14px; align-items: center; }
+  .av { border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; flex: none; }
+  .wrap { position: absolute; top: 50px; left: 0; right: 0; bottom: 0; display: flex; }
+  .side { width: 50px; background: #1f1f23; display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 12px; }
+  .side .av { width: 30px; height: 30px; font-size: 12px; }
+  .main { flex: 1; min-width: 0; }
+  .video { height: 500px; background: #000 url('youtube_assets/sddefault(1).jpg') center/cover; position: relative; animation: drift 30s ease-in-out infinite alternate; }
+  @keyframes drift { from { background-position: 40% 50%; } to { background-position: 60% 45%; } }
+  .video .live { position: absolute; left: 12px; top: 12px; background: #eb0400; color: #fff; font-weight: 700; padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+  .info { display: flex; gap: 12px; padding: 14px 18px; }
+  .info .av { width: 64px; height: 64px; font-size: 24px; background: #9146ff; outline: 2px solid #eb0400; outline-offset: 2px; }
+  .info h1 { margin: 0; font-size: 18px; } .info .t { font-weight: 600; font-size: 14px; margin-top: 4px; } .info .g { color: #bf94ff; margin-top: 4px; }
+  .info .r { margin-left: auto; text-align: right; } .follow { background: #9146ff; border-radius: 4px; padding: 6px 12px; font-weight: 600; display: inline-block; }
+  .info .view { color: #ff8280; margin-top: 10px; font-weight: 600; }
+  .chat { width: 340px; flex: none; background: #18181b; border-left: 1px solid #2f2f35; display: flex; flex-direction: column; }
+  .chat .hd { height: 50px; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; letter-spacing: .3px; border-bottom: 1px solid #2f2f35; }
+  #log { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 0 6px; }
+  .msg { padding: 5px 20px; line-height: 20px; word-wrap: break-word; }
+  .msg .u { font-weight: 700; }
+  .badge { display: inline-block; width: 18px; height: 18px; border-radius: 3px; vertical-align: -4px; margin-right: 3px; }
+  .chat .in { margin: 10px; height: 40px; border-radius: 6px; background: #2b2b2e; color: #adadb8; display: flex; align-items: center; padding: 0 10px; }
+  .chat .btns { display: flex; justify-content: flex-end; padding: 0 10px 10px; } .chat .btns span { background: #9146ff; padding: 6px 12px; border-radius: 4px; font-weight: 600; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="top">
+  <svg class="glitch" viewBox="0 0 24 28"><path fill="#9146ff" d="M2 0 0 5v20h6v3h4l3-3h5l6-6V0zm20 18-4 4h-5l-3 3v-3H6V2h16zM17 6h2v7h-2zM11 6h2v7h-2z"/></svg>
+  <span class="nav">Following</span><span class="nav">Browse</span>
+  <div class="search">Search<span class="ms">search</span></div>
+  <div class="r"><span class="ms">notifications</span><div class="av" style="width:30px;height:30px;background:#7b5ea7;font-size:12px">R</div></div>
+</div>
+<div class="wrap">
+  <div class="side"><div class="av" style="background:#1f69ff">T</div><div class="av" style="background:#e0115f">M</div><div class="av" style="background:#00a86b">S</div><div class="av" style="background:#ff7f50">L</div></div>
+  <div class="main">
+    <div class="video"><span class="live">LIVE</span></div>
+    <div class="info">
+      <div class="av">K</div>
+      <div><h1>KiraPlays</h1><div class="t">ranked grind to Immortal 🔥 !discord !socials</div><div class="g">VALORANT</div></div>
+      <div class="r"><span class="follow">♡ Follow</span><div class="view">👤 <span id="viewers">2,314</span></div></div>
+    </div>
+  </div>
+  <div class="chat">
+    <div class="hd">STREAM CHAT</div>
+    <div id="log"></div>
+    <div class="in">Send a message</div>
+    <div class="btns"><span>Chat</span></div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const COLORS = ['#ff4500', '#1e90ff', '#9acd32', '#ff69b4', '#daa520', '#00ff7f', '#8a2be2', '#5f9ea0', '#ff7f50', '#b22222', '#2e8b57', '#d2691e'];
+  const colorOf = name => COLORS[[...name].reduce((h, c) => h + c.charCodeAt(0), 0) % COLORS.length];
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const post = (user, text, badge) => {
+    const d = document.createElement('div');
+    d.className = 'msg';
+    d.innerHTML = `${badge ? `<span class="badge" style="background:${badge}"></span>` : ''}<span class="u" style="color:${colorOf(user)}">${esc(user)}</span>: ${esc(text)}`;
+    $('log').appendChild(d);
+    while ($('log').children.length > 60) $('log').firstChild.remove();
+  };
+
+  // What chat says once the suite starts it, in order: the transcript the agent should capture.
+  const CHAT = [
+    ['nightowl_92', 'that flick on the operator was insane'], ['pixelpanda', 'KEKW he whiffed the whole spray'], ['mod_sarah', 'reminder: be nice in chat or you get a timeout', '#00ad03'],
+    ['tacoTuesday', 'is this the new ascent update?'], ['grizzly_gg', 'Kira what crosshair are you using'], ['KiraPlays', 'crosshair code is in !crosshair chat'],
+    ['lunarbyte', 'first time catching the stream live, hi from Portugal'], ['zed_main_btw', 'that sage wall saved the round'], ['coffee_and_frags', 'Pog clutch 1v3'],
+    ['nightowl_92', 'they are stacking B every round'], ['spicy_ramen', 'how many hours a day do you practice'], ['retro_rick', 'my dog is watching with me lol'],
+    ['vibecheck', 'chat what rank is Kira right now'], ['mod_sarah', 'Kira is Ascendant 3, going for Immortal today', '#00ad03'], ['pixelpanda', 'eco round incoming'],
+    ['quietstorm', 'the sheriff headshot through smoke was clean'], ['tacoTuesday', 'can you play viper next game'], ['bananaBread', 'just subscribed for the rhubarb emote'],
+    ['grizzly_gg', 'enemy jett is cracked ngl'], ['lunarbyte', 'what headset is that'], ['KiraPlays', 'headset is in the panels below the stream'],
+    ['zed_main_btw', 'save the op, dont force buy'], ['coffee_and_frags', 'thats the third ace this week'], ['frostbitten', 'hello from a night shift in Toronto'],
+    ['spicy_ramen', 'raid incoming from MarshmallowTV in five minutes'], ['vibecheck', 'the music is a vibe, what playlist'], ['retro_rick', 'LUL the knife kill'],
+    ['nightowl_92', 'overtime lets go'], ['quietstorm', 'that lineup for the molly was perfect'], ['mod_sarah', 'no spoilers about the tournament in chat please', '#00ad03'],
+    ['bananaBread', 'gg that was a close one'], ['pixelpanda', 'thirteen eleven, so close'], ['frostbitten', 'queue up again Kira'],
+    ['tacoTuesday', 'do you warm up in the range first'], ['KiraPlays', 'twenty minutes of deathmatch before ranked, every day'], ['grizzly_gg', 'respect the discipline'],
+    ['lunarbyte', 'can we get a giveaway at 3k followers'], ['zed_main_btw', 'chat spam hearts for the clutch'], ['coffee_and_frags', 'hydrate check, drink some water'],
+    ['vibecheck', 'the new agent looks overpowered'], ['spicy_ramen', 'my internet just died for a minute, what did I miss'], ['retro_rick', 'you missed a triple kill with the classic'],
+    ['quietstorm', 'clean defuse with half a second left'], ['frostbitten', 'going to bed, good luck on the climb'], ['bananaBread', 'see you tomorrow chat'],
+  ];
+  const FILLER = ['lol', 'gg', 'nice', 'LUL', 'W', 'PogChamp', 'lets goooo', 'monkaS', 'hello chat', 'o7', 'L take', 'true'];
+  const FILLER_USERS = ['bot_hunter', 'jjjjjjj', 'quiet_lurker', 'sam_from_ohio', 'xxsniperxx', 'not_a_bot_42'];
+  demo.truth = { chat: CHAT.map(([user, text]) => ({ user, text })) };
+
+  // A screenful of chat already there, then filler while the stream waits for the suite.
+  for (let i = 0; i < 22; i++) post(FILLER_USERS[i % FILLER_USERS.length], FILLER[i % FILLER.length]);
+  let run = null, next = 0;
+  const loop = () => {
+    if (!run) post(FILLER_USERS[Math.floor(Math.random() * FILLER_USERS.length)], FILLER[Math.floor(Math.random() * FILLER.length)]);
+    else {
+      const f = (Date.now() - run.at) / run.durationMs;
+      while (next < CHAT.length && f >= next / CHAT.length) {
+        const [user, text, badge] = CHAT[next];
+        post(user, text, badge);
+        demo.mark('chat', { index: next });
+        next++;
+      }
+      if (f >= 1 && !run.done) { run.done = true; demo.trigger(); }
+    }
+    setTimeout(loop, run ? 500 : 4000 + Math.random() * 4000);
+  };
+  loop();
+  setInterval(() => { $('viewers').textContent = (2300 + Math.round(Math.random() * 40)).toLocaleString('en-US'); }, 15000);
+
+  demo.onStart = durationMs => { run = { at: Date.now(), durationMs }; };
+</script>
+</body>
+</html>

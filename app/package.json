@@ -16,7 +16,10 @@
     "ios:dev": "cd mobile && cargo tauri ios dev",
     "ios:build": "pnpm build && cd mobile && cargo tauri ios build",
     "android:dev": "cd mobile && cargo tauri android dev",
-    "android:build": "pnpm build && cd mobile && cargo tauri android build"
+    "android:build": "pnpm build && cd mobile && cargo tauri android build",
+    "e2e": "playwright test -c e2e --project=mcp",
+    "e2e:login": "playwright test -c e2e --project=login",
+    "e2e:patterns": "playwright test -c e2e --project=patterns"
   },
   "dependencies": {
     "@auth0/auth0-react": "^2.3.0",
@@ -82,6 +85,7 @@
     "yaml": "^2.7.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@tauri-apps/cli": "^2.6.2",
     "@types/canvas-confetti": "^1.9.0",
     "@types/dom-speech-recognition": "^0.0.6",

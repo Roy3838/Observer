@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<!-- Shopify admin's Orders page for a small store, with today's 12 orders already in the list. Holds
+     there until the suite starts it; then 7 new orders come in over the run (two of them seconds
+     apart), each a new row at the top, and the trigger fires when the run's time is up (nothing
+     changes on screen). The metrics bar counts today's orders, as Shopify's does. Marks each new
+     order ('order', { number }); demo.truth has the counts. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Orders · Bramble &amp; Co · Shopify</title>
+<link rel="stylesheet" href="fonts/inter.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #1a1a1a; color: #303030; font-family: Inter, -apple-system, sans-serif; font-size: 13px; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 20px; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+  .top { height: 56px; display: flex; align-items: center; padding: 0 12px 0 16px; color: #e3e3e3; }
+  .brand { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 18px; letter-spacing: -0.4px; color: #fff; width: 228px; }
+  .brand svg { width: 22px; height: 25px; }
+  .search { flex: 1; max-width: 560px; margin: 0 auto; height: 34px; border-radius: 10px; background: #303030; border: 1px solid #4a4a4a; display: flex; align-items: center; gap: 8px; padding: 0 10px; color: #a8a8a8; }
+  .search kbd { margin-left: auto; font-family: Inter; font-size: 11px; background: #4a4a4a; border-radius: 4px; padding: 1px 5px; color: #ddd; }
+  .top .r { display: flex; align-items: center; gap: 14px; }
+  .store { display: flex; align-items: center; gap: 8px; background: #303030; border-radius: 10px; padding: 4px 10px 4px 4px; font-weight: 600; color: #fff; }
+  .store b { width: 26px; height: 26px; border-radius: 7px; background: #36fba1; color: #1a1a1a; display: grid; place-items: center; font-size: 12px; }
+  .shell { position: absolute; top: 56px; left: 0; right: 0; bottom: 0; display: flex; background: #f1f1f1; border-radius: 12px 12px 0 0; overflow: hidden; }
+  .nav { width: 240px; flex: none; background: #ebebeb; padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
+  .nav a { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 8px; color: #303030; font-weight: 550; text-decoration: none; }
+  .nav a.on { background: #fff; font-weight: 650; }
+  .nav a .badge { margin-left: auto; background: #e3e3e3; border-radius: 8px; padding: 1px 7px; font-size: 12px; font-weight: 600; }
+  .nav .sub { padding-left: 36px; font-weight: 450; color: #616161; height: 26px; }
+  .nav .sec { margin: 14px 8px 4px; color: #616161; font-size: 12px; font-weight: 600; }
+  .nav .bottom { margin-top: auto; }
+  .main { flex: 1; overflow: hidden; padding: 20px 28px; }
+  .hd { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .hd h1 { margin: 0; font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .hd .r { margin-left: auto; display: flex; gap: 8px; }
+  .btn { height: 30px; padding: 0 12px; border-radius: 8px; background: #fff; box-shadow: 0 1px 0 #d4d4d4, inset 0 0 0 1px #e3e3e3; display: flex; align-items: center; gap: 4px; font-weight: 600; }
+  .btn.p { background: #303030; color: #fff; box-shadow: inset 0 -1px 0 #000; }
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 0 rgba(26,26,26,.07), inset 0 0 0 1px rgba(0,0,0,.06); }
+  .metrics { display: flex; align-items: stretch; margin-bottom: 16px; padding: 10px 6px; }
+  .metrics .when { display: flex; align-items: center; gap: 6px; padding: 0 14px; font-weight: 600; border-right: 1px solid #ebebeb; }
+  .metric { padding: 4px 18px; border-right: 1px solid #ebebeb; }
+  .metric:last-child { border-right: 0; }
+  .metric .l { color: #616161; font-weight: 550; text-decoration: underline dotted #b5b5b5; text-underline-offset: 3px; }
+  .metric .v { font-size: 15px; font-weight: 700; margin-top: 4px; display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+  .metric .v small { color: #29845a; font-weight: 600; font-size: 12px; }
+  .tabs { display: flex; align-items: center; gap: 4px; padding: 8px; border-bottom: 1px solid #ebebeb; }
+  .tab { height: 28px; padding: 0 12px; border-radius: 8px; display: grid; place-items: center; font-weight: 600; color: #616161; }
+  .tab.on { background: #ebebeb; color: #303030; }
+  .tabs .r { margin-left: auto; display: flex; gap: 6px; color: #4a4a4a; }
+  .tabs .r .ms { padding: 4px; border-radius: 8px; box-shadow: inset 0 0 0 1px #e3e3e3; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; background: #f7f7f7; color: #616161; font-weight: 550; height: 34px; padding: 0 10px; border-bottom: 1px solid #ebebeb; white-space: nowrap; }
+  td { height: 38px; padding: 0 10px; border-bottom: 1px solid #ebebeb; white-space: nowrap; }
+  td.n { font-weight: 650; }
+  td.t, th.t { text-align: right; }
+  .cb { width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 0 0 1px #8a8a8a; }
+  .bdg { display: inline-flex; align-items: center; gap: 4px; border-radius: 8px; padding: 2px 8px 2px 6px; font-weight: 550; font-size: 12px; }
+  .bdg i { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid currentColor; }
+  .bdg.paid { background: #ebebeb; color: #4a4a4a; } .bdg.paid i { background: currentColor; }
+  .bdg.pend { background: #ffeb78; color: #4f4700; }
+  .bdg.unf { background: #ffd6a4; color: #5e4200; }
+  .bdg.ful { background: #ebebeb; color: #4a4a4a; } .bdg.ful i { background: currentColor; }
+  tr.new td { animation: glow 6s ease-out; }
+  @keyframes glow { from { background: #eaf4ff; } to { background: #fff; } }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="top">
+  <div class="brand"><svg viewBox="0 0 109 124"><path fill="#95bf47" d="M95.9 23.9c-.1-.6-.6-1-1.1-1-.5 0-9.3-.2-9.3-.2s-7.4-7.2-8.1-7.9c-.7-.7-2.2-.5-2.7-.3 0 0-1.4.4-3.7 1.1-.4-1.3-1-2.8-1.8-4.4-2.6-5-6.5-7.7-11.1-7.7-.3 0-.6 0-1 .1-.1-.2-.3-.3-.4-.5C54.7.9 52.1-.1 49 0c-6 .2-12 4.5-16.8 12.2-3.4 5.4-6 12.2-6.7 17.5-6.9 2.1-11.7 3.6-11.8 3.7-3.5 1.1-3.6 1.2-4 4.5-.3 2.5-9.5 73-9.5 73l76.4 13.2 33.1-8.2S96 24.5 95.9 23.9z"/><path fill="#5e8e3e" d="M94.8 22.9c-.5 0-9.3-.2-9.3-.2s-7.4-7.2-8.1-7.9c-.3-.3-.6-.4-1-.5v108.1l33.1-8.2S96 24.5 95.9 23.9c-.1-.5-.6-.9-1.1-1z"/><path fill="#fff" d="M58 39.9l-3.8 14.4s-4.3-2-9.4-1.6c-7.5.5-7.5 5.2-7.5 6.4.4 6.4 17.3 7.8 18.3 22.9.7 11.9-6.3 20-16.4 20.6-12.2.8-18.9-6.4-18.9-6.4l2.6-11s6.7 5.1 12.1 4.7c3.5-.2 4.8-3.1 4.7-5.1-.5-8.4-14.3-7.9-15.2-21.7-.7-11.6 6.9-23.4 23.7-24.4 6.5-.4 9.8 1.2 9.8 1.2z"/></svg>shopify</div>
+  <div class="search"><span class="ms">search</span>Search<kbd>⌘ K</kbd></div>
+  <div class="r"><span class="ms">notifications</span><div class="store"><b>BC</b>Bramble &amp; Co</div></div>
+</div>
+<div class="shell">
+  <div class="nav">
+    <a><span class="ms">home</span>Home</a>
+    <a class="on"><span class="ms">inbox</span>Orders<span class="badge" id="navcount">9</span></a>
+    <a class="sub">Drafts</a><a class="sub">Abandoned checkouts</a>
+    <a><span class="ms">sell</span>Products</a>
+    <a><span class="ms">person</span>Customers</a>
+    <a><span class="ms">article</span>Content</a>
+    <a><span class="ms">bar_chart</span>Analytics</a>
+    <a><span class="ms">target</span>Marketing</a>
+    <a><span class="ms">percent</span>Discounts</a>
+    <div class="sec">Sales channels</div>
+    <a><span class="ms">storefront</span>Online Store</a>
+    <a><span class="ms">point_of_sale</span>Point of Sale</a>
+    <div class="sec">Apps</div>
+    <a><span class="ms">add_circle</span>Add</a>
+    <a class="bottom"><span class="ms">settings</span>Settings</a>
+  </div>
+  <div class="main">
+    <div class="hd"><h1><span class="ms">inbox</span>Orders</h1><div class="r"><span class="btn">Export</span><span class="btn">More actions<span class="ms" style="font-size:16px">expand_more</span></span><span class="btn p">Create order</span></div></div>
+    <div class="card metrics">
+      <div class="when"><span class="ms" style="font-size:18px">calendar_today</span>Today</div>
+      <div class="metric"><div class="l">Orders</div><div class="v"><span id="m-orders">12</span><small>↗ 9%</small></div></div>
+      <div class="metric"><div class="l">Items ordered</div><div class="v" id="m-items">31</div></div>
+      <div class="metric"><div class="l">Returns</div><div class="v">$0</div></div>
+      <div class="metric"><div class="l">Orders fulfilled</div><div class="v">3</div></div>
+      <div class="metric"><div class="l">Orders delivered</div><div class="v">1</div></div>
+    </div>
+    <div class="card">
+      <div class="tabs"><span class="tab on">All</span><span class="tab">Unfulfilled</span><span class="tab">Unpaid</span><span class="tab">Open</span><span class="tab">Archived</span><span class="tab"><span class="ms">add</span></span>
+        <div class="r"><span class="ms">search</span><span class="ms">filter_list</span><span class="ms">view_column</span><span class="ms">swap_vert</span></div></div>
+      <table>
+        <thead><tr><th><div class="cb"></div></th><th>Order</th><th>Date</th><th>Customer</th><th>Channel</th><th class="t">Total</th><th>Payment status</th><th>Fulfillment status</th><th>Items</th><th>Delivery method</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const row = (o, isNew) => {
+    const tr = document.createElement('tr');
+    if (isNew) tr.className = 'new';
+    tr.innerHTML = `<td><div class="cb"></div></td><td class="n">#${o.n}</td><td>${o.date}</td><td>${o.customer}</td><td>Online Store</td>`
+      + `<td class="t">$${o.total.toFixed(2)}</td><td><span class="bdg ${o.paid ? 'paid' : 'pend'}"><i></i>${o.paid ? 'Paid' : 'Payment pending'}</span></td>`
+      + `<td><span class="bdg ${o.fulfilled ? 'ful' : 'unf'}"><i></i>${o.fulfilled ? 'Fulfilled' : 'Unfulfilled'}</span></td>`
+      + `<td>${o.items} item${o.items > 1 ? 's' : ''}</td><td>${o.ship}</td>`;
+    return tr;
+  };
+  // Today's orders so far, newest first.
+  const TODAY = [
+    ['Maya Rodriguez', 64.00, 2, '11:52 am'], ['Liam Chen', 128.50, 3, '11:31 am'], ['Sofia Rossi', 42.00, 1, '11:07 am'],
+    ['Noah Williams', 89.90, 2, '10:48 am'], ['Emma Dubois', 215.00, 5, '10:22 am'], ['Lucas Silva', 38.00, 1, '10:05 am'],
+    ['Aisha Khan', 76.40, 3, '9:44 am'], ['Oliver Brown', 54.00, 2, '9:21 am'], ['Hana Sato', 112.00, 4, '8:58 am'],
+    ['Mateo García', 47.50, 2, '8:30 am'], ['Chloe Martin', 61.00, 3, '7:52 am'], ['Ethan Park', 33.00, 1, '7:15 am'],
+  ];
+  TODAY.forEach(([customer, total, items, time], i) => $('rows').appendChild(row({
+    n: 1044 - i, date: `Today at ${time}`, customer, total, items, paid: i !== 4, fulfilled: i >= 9,
+    ship: i % 3 === 0 ? 'Express' : 'Standard',
+  })));
+
+  // The new ones, in arrival order, with when each comes in as a fraction of the run.
+  const NEW = [
+    ['Grace Thompson', 72.00, 2, 0.08], ['Daniel Novak', 145.00, 4, 0.22], ['Isabella Costa', 39.00, 1, 0.37],
+    ['Ryan O’Connor', 58.50, 2, 0.39], ['Mia Fischer', 96.00, 3, 0.58], ['Arjun Mehta', 44.00, 1, 0.74], ['Zoe Laurent', 131.20, 4, 0.9],
+  ];
+  demo.truth = { before: TODAY.length, added: NEW.length };
+  let count = TODAY.length, items = 31, unfulfilled = 9, nextN = 1045, run = null, next = 0;
+  const clock = () => { const d = new Date(Date.UTC(2026, 9, 12, 12, 4) + (run ? Date.now() - run.at : 0)); return `${d.getUTCHours() % 12 || 12}:${String(d.getUTCMinutes()).padStart(2, '0')} pm`; };
+
+  setInterval(() => {
+    if (!run) return;
+    const f = (Date.now() - run.at) / run.durationMs;
+    while (next < NEW.length && f >= NEW[next][3]) {
+      const [customer, total, n] = NEW[next];
+      $('rows').prepend(row({ n: nextN, date: `Today at ${clock()}`, customer, total, items: n, paid: true, fulfilled: false, ship: 'Standard' }, true));
+      $('rows').lastElementChild.remove(); // the page shows the latest dozen
+      count++; items += n; unfulfilled++;
+      $('m-orders').textContent = count; $('m-items').textContent = items; $('navcount').textContent = unfulfilled;
+      demo.mark('order', { number: nextN });
+      nextN++; next++;
+    }
+    if (f >= 1 && !run.done) { run.done = true; demo.trigger(); }
+  }, 250);
+
+  demo.onStart = durationMs => { run = { at: Date.now(), durationMs }; };
+</script>
+</body>
+</html>

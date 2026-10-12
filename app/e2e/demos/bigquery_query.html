@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<!-- BigQuery Studio running a long query. Holds on "Query running…" with the elapsed time counting
+     until the suite starts it; then it ends by ?outcome=: success, the results table; fail, a
+     "Resources exceeded" query error. Google Sans/Roboto (fonts/), Google Cloud icons (bigquery_assets/). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BigQuery – acme-analytics – Google Cloud console</title>
+<link rel="stylesheet" href="fonts/google-sans.css">
+<link rel="stylesheet" href="fonts/roboto-mono.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #fff; color: #202124; font-family: Roboto, Arial, sans-serif; font-size: 14px; display: flex; flex-direction: column; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 20px; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20; color: #5f6368; }
+  .fill { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+  /* Console header */
+  .hdr { height: 48px; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid #dadce0; flex: none; }
+  .logo { display: flex; align-items: center; gap: 6px; font-family: 'Google Sans'; font-size: 18px; color: #5f6368; }
+  .logo img { width: 26px; height: 26px; }
+  .logo b { font-weight: 500; color: #5f6368; }
+  .proj { height: 32px; border: 1px solid #dadce0; border-radius: 4px; display: flex; align-items: center; gap: 8px; padding: 0 10px; font-size: 14px; }
+  .search { flex: 1; max-width: 720px; height: 36px; background: #f1f3f4; border-radius: 8px; display: flex; align-items: center; gap: 10px; padding: 0 12px; color: #5f6368; }
+  .hdr .r { margin-left: auto; display: flex; gap: 18px; align-items: center; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: #7b5ea7; color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 500; }
+  /* Body */
+  .body { flex: 1; display: flex; min-height: 0; }
+  .rail { width: 56px; border-right: 1px solid #dadce0; display: flex; flex-direction: column; align-items: center; padding-top: 10px; gap: 22px; flex: none; }
+  .rail .on { background: #e8f0fe; border-radius: 16px; padding: 4px 12px; } .rail .on .ms { color: #1967d2; }
+  .explorer { width: 272px; border-right: 1px solid #dadce0; padding: 12px 0; flex: none; font-size: 13px; }
+  .explorer .t { display: flex; align-items: center; padding: 0 16px 10px; font-family: 'Google Sans'; font-size: 16px; }
+  .explorer .t .add { margin-left: auto; color: #1a73e8; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 4px; }
+  .explorer .t .add .ms { color: #1a73e8; font-size: 18px; }
+  .filter { margin: 0 16px 10px; height: 32px; border: 1px solid #dadce0; border-radius: 4px; display: flex; align-items: center; gap: 6px; padding: 0 8px; color: #80868b; }
+  .tree div { height: 28px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .tree .ms { font-size: 18px; }
+  .tree .sel { background: #e8f0fe; color: #1967d2; } .tree .sel .ms { color: #1967d2; }
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .tabs { height: 40px; display: flex; align-items: flex-end; border-bottom: 1px solid #dadce0; padding-left: 8px; gap: 2px; flex: none; }
+  .tab { height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 14px; font-size: 13px; color: #5f6368; border-radius: 8px 8px 0 0; }
+  .tab.on { background: #fff; color: #202124; border: 1px solid #dadce0; border-bottom-color: #fff; margin-bottom: -1px; }
+  .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #c6dafc; border-top-color: #1a73e8; animation: spin 0.9s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .tools { height: 48px; display: flex; align-items: center; gap: 4px; padding: 0 12px; border-bottom: 1px solid #dadce0; flex: none; }
+  .tb { height: 32px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: 4px; color: #1a73e8; font-weight: 500; font-size: 13px; letter-spacing: .25px; }
+  .tb .ms { color: #1a73e8; font-size: 18px; }
+  .tb.run { background: #1a73e8; color: #fff; } .tb.run .ms { color: #fff; }
+  .tb.run.off { background: #f1f3f4; color: #80868b; } .tb.run.off .ms { color: #80868b; }
+  .tools .est { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; color: #188038; }
+  .tools .est .ms { color: #188038; font-size: 18px; }
+  .editor { height: 300px; flex: none; display: flex; font-family: 'Roboto Mono', monospace; font-size: 13px; line-height: 20px; padding-top: 8px; border-bottom: 1px solid #dadce0; overflow: hidden; }
+  .gut { width: 48px; text-align: right; padding-right: 14px; color: #9aa0a6; }
+  .code { white-space: pre; color: #202124; }
+  .k { color: #1a0dab; font-weight: 500; } .f { color: #b06000; } .s { color: #188038; } .n { color: #c5221f; } .c { color: #80868b; }
+  /* Results pane */
+  .res { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .res .h { height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 16px; font-family: 'Google Sans'; font-size: 16px; flex: none; }
+  .res .h .state { display: flex; align-items: center; gap: 6px; font-family: Roboto; font-size: 13px; }
+  .rtabs { display: flex; gap: 0; padding: 0 8px; border-bottom: 1px solid #dadce0; flex: none; }
+  .rtab { padding: 10px 14px; font-size: 13px; font-weight: 500; color: #5f6368; letter-spacing: .25px; }
+  .rtab.on { color: #1a73e8; box-shadow: inset 0 -2px #1a73e8; }
+  .pbar { height: 4px; background: #c6dafc; position: relative; overflow: hidden; flex: none; }
+  .pbar i { position: absolute; top: 0; bottom: 0; width: 35%; background: #1a73e8; animation: slide 1.4s ease-in-out infinite; }
+  @keyframes slide { from { left: -35%; } to { left: 100%; } }
+  .running { padding: 18px 16px; display: flex; flex-direction: column; gap: 14px; }
+  .running .line { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .running .line b { font-weight: 500; }
+  .stats { display: grid; grid-template-columns: repeat(3, 200px); gap: 6px 24px; font-size: 13px; color: #5f6368; }
+  .stats span b { color: #202124; font-weight: 500; }
+  .cancel { color: #1a73e8; font-weight: 500; font-size: 13px; }
+  .table { display: none; overflow: hidden; }
+  table { border-collapse: collapse; font-size: 13px; width: 100%; }
+  th, td { text-align: left; padding: 7px 14px; border-bottom: 1px solid #e8eaed; white-space: nowrap; }
+  th { font-weight: 500; color: #5f6368; background: #f8f9fa; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .err { display: none; margin: 14px 16px; border-left: 4px solid #d93025; background: #fce8e6; padding: 12px 14px; border-radius: 4px; font-size: 13px; line-height: 20px; color: #202124; }
+  .err b { color: #c5221f; font-weight: 500; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .err b .ms { color: #d93025; }
+  .is-done .running, .is-done .pbar, .is-failed .running, .is-failed .pbar { display: none; }
+  .is-done .table { display: block; } .is-failed .err { display: block; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body id="body">
+<div class="hdr">
+  <span class="ms">menu</span>
+  <span class="logo"><img src="bigquery_assets/googlecloud.svg" alt=""><b>Google Cloud</b></span>
+  <span class="proj"><span class="ms" style="font-size:18px">account_tree</span>acme-analytics<span class="ms" style="font-size:18px">arrow_drop_down</span></span>
+  <span class="search"><span class="ms">search</span>Search (/) for resources, docs, products, and more</span>
+  <span class="r"><span class="ms">terminal</span><span class="ms">notifications</span><span class="ms">help</span><span class="ms">more_vert</span><span class="avatar">R</span></span>
+</div>
+<div class="body">
+  <div class="rail">
+    <img src="bigquery_assets/googlebigquery.svg" alt="" style="width:24px;height:24px">
+    <span class="on"><span class="ms fill">search_insights</span></span>
+    <span class="ms">tune</span><span class="ms">schedule</span><span class="ms">sync_alt</span><span class="ms">monitoring</span><span class="ms">description</span>
+  </div>
+  <div class="explorer">
+    <div class="t">Explorer<span class="add"><span class="ms">add</span>ADD</span></div>
+    <div class="filter"><span class="ms" style="font-size:18px">search</span>Type to search</div>
+    <div class="tree">
+      <div style="padding-left:12px"><span class="ms">expand_more</span><span class="ms fill" style="color:#fbbc04">star</span>acme-analytics</div>
+      <div style="padding-left:32px"><span class="ms">chevron_right</span><span class="ms">dataset</span>billing</div>
+      <div style="padding-left:32px"><span class="ms">expand_more</span><span class="ms">dataset</span>events</div>
+      <div style="padding-left:58px"><span class="ms">table</span>app_events</div>
+      <div class="sel" style="padding-left:58px"><span class="ms">table</span>page_views</div>
+      <div style="padding-left:58px"><span class="ms">table</span>sessions</div>
+      <div style="padding-left:32px"><span class="ms">expand_more</span><span class="ms">dataset</span>marts</div>
+      <div style="padding-left:58px"><span class="ms">table</span>customers</div>
+      <div style="padding-left:58px"><span class="ms">table</span>orders</div>
+      <div style="padding-left:58px"><span class="ms">table</span>revenue_daily</div>
+      <div style="padding-left:32px"><span class="ms">chevron_right</span><span class="ms">dataset</span>staging</div>
+      <div style="padding-left:12px"><span class="ms">chevron_right</span><span class="ms">star</span>bigquery-public-data</div>
+    </div>
+  </div>
+  <div class="main">
+    <div class="tabs">
+      <div class="tab"><span class="ms" style="font-size:16px">home</span>Welcome</div>
+      <div class="tab on"><span class="spin" id="tabspin"></span><span id="tabicon" class="ms" style="font-size:16px;display:none">search_insights</span>*Untitled query<span class="ms" style="font-size:16px">close</span></div>
+    </div>
+    <div class="tools">
+      <span class="tb run off" id="runbtn"><span class="ms">play_arrow</span>RUN</span>
+      <span class="tb"><span class="ms">save</span>SAVE<span class="ms">arrow_drop_down</span></span>
+      <span class="tb"><span class="ms">download</span>DOWNLOAD</span>
+      <span class="tb"><span class="ms">share</span>SHARE<span class="ms">arrow_drop_down</span></span>
+      <span class="tb"><span class="ms">schedule</span>SCHEDULE</span>
+      <span class="tb"><span class="ms">settings</span>MORE<span class="ms">arrow_drop_down</span></span>
+      <span class="est"><span class="ms fill">check_circle</span>This query will process 2.41 TB when run.</span>
+    </div>
+    <div class="editor">
+      <div class="gut">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13<br>14</div>
+<div class="code"><span class="c">-- Revenue and sessions by region and month, all of 2025</span>
+<span class="k">SELECT</span>
+  s.region,
+  <span class="f">DATE_TRUNC</span>(<span class="f">DATE</span>(pv.event_ts), <span class="k">MONTH</span>) <span class="k">AS</span> month,
+  <span class="f">COUNT</span>(<span class="k">DISTINCT</span> s.session_id) <span class="k">AS</span> sessions,
+  <span class="f">COUNT</span>(<span class="k">DISTINCT</span> o.order_id) <span class="k">AS</span> orders,
+  <span class="f">ROUND</span>(<span class="f">SUM</span>(o.total_usd), <span class="n">2</span>) <span class="k">AS</span> revenue_usd
+<span class="k">FROM</span> <span class="s">`acme-analytics.events.page_views`</span> pv
+<span class="k">JOIN</span> <span class="s">`acme-analytics.events.sessions`</span> s <span class="k">USING</span> (session_id)
+<span class="k">LEFT JOIN</span> <span class="s">`acme-analytics.marts.orders`</span> o
+  <span class="k">ON</span> o.session_id = s.session_id
+<span class="k">WHERE</span> pv.event_ts <span class="k">BETWEEN</span> <span class="s">'2025-01-01'</span> <span class="k">AND</span> <span class="s">'2025-12-31'</span>
+<span class="k">GROUP BY</span> <span class="n">1</span>, <span class="n">2</span>
+<span class="k">ORDER BY</span> month, revenue_usd <span class="k">DESC</span>;</div>
+    </div>
+    <div class="res">
+      <div class="h">Query results<span class="state" id="state"><span class="spin"></span>Running</span></div>
+      <div class="rtabs"><span class="rtab">JOB INFORMATION</span><span class="rtab on">RESULTS</span><span class="rtab">CHART</span><span class="rtab">JSON</span><span class="rtab">EXECUTION DETAILS</span><span class="rtab">EXECUTION GRAPH</span></div>
+      <div class="pbar"><i></i></div>
+      <div class="running">
+        <div class="line"><span class="spin"></span><b>Query running…</b><span>Elapsed time: <span id="elapsed">4 min 12 sec</span></span><span class="cancel">CANCEL</span></div>
+        <div class="stats">
+          <span>Bytes processed: <b id="bytes">1.02 TB</b></span><span>Slot time consumed: <b id="slot">9 hr 41 min</b></span><span>Stages complete: <b id="stages">7 / 14</b></span>
+        </div>
+      </div>
+      <div class="table">
+        <table>
+          <thead><tr><th>Row</th><th>region</th><th>month</th><th style="text-align:right">sessions</th><th style="text-align:right">orders</th><th style="text-align:right">revenue_usd</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="err">
+        <b><span class="ms fill">error</span>Query error</b>
+        Resources exceeded during query execution: Your project or organization exceeded the maximum disk and memory limit available for shuffle operations. Consider provisioning more slots, reducing query concurrency, or using more efficient logic in this job.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const loadedAt = Date.now();
+  const BASE_S = 252; // the query had been running 4 min 12 s when the page opened
+  let run = null;
+
+  const fmt = s => `${Math.floor(s / 60)} min ${String(Math.floor(s % 60)).padStart(2, '0')} sec`;
+  // Progress through the job: creeps slowly while holding, then runs to the end over the suite's duration.
+  const progress = () => run ? run.from + (1 - run.from) * Math.min((Date.now() - run.at) / run.durationMs, 1)
+                             : 0.5 - 0.15 * Math.exp(-(Date.now() - loadedAt) / 600_000);
+  const tick = () => {
+    const secs = BASE_S + (Date.now() - loadedAt) / 1000;
+    const p = progress();
+    $('elapsed').textContent = fmt(secs);
+    $('bytes').textContent = `${(2.41 * p).toFixed(2)} TB`;
+    const slotMin = Math.round(secs * 2.3);
+    $('slot').textContent = `${Math.floor(slotMin / 60)} hr ${slotMin % 60} min`;
+    $('stages').textContent = `${Math.min(13, Math.floor(p * 14))} / 14`;
+    if (run && Date.now() - run.at >= run.durationMs) finish(secs);
+  };
+  const timer = setInterval(tick, 1000);
+  tick();
+
+  const ROWS = [
+    ['us-east', '2025-01-01', 1284311, 48210, 3912044.18], ['eu-west', '2025-01-01', 902118, 31877, 2490310.52],
+    ['us-west', '2025-01-01', 744920, 27105, 2210988.07], ['ap-south', '2025-01-01', 512644, 15240, 905332.91],
+    ['us-east', '2025-02-01', 1197004, 45992, 3708115.40], ['eu-west', '2025-02-01', 871560, 30418, 2381776.25],
+    ['us-west', '2025-02-01', 731245, 26511, 2150442.89], ['ap-south', '2025-02-01', 530187, 15902, 951208.33],
+    ['us-east', '2025-03-01', 1322870, 50114, 4105230.66], ['eu-west', '2025-03-01', 925413, 33006, 2602117.10],
+    ['us-west', '2025-03-01', 768052, 28330, 2297541.74], ['ap-south', '2025-03-01', 548911, 16488, 990415.02],
+  ];
+  const finish = secs => {
+    clearInterval(timer);
+    const ok = demo.outcome === 'success';
+    $('tabspin').style.display = 'none'; $('tabicon').style.display = '';
+    $('runbtn').classList.remove('off');
+    if (ok) {
+      $('rows').innerHTML = ROWS.map((r, i) => `<tr><td>${i + 1}</td><td>${r[0]}</td><td>${r[1]}</td><td class="num">${r[2]}</td><td class="num">${r[3]}</td><td class="num">${r[4].toFixed(2)}</td></tr>`).join('');
+      $('state').innerHTML = `<span class="ms fill" style="color:#188038;font-size:18px">check_circle</span>Query completed (${fmt(secs)} elapsed, 2.41 TB processed)`;
+    } else {
+      $('state').innerHTML = `<span class="ms fill" style="color:#d93025;font-size:18px">error</span>Query failed after ${fmt(secs)}`;
+    }
+    $('body').classList.add(ok ? 'is-done' : 'is-failed');
+    demo.trigger();
+  };
+
+  demo.onStart = durationMs => { run = { from: progress(), at: Date.now(), durationMs }; };
+</script>
+</body>
+</html>

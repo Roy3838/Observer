@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<!-- A Weights & Biases training run's workspace (ResNet-50 on ImageNet, 8 GPUs). Holds "Running" with
+     the charts slowly extending until the suite starts it; then it ends by ?outcome=: success, the run
+     reaches its last step and is "Finished"; fail, it dies mid-epoch and is "Crashed".
+     Source Sans 3 (fonts/), W&B logo (wandb_assets/). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>glowing-sunset-42 | resnet-imagenet – Weights & Biases</title>
+<link rel="stylesheet" href="fonts/source-sans.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #fff; color: #1a1d24; font-family: 'Source Sans 3', 'Source Sans Pro', Arial, sans-serif; font-size: 15px; display: flex; flex-direction: column; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 20px; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20; color: #565c66; }
+  .top { height: 52px; border-bottom: 1px solid #e4e6eb; display: flex; align-items: center; gap: 12px; padding: 0 16px; flex: none; }
+  .top img { width: 28px; height: 28px; }
+  .crumb { display: flex; align-items: center; gap: 6px; color: #565c66; }
+  .crumb b { color: #1a1d24; font-weight: 600; }
+  .crumb .sl { color: #b0b5bd; }
+  .top .r { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+  .invite { height: 32px; padding: 0 12px; border-radius: 4px; background: #f4f5f7; display: flex; align-items: center; font-weight: 600; font-size: 14px; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: #7b5ea7; color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 600; }
+  .wrap { flex: 1; display: flex; min-height: 0; }
+  .rail { width: 56px; border-right: 1px solid #e4e6eb; display: flex; flex-direction: column; align-items: center; padding-top: 12px; gap: 6px; flex: none; }
+  .rail span { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 6px; }
+  .rail .on { background: #e1f7fa; } .rail .on .ms { color: #038194; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .rhead { padding: 14px 20px 0; flex: none; }
+  .rtitle { display: flex; align-items: center; gap: 10px; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; background: #e87b9f; flex: none; }
+  .rtitle h1 { margin: 0; font-size: 22px; font-weight: 600; }
+  .state { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 13px; font-size: 14px; font-weight: 600; }
+  .state.running { background: #e6f6ed; color: #0b7a3e; }
+  .state.running i { width: 8px; height: 8px; border-radius: 50%; background: #10a44e; box-shadow: 0 0 0 0 rgba(16,164,78,.5); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(16,164,78,0); } 100% { box-shadow: 0 0 0 0 rgba(16,164,78,0); } }
+  .state.finished { background: #eef0f3; color: #3d424b; }
+  .state.crashed { background: #fde8e8; color: #c62828; }
+  .state .ms { font-size: 18px; color: inherit; font-variation-settings: 'FILL' 1; }
+  .rmeta { display: flex; gap: 18px; color: #565c66; font-size: 14px; margin: 8px 0 0 24px; }
+  .rmeta b { color: #1a1d24; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tabs { display: flex; gap: 4px; margin-top: 12px; border-bottom: 1px solid #e4e6eb; }
+  .tab { padding: 9px 12px; color: #565c66; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+  .tab .ms { font-size: 18px; }
+  .tab.on { color: #038194; box-shadow: inset 0 -2px #13a9ba; } .tab.on .ms { color: #038194; }
+  .tools { display: flex; align-items: center; gap: 10px; padding: 10px 20px; color: #565c66; font-size: 14px; flex: none; }
+  .tools .s { height: 32px; width: 280px; border: 1px solid #d4d7dc; border-radius: 4px; display: flex; align-items: center; gap: 6px; padding: 0 8px; color: #8a9099; }
+  .tools .r { margin-left: auto; display: flex; gap: 14px; align-items: center; }
+  .sec { padding: 0 20px; display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 15px; flex: none; }
+  .sec span.c { color: #8a9099; font-weight: 400; }
+  .grid { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); gap: 12px; padding: 10px 20px 16px; min-height: 0; }
+  .panel { border: 1px solid #e4e6eb; border-radius: 6px; padding: 8px 10px 4px; display: flex; flex-direction: column; min-height: 0; }
+  .panel .t { font-size: 13px; color: #3d424b; text-align: center; font-weight: 600; }
+  .panel svg { flex: 1; width: 100%; min-height: 0; }
+  .legend { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #565c66; justify-content: center; }
+  .legend i { width: 14px; height: 2px; background: #e87b9f; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="top">
+  <img src="wandb_assets/wandb_logo.svg" alt="">
+  <span class="crumb">acme-ml<span class="sl">/</span>resnet-imagenet<span class="sl">/</span>Runs<span class="sl">/</span><b>glowing-sunset-42</b></span>
+  <span class="r"><span class="ms">search</span><span class="ms">notifications</span><span class="invite">Invite teammates</span><span class="ms">help</span><span class="avatar">R</span></span>
+</div>
+<div class="wrap">
+  <div class="rail">
+    <span><span class="ms">home</span></span><span class="on"><span class="ms">space_dashboard</span></span><span><span class="ms">table_rows</span></span>
+    <span><span class="ms">bolt</span></span><span><span class="ms">tune</span></span><span><span class="ms">description</span></span><span><span class="ms">deployed_code</span></span>
+  </div>
+  <div class="main">
+    <div class="rhead">
+      <div class="rtitle"><span class="dot"></span><h1>glowing-sunset-42</h1><span class="state running" id="state"><i></i>Running</span></div>
+      <div class="rmeta"><span>Runtime <b id="runtime">3h 12m 08s</b></span><span>Step <b id="step">-</b></span><span>Epoch <b id="epoch">-</b></span><span>Host <b>gpu-node-07</b></span><span>8 × NVIDIA H100 80GB</span></div>
+      <div class="tabs"><span class="tab"><span class="ms">info</span>Overview</span><span class="tab on"><span class="ms">monitoring</span>Workspace</span><span class="tab"><span class="ms">terminal</span>Logs</span><span class="tab"><span class="ms">folder</span>Files</span><span class="tab"><span class="ms">deployed_code</span>Artifacts</span></div>
+    </div>
+    <div class="tools"><span class="s"><span class="ms" style="font-size:18px">search</span>Search panels</span><span class="r"><span>Smoothing 0.6</span><span class="ms">tune</span><span class="ms">settings</span><span class="ms">refresh</span></span></div>
+    <div class="sec"><span class="ms" style="font-size:18px">expand_more</span>Charts <span class="c">6</span></div>
+    <div class="grid" id="grid"></div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const STEPS = 450_000, EPOCHS = 90;
+  // Metric curves over training progress x in [0, 1].
+  const lr = x => 0.4 * (x < 0.03 ? x / 0.03 : 0.5 * (1 + Math.cos(Math.PI * (x - 0.03) / 0.97)));
+  const noise = (x, k) => Math.sin(x * 977 * k) * 0.5 + Math.sin(x * 2311 * k) * 0.3;
+  const PANELS = [
+    ['train/loss', x => 6.9 * Math.exp(-9 * x) + 0.95 - 0.35 * x + 0.06 * noise(x, 1), [0, 7]],
+    ['val/loss', x => 6.4 * Math.exp(-8 * x) + 1.05 - 0.3 * x + 0.04 * noise(x, 2), [0, 7]],
+    ['val/top1_acc', x => 0.77 * (1 - Math.exp(-6 * x)) + 0.004 * noise(x, 3), [0, 1]],
+    ['train/lr', lr, [0, 0.42]],
+    ['epoch', x => EPOCHS * x, [0, EPOCHS]],
+    ['system/gpu.0.gpu (%)', x => 94 + 3 * noise(x, 4), [0, 100]],
+  ];
+  const W = 360, H = 190, L = 40, B = 22;
+  const fmtK = v => v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`;
+  const draw = (upTo, crashed) => {
+    $('grid').innerHTML = PANELS.map(([name, f, [lo, hi]], pi) => {
+      const pts = [];
+      const N = 240;
+      for (let i = 0; i <= N; i++) {
+        const x = i / N * upTo;
+        let y = f(x);
+        if (pi === 5 && crashed && i === N) y = 0;
+        pts.push(`${(L + (x * (W - L - 8))).toFixed(1)},${(H - B - (y - lo) / (hi - lo) * (H - B - 8)).toFixed(1)}`);
+      }
+      const ticksY = [0, 0.5, 1].map(t => lo + t * (hi - lo));
+      const grid = ticksY.map(v => { const y = H - B - (v - lo) / (hi - lo) * (H - B - 8);
+        return `<line x1="${L}" x2="${W - 8}" y1="${y}" y2="${y}" stroke="#eef0f3"/><text x="${L - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#8a9099">${+v.toFixed(2)}</text>`; }).join('');
+      const ticksX = [0, 0.25, 0.5, 0.75, 1].map(t => `<text x="${L + t * (W - L - 8)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="#8a9099">${fmtK(Math.round(t * STEPS))}</text>`).join('');
+      return `<div class="panel"><div class="t">${name}</div><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${grid}${ticksX}<polyline fill="none" stroke="#e87b9f" stroke-width="1.6" points="${pts.join(' ')}"/></svg><div class="legend"><i></i>glowing-sunset-42</div></div>`;
+    }).join('');
+    $('step').textContent = Math.round(upTo * STEPS).toLocaleString('en-US');
+    $('epoch').textContent = (upTo * EPOCHS).toFixed(2);
+  };
+
+  const loadedAt = Date.now();
+  const BASE_S = 3 * 3600 + 12 * 60 + 8;
+  let run = null, ended = false;
+  const progress = () => run
+    ? run.from + (run.to - run.from) * Math.min((Date.now() - run.at) / run.durationMs, 1)
+    : 0.62 - 0.08 * Math.exp(-(Date.now() - loadedAt) / 600_000); // holding: creeps from 54% toward 62%
+  const tick = () => {
+    if (ended) return;
+    const s = BASE_S + Math.floor((Date.now() - loadedAt) / 1000);
+    $('runtime').textContent = `${Math.floor(s / 3600)}h ${String(Math.floor(s % 3600 / 60)).padStart(2, '0')}m ${String(s % 60).padStart(2, '0')}s`;
+    draw(progress(), false);
+    if (run && Date.now() - run.at >= run.durationMs) finish();
+  };
+  const timer = setInterval(tick, 2000);
+  tick();
+
+  const finish = () => {
+    ended = true;
+    clearInterval(timer);
+    const ok = demo.outcome === 'success';
+    draw(run.to, !ok);
+    $('state').className = `state ${ok ? 'finished' : 'crashed'}`;
+    $('state').innerHTML = ok ? '<span class="ms">check_circle</span>Finished' : '<span class="ms">error</span>Crashed';
+    demo.trigger();
+  };
+  // Success trains to the last step; fail dies partway through what's left.
+  demo.onStart = durationMs => {
+    const from = progress();
+    run = { from, at: Date.now(), durationMs, to: demo.outcome === 'success' ? 1 : from + (1 - from) * 0.55 };
+  };
+</script>
+</body>
+</html>

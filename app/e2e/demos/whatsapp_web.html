@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<!-- WhatsApp Web, waiting on a reply from Maria (her chat is open). Group chats keep getting
+     messages the whole time: noise that shouldn't count. When the suite starts it, the run ends
+     by ?outcome=: success, Maria replies in the open chat; fail, Carlos (another contact) messages
+     instead, which only shows in the chat list. Chat wallpaper is WhatsApp's own doodle tile. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>WhatsApp</title>
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; display: flex; background: #fcf5eb;
+         font-family: "Segoe UI", "Helvetica Neue", Helvetica, "Lucida Grande", Arial, sans-serif; color: #111b21; font-size: 14.2px; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 24px; line-height: 1; color: #54656f; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  .fill { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  /* Left rail */
+  .rail { width: 64px; flex: none; background: #f0f2f5; border-right: 1px solid #e9edef; display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 8px; }
+  .rail .it { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; position: relative; }
+  .rail .it.on { background: #d9dbdf; }
+  .rail .it.on .ms { color: #111b21; }
+  .rail .badge { position: absolute; top: 2px; right: 0; min-width: 18px; height: 18px; border-radius: 9px; background: #25d366; color: #fff; font-size: 11px; font-weight: 600; display: grid; place-items: center; padding: 0 4px; }
+  .rail .sp { flex: 1; }
+  .me { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #8a6f5a, #3c2f25); }
+  /* Chat list */
+  .list { width: 420px; flex: none; background: #fff; border-right: 1px solid #e9edef; display: flex; flex-direction: column; }
+  .lh { height: 64px; display: flex; align-items: center; padding: 0 20px; }
+  .lh h1 { font-size: 22px; font-weight: 700; color: #111b21; margin: 0; letter-spacing: -0.2px; }
+  .lh .r { margin-left: auto; display: flex; gap: 22px; }
+  .search { margin: 0 12px 6px; height: 40px; border-radius: 20px; background: #f0f2f5; display: flex; align-items: center; gap: 14px; padding: 0 16px; color: #667781; font-size: 15px; }
+  .search .ms { font-size: 20px; color: #667781; }
+  .chips { display: flex; gap: 8px; padding: 6px 12px 8px; }
+  .chip { height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid #e9edef; color: #54656f; font-size: 14.5px; display: flex; align-items: center; }
+  .chip.on { background: #d9fdd3; border-color: #d9fdd3; color: #008069; font-weight: 500; }
+  #chats { flex: 1; overflow: hidden; }
+  .row { height: 72px; display: flex; align-items: center; padding: 0 12px; gap: 12px; }
+  .row.open { background: #f0f2f5; }
+  .av { width: 49px; height: 49px; border-radius: 50%; flex: none; display: grid; place-items: center; overflow: hidden; }
+  .av.def { background: #dfe5e7; }
+  .av.def .ms { color: #fff; font-size: 38px; margin-top: 10px; font-variation-settings: 'FILL' 1; }
+  .av.grp .ms { margin-top: 2px; font-size: 30px; }
+  .rb { flex: 1; min-width: 0; height: 72px; border-bottom: 1px solid #e9edef; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+  .row:last-child .rb { border-bottom: 0; }
+  .l1, .l2 { display: flex; align-items: center; gap: 6px; }
+  .name { font-size: 17px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .time { font-size: 12px; color: #667781; }
+  .unread .time { color: #1fa855; }
+  .prev { flex: 1; color: #667781; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 2px; }
+  .unread .prev { color: #111b21; }
+  .cnt { min-width: 20px; height: 20px; border-radius: 10px; background: #25d366; color: #fff; font-size: 12px; font-weight: 600; display: grid; place-items: center; padding: 0 6px; }
+  .tick { font-size: 18px; color: #53bdeb; }
+  .tick.grey { color: #8696a0; }
+  .muted-ic { font-size: 18px; color: #8696a0; }
+  /* Conversation */
+  .conv { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+  .ch { height: 64px; flex: none; background: #f0f2f5; display: flex; align-items: center; padding: 0 16px; gap: 14px; border-left: 1px solid #e9edef; z-index: 1; }
+  .ch .av { width: 40px; height: 40px; }
+  .ch .who { flex: 1; }
+  .ch .nm { font-size: 16px; }
+  .ch .st { font-size: 13px; color: #667781; margin-top: 1px; }
+  .ch .st.typing { color: #1fa855; }
+  .ch .r { display: flex; gap: 24px; }
+  .msgs { flex: 1; position: relative; overflow: hidden; background: #efeae2; display: flex; flex-direction: column; justify-content: flex-end; padding: 12px 7% 8px; gap: 2px; }
+  .msgs::before { content: ''; position: absolute; inset: 0; background: url(whatsapp_assets/chat-bg.png) repeat; opacity: .4; }
+  .msgs > * { position: relative; }
+  .day { align-self: center; background: #fff; color: #54656f; font-size: 12.5px; padding: 5px 12px; border-radius: 8px; margin: 8px 0; box-shadow: 0 1px .5px rgba(11,20,26,.13); }
+  .b { max-width: 65%; padding: 6px 7px 8px 9px; border-radius: 7.5px; box-shadow: 0 1px .5px rgba(11,20,26,.13); font-size: 14.2px; line-height: 19px; position: relative; margin-top: 2px; }
+  .b.in { align-self: flex-start; background: #fff; }
+  .b.out { align-self: flex-end; background: #d9fdd3; }
+  .b.first.in { border-top-left-radius: 0; margin-top: 10px; } .b.first.out { border-top-right-radius: 0; margin-top: 10px; }
+  .b .meta { float: right; margin: 6px 0 -6px 12px; font-size: 11px; color: #667781; display: inline-flex; align-items: center; gap: 3px; }
+  .b .meta .ms { font-size: 16px; color: #53bdeb; }
+  .doc { display: flex; align-items: center; gap: 10px; background: rgba(11,20,26,.05); border-radius: 6px; padding: 12px 10px; margin-bottom: 4px; min-width: 300px; }
+  .doc .pdf { width: 30px; height: 36px; border-radius: 3px; background: #e44c3c; color: #fff; font-size: 9px; font-weight: 700; display: grid; place-items: end center; padding-bottom: 4px; }
+  .doc .dn { font-size: 14.5px; } .doc .ds { font-size: 12px; color: #667781; margin-top: 2px; }
+  .composer { height: 62px; flex: none; background: #f0f2f5; display: flex; align-items: center; gap: 12px; padding: 0 16px; }
+  .composer .in { flex: 1; height: 42px; background: #fff; border-radius: 21px; display: flex; align-items: center; padding: 0 14px; gap: 12px; color: #667781; font-size: 15px; }
+  .hidden { display: none !important; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="rail">
+  <div class="it on"><span class="ms fill">chat</span><span class="badge" id="rail-badge">9</span></div>
+  <div class="it"><span class="ms">donut_large</span></div>
+  <div class="it"><span class="ms">forum</span></div>
+  <div class="it"><span class="ms">groups</span></div>
+  <div class="sp"></div>
+  <div class="it"><span class="ms">settings</span></div>
+  <div class="me"></div>
+</div>
+
+<div class="list">
+  <div class="lh"><h1>WhatsApp</h1><div class="r"><span class="ms">add_comment</span><span class="ms">more_vert</span></div></div>
+  <div class="search"><span class="ms">search</span>Search or start a new chat</div>
+  <div class="chips"><span class="chip on">All</span><span class="chip">Unread</span><span class="chip">Favorites</span><span class="chip">Groups</span></div>
+  <div id="chats"></div>
+</div>
+
+<div class="conv">
+  <div class="ch">
+    <div class="av" style="background:linear-gradient(135deg,#d9a7c7,#7f5a83)"></div>
+    <div class="who"><div class="nm">Maria</div><div class="st" id="maria-status">last seen today at 1:31 AM</div></div>
+    <div class="r"><span class="ms">videocam</span><span class="ms">search</span><span class="ms">more_vert</span></div>
+  </div>
+  <div class="msgs" id="msgs">
+    <div class="day">YESTERDAY</div>
+    <div class="b in first">Ok I'll talk to legal tomorrow morning and get you the final version<span class="meta">6:12 PM</span></div>
+    <div class="b out first">Perfect, thank you!! The client wants it signed before Monday<span class="meta">6:14 PM <span class="ms">done_all</span></span></div>
+    <div class="b in first">Yeah no problem 👍<span class="meta">6:15 PM</span></div>
+    <div class="day">TODAY</div>
+    <div class="b out first">Hey Maria, any news on the contract? 😅<span class="meta">1:36 AM <span class="ms">done_all</span></span></div>
+    <div class="b out">Can you send it to me when you get a chance? I want to review it before the call 🙏<span class="meta">1:38 AM <span class="ms">done_all</span></span></div>
+  </div>
+  <div class="composer"><span class="ms">add</span><div class="in"><span class="ms">mood</span>Type a message</div><span class="ms">mic</span></div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const DEF = '<div class="av def"><span class="ms">person</span></div>';
+  const GRP = '<div class="av def grp"><span class="ms">group</span></div>';
+  const PH = (a, b) => `<div class="av" style="background:linear-gradient(135deg,${a},${b})"></div>`;
+  // The chat list, top to bottom. Maria's chat is open; Carlos is a contact who hasn't written in days.
+  const chats = [
+    { id: 'family', name: 'Familia 🏡', av: GRP, prev: 'Tía Rosa: 📷 Photo', time: '1:52 AM', n: 4, group: true },
+    { id: 'maria', name: 'Maria', av: PH('#d9a7c7', '#7f5a83'), prev: '<span class="ms tick">done_all</span>Can you send it to me when you get a chance? I want to…', time: '1:38 AM', n: 0, open: true },
+    { id: 'futbol', name: 'Fútbol martes ⚽', av: GRP, prev: 'Diego: quién trae el balón?', time: '1:20 AM', n: 3, group: true, muted: true },
+    { id: 'acme', name: 'Acme – Product team', av: GRP, prev: 'Priya: pushed the fix, deploying now', time: '12:47 AM', n: 2, group: true },
+    { id: 'mom', name: 'Mamá', av: PH('#f6d365', '#c98b3a'), prev: '<span class="ms tick">done_all</span>Sí, el domingo voy', time: 'Yesterday', n: 0 },
+    { id: 'roomies', name: 'Depa 🔑', av: GRP, prev: 'Alex: who finished the milk', time: 'Yesterday', n: 0, group: true },
+    { id: 'carlos', name: 'Carlos', av: PH('#89c4f4', '#2c6e9b'), prev: '<span class="ms tick grey">done_all</span>Thanks man, see you then', time: 'Thursday', n: 0 },
+    { id: 'gym', name: 'Smart Fit Coyoacán', av: DEF, prev: 'Tu membresía vence en 5 días', time: 'Thursday', n: 0 },
+    { id: 'pablo', name: 'Pablo', av: PH('#a8e063', '#56ab2f'), prev: 'jajaja no manches', time: 'Wednesday', n: 0 },
+  ];
+  const render = () => {
+    $('chats').innerHTML = chats.map(c => `
+      <div class="row ${c.open ? 'open' : ''} ${c.n ? 'unread' : ''}">${c.av}
+        <div class="rb"><div class="l1"><span class="name">${c.name}</span><span class="time">${c.time}</span></div>
+        <div class="l2"><span class="prev">${c.prev}</span>${c.muted ? '<span class="ms muted-ic">notifications_off</span>' : ''}${c.n ? `<span class="cnt">${c.n}</span>` : ''}</div></div>
+      </div>`).join('');
+    $('rail-badge').textContent = chats.filter(c => c.n).length;
+  };
+  render();
+
+  // Clock for message times: page load is 1:58 AM.
+  const loadedAt = Date.now();
+  const nowLabel = () => {
+    const m = 118 + Math.floor((Date.now() - loadedAt) / 60000);
+    return `${Math.floor(m / 60) % 12 || 12}:${String(m % 60).padStart(2, '0')} AM`;
+  };
+  const bump = (id, prev) => {
+    const i = chats.findIndex(c => c.id === id);
+    const [c] = chats.splice(i, 1);
+    c.prev = prev; c.time = nowLabel(); c.n += 1;
+    chats.unshift(c);
+    render();
+  };
+
+  // Group noise: someone writes in a group every 25–60 s, the whole time.
+  const NOISE = [
+    ['family', 'Tío Beto: 📷 Photo'], ['family', 'Tía Rosa: qué bonitos 😍😍'], ['futbol', 'Diego: yo llevo el balón'],
+    ['acme', 'Priya: deploy is green ✅'], ['futbol', 'Memo: somos 9, falta uno'], ['family', 'Abuela: 🎤 Voice message (0:42)'],
+    ['acme', 'Sam: can someone review #1432?'], ['roomies', 'Alex: also we\'re out of coffee'], ['futbol', 'Diego: 👍'],
+    ['family', 'Tío Beto: STICKER'], ['acme', 'Priya: thanks!'], ['roomies', 'Jo: on it'],
+  ];
+  let k = 0, noiseTimer;
+  const noise = () => { noiseTimer = setTimeout(() => { const [id, p] = NOISE[k++ % NOISE.length]; bump(id, p); noise(); }, 25000 + Math.random() * 35000); };
+  noise();
+
+  const msgs = $('msgs');
+  const finish = () => {
+    if (demo.outcome === 'success') {
+      // Maria comes online, types, and replies with the contract.
+      $('maria-status').textContent = 'online';
+      setTimeout(() => { $('maria-status').textContent = 'typing…'; $('maria-status').classList.add('typing'); }, 1500);
+      setTimeout(() => {
+        $('maria-status').textContent = 'online'; $('maria-status').classList.remove('typing');
+        const t = nowLabel();
+        msgs.insertAdjacentHTML('beforeend',
+          `<div class="b in first">Sorry!! Just saw this. Here it is, the final version from legal 📎<span class="meta">${t}</span></div>` +
+          `<div class="b in"><div class="doc"><div class="pdf">PDF</div><div><div class="dn">Contract_Acme_final_v3.pdf</div><div class="ds">4 pages · PDF · 312 kB</div></div></div><span class="meta">${t}</span></div>`);
+        const m = chats.find(c => c.id === 'maria');
+        m.prev = '📄 Contract_Acme_final_v3.pdf'; m.time = t;
+        chats.splice(chats.indexOf(m), 1); chats.unshift(m); render();
+        demo.trigger();
+      }, 5000);
+    } else {
+      // Not Maria: Carlos writes, and it only shows in the chat list.
+      bump('carlos', 'Hey! Are you still up? Need a favor for tomorrow');
+      setTimeout(() => bump('carlos', 'Can you lend me your car in the morning? 🙏'), 2500);
+      setTimeout(() => demo.trigger(), 2600);
+    }
+  };
+
+  // The reply sequence takes 5 s (fail: 2.6 s), so it starts that much before the end.
+  demo.onStart = durationMs => { setTimeout(finish, Math.max(0, durationMs - (demo.outcome === 'success' ? 5000 : 2600))); };
+</script>
+</body>
+</html>

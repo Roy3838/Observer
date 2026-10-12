@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<!-- A Vercel production deployment, building. Holds mid-build until the suite starts it; then the
+     build logs run to their end by ?outcome=: success ends "Ready", fail ends "Error" with a failed
+     `npm run build`. Uses Vercel's Geist fonts (fonts/geist.css). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>acme-dashboard – Deployment Overview – Vercel</title>
+<link rel="stylesheet" href="fonts/geist.css">
+<style>
+  :root { --g100: #f2f2f2; --g200: #ebebeb; --g400: #eaeaea; --g500: #c9c9c9; --g700: #8f8f8f; --g900: #666; --g1000: #171717;
+          --blue: #0070f3; --amber: #f5a623; --green: #45a557; --red: #e5484d; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fafafa; color: var(--g1000); font-family: Geist, Arial, sans-serif; font-size: 14px; overflow: hidden; }
+  svg { display: block; }
+  /* Header */
+  .top { background: #fff; border-bottom: 1px solid var(--g400); }
+  .bar { height: 64px; display: flex; align-items: center; padding: 0 24px; gap: 12px; }
+  .slash { color: var(--g500); font-size: 22px; font-weight: 200; }
+  .crumb { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+  .av { width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg, #7928ca, #ff0080); }
+  .av.proj { background: #000; display: grid; place-items: center; }
+  .pill { font-size: 12px; padding: 0 8px; height: 20px; border-radius: 10px; background: var(--g100); color: var(--g900); display: flex; align-items: center; font-weight: 500; }
+  .bar .right { margin-left: auto; display: flex; align-items: center; gap: 12px; color: var(--g900); }
+  .btn { height: 32px; padding: 0 12px; border: 1px solid var(--g400); border-radius: 6px; background: #fff; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; font-size: 14px; color: var(--g1000); }
+  .btn.dark { background: #171717; color: #fff; border-color: #171717; }
+  .btn.disabled { color: var(--g700); background: var(--g100); }
+  .tabs { display: flex; gap: 4px; padding: 0 16px; height: 46px; align-items: stretch; }
+  .tab { padding: 0 12px; display: flex; align-items: center; color: var(--g900); font-size: 14px; position: relative; }
+  .tab.on { color: var(--g1000); }
+  .tab.on::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; background: var(--g1000); }
+
+  .page { max-width: 1200px; margin: 0 auto; padding: 16px 24px 0; }
+  .head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .head h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.04em; margin: 0; }
+  .head .right { margin-left: auto; display: flex; gap: 8px; }
+
+  .card { background: #fff; border: 1px solid var(--g400); border-radius: 12px; display: flex; padding: 20px; gap: 32px; }
+  .preview { width: 320px; height: 180px; flex: none; border-radius: 8px; border: 1px solid var(--g400); background: var(--g100); position: relative; overflow: hidden; display: grid; place-items: center; color: var(--g700); font-size: 13px; }
+  .preview .shot { position: absolute; inset: 0; background: #fff; display: none; }
+  .ready .preview .shot { display: block; }
+  .shot .nav { height: 22px; background: #111; }
+  .shot .side { position: absolute; left: 0; top: 22px; bottom: 0; width: 70px; background: #f6f6f6; border-right: 1px solid #eee; }
+  .shot .k { position: absolute; top: 36px; height: 44px; width: 86px; border: 1px solid #eee; border-radius: 6px; }
+  .shot .chart { position: absolute; left: 84px; right: 14px; top: 92px; bottom: 14px; border: 1px solid #eee; border-radius: 6px;
+                 background: linear-gradient(transparent 60%, rgba(0,112,243,.12) 60%), repeating-linear-gradient(90deg, transparent 0 28px, #f2f2f2 28px 29px); }
+  .info { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 32px; align-content: start; min-width: 0; }
+  .info > div { min-width: 0; } .val a { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .label { color: var(--g900); font-size: 13px; margin-bottom: 6px; }
+  .val { font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  .val.mono { font-family: 'Geist Mono', monospace; font-size: 13px; }
+  .val .muted { color: var(--g900); font-weight: 400; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--amber); }
+  .building .dot { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .4; } }
+  .ready .dot { background: var(--green); } .error .dot { background: var(--red); }
+  .wide { grid-column: 1 / -1; }
+  .link { color: var(--g1000); text-decoration: none; }
+  .building .link, .error .link { color: var(--g700); }
+
+  .details { margin-top: 16px; background: #fff; border: 1px solid var(--g400); border-radius: 12px; overflow: hidden; }
+  .acc { height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-top: 1px solid var(--g400); font-weight: 500; }
+  .acc:first-child { border-top: 0; }
+  .acc .t { margin-left: auto; color: var(--g900); font-weight: 400; font-family: 'Geist Mono', monospace; font-size: 13px; }
+  .acc .ic { width: 16px; height: 16px; display: grid; place-items: center; }
+  .spin { width: 14px; height: 14px; border: 2px solid var(--g400); border-top-color: var(--g1000); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .logs { border-top: 1px solid var(--g400); }
+  .logbar { height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--g400); }
+  .find { flex: 1; height: 30px; border: 1px solid var(--g400); border-radius: 6px; display: flex; align-items: center; padding: 0 10px; color: var(--g700); font-size: 13px; gap: 6px; }
+  .count { color: var(--g900); font-size: 13px; }
+  #log { height: 190px; overflow: hidden; padding: 8px 0; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 20px; display: flex; flex-direction: column; justify-content: flex-end; }
+  #log div { display: flex; padding: 0 16px; white-space: pre; }
+  #log .ts { color: var(--g700); width: 104px; flex: none; }
+  #log .err { background: #fff0f0; color: #cd2b31; }
+  #log .warn { background: #fff8e6; color: #ab6400; }
+  .banner { display: none; margin: 8px 12px 0; padding: 8px 14px; border: 1px solid #fdd8d8; background: #fff0f0; color: #cd2b31; border-radius: 6px; font-family: 'Geist Mono', monospace; font-size: 13px; }
+  .error .banner { display: block; }
+  .ok-ic { color: var(--green); } .bad-ic { color: var(--red); }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body class="building" id="body">
+<div class="top">
+  <div class="bar">
+    <svg width="24" height="24" viewBox="0 0 76 65"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z" fill="#000"/></svg>
+    <span class="slash">/</span>
+    <span class="crumb"><span class="av"></span>roy3838's projects <span class="pill">Hobby</span></span>
+    <span class="slash">/</span>
+    <span class="crumb"><span class="av proj"><svg width="10" height="10" viewBox="0 0 76 65"><path d="M37.5 0L75 65H0z" fill="#fff"/></svg></span>acme-dashboard</span>
+    <div class="right"><span class="btn">Feedback</span><span>Changelog</span><span>Help</span><span>Docs</span><span class="av" style="width:30px;height:30px"></span></div>
+  </div>
+  <div class="tabs">
+    <div class="tab">Overview</div><div class="tab on">Deployments</div><div class="tab">Analytics</div><div class="tab">Speed Insights</div>
+    <div class="tab">Logs</div><div class="tab">Observability</div><div class="tab">Firewall</div><div class="tab">Storage</div><div class="tab">Flags</div><div class="tab">Settings</div>
+  </div>
+</div>
+
+<div class="page">
+  <div class="head">
+    <h1>Deployment Details</h1>
+    <div class="right">
+      <span class="btn">Build Logs</span><span class="btn">Runtime Logs</span><span class="btn">Instant Rollback</span>
+      <span class="btn disabled" id="visit">Visit</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="preview"><span id="preview-text">Building…</span><div class="shot"><div class="nav"></div><div class="side"></div>
+      <div class="k" style="left:84px"></div><div class="k" style="left:180px"></div><div class="k" style="left:276px"></div><div class="chart"></div></div></div>
+    <div class="info">
+      <div><div class="label">Deployment</div><div class="val"><a class="link">acme-dashboard-4f2a9c1-roy3838s-projects.vercel.app</a></div></div>
+      <div><div class="label">Domains</div><div class="val"><a class="link">acme-dashboard.vercel.app</a></div></div>
+      <div><div class="label">Status</div><div class="val"><span class="dot"></span><span id="status">Building</span> <span class="pill">Production</span></div></div>
+      <div><div class="label">Created</div><div class="val"><span class="av"></span><span id="created">4m ago</span> <span class="muted">by roy3838</span></div></div>
+      <div><div class="label">Duration</div><div class="val mono" id="duration">3m 41s</div></div>
+      <div><div class="label">Environment</div><div class="val">Production <span class="pill">Current</span></div></div>
+      <div class="wide"><div class="label">Source</div><div class="val"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="3" r="1.6"/><circle cx="4" cy="13" r="1.6"/><circle cx="12" cy="5" r="1.6"/><path d="M4 4.6v6.8M12 6.6c0 3-4 2.5-8 4.8"/></svg>main
+        <span class="muted mono" style="font-family:'Geist Mono'">4f2a9c1</span> <span class="muted">migrate billing to the Stripe client</span></div></div>
+    </div>
+  </div>
+
+  <div class="details">
+    <div class="acc"><span class="ic" id="ic-build"><span class="spin"></span></span>Build Logs<span class="t" id="build-time">3m 41s</span>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg></div>
+    <div class="logs">
+      <div class="logbar"><div class="find"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5"/><path d="M11 11l3 3"/></svg>Find in logs</div><span class="count" id="count">0 lines</span></div>
+      <div class="banner" id="banner">Command "npm run build" exited with 1</div>
+      <div id="log"></div>
+    </div>
+    <div class="acc"><span class="ic" id="ic-summary"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#c9c9c9" stroke-width="1.5"><circle cx="8" cy="8" r="6"/></svg></span>Deployment Summary</div>
+    <div class="acc"><span class="ic" id="ic-domains"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#c9c9c9" stroke-width="1.5"><circle cx="8" cy="8" r="6"/></svg></span>Assigning Custom Domains</div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const startedAt = Date.now() - 221_000; // the build has been running 3m 41s when the page loads
+  let lines = 0;
+  const stamp = () => {
+    const d = new Date(Date.parse('2026-10-11T19:38:04.112Z') + (Date.now() - startedAt));
+    return d.toISOString().slice(11, 23);
+  };
+  const log = (text, cls = '') => {
+    const d = document.createElement('div');
+    if (cls) d.className = cls;
+    d.innerHTML = `<span class="ts">${stamp()}</span><span>${esc(text)}</span>`;
+    $('log').appendChild(d);
+    lines++;
+    $('count').textContent = `${lines} lines`;
+  };
+
+  // Everything up to the long compile step is already in the log when the page opens.
+  [
+    'Running build in Washington, D.C., USA (East) – iad1',
+    'Build machine configuration: 4 cores, 8 GB',
+    'Cloning github.com/roy3838/acme-dashboard (Branch: main, Commit: 4f2a9c1)',
+    'Cloning completed: 1.112s',
+    'Restored build cache from previous deployment (8nEwQd3RjcQx2TpAa7cW1p9Lk4Vb)',
+    'Running "vercel build"',
+    'Vercel CLI 48.2.1',
+    'Installing dependencies...',
+    'npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory.',
+    'npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported',
+    '',
+    'added 1243 packages, and audited 1244 packages in 24s',
+    '',
+    '218 packages are looking for funding',
+    '  run `npm fund` for details',
+    'found 0 vulnerabilities',
+    'Detected Next.js version: 15.5.2',
+    'Running "npm run build"',
+    '',
+    '> acme-dashboard@0.4.0 build',
+    '> next build',
+    '',
+    '   ▲ Next.js 15.5.2',
+    '   - Environments: .env.production',
+    '',
+    '   Creating an optimized production build ...',
+  ].forEach(t => log(t, t.startsWith('npm warn') ? 'warn' : ''));
+
+  const fmt = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`; };
+  let done = false;
+  const clock = setInterval(() => {
+    if (done) return;
+    const ms = Date.now() - startedAt;
+    $('duration').textContent = fmt(ms);
+    $('build-time').textContent = fmt(ms);
+    $('created').textContent = `${Math.floor((ms + 30_000) / 60_000)}m ago`;
+  }, 1000);
+
+  // The rest of the build, spread over the run. A failed build dies at the type check.
+  const OK_REST = [
+    ' ✓ Compiled successfully in 4.1min',
+    '   Linting and checking validity of types ...',
+    '   Collecting page data ...',
+    ...[0, 6, 12, 24, 36, 48].map(n => `   Generating static pages (${n}/48) ${n === 48 ? '' : '...'}`.replace(/^   Generating static pages \(48\/48\) $/, ' ✓ Generating static pages (48/48)')),
+    '   Finalizing page optimization ...',
+    '   Collecting build traces ...',
+    '',
+    'Route (app)                                 Size  First Load JS',
+    '┌ ○ /                                     5.21 kB         128 kB',
+    '├ ƒ /api/checkout                          0 B             0 B',
+    '├ ƒ /api/webhooks/stripe                   0 B             0 B',
+    '├ ○ /billing                              9.84 kB         141 kB',
+    '└ ○ /settings                             3.02 kB         119 kB',
+    '+ First Load JS shared by all              102 kB',
+    '',
+    'Traced Next.js server files in: 182.371ms',
+    'Created all serverless functions in: 1.204s',
+    'Collected static files (public/, static/, .next/static): 9.52ms',
+    'Build Completed in /vercel/output [4m]',
+    'Deploying outputs...',
+  ];
+  const FAIL_REST = [
+    ' ✓ Compiled successfully in 4.1min',
+    '   Linting and checking validity of types ...',
+    'Failed to compile.',
+    '',
+    './src/billing/invoices.ts:88:31',
+    "Type error: Property 'lineItems' does not exist on type 'Invoice'.",
+    '',
+    '  86 |   const rows: InvoiceRow[] = [];',
+    '  87 |',
+    '> 88 |   for (const item of invoice.lineItems) {',
+    '     |                               ^',
+    '  89 |     rows.push(toRow(item));',
+    'Next.js build worker exited with code: 1 and signal: null',
+    'Error: Command "npm run build" exited with 1',
+  ];
+
+  const finish = () => {
+    done = true;
+    clearInterval(clock);
+    const body = $('body');
+    body.classList.remove('building');
+    if (demo.outcome === 'success') {
+      log('Deployment completed');
+      body.classList.add('ready');
+      $('status').textContent = 'Ready';
+      $('visit').className = 'btn dark';
+      $('preview-text').textContent = '';
+      const check = '<svg class="ok-ic" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zm3.5 5.2L7 9.7 4.5 7.2l-1 1L7 11.7l5.5-5.5z"/></svg>';
+      $('ic-build').innerHTML = $('ic-summary').innerHTML = $('ic-domains').innerHTML = check;
+    } else {
+      body.classList.add('error');
+      $('status').textContent = 'Error';
+      $('preview-text').textContent = 'Build Failed';
+      $('ic-build').innerHTML = '<svg class="bad-ic" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zm2.6 4.3L8 6.9 5.4 4.3l-1.1 1.1L6.9 8l-2.6 2.6 1.1 1.1L8 9.1l2.6 2.6 1.1-1.1L9.1 8l2.6-2.6z"/></svg>';
+    }
+    demo.trigger();
+  };
+
+  demo.onStart = durationMs => {
+    const rest = demo.outcome === 'success' ? OK_REST : FAIL_REST;
+    // Most of the run is the compile itself; the remaining lines come in over the last 40%.
+    rest.forEach((t, i) => setTimeout(() => {
+      const err = demo.outcome === 'fail' && /error|Failed|^>|\^$|exited/i.test(t);
+      log(t, err ? 'err' : '');
+    }, durationMs * (0.6 + 0.38 * i / rest.length)));
+    setTimeout(finish, durationMs);
+  };
+</script>
+</body>
+</html>

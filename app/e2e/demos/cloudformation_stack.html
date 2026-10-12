@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<!-- AWS CloudFormation updating a production stack (ECS service deploy). Holds in UPDATE_IN_PROGRESS,
+     with new stack events arriving now and then, until the suite starts it; then it ends by ?outcome=:
+     success, UPDATE_COMPLETE; fail, the ECS deployment circuit breaker trips and the stack rolls back
+     to UPDATE_ROLLBACK_COMPLETE. Cloudscape-style console (Open Sans, fonts/), AWS logo (aws_assets/). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CloudFormation - Stack acme-api-prod</title>
+<link rel="stylesheet" href="fonts/open-sans.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #f2f3f3; color: #16191f; font-family: 'Open Sans', 'Helvetica Neue', Arial, sans-serif; font-size: 14px; display: flex; flex-direction: column; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 18px; line-height: 1; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+  /* Global nav */
+  .nav { height: 40px; background: #232f3e; display: flex; align-items: center; gap: 16px; padding: 0 16px; color: #fff; flex: none; font-size: 14px; }
+  .nav img { width: 34px; height: 34px; margin-top: 4px; }
+  .nav .svc { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+  .nav .search { width: 520px; height: 30px; border: 1px solid #687078; border-radius: 6px; background: #0f1b2a; display: flex; align-items: center; gap: 8px; padding: 0 10px; color: #aab7b8; font-size: 13px; }
+  .nav .search i { margin-left: auto; font-style: normal; font-size: 12px; }
+  .nav .r { margin-left: auto; display: flex; align-items: center; gap: 18px; font-weight: 700; font-size: 13px; }
+  .nav .r .ms { font-size: 20px; font-variation-settings: 'FILL' 0; }
+  .favs { height: 30px; background: #192534; display: flex; align-items: center; gap: 18px; padding: 0 16px; color: #d1d5db; font-size: 12px; flex: none; }
+  .wrap { flex: 1; display: flex; min-height: 0; }
+  .side { width: 196px; background: #fff; border-right: 1px solid #e9ebed; padding: 18px 0; flex: none; font-size: 14px; }
+  .side h3 { margin: 0 20px 14px; font-size: 18px; font-weight: 700; }
+  .side div { padding: 6px 20px; color: #414d5c; }
+  .side .on { color: #0972d3; font-weight: 700; }
+  .side .sep { border-top: 1px solid #e9ebed; margin: 10px 20px; padding: 0; }
+  .content { flex: 1; padding: 14px 16px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  .crumbs { font-size: 14px; color: #0972d3; display: flex; gap: 8px; align-items: center; }
+  .crumbs span.cur { color: #5f6b7a; }
+  .split { flex: 1; display: flex; gap: 14px; min-height: 0; }
+  .card { background: #fff; border-radius: 16px; box-shadow: 0 1px 1px rgba(0,28,36,.3), 1px 1px 1px rgba(0,28,36,.15), -1px 1px 1px rgba(0,28,36,.15); }
+  .stacks { width: 262px; flex: none; padding: 16px 0; }
+  .stacks h2, .detail h2 { margin: 0; font-size: 18px; font-weight: 700; }
+  .stacks .hd { padding: 0 16px 12px; display: flex; align-items: center; gap: 6px; }
+  .stacks .hd span { color: #5f6b7a; font-weight: 400; }
+  .stk { padding: 12px 16px; border-top: 1px solid #e9ebed; }
+  .stk.sel { background: #f2f8fd; box-shadow: inset 3px 0 #0972d3; }
+  .stk .n { color: #0972d3; font-weight: 700; }
+  .stk .d { color: #5f6b7a; font-size: 12px; margin-top: 4px; }
+  .st { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; margin-top: 4px; }
+  .st.prog { color: #0972d3; } .st.ok { color: #037f0c; } .st.bad { color: #d91515; }
+  .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #b5d6f4; border-top-color: #0972d3; animation: spin .9s linear infinite; display: inline-block; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .detail { flex: 1; min-width: 0; padding: 18px 20px; display: flex; flex-direction: column; }
+  .dhead { display: flex; align-items: center; gap: 10px; }
+  .dhead .btns { margin-left: auto; display: flex; gap: 8px; }
+  .btn { height: 30px; padding: 0 12px; border: 2px solid #0972d3; border-radius: 20px; color: #0972d3; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; font-size: 14px; background: #fff; }
+  .btn.dis { border-color: #9ba7b6; color: #9ba7b6; }
+  .btn.p { background: #ff9900; border-color: #ff9900; color: #0f1b2a; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid #e9ebed; margin-top: 16px; }
+  .tab { padding: 8px 10px; white-space: nowrap; font-weight: 700; color: #414d5c; }
+  .tab.on { color: #0972d3; box-shadow: inset 0 -4px #0972d3; }
+  .ehead { display: flex; align-items: center; gap: 8px; margin: 16px 0 10px; }
+  .ehead h3 { margin: 0; font-size: 18px; font-weight: 700; }
+  .ehead h3 span { color: #5f6b7a; font-weight: 400; }
+  .ehead .btns { margin-left: auto; display: flex; gap: 8px; }
+  .filter { height: 32px; border: 2px solid #7d8998; border-radius: 8px; display: flex; align-items: center; gap: 8px; padding: 0 10px; color: #5f6b7a; width: 380px; margin-bottom: 10px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+  th { text-align: left; font-weight: 700; color: #414d5c; padding: 8px 8px; border-bottom: 1px solid #c6c6cd; background: #fff; }
+  td { padding: 7px 8px; border-bottom: 1px solid #e9ebed; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
+  td.reason { white-space: normal; color: #16191f; }
+  tr.new td { animation: hl 3s ease-out; }
+  @keyframes hl { from { background: #f2f8fd; } to { background: transparent; } }
+  .tablewrap { flex: 1; overflow: hidden; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="nav">
+  <img src="aws_assets/aws_logo.svg" alt="">
+  <span class="svc"><span class="ms" style="font-variation-settings:'FILL' 0">apps</span></span>
+  <span class="search"><span class="ms" style="font-variation-settings:'FILL' 0">search</span>Search<i>[Option+S]</i></span>
+  <span class="r"><span class="ms">terminal</span><span class="ms">notifications</span><span class="ms">help</span><span class="ms">settings</span><span>N. Virginia ▾</span><span>roy @ acme-prod ▾</span></span>
+</div>
+<div class="favs"><span>CloudFormation</span><span>EC2</span><span>Elastic Container Service</span><span>CloudWatch</span><span>Lambda</span><span>S3</span></div>
+<div class="wrap">
+  <div class="side">
+    <h3>CloudFormation</h3>
+    <div class="on">Stacks</div><div>StackSets</div><div>Exports</div><div class="sep"></div>
+    <div>Infrastructure Composer</div><div>IaC generator</div><div class="sep"></div>
+    <div>Registry</div><div>Public extensions</div><div>Activated extensions</div><div>Publisher</div><div class="sep"></div>
+    <div>Spotlight</div><div>Feedback</div>
+  </div>
+  <div class="content">
+    <div class="crumbs">CloudFormation<span class="ms" style="color:#5f6b7a">chevron_right</span>Stacks<span class="ms" style="color:#5f6b7a">chevron_right</span><span class="cur">acme-api-prod</span></div>
+    <div class="split">
+      <div class="card stacks">
+        <div class="hd"><h2>Stacks <span>(5)</span></h2></div>
+        <div class="stk sel"><div class="n">acme-api-prod</div><div class="d">2024-03-18 10:41:22 UTC-0600</div><div class="st prog" id="list-status"><span class="spin"></span>UPDATE_IN_PROGRESS</div></div>
+        <div class="stk"><div class="n">acme-web-prod</div><div class="d">2024-03-18 10:39:05 UTC-0600</div><div class="st ok"><span class="ms">check_circle</span>UPDATE_COMPLETE</div></div>
+        <div class="stk"><div class="n">acme-data-prod</div><div class="d">2023-11-02 09:12:47 UTC-0600</div><div class="st ok"><span class="ms">check_circle</span>UPDATE_COMPLETE</div></div>
+        <div class="stk"><div class="n">acme-network-prod</div><div class="d">2023-06-21 16:03:10 UTC-0600</div><div class="st ok"><span class="ms">check_circle</span>CREATE_COMPLETE</div></div>
+        <div class="stk"><div class="n">CDKToolkit</div><div class="d">2023-06-20 14:55:31 UTC-0600</div><div class="st ok"><span class="ms">check_circle</span>UPDATE_COMPLETE</div></div>
+      </div>
+      <div class="card detail">
+        <div class="dhead"><h2>acme-api-prod</h2>
+          <div class="btns"><span class="btn dis">Delete</span><span class="btn dis">Update stack ▾</span><span class="btn">Stack actions ▾</span><span class="btn p">Create stack ▾</span></div></div>
+        <div class="tabs"><span class="tab">Stack info</span><span class="tab on">Events</span><span class="tab">Resources</span><span class="tab">Outputs</span><span class="tab">Parameters</span><span class="tab">Template</span><span class="tab">Change sets</span></div>
+        <div class="ehead"><h3>Events <span id="count">(0)</span></h3><div class="btns"><span class="btn">Detect root cause</span><span class="btn"><span class="ms" style="font-variation-settings:'FILL' 0">refresh</span></span></div></div>
+        <div class="filter"><span class="ms" style="font-variation-settings:'FILL' 0">search</span>Search events</div>
+        <div class="tablewrap">
+          <table>
+            <colgroup><col style="width:150px"><col style="width:168px"><col style="width:236px"><col></colgroup>
+            <thead><tr><th>Timestamp</th><th>Logical ID</th><th>Status</th><th>Status reason</th></tr></thead>
+            <tbody id="events"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  // The console's clock: the update started 10:41:22, and the page opened 6 min later.
+  const loadedAt = Date.now();
+  const T0 = Date.UTC(2024, 2, 18, 10, 41, 22);
+  const OPEN_OFFSET = 6 * 60_000 + 14_000;
+  const ts = ms => {
+    const d = new Date(T0 + ms);
+    const p = n => String(n).padStart(2, '0');
+    return `2024-03-18 ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+  };
+  const now = () => OPEN_OFFSET + (Date.now() - loadedAt);
+  const KIND = {
+    UPDATE_IN_PROGRESS: 'prog', UPDATE_COMPLETE: 'ok', CREATE_IN_PROGRESS: 'prog', CREATE_COMPLETE: 'ok',
+    DELETE_IN_PROGRESS: 'prog', DELETE_COMPLETE: 'ok', UPDATE_FAILED: 'bad', UPDATE_COMPLETE_CLEANUP_IN_PROGRESS: 'prog',
+    UPDATE_ROLLBACK_IN_PROGRESS: 'bad', UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS: 'bad', UPDATE_ROLLBACK_COMPLETE: 'bad',
+  };
+  const ICON = { prog: '<span class="spin"></span>', ok: '<span class="ms">check_circle</span>', bad: '<span class="ms">cancel</span>' };
+  const badge = s => `<span class="st ${KIND[s]}" style="margin:0">${KIND[s] === 'prog' ? '<span class="ms" style="color:#0972d3">info</span>' : ICON[KIND[s]]}${s}</span>`;
+
+  let n = 0;
+  const add = (ms, id, status, reason = '-', fresh = true) => {
+    n++;
+    $('count').textContent = `(${n})`;
+    const tr = document.createElement('tr');
+    if (fresh) tr.className = 'new';
+    tr.innerHTML = `<td>${ts(ms)}</td><td>${id}</td><td>${badge(status)}</td><td class="reason">${reason}</td>`;
+    $('events').prepend(tr); // newest first, like the console
+  };
+
+  // What already happened in the 6 minutes before the page opened.
+  [
+    [0, 'acme-api-prod', 'UPDATE_IN_PROGRESS', 'User Initiated'],
+    [21_000, 'ApiTaskRole', 'UPDATE_IN_PROGRESS'], [24_000, 'ApiTaskRole', 'UPDATE_COMPLETE'],
+    [27_000, 'ApiLogGroup', 'UPDATE_IN_PROGRESS'], [29_000, 'ApiLogGroup', 'UPDATE_COMPLETE'],
+    [33_000, 'ApiTaskDefinition', 'UPDATE_IN_PROGRESS', 'Requested update requires the creation of a new physical resource; hence creating one.'],
+    [36_000, 'ApiTaskDefinition', 'UPDATE_IN_PROGRESS', 'Resource creation Initiated'],
+    [39_000, 'ApiTaskDefinition', 'UPDATE_COMPLETE'],
+    [44_000, 'ApiTargetGroupGreen', 'CREATE_IN_PROGRESS'], [47_000, 'ApiTargetGroupGreen', 'CREATE_IN_PROGRESS', 'Resource creation Initiated'],
+    [61_000, 'ApiTargetGroupGreen', 'CREATE_COMPLETE'],
+    [66_000, 'ApiListenerRule', 'UPDATE_IN_PROGRESS'], [70_000, 'ApiListenerRule', 'UPDATE_COMPLETE'],
+    [75_000, 'ApiService', 'UPDATE_IN_PROGRESS'],
+    [78_000, 'ApiService', 'UPDATE_IN_PROGRESS', 'Eventual consistency check initiated'],
+  ].forEach(([ms, id, s, r]) => add(ms, id, s, r, false));
+
+  // While holding, the ECS service keeps stabilizing; other resources update now and then.
+  const HOLD = [
+    ['ApiScalingTarget', 'UPDATE_IN_PROGRESS'], ['ApiScalingTarget', 'UPDATE_COMPLETE'],
+    ['ApiCpuScalingPolicy', 'UPDATE_IN_PROGRESS'], ['ApiCpuScalingPolicy', 'UPDATE_COMPLETE'],
+    ['ApiDashboard', 'UPDATE_IN_PROGRESS'], ['ApiDashboard', 'UPDATE_COMPLETE'],
+    ['Api5xxAlarm', 'UPDATE_IN_PROGRESS'], ['Api5xxAlarm', 'UPDATE_COMPLETE'],
+    ['ApiLatencyAlarm', 'UPDATE_IN_PROGRESS'], ['ApiLatencyAlarm', 'UPDATE_COMPLETE'],
+  ];
+  let h = 0, run = null;
+  const hold = () => {
+    if (run) return;
+    if (h < HOLD.length) add(now(), ...HOLD[h++]);
+    setTimeout(hold, 25_000 + Math.random() * 35_000);
+  };
+  setTimeout(hold, 15_000);
+
+  const listStatus = s => { $('list-status').className = `st ${KIND[s]}`; $('list-status').innerHTML = `${ICON[KIND[s]]}${s}`; };
+
+  const finish = () => {
+    if (demo.outcome === 'success') {
+      add(now(), 'ApiService', 'UPDATE_COMPLETE');
+      setTimeout(() => { add(now(), 'acme-api-prod', 'UPDATE_COMPLETE_CLEANUP_IN_PROGRESS'); listStatus('UPDATE_COMPLETE_CLEANUP_IN_PROGRESS'); demo.trigger(); }, 1500);
+      setTimeout(() => add(now(), 'ApiTargetGroupBlue', 'DELETE_IN_PROGRESS'), 3000);
+      setTimeout(() => add(now(), 'ApiTargetGroupBlue', 'DELETE_COMPLETE'), 4500);
+      setTimeout(() => { add(now(), 'acme-api-prod', 'UPDATE_COMPLETE'); listStatus('UPDATE_COMPLETE'); }, 6000);
+    } else {
+      add(now(), 'ApiService', 'UPDATE_FAILED', 'Resource handler returned message: "Error occurred during operation \'ECS Deployment Circuit Breaker was triggered\'." (RequestToken: 7c1e4b2a-93d0-4f5e-b8a1-2d6c0f9e3a71, HandlerErrorCode: GeneralServiceException)');
+      setTimeout(() => { add(now(), 'acme-api-prod', 'UPDATE_ROLLBACK_IN_PROGRESS', 'The following resource(s) failed to update: [ApiService].'); listStatus('UPDATE_ROLLBACK_IN_PROGRESS'); demo.trigger(); }, 1500);
+      setTimeout(() => add(now(), 'ApiService', 'UPDATE_COMPLETE'), 3000);
+      setTimeout(() => { add(now(), 'acme-api-prod', 'UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS'); listStatus('UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS'); }, 4500);
+      setTimeout(() => add(now(), 'ApiTargetGroupGreen', 'DELETE_COMPLETE'), 5500);
+      setTimeout(() => { add(now(), 'acme-api-prod', 'UPDATE_ROLLBACK_COMPLETE'); listStatus('UPDATE_ROLLBACK_COMPLETE'); }, 6500);
+    }
+  };
+
+  // The rollout runs out its duration; the last 6.5 s are the closing events. The job has
+  // ended for the user once the stack status leaves UPDATE_IN_PROGRESS, so that is the trigger.
+  demo.onStart = durationMs => {
+    run = { at: Date.now() };
+    const steps = HOLD.slice(h);
+    steps.forEach((e, i) => setTimeout(() => add(now(), ...e), (durationMs - 7000) * (i + 1) / (steps.length + 1)));
+    setTimeout(finish, Math.max(0, durationMs - 6500));
+  };
+</script>
+</body>
+</html>

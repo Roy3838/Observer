@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<!-- Argo CD syncing a Kubernetes rollout (payments-api, revision 42). Holds "Progressing / Syncing" with
+     new pods still starting until the suite starts it; then it ends by ?outcome=: success, every new pod
+     is up, the old ReplicaSet is gone and the app is Healthy with "Sync OK"; fail, the new pods crash-loop,
+     the app is Degraded and the sync failed. Heebo (fonts/, Argo CD's font), Argo logo (argocd_assets/). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>payments-api - Argo CD</title>
+<link rel="stylesheet" href="fonts/heebo.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #dee6eb; color: #363c4a; font-family: Heebo, Arial, sans-serif; font-size: 14px; display: flex; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 18px; line-height: 1; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+  .spinning { display: inline-block; animation: spin 1.2s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .healthy { color: #18be94; } .progressing { color: #0dadea; } .degraded { color: #e96d76; } .synced { color: #18be94; } .oos { color: #f4c030; } .failed { color: #e96d76; }
+  /* Sidebar */
+  .side { width: 60px; background: #0f2733; display: flex; flex-direction: column; align-items: center; padding-top: 12px; gap: 22px; flex: none; }
+  .side img { width: 34px; }
+  .side .v { color: #8fa4b1; font-size: 10px; margin-top: -14px; }
+  .side .ms { color: #8fa4b1; font-size: 24px; font-variation-settings: 'FILL' 0; }
+  .side .on .ms { color: #fff; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .top { height: 50px; background: #fff; display: flex; align-items: center; padding: 0 18px; gap: 8px; border-bottom: 1px solid #dee6eb; flex: none; }
+  .top .crumb { color: #6d7f8b; font-size: 13px; text-transform: uppercase; letter-spacing: .5px; }
+  .top .crumb b { color: #363c4a; font-weight: 500; text-transform: none; font-size: 16px; letter-spacing: 0; margin-left: 6px; }
+  .top .r { margin-left: auto; display: flex; align-items: center; gap: 14px; color: #6d7f8b; font-size: 13px; }
+  .top .r .ms { font-variation-settings: 'FILL' 0; }
+  .actions { display: flex; gap: 8px; padding: 10px 18px; background: #fff; border-bottom: 1px solid #dee6eb; flex: none; }
+  .ab { height: 30px; padding: 0 12px; border-radius: 4px; background: #fff; border: 1px solid #c4d0d6; color: #495763; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: .4px; }
+  .ab .ms { font-size: 16px; color: #6d7f8b; font-variation-settings: 'FILL' 0; }
+  /* Status panel */
+  .status { display: flex; background: #fff; margin: 12px 18px 0; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.08); flex: none; }
+  .sp { padding: 12px 18px; border-right: 1px solid #eef2f4; min-width: 230px; }
+  .sp:last-child { border-right: 0; flex: 1; }
+  .sp .l { font-size: 11px; color: #6d7f8b; text-transform: uppercase; letter-spacing: .6px; font-weight: 500; }
+  .sp .v { display: flex; align-items: center; gap: 6px; font-size: 20px; font-weight: 500; margin-top: 4px; }
+  .sp .v .ms { font-size: 22px; }
+  .sp .d { font-size: 12px; color: #6d7f8b; margin-top: 4px; line-height: 17px; }
+  .sp .d b { color: #363c4a; font-weight: 500; }
+  /* Resource tree */
+  .tree { position: relative; flex: 1; margin: 12px 18px 12px; min-height: 0; }
+  .tree svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .node { position: absolute; width: 238px; height: 54px; background: #fff; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.12); display: flex; align-items: center; gap: 10px; padding: 0 10px; transition: opacity .4s; }
+  .node .kind { width: 34px; display: flex; flex-direction: column; align-items: center; color: #6d7f8b; font-size: 10px; }
+  .node .kind .ms { font-size: 22px; color: #8fa4b1; }
+  .node .nm { flex: 1; min-width: 0; }
+  .node .nm div:first-child { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node .nm div:last-child { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+  .tag { font-size: 10px; background: #eef2f4; color: #6d7f8b; border-radius: 3px; padding: 0 5px; line-height: 16px; }
+  .tag.err { background: #fbe4e6; color: #c4434d; }
+  .node.app { width: 210px; }
+  .gone { opacity: 0; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="side">
+  <img src="argocd_assets/argo.svg" alt=""><span class="v">v2.13.2</span>
+  <span class="on"><span class="ms">layers</span></span><span><span class="ms">settings</span></span><span><span class="ms">person</span></span><span><span class="ms">help</span></span>
+</div>
+<div class="main">
+  <div class="top"><span class="crumb">Applications /<b>payments-api</b></span>
+    <span class="r"><span class="ms">account_tree</span><span class="ms">view_list</span><span class="ms">bar_chart</span><span class="ms">lan</span><span>Log out</span></span></div>
+  <div class="actions">
+    <span class="ab"><span class="ms">info</span>Details</span><span class="ab"><span class="ms">difference</span>Diff</span><span class="ab"><span class="ms">sync</span>Sync</span>
+    <span class="ab"><span class="ms">sync_alt</span>Sync status</span><span class="ab"><span class="ms">history</span>History and rollback</span><span class="ab"><span class="ms">delete</span>Delete</span><span class="ab"><span class="ms">refresh</span>Refresh ▾</span>
+  </div>
+  <div class="status">
+    <div class="sp"><div class="l">App health</div><div class="v" id="health"></div><div class="d" id="health-d"></div></div>
+    <div class="sp"><div class="l">Sync status</div><div class="v"><span class="ms synced">check_circle</span>Synced</div><div class="d">To <b>HEAD (9e41b7c)</b><br>Auto sync is enabled.</div></div>
+    <div class="sp"><div class="l">Last sync</div><div class="v" id="sync"></div><div class="d" id="sync-d"></div></div>
+  </div>
+  <div class="tree" id="tree"><svg id="links"></svg></div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const HEALTH = {
+    Healthy: '<span class="ms healthy">favorite</span>', Progressing: '<span class="ms progressing spinning">progress_activity</span>',
+    Degraded: '<span class="ms degraded">heart_broken</span>',
+  };
+  const SYNC = '<span class="ms synced">check_circle</span>';
+  // id, kind label, icon, name, column, row (px), parent
+  const NODES = [
+    ['app', '', '', 'payments-api', 0, 205, null],
+    ['cm', 'cm', 'tune', 'payments-api-config', 1, 0, 'app'],
+    ['svc', 'svc', 'lan', 'payments-api', 1, 68, 'app'],
+    ['deploy', 'deploy', 'deployed_code', 'payments-api', 1, 205, 'app'],
+    ['ing', 'ing', 'language', 'payments-api', 1, 342, 'app'],
+    ['rs42', 'rs', 'content_copy', 'payments-api-7d9f8c6b54', 2, 102, 'deploy'],
+    ['rs41', 'rs', 'content_copy', 'payments-api-5c8b7f9d61', 2, 342, 'deploy'],
+    ['p1', 'pod', 'widgets', 'payments-api-7d9f8c6b54-x2kqp', 3, 0, 'rs42'],
+    ['p2', 'pod', 'widgets', 'payments-api-7d9f8c6b54-m8wzr', 3, 68, 'rs42'],
+    ['p3', 'pod', 'widgets', 'payments-api-7d9f8c6b54-tq4vn', 3, 136, 'rs42'],
+    ['p4', 'pod', 'widgets', 'payments-api-7d9f8c6b54-h7jds', 3, 204, 'rs42'],
+    ['o1', 'pod', 'widgets', 'payments-api-5c8b7f9d61-f9lbc', 3, 308, 'rs41'],
+    ['o2', 'pod', 'widgets', 'payments-api-5c8b7f9d61-rz2xk', 3, 376, 'rs41'],
+  ];
+  const X = [0, 262, 524, 786];
+  // Per-node health and an optional status tag; set during the rollout.
+  const state = {
+    app: ['Progressing'], cm: ['Healthy'], svc: ['Healthy'], deploy: ['Progressing'], ing: ['Healthy'],
+    rs42: ['Progressing', 'rev:42'], rs41: ['Healthy', 'rev:41'],
+    p1: ['Healthy', 'running 1/1'], p2: ['Healthy', 'running 1/1'], p3: ['Progressing', 'ContainerCreating'], p4: ['Progressing', 'Pending'],
+    o1: ['Healthy', 'running 1/1'], o2: ['Healthy', 'running 1/1'],
+  };
+  const gone = new Set();
+
+  const render = () => {
+    const tree = $('tree');
+    tree.querySelectorAll('.node').forEach(n => n.remove());
+    let links = '';
+    for (const [id, kind, icon, name, col, y, parent] of NODES) {
+      const [h, tag] = state[id];
+      const el = document.createElement('div');
+      el.className = `node ${id === 'app' ? 'app' : ''} ${gone.has(id) ? 'gone' : ''}`;
+      el.style.left = `${X[col]}px`; el.style.top = `${y}px`;
+      const kindHtml = id === 'app'
+        ? '<div class="kind"><img src="argocd_assets/argo.svg" style="width:22px"><span>app</span></div>'
+        : `<div class="kind"><span class="ms">${icon}</span><span>${kind}</span></div>`;
+      el.innerHTML = `${kindHtml}<div class="nm"><div>${name}</div><div>${HEALTH[h]}${SYNC}${tag ? `<span class="tag ${/Crash|Error/.test(tag) ? 'err' : ''}">${tag}</span>` : ''}</div></div>`;
+      tree.appendChild(el);
+      if (parent && !gone.has(id)) {
+        const p = NODES.find(n => n[0] === parent);
+        const x1 = X[p[4]] + (parent === 'app' ? 210 : 238), y1 = p[5] + 27, x2 = X[col], y2 = y + 27, mx = (x1 + x2) / 2;
+        links += `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="#8fa4b1" stroke-width="1.2"/>`;
+      }
+    }
+    $('links').innerHTML = links;
+  };
+
+  const loadedAt = Date.now();
+  const STARTED = Date.UTC(2026, 9, 11, 10, 2, 14);
+  const ago = () => {
+    const s = Math.floor((Date.now() - loadedAt) / 1000) + 9 * 60 + 41;
+    return `${Math.floor(s / 60)} minutes ${s % 60} seconds ago`;
+  };
+  let phase = 'running', finalMsg = '';
+  const panel = () => {
+    $('health').innerHTML = `${HEALTH[state.app[0]]}${state.app[0]}`;
+    $('health-d').innerHTML = state.app[0] === 'Degraded' ? 'Deployment <b>payments-api</b> exceeded its progress deadline' : '';
+    if (phase === 'running') {
+      $('sync').innerHTML = '<span class="ms progressing spinning">sync</span>Syncing';
+      $('sync-d').innerHTML = `Operation: <b>Sync</b> · Phase: <b>Running</b><br>Started ${ago()} · waiting for healthy state of apps/Deployment/payments-api`;
+    } else {
+      $('sync').innerHTML = phase === 'ok' ? '<span class="ms synced">check_circle</span>Sync OK' : '<span class="ms failed">cancel</span>Sync failed';
+      $('sync-d').innerHTML = finalMsg;
+    }
+  };
+  render(); panel();
+  setInterval(() => { if (phase === 'running') panel(); }, 1000);
+
+  const finish = () => {
+    const ok = demo.outcome === 'success';
+    if (ok) {
+      ['p3', 'p4'].forEach(p => { state[p] = ['Healthy', 'running 1/1']; });
+      gone.add('rs41'); gone.add('o1'); gone.add('o2');
+      state.rs42 = ['Healthy', 'rev:42']; state.deploy = ['Healthy']; state.app = ['Healthy'];
+      phase = 'ok';
+      finalMsg = 'To <b>9e41b7c</b> · Succeeded a few seconds ago<br>successfully synced (all tasks run)';
+    } else {
+      ['p1', 'p2', 'p3', 'p4'].forEach(p => { state[p] = ['Degraded', 'CrashLoopBackOff']; });
+      state.rs42 = ['Degraded', 'rev:42']; state.deploy = ['Degraded']; state.app = ['Degraded'];
+      phase = 'failed';
+      finalMsg = 'To <b>9e41b7c</b> · Failed a few seconds ago<br>one or more synchronization tasks completed unsuccessfully';
+    }
+    render(); panel();
+    demo.trigger();
+  };
+  // Mid-rollout the new pods come up one by one; on the fail path they start crash-looping first.
+  demo.onStart = durationMs => {
+    const ok = demo.outcome === 'success';
+    setTimeout(() => { state.p3 = ok ? ['Healthy', 'running 1/1'] : ['Progressing', 'Error']; state.p4 = ['Progressing', 'ContainerCreating']; render(); }, durationMs * 0.4);
+    setTimeout(() => { if (ok) { gone.add('o2'); } else { state.p3 = ['Degraded', 'CrashLoopBackOff']; } render(); }, durationMs * 0.75);
+    setTimeout(finish, durationMs);
+  };
+</script>
+</body>
+</html>

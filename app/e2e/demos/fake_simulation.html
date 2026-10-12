@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<!-- Copied from video/demos/fake_simulation.html and reworked for app/e2e: holds in progress until the suite starts it, then ends by ?outcome=. -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CFD Solver - Fake Simulation Crash</title>
+    <style>
+        :root {
+            --app-bg: #d6d9de;
+            --panel-bg: #f2f3f5;
+            --panel-alt: #e8eaed;
+            --graphics-bg: #ffffff;
+            --border: #b9bec6;
+            --border-soft: #d3d7dd;
+            --text: #1f2328;
+            --text-dim: #5c6570;
+            --accent: #0b5ea8;
+            --accent-soft: #cfe2f5;
+            --bad: #c62828;
+            --warn: #b26a00;
+            --mono: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+        }
+
+        body {
+            background-color: #4a4f57;
+            font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            color: var(--text);
+            font-size: 13px;
+        }
+
+        /* ---------- Application shell ---------- */
+        .app-window {
+            width: 1180px;
+            background-color: var(--app-bg);
+            border: 1px solid #2f343a;
+            border-radius: 6px;
+            box-shadow: 0 14px 40px rgba(0,0,0,0.45);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .app-window.shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        .title-bar {
+            background: linear-gradient(#3d444d, #343a42);
+            color: #eef1f4;
+            padding: 7px 12px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .title-bar .app-mark {
+            width: 16px; height: 16px; border-radius: 3px;
+            background: linear-gradient(135deg, #f0b429, #e07a1f);
+            flex-shrink: 0;
+        }
+        .title-bar .spacer { flex-grow: 1; }
+        .title-bar .win-btns { display: flex; gap: 8px; opacity: 0.8; }
+        .title-bar .win-btns span {
+            width: 11px; height: 11px; border-radius: 50%; display: block;
+        }
+
+        .menu-bar {
+            background-color: var(--panel-bg);
+            border-bottom: 1px solid var(--border);
+            padding: 0 6px;
+            display: flex;
+            gap: 2px;
+        }
+        .menu-bar span {
+            padding: 5px 10px;
+            font-size: 12px;
+            color: var(--text);
+        }
+        .menu-bar span:first-child { background-color: var(--accent-soft); }
+
+        .tool-bar {
+            background-color: var(--panel-alt);
+            border-bottom: 1px solid var(--border);
+            padding: 5px 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .tool-btn {
+            width: 24px; height: 22px;
+            border: 1px solid var(--border-soft);
+            border-radius: 3px;
+            background: linear-gradient(#fdfdfd, #eceef1);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .tool-btn i {
+            display: block; width: 11px; height: 11px;
+            background-color: #6a7480; border-radius: 1px;
+        }
+        .tool-btn.mesh i { background: repeating-linear-gradient(90deg, #6a7480 0 1px, transparent 1px 4px), repeating-linear-gradient(0deg, #6a7480 0 1px, transparent 1px 4px); }
+        .tool-btn.run i { background-color: #2f8a3e; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+        .tool-btn.stop i { background-color: #b23b3b; }
+        .tool-sep { width: 1px; height: 20px; background-color: var(--border); margin: 0 3px; }
+
+        /* ---------- Three-column body ---------- */
+        .app-body {
+            display: flex;
+            height: 560px;
+            background-color: var(--panel-bg);
+        }
+
+        .panel-title {
+            background: linear-gradient(#eef0f3, #e2e5e9);
+            border-bottom: 1px solid var(--border);
+            padding: 5px 9px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        /* Outline tree */
+        .tree-panel {
+            width: 232px;
+            border-right: 1px solid var(--border);
+            background-color: #fbfbfc;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+        .tree {
+            padding: 6px 0;
+            font-size: 12.5px;
+            line-height: 1.9;
+            color: var(--text);
+        }
+        .tree div { padding: 0 8px; white-space: nowrap; }
+        .tree .indent-1 { padding-left: 20px; }
+        .tree .indent-2 { padding-left: 36px; }
+        .tree .indent-3 { padding-left: 52px; }
+        .tree .node::before {
+            content: "▾";
+            color: #8a929c;
+            font-size: 9px;
+            margin-right: 6px;
+        }
+        .tree .leaf::before {
+            content: "•";
+            color: #a7aeb7;
+            margin-right: 8px;
+        }
+        .tree .selected {
+            background-color: var(--accent-soft);
+            border-top: 1px solid #b6d3ef;
+            border-bottom: 1px solid #b6d3ef;
+        }
+        .tree .group { color: var(--text-dim); font-weight: 600; }
+
+        /* Center: graphics + console */
+        .center-col {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .graphics-tabs {
+            display: flex;
+            background-color: var(--panel-alt);
+            border-bottom: 1px solid var(--border);
+            padding: 4px 6px 0 6px;
+            gap: 3px;
+        }
+        .graphics-tabs div {
+            padding: 4px 12px;
+            font-size: 12px;
+            border: 1px solid var(--border);
+            border-bottom: none;
+            border-radius: 3px 3px 0 0;
+            background: linear-gradient(#e6e8eb, #dcdfe3);
+            color: var(--text-dim);
+        }
+        .graphics-tabs div.active {
+            background: var(--graphics-bg);
+            color: var(--text);
+            font-weight: 600;
+            position: relative;
+            top: 1px;
+        }
+
+        .graphics-area {
+            background-color: var(--graphics-bg);
+            border-bottom: 1px solid var(--border);
+            flex-grow: 1;
+            position: relative;
+            min-height: 0;
+        }
+        .graphics-area svg { width: 100%; height: 100%; display: block; }
+
+        /* Fluent-style transcript console */
+        .console {
+            height: 176px;
+            background-color: #ffffff;
+            border-top: 1px solid var(--border);
+            overflow: hidden;
+            font-family: var(--mono);
+            font-size: 11px;
+            line-height: 1.55;
+            padding: 6px 10px;
+            color: #2b3138;
+            white-space: pre;
+            flex-shrink: 0;
+        }
+        .console .head { color: var(--accent); }
+        .console .warn { color: var(--warn); }
+        .console .err  { color: var(--bad); font-weight: 600; }
+
+        /* Right: Run Calculation task page */
+        .task-panel {
+            width: 250px;
+            border-left: 1px solid var(--border);
+            background-color: var(--panel-bg);
+            flex-shrink: 0;
+        }
+        .task-body { padding: 10px; }
+        .task-body h4 {
+            margin: 0 0 8px 0;
+            font-size: 12px;
+            color: var(--text-dim);
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-soft);
+            padding-bottom: 5px;
+        }
+        .field { margin-bottom: 9px; }
+        .field label {
+            display: block;
+            font-size: 11.5px;
+            color: var(--text-dim);
+            margin-bottom: 3px;
+        }
+        .field .input {
+            background-color: #fff;
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            padding: 4px 7px;
+            font-size: 12px;
+            font-family: var(--mono);
+        }
+        .field .input.readonly { background-color: #f6f7f8; color: var(--text-dim); }
+        .check { font-size: 12px; color: var(--text); margin-bottom: 7px; }
+        .check::before {
+            content: "☑";
+            color: var(--accent);
+            margin-right: 6px;
+        }
+
+        .calc-button {
+            width: 100%;
+            margin-top: 12px;
+            padding: 9px 0;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: inherit;
+            color: #fff;
+            background: linear-gradient(#2a8f45, #217237);
+            border: 1px solid #1a5b2c;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .calc-button:hover { background: linear-gradient(#31a24f, #26813e); }
+        .calc-button:disabled { background: #b8bdc4; border-color: #a5abb3; cursor: default; }
+
+        /* ---------- Status bar ---------- */
+        .status-bar {
+            background-color: var(--panel-alt);
+            border-top: 1px solid var(--border);
+            padding: 5px 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 11.5px;
+            color: var(--text-dim);
+        }
+        #status-text { min-width: 210px; }
+        #status-text.bad { color: var(--bad); font-weight: 600; }
+        .status-progress {
+            flex-grow: 1;
+            height: 12px;
+            background-color: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        #status-bar-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(#4f9fe0, #2e7cc0);
+            transition: width 0.4s linear, background 0.3s ease;
+        }
+        #status-iter { font-family: var(--mono); min-width: 230px; text-align: right; }
+
+        /* ---------- Crash dialog ---------- */
+        .modal-veil {
+            position: absolute;
+            inset: 0;
+            background-color: rgba(30,34,39,0.42);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .error-dialog {
+            width: 460px;
+            background-color: var(--panel-bg);
+            border: 1px solid #6e757d;
+            border-radius: 5px;
+            box-shadow: 0 12px 34px rgba(0,0,0,0.45);
+            overflow: hidden;
+        }
+        .error-dialog .dlg-title {
+            background: linear-gradient(#3d444d, #343a42);
+            color: #f0f2f4;
+            padding: 7px 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .error-dialog .dlg-body {
+            padding: 18px;
+            display: flex;
+            gap: 14px;
+        }
+        .error-dialog .dlg-icon svg { width: 38px; height: 38px; fill: var(--bad); flex-shrink: 0; }
+        .error-dialog .dlg-text h3 {
+            margin: 0 0 7px 0;
+            font-size: 14px;
+            color: var(--bad);
+        }
+        .error-dialog .dlg-text p {
+            margin: 0 0 10px 0;
+            font-size: 12.5px;
+            line-height: 1.5;
+            color: var(--text);
+        }
+        .error-dialog .dlg-text .detail {
+            background-color: #fff;
+            border: 1px solid var(--border-soft);
+            border-radius: 3px;
+            padding: 8px 10px;
+            font-family: var(--mono);
+            font-size: 10.5px;
+            line-height: 1.6;
+            color: #58606a;
+            white-space: pre;
+        }
+        .error-dialog .dlg-actions {
+            border-top: 1px solid var(--border-soft);
+            background-color: var(--panel-alt);
+            padding: 9px 12px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        .dlg-btn {
+            padding: 6px 20px;
+            font-size: 12.5px;
+            font-family: inherit;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            background: linear-gradient(#fdfdfd, #eceef1);
+            color: var(--text);
+            cursor: pointer;
+        }
+        .dlg-btn.primary {
+            background: linear-gradient(#3f8fd6, #2a72b8);
+            border-color: #22619e;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .hidden { display: none; }
+
+        /* Residual plot typography */
+        .axis-line { stroke: #3b4249; stroke-width: 1; }
+        .grid-line { stroke: #e3e6ea; stroke-width: 1; }
+        .tick-text { font-family: "Segoe UI", Arial, sans-serif; font-size: 10px; fill: #58606a; }
+        .axis-title { font-family: "Segoe UI", Arial, sans-serif; font-size: 11px; fill: #3b4249; }
+        .plot-title { font-family: "Segoe UI", Arial, sans-serif; font-size: 12.5px; font-weight: 600; fill: #1f2328; }
+        .legend-text { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5px; fill: #2b3138; }
+        .resid-curve { fill: none; stroke-width: 1.4; stroke-linejoin: round; }
+            /* Success dialog: the error dialog's frame, in green. */
+        .error-dialog.success .dlg-icon svg { fill: var(--good, #1a7f37); }
+        .error-dialog.success .dlg-text h3 { color: var(--good, #1a7f37); }
+    </style>
+    <script src="demo-contract.js"></script>
+</head>
+<body>
+
+<div id="app-window" class="app-window">
+
+    <div class="title-bar">
+        <div class="app-mark"></div>
+        <span>CFD Workbench 2026 R1 &nbsp;—&nbsp; cavity_flow_re10000.cas &nbsp;[3d, dp, pbns, rke, 8 processes]</span>
+        <div class="spacer"></div>
+        <div class="win-btns"><span style="background:#8b9099"></span><span style="background:#8b9099"></span><span style="background:#8b9099"></span></div>
+    </div>
+
+    <div class="menu-bar">
+        <span>File</span><span>Domain</span><span>Physics</span><span>Solution</span><span>Results</span><span>View</span><span>Parallel</span><span>Help</span>
+    </div>
+
+    <div class="tool-bar">
+        <div class="tool-btn mesh"><i></i></div>
+        <div class="tool-btn"><i style="border-radius:50%"></i></div>
+        <div class="tool-sep"></div>
+        <div class="tool-btn run"><i></i></div>
+        <div class="tool-btn stop"><i></i></div>
+        <div class="tool-sep"></div>
+        <div class="tool-btn"><i style="background:#c2903a"></i></div>
+        <div class="tool-btn"><i style="background:#4a7fb5"></i></div>
+    </div>
+
+    <div class="app-body">
+
+        <!-- Outline / Model tree -->
+        <div class="tree-panel">
+            <div class="panel-title">Outline View</div>
+            <div class="tree">
+                <div class="node group">Setup</div>
+                <div class="node indent-1">General</div>
+                <div class="node indent-1">Models</div>
+                <div class="leaf indent-2">Viscous (Realizable k-e)</div>
+                <div class="leaf indent-2">Energy (On)</div>
+                <div class="node indent-1">Materials</div>
+                <div class="leaf indent-2">air</div>
+                <div class="node indent-1">Cell Zone Conditions</div>
+                <div class="node indent-1">Boundary Conditions</div>
+                <div class="leaf indent-2">inlet (velocity-inlet)</div>
+                <div class="leaf indent-2">outlet (pressure-outlet)</div>
+                <div class="leaf indent-2">walls (wall)</div>
+                <div class="node group">Solution</div>
+                <div class="leaf indent-1">Methods</div>
+                <div class="leaf indent-1">Controls</div>
+                <div class="node indent-1">Monitors</div>
+                <div class="leaf indent-2">Residual</div>
+                <div class="leaf indent-1">Initialization</div>
+                <div class="leaf indent-1 selected">Run Calculation</div>
+                <div class="node group">Results</div>
+                <div class="leaf indent-1">Graphics</div>
+                <div class="leaf indent-1">Plots</div>
+            </div>
+        </div>
+
+        <!-- Graphics + console -->
+        <div class="center-col">
+            <div class="graphics-tabs">
+                <div>Mesh</div>
+                <div>Contours</div>
+                <div class="active">Scaled Residuals</div>
+                <div>Report Definitions</div>
+            </div>
+
+            <div class="graphics-area">
+                <svg id="resid-plot" viewBox="0 0 700 330" preserveAspectRatio="xMidYMid meet">
+                    <rect x="0" y="0" width="700" height="330" fill="#ffffff"/>
+                    <text class="plot-title" x="350" y="20" text-anchor="middle">Scaled Residuals</text>
+                    <g id="plot-grid"></g>
+                    <g id="plot-curves"></g>
+                    <g id="plot-legend"></g>
+                    <!-- axes drawn last so they sit above the grid -->
+                    <line class="axis-line" x1="70" y1="40" x2="70" y2="290"/>
+                    <line class="axis-line" x1="70" y1="290" x2="660" y2="290"/>
+                    <text class="axis-title" x="365" y="318" text-anchor="middle">Iterations</text>
+                </svg>
+            </div>
+
+            <div id="console" class="console"></div>
+        </div>
+
+        <!-- Run Calculation task page -->
+        <div class="task-panel">
+            <div class="panel-title">Task Page — Run Calculation</div>
+            <div class="task-body">
+                <h4>Solution Advancement</h4>
+                <div class="field">
+                    <label>Type</label>
+                    <div class="input readonly">Steady</div>
+                </div>
+                <div class="field">
+                    <label>Number of Iterations</label>
+                    <div class="input">250000</div>
+                </div>
+                <div class="field">
+                    <label>Reporting Interval</label>
+                    <div class="input">350</div>
+                </div>
+
+                <h4 style="margin-top:14px">Solver Controls</h4>
+                <div class="field">
+                    <label>Pseudo Time Step (s)</label>
+                    <div class="input">8.0e-06</div>
+                </div>
+                <div class="field">
+                    <label>Convergence Criterion</label>
+                    <div class="input">1.0e-06</div>
+                </div>
+                <div class="check">Extrapolate Variables</div>
+                <div class="check">Check Convergence Every Iteration</div>
+
+                <button id="calc-button" class="calc-button" disabled>Calculating…</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <span id="status-text">Ready</span>
+        <div class="status-progress"><div id="status-bar-fill"></div></div>
+        <span id="status-iter">iteration 0 of 250,000 &nbsp;|&nbsp; --:--:-- remaining</span>
+    </div>
+
+    <!-- Success dialog -->
+    <div id="done-modal" class="modal-veil hidden">
+        <div class="error-dialog success">
+            <div class="dlg-title">Information</div>
+            <div class="dlg-body">
+                <div class="dlg-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                        <path d="M470.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L192 338.7 425.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"/>
+                    </svg>
+                </div>
+                <div class="dlg-text">
+                    <h3>Calculation complete.</h3>
+                    <p>All residuals fell below the convergence criterion (1.0e-06) at iteration 41932. Case and data saved to cavity_flow_re10000.cas.h5.</p>
+                </div>
+            </div>
+            <div class="dlg-actions">
+                <button class="dlg-btn primary">OK</button>
+            </div>
+        </div>
+    </div>
+    <!-- Crash dialog -->
+    <div id="crash-modal" class="modal-veil hidden">
+        <div class="error-dialog">
+            <div class="dlg-title">Solver Error</div>
+            <div class="dlg-body">
+                <div class="dlg-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                        <path d="M256 32c14.2 0 27.3 7.5 34.5 19.8l216 368c7.3 12.4 7.3 27.7 .2 40.1S486.3 480 472 480H40c-14.3 0-27.6-7.7-34.7-20.1s-7-27.8 .2-40.1l216-368C228.7 39.5 241.8 32 256 32zm0 128c-13.3 0-24 10.7-24 24V296c0 13.3 10.7 24 24 24s24-10.7 24-24V184c0-13.3-10.7-24-24-24zm32 224c0-17.7-14.3-32-32-32s-32 14.3-32 32s14.3 32 32 32s32-14.3 32-32z"/>
+                    </svg>
+                </div>
+                <div class="dlg-text">
+                    <h3>Divergence detected in AMG solver: pressure correction</h3>
+                    <p>The solution has diverged and the solver process was terminated. Data written after iteration 41932 may be unusable.</p>
+                    <div class="detail">Error at Node 3: floating point exception
+Error Object: #f
+  continuity residual = nan at iteration 41932
+  cell 88241, zone 4 (fluid): volume &lt; 0
+The fl process could not be started.</div>
+                </div>
+            </div>
+            <div class="dlg-actions">
+                <button id="close-button" class="dlg-btn">Close</button>
+                <button id="restart-button" class="dlg-btn primary">Restart Calculation</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+// The solver is already running when the page loads. It iterates slowly while the suite
+// holds it, then runs to iteration LAST_ITER over the duration demo.start() gives it and
+// either converges (success) or blows up and crashes in its last few seconds (fail).
+const calcBtn    = document.getElementById('calc-button');
+const crashModal = document.getElementById('crash-modal');
+const doneModal  = document.getElementById('done-modal');
+const appWindow  = document.getElementById('app-window');
+const consoleBox = document.getElementById('console');
+const statusText = document.getElementById('status-text');
+const statusIter = document.getElementById('status-iter');
+const statusFill = document.getElementById('status-bar-fill');
+const gridGroup   = document.getElementById('plot-grid');
+const curveGroup  = document.getElementById('plot-curves');
+const legendGroup = document.getElementById('plot-legend');
+
+const SVG_NS      = 'http://www.w3.org/2000/svg';
+const LAST_ITER   = 41932;  // iteration the run ends on, either way
+const X_MAX       = 45000;  // iteration axis range
+const TOTAL_ITERS = 250000; // requested iterations, per the task page
+const DECADE_TOP  = 6;      // 1e+6 at the top of the plot
+const DECADE_BOT  = -7;     // 1e-7 at the bottom
+const PLOT = { left: 70, right: 660, top: 40, bottom: 290 };
+const HOLD_FROM = 0.12;     // the solver has been running a while when the page loads
+const HOLD_MAX = 0.35;      // and holding never gets past 35% of the run
+const BLOWUP_FROM = 0.97;   // a failing run only diverges in its last few seconds
+
+// Residual monitors, in the order Fluent lists them.
+const MONITORS = [
+    { key: 'continuity', color: '#d1242f', offset:  0.55 },
+    { key: 'x-velocity', color: '#1a7f37', offset:  0.05 },
+    { key: 'y-velocity', color: '#0b5ea8', offset: -0.25 },
+    { key: 'k',          color: '#bf8700', offset: -0.70 },
+    { key: 'epsilon',    color: '#8250df', offset: -1.15 }
+];
+
+const svgEl = (tag, attrs) => {
+    const el = document.createElementNS(SVG_NS, tag);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+};
+
+const xPos = iter => PLOT.left + (iter / X_MAX) * (PLOT.right - PLOT.left);
+const yPos = decade => {
+    const clamped = Math.max(DECADE_BOT, Math.min(DECADE_TOP, decade));
+    const frac = (clamped - DECADE_BOT) / (DECADE_TOP - DECADE_BOT);
+    return PLOT.bottom - frac * (PLOT.bottom - PLOT.top);
+};
+
+// ---------- Static plot furniture: log-y gridlines and iteration ticks ----------
+const buildGrid = () => {
+    for (let d = DECADE_BOT; d <= DECADE_TOP; d++) {
+        const y = yPos(d);
+        gridGroup.appendChild(svgEl('line', { class: 'grid-line', x1: PLOT.left, y1: y, x2: PLOT.right, y2: y }));
+        gridGroup.appendChild(svgEl('line', { class: 'axis-line', x1: PLOT.left - 4, y1: y, x2: PLOT.left, y2: y }));
+        const label = svgEl('text', { class: 'tick-text', x: PLOT.left - 8, y: y + 3.5, 'text-anchor': 'end' });
+        label.textContent = '1e' + (d < 0 ? '-' : '+') + String(Math.abs(d)).padStart(2, '0');
+        gridGroup.appendChild(label);
+    }
+    for (let iter = 0; iter <= X_MAX; iter += 5000) {
+        const x = xPos(iter);
+        gridGroup.appendChild(svgEl('line', { class: 'grid-line', x1: x, y1: PLOT.top, x2: x, y2: PLOT.bottom }));
+        gridGroup.appendChild(svgEl('line', { class: 'axis-line', x1: x, y1: PLOT.bottom, x2: x, y2: PLOT.bottom + 4 }));
+        const label = svgEl('text', { class: 'tick-text', x: x, y: PLOT.bottom + 16, 'text-anchor': 'middle' });
+        label.textContent = iter;
+        gridGroup.appendChild(label);
+    }
+    // Legend block, top-left inside the plot box like Fluent's.
+    MONITORS.forEach((m, i) => {
+        const y = PLOT.top + 12 + i * 15;
+        legendGroup.appendChild(svgEl('line', { x1: PLOT.left + 12, y1: y, x2: PLOT.left + 40, y2: y, stroke: m.color, 'stroke-width': 2 }));
+        const label = svgEl('text', { class: 'legend-text', x: PLOT.left + 46, y: y + 3.5 });
+        label.textContent = m.key;
+        legendGroup.appendChild(label);
+    });
+};
+
+// ---------- Residual model ----------
+// log10(residual) at run progress p in [0, 1]. Converges steadily; continuity crosses 1e-6
+// right at the end. A failing run turns around in its last few seconds and runs away.
+const residualDecade = (monitor, p) => {
+    let decade = -6.8 * Math.pow(p, 0.7);
+    if (demo.outcome === 'fail' && p > BLOWUP_FROM) {
+        const u = (p - BLOWUP_FROM) / (1 - BLOWUP_FROM);
+        decade = -6.8 * Math.pow(BLOWUP_FROM, 0.7) + 5 * u + 6 * Math.pow(u, 4);
+    }
+    const noise = (Math.random() - 0.5) * 0.16 + Math.sin(p * 90 + monitor.offset * 4) * 0.05;
+    return decade + monitor.offset + noise;
+};
+
+const fmtResidual = decade => Math.pow(10, decade).toExponential(4).replace(/e([+-])(\d)$/, 'e$10$2');
+
+// ---------- Console transcript ----------
+const log = (text, cls) => {
+    const line = document.createElement('div');
+    if (cls) line.className = cls;
+    line.textContent = text;
+    consoleBox.appendChild(line);
+    consoleBox.scrollTop = consoleBox.scrollHeight;
+    while (consoleBox.childElementCount > 200) consoleBox.removeChild(consoleBox.firstChild);
+};
+
+const pad = (text, width) => String(text).padStart(width);
+const logHeader = () => log('  iter  continuity  x-velocity  y-velocity           k     epsilon     time/iter', 'head');
+const clock = seconds => {
+    const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = Math.floor(seconds % 60);
+    return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+};
+
+const series = MONITORS.map(m => {
+    const path = svgEl('polyline', { class: 'resid-curve', stroke: m.color, points: '' });
+    curveGroup.appendChild(path);
+    return { monitor: m, path, points: [], lastDecade: 0 };
+});
+
+// ---------- Run ----------
+buildGrid();
+log('> /solve/initialize/hyb-initialization');
+log('  Reading "cavity_flow_re10000.cas"...');
+log('  4237118 cells, 12744902 faces, 4419573 nodes.');
+log('  Partitioning across 8 compute nodes.');
+log('Hybrid initialization is done.');
+log('');
+logHeader();
+statusText.textContent = 'Solving — iterating';
+
+// Backfill the residual history up to where the page picks up.
+for (let i = 0; i <= 240; i++) {
+    const pp = HOLD_FROM * i / 240;
+    for (const s of series) {
+        s.lastDecade = residualDecade(s.monitor, pp);
+        s.points.push(xPos(Math.floor(LAST_ITER * pp)) + ',' + yPos(s.lastDecade));
+    }
+    if (i % 24 === 0 && i > 0) {
+        const iter = Math.floor(LAST_ITER * pp);
+        log(pad(iter, 6) + ' ' + series.map(s => pad(fmtResidual(s.lastDecade), 11)).join(' ') + '  ' +
+            pad(clock((TOTAL_ITERS - iter) * (1.05 + pp * 0.4)), 10));
+    }
+}
+
+const loadedAt = Date.now();
+let run = null;            // { from, at, durationMs } once the suite starts the run
+let p = 0;
+let lastReportedIter = Math.floor(LAST_ITER * HOLD_FROM);
+let nextWarningAt = loadedAt + 70000;
+
+const sample = () => {
+    if (!run) {
+        p = HOLD_FROM + (HOLD_MAX - HOLD_FROM) * (1 - Math.exp(-(Date.now() - loadedAt) / 600000));
+    } else {
+        const f = Math.min((Date.now() - run.at) / run.durationMs, 1);
+        p = run.from + (1 - run.from) * f;
+        if (f >= 1) return finish();
+    }
+    const iter = Math.floor(LAST_ITER * p);
+    const secsPerIter = 1.05 + p * 0.4;
+
+    for (const s of series) {
+        s.lastDecade = residualDecade(s.monitor, p);
+        s.points.push(xPos(iter) + ',' + yPos(s.lastDecade));
+        if (s.points.length > 1500) s.points.splice(0, s.points.length - 1500);
+        s.path.setAttribute('points', s.points.join(' '));
+    }
+
+    statusFill.style.width = (p * 100).toFixed(1) + '%';
+    statusIter.textContent = 'iteration ' + iter.toLocaleString() + ' of ' + TOTAL_ITERS.toLocaleString() +
+        '  |  ' + clock((TOTAL_ITERS - iter) * secsPerIter) + ' remaining';
+
+    if (iter - lastReportedIter >= 350) {
+        log(pad(iter, 6) + ' ' + series.map(s => pad(fmtResidual(s.lastDecade), 11)).join(' ') + '  ' +
+            pad(clock((TOTAL_ITERS - iter) * secsPerIter), 10));
+        lastReportedIter = iter;
+    }
+
+    // Harmless solver chatter every minute or so, on both outcomes.
+    if (Date.now() >= nextWarningAt) {
+        log('');
+        log('Warning: Courant number exceeds 1.0 in ' + (150 + Math.floor(Math.random() * 120)) + ' cells.', 'warn');
+        log('');
+        logHeader();
+        nextWarningAt = Date.now() + 60000 + Math.random() * 40000;
+    }
+};
+
+const sampleTimer = setInterval(sample, 250);
+
+const finish = () => {
+    clearInterval(sampleTimer);
+    calcBtn.disabled = false;
+    calcBtn.textContent = 'Calculate';
+    statusFill.style.width = '100%';
+    if (demo.outcome === 'success') {
+        log('');
+        log('  solution is converged');
+        log('Calculation complete.');
+        statusText.textContent = 'Calculation complete';
+        statusIter.textContent = 'iteration ' + LAST_ITER.toLocaleString() + ' of ' + TOTAL_ITERS.toLocaleString() + '  |  converged';
+        doneModal.classList.remove('hidden');
+    } else {
+        log('');
+        log('Error: floating point exception at Node 3.', 'err');
+        log('Error Object: #f', 'err');
+        log('Divergence detected in AMG solver: pressure correction', 'err');
+        log('The fl process could not be started.', 'err');
+        appWindow.classList.add('shake');
+        statusFill.style.background = 'linear-gradient(#d95757, #b62d2d)';
+        statusText.textContent = 'Solver terminated — divergence';
+        statusText.classList.add('bad');
+        statusIter.textContent = 'iteration ' + LAST_ITER.toLocaleString() + ' of ' + TOTAL_ITERS.toLocaleString() + '  |  terminated';
+        crashModal.classList.remove('hidden');
+    }
+    demo.trigger();
+};
+
+demo.onStart = durationMs => {
+    run = { from: p, at: Date.now(), durationMs };
+};
+</script>
+</body>
+</html>
