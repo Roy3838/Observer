@@ -201,6 +201,18 @@ impl LlmEngine {
     /// Loads a model from `model_path`. If `mmproj_path` is provided, the multimodal
     /// projector is loaded alongside it; otherwise the model is treated as text-only.
     pub fn load_model(&mut self, model_path: PathBuf, model_id: String, mmproj_path: Option<PathBuf>) -> Result<(), String> {
+        self.load_model_with_image_tokens(model_path, model_id, mmproj_path, None)
+    }
+
+    /// `load_model` with a vision token budget (min, max) for this load only, e.g. a decision
+    /// model that needs more detail. None uses the context params; either way they're left as set.
+    pub fn load_model_with_image_tokens(
+        &mut self,
+        model_path: PathBuf,
+        model_id: String,
+        mmproj_path: Option<PathBuf>,
+        image_tokens: Option<(i32, i32)>,
+    ) -> Result<(), String> {
         llm_log!("Loading model: {:?}", model_path);
 
         if !model_path.exists() {
@@ -227,7 +239,7 @@ impl LlmEngine {
         self.loaded_model_id = Some(model_id.clone());
 
         if let Some(mmproj) = mmproj_path {
-            if let Err(e) = self.load_mmproj(mmproj) {
+            if let Err(e) = self.load_mmproj(mmproj, image_tokens) {
                 llm_log!(warn, "Failed to load mmproj: {}", e);
             }
         }
@@ -236,8 +248,9 @@ impl LlmEngine {
         Ok(())
     }
 
-    /// Load a multimodal projector (mmproj) file for vision support
-    pub fn load_mmproj(&mut self, mmproj_path: PathBuf) -> Result<(), String> {
+    /// Load a multimodal projector (mmproj) file for vision support. `image_tokens` (min, max)
+    /// overrides the context params' vision token budget for this projector.
+    pub fn load_mmproj(&mut self, mmproj_path: PathBuf, image_tokens: Option<(i32, i32)>) -> Result<(), String> {
         if !mmproj_path.exists() {
             return Err(format!("mmproj file not found: {:?}", mmproj_path));
         }
@@ -246,8 +259,10 @@ impl LlmEngine {
 
         let mut mtmd_params = MtmdContextParams::default();
         mtmd_params.use_gpu = self.use_gpu;
-        mtmd_params.image_min_tokens = self.context_params.image_min_tokens;
-        mtmd_params.image_max_tokens = self.context_params.image_max_tokens;
+        let (image_min_tokens, image_max_tokens) = image_tokens
+            .unwrap_or((self.context_params.image_min_tokens, self.context_params.image_max_tokens));
+        mtmd_params.image_min_tokens = image_min_tokens;
+        mtmd_params.image_max_tokens = image_max_tokens;
 
         let mmproj_str = mmproj_path.to_str()
             .ok_or_else(|| "Invalid mmproj path".to_string())?;
@@ -255,7 +270,7 @@ impl LlmEngine {
         let mtmd_ctx = MtmdContext::init_from_file(mmproj_str, model, &mtmd_params)
             .map_err(|e| format!("Failed to create mtmd context: {:?}", e))?;
 
-        llm_log!("mmproj loaded: {:?}", mmproj_path);
+        llm_log!("mmproj loaded: {:?} (image tokens {}..{})", mmproj_path, image_min_tokens, image_max_tokens);
         self.mtmd_ctx = Some(mtmd_ctx);
         self.mmproj_path = Some(mmproj_path);
 

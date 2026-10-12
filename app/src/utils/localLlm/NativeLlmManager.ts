@@ -45,6 +45,7 @@ export class NativeLlmManager {
   private autoLoadTriggered = false;
   private loadedFilename: string | null = null;
   private loadedMmprojFilename: string | null = null;
+  private loadedImageMaxTokens: number | null = null; // budget passed at load; null = the context params
   private multimodalAvailable = false;
   private currentDownloadFilename: string | null = null;
   private cachedGgufFiles: GgufFileInfo[] = [];
@@ -522,6 +523,7 @@ export class NativeLlmManager {
    * Load a model into memory for inference.
    * If mmprojFilename is omitted, the persisted assignment map is checked.
    * If neither is set, the model loads as text-only — no auto-detection.
+   * imageMin/MaxTokens set the vision token budget for this load only (the context params keep theirs).
    */
   public async loadModel(filename: string, mmprojFilename?: string, imageMinTokens?: number, imageMaxTokens?: number): Promise<void> {
     if (this.state.status === 'downloading') {
@@ -568,6 +570,7 @@ export class NativeLlmManager {
       Logger.info('NativeLlmManager', 'Model loaded successfully');
       this.loadedFilename = filename;
       this.loadedMmprojFilename = resolvedMmproj ?? null;
+      this.loadedImageMaxTokens = imageMaxTokens ?? null;
       this.setState({ status: 'loaded' });
       this.persistSettings(filename);
 
@@ -603,6 +606,7 @@ export class NativeLlmManager {
       Logger.info('NativeLlmManager', 'Model unloaded');
       this.loadedFilename = null;
       this.loadedMmprojFilename = null;
+      this.loadedImageMaxTokens = null;
       this.multimodalAvailable = false;
       this.setState({ status: 'unloaded', modelId: null, error: null });
 
@@ -714,6 +718,7 @@ export class NativeLlmManager {
 
   public getLoadedFilename(): string | null { return this.loadedFilename; }
   public getLoadedMmprojFilename(): string | null { return this.loadedMmprojFilename; }
+  public getLoadedImageMaxTokens(): number | null { return this.loadedImageMaxTokens; }
 
   /**
    * Get display name for the loaded model

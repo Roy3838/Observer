@@ -519,7 +519,7 @@ async fn llm_load_model(
     image_min_tokens: Option<i32>,
     image_max_tokens: Option<i32>,
 ) -> Result<(), String> {
-    use tauri_plugin_llm_engine::{with_engine, model_id_from_filename, ContextParams};
+    use tauri_plugin_llm_engine::{with_engine, model_id_from_filename};
 
     let models_dir = app_handle.path().app_data_dir()
         .map_err(|e| e.to_string())?
@@ -559,21 +559,23 @@ async fn llm_load_model(
         }
     }
 
-    if image_min_tokens.is_some() || image_max_tokens.is_some() {
+    // A vision token budget passed here applies to this load only; the context params (the
+    // user's settings) stay as set, so the next model doesn't inherit another model's budget.
+    let image_tokens = if image_min_tokens.is_some() || image_max_tokens.is_some() {
         with_engine(|engine| {
-            let current = engine.get_context_params().clone();
-            engine.set_context_params(ContextParams {
-                image_min_tokens: image_min_tokens.unwrap_or(current.image_min_tokens),
-                image_max_tokens: image_max_tokens.unwrap_or(current.image_max_tokens),
-                ..current
-            });
-            Ok(())
-        })?;
-    }
+            let current = engine.get_context_params();
+            Ok(Some((
+                image_min_tokens.unwrap_or(current.image_min_tokens),
+                image_max_tokens.unwrap_or(current.image_max_tokens),
+            )))
+        })?
+    } else {
+        None
+    };
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         with_engine(|engine| {
-            engine.load_model(model_path.clone(), model_id.clone(), explicit_mmproj.clone())
+            engine.load_model_with_image_tokens(model_path.clone(), model_id.clone(), explicit_mmproj.clone(), image_tokens)
         })
     }));
 

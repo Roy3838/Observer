@@ -21,7 +21,7 @@ import { SensorSettings } from '@utils/settings';
 import { normalizeWhitelistCode } from '@utils/whitelistCode';
 import { isTauri } from '@utils/platform';
 import { GemmaModelManager } from '@utils/localLlm/GemmaModelManager';
-import { DEFAULT_LLAMACPP_FILES } from '@/mcp/localModel';
+import { llamaCppFiles, type LocalModelChoice } from '@/mcp/localModel';
 import { NativeLlmManager } from '@utils/localLlm/NativeLlmManager';
 import type { GemmaModelState, NativeModelState } from '@utils/localLlm/types';
 import { ModelManager, type Model } from '@utils/ModelManager';
@@ -339,13 +339,14 @@ const DownloadShell: React.FC<{ meta: React.ReactNode; onCancel?: () => void; ch
   </div>
 );
 
-// `download_model({ model: 'onejev' })` is a transformers.js download on every platform.
-const downloadsTransformers = (tc: ToolCall): boolean => {
-  try { return JSON.parse(tc.function.arguments || '{}').model === 'onejev'; } catch { return false; }
+// Which model a `download_model` call fetches ('default' when unspecified or unparseable).
+const downloadChoice = (tc: ToolCall): LocalModelChoice => {
+  try { return JSON.parse(tc.function.arguments || '{}').model === 'onejev' ? 'onejev' : 'default'; } catch { return 'default'; }
 };
 
-const DownloadModelProgress: React.FC<{ transformers?: boolean }> = ({ transformers = false }) => {
-  const tauri = isTauri() && !transformers;
+const DownloadModelProgress: React.FC<{ choice: LocalModelChoice }> = ({ choice }) => {
+  const tauri = isTauri();
+  const files = llamaCppFiles(choice);
   const [gemma, setGemma] = useState<GemmaModelState>(() => GemmaModelManager.getInstance().getState());
   const [native, setNative] = useState<NativeModelState>(() => NativeLlmManager.getInstance().getState());
 
@@ -361,7 +362,7 @@ const DownloadModelProgress: React.FC<{ transformers?: boolean }> = ({ transform
     if (status === 'downloading') {
       return (
         <DownloadShell meta="Downloading…" onCancel={() => NativeLlmManager.getInstance().cancelDownload()}>
-          <FileProgressList items={(DEFAULT_LLAMACPP_FILES.length ? DEFAULT_LLAMACPP_FILES : [modelId ?? 'model']).map((name, i, all) => {
+          <FileProgressList items={(files.length ? files : [modelId ?? 'model']).map((name, i, all) => {
             const current = Math.max(0, all.indexOf(modelId ?? ''));
             const done = i < current;
             const live = i === current;
@@ -671,7 +672,7 @@ const MCP: React.FC<MCPProps> = ({
         <div key={idx} className="flex flex-col items-start w-full">
           <WorkingGroup batches={batches} toolStatus={toolStatus} messages={messages} />
           {calls.some(tc => tc.function.name === 'download_model') && (
-            <DownloadModelProgress transformers={calls.some(tc => tc.function.name === 'download_model' && downloadsTransformers(tc))} />
+            <DownloadModelProgress choice={downloadChoice(calls.find(tc => tc.function.name === 'download_model')!)} />
           )}
           {calls
             .filter(tc => tc.function.name === 'check_whitelist')
