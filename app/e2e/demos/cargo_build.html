@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<!-- A Tauri release build (`pnpm desktop:build`) in a macOS Terminal window: cargo prints a
+     Compiling line per crate under its progress bar. Holds by compiling up to llama-cpp-sys-2, whose
+     build script (cmake for llama.cpp) then stalls the bar until the suite starts it; then the rest
+     of the crates and the app compile over the run. success: Finished, the .app and .dmg bundle, the
+     shell prompt comes back. fail: a rustc error in the app crate, "could not compile", ELIFECYCLE,
+     the prompt. A build-script warning and an unused-variable warning print either way: warnings
+     aren't a failure. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>pnpm desktop:build</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; background: #1d1f21; display: flex; overflow: hidden;
+         font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+  .win { flex: 1; display: flex; flex-direction: column; background: #000; }
+  .titlebar { height: 28px; flex: none; background: linear-gradient(#3a3a3a, #2f2f2f); border-bottom: 1px solid #111;
+              display: flex; align-items: center; justify-content: center; position: relative; color: #b5b5b5; font-size: 13px; }
+  .lights { position: absolute; left: 10px; display: flex; gap: 8px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+  .term { flex: 1; overflow: hidden; padding: 6px 10px 8px; color: #e6e6e6; display: flex; flex-direction: column;
+          font: 13px/1.38 Menlo, "SF Mono", Monaco, monospace; }
+  #log { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+  #log > div, #bar { white-space: pre; }
+  .green { color: #5fd35f; font-weight: bold; } .cyan { color: #5fc8d7; font-weight: bold; } .red { color: #ff5f5f; font-weight: bold; }
+  .yellow { color: #f0d050; font-weight: bold; } .blue { color: #6c9ef8; font-weight: bold; } .bold { font-weight: bold; } .dim { color: #8a8a8a; }
+  .cursor { display: inline-block; width: 8px; height: 15px; background: #d0d0d0; vertical-align: -3px; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar"><div class="lights"><i></i><i></i><i></i></div><span id="title">pnpm desktop:build</span></div>
+  <div class="term"><div id="log"></div><div id="bar"></div></div>
+</div>
+
+<script>
+  const log = document.getElementById('log');
+  const barEl = document.getElementById('bar');
+  const line = (html = ' ') => {
+    const d = document.createElement('div');
+    d.innerHTML = html || ' ';
+    log.appendChild(d);
+    while (log.children.length > 200) log.firstChild.remove();
+  };
+  const ROOT = '/Users/roy/code/Observer/app/desktop';
+  const compiling = c => line(`   <span class="green">Compiling</span> ${c.replace('@', ' v')}`);
+
+  // The crates still to build, in build order (from the real Cargo.lock, macOS-only).
+  const CRATES = `
+serde_path_to_error@0.1.17 smallvec@1.14.0 darling_macro@0.20.10 document-features@0.2.12 quinn@0.11.6
+getrandom@0.1.16 unicode-width@0.2.2 dirs-sys@0.4.1 objc2-core-video@0.3.2 ipnet@2.11.0 cargo-platform@0.1.9
+sysinfo@0.33.1 time-macros@0.2.19 crunchy@0.2.3 http-range-header@0.4.2 sync_wrapper@1.0.2
+serde_with_macros@3.12.0 arrayvec@0.7.6 crossbeam-utils@0.8.21 objc2-quartz-core@0.2.2 rkyv@0.7.45
+tokio-macros@2.5.0 regex-syntax@0.8.5 serde@1.0.228 webpki-roots@0.26.8 cookie_store@0.21.1 tokio-util@0.7.13
+lock_api@0.4.12 crypto-common@0.1.6 enigo@0.6.1 rubato@0.15.0 rand_hc@0.2.0 radium@0.7.0 global-hotkey@0.7.0
+async-process@2.4.0 serde_core@1.0.228 raw-window-handle@0.6.2 utf16_iter@1.0.5 quote@1.0.38
+objc2-security@0.3.0 toml_datetime@0.6.8 thiserror-impl@1.0.69 mio@1.0.3 try-lock@0.2.5
+futures-channel@0.3.31 fastrand@2.3.0 serialize-to-javascript@0.1.2 cookie@0.18.1 zerofrom@0.1.5
+quinn-udp@0.5.10 idna_adapter@1.2.0 form_urlencoded@1.2.1 utf8_iter@1.0.4 yoke-derive@0.7.5 socket2@0.5.8
+enumflags2@0.7.12 is-docker@0.2.0 dispatch@0.2.0 http-body-util@0.1.2 rfd@0.16.0 mime_guess@2.0.5
+cfg-expr@0.15.8 indexmap@1.9.3 core-graphics@0.22.3 memchr@2.7.4 quick-xml@0.28.2 tempfile@3.17.1
+objc2-core-location@0.3.0 bit_field@0.10.2 tower-layer@0.3.3 tiny-keccak@2.0.2 tracing@0.1.41
+async-signal@0.2.12 servo_arc@0.2.0 yoke@0.7.5 ordered-multimap@0.7.3 rand@0.7.3 futures-macro@0.3.31
+primal-check@0.3.4 urlpattern@0.3.0 arbitrary@1.4.1 ident_case@1.0.1 uuid@1.15.0 mac@0.1.1
+find_cuda_helper@0.2.0 prettyplease@0.2.37 async-recursion@1.1.1 infer@0.19.0 serde_bytes@0.11.19
+keyboard-types@0.7.0 iana-time-zone@0.1.61 openssl-macros@0.1.1 dyn-clone@1.0.18 xkeysym@0.2.1 utf-8@0.7.6
+dtoa-short@0.3.5 jsonptr@0.6.3 time@0.3.37 libloading@0.7.4 valuable@0.1.1 const-random-macro@0.1.16
+phf_codegen@0.8.0 markup5ever@0.14.1 crossbeam-epoch@0.9.18 rustls-pemfile@2.2.0 matchit@0.7.3 anyhow@1.0.96
+security-framework@2.11.1 png@0.17.16 httparse@1.10.0 nodrop@0.1.14 cfg_aliases@0.2.1 qoi@0.4.1
+async-channel@2.5.0 displaydoc@0.2.5 httpdate@1.0.3 simd-adler32@0.3.7 axum-core@0.4.5 powerfmt@0.2.0
+async-io@2.5.0 psl-types@2.0.11 litrs@1.0.0 unicase@2.8.1 seahash@4.1.0 kuchikiki@0.8.8-speedreader ico@0.4.0
+xml-rs@0.8.28 futures-executor@0.3.31 adler2@2.0.0 objc2-core-media@0.3.2 embed_plist@1.2.2
+alloc-no-stdlib@2.0.4 rkyv_derive@0.7.45 once_cell@1.20.3 foreign-types-shared@0.1.1 thiserror@1.0.69
+tinystr@0.7.6 strsim@0.11.1 futures-util@0.3.31 enumflags2_derive@0.7.12 regex-automata@0.4.9
+async-lock@3.4.0 pin-utils@0.1.0 dtoa@1.0.9 futf@0.1.5 new_debug_unreachable@1.0.6 fxhash@0.2.1
+color_quant@1.1.0 field-offset@0.3.6 heck@0.4.1 llama-cpp-sys-2@0.1.146 llama-cpp-2@0.1.146 muda@0.17.1
+tray-icon@0.21.2 tao-macros@0.1.3 tao@0.34.5 wry@0.53.5 tauri-utils@2.8.1 tauri-build@2.5.3
+tauri-codegen@2.5.2 tauri-macros@2.5.2 tauri-runtime@2.9.2 tauri-runtime-wry@2.9.3 tauri-plugin@2.5.2
+tauri@2.9.5 tauri-plugin-deep-link@2.4.6 tauri-plugin-dialog@2.6.0 tauri-plugin-fs@2.4.5
+tauri-plugin-global-shortcut@2.2.1 tauri-plugin-http@2.5.6 tauri-plugin-llm-engine@0.1.0
+tauri-plugin-log@2.8.0 tauri-plugin-notification@2.3.3 tauri-plugin-opener@2.5.3 tauri-plugin-os@2.3.2
+tauri-plugin-screen-capture@0.1.0 tauri-plugin-screenshots@2.2.0 tauri-plugin-shell@2.3.3
+tauri-plugin-updater@2.9.0`.trim().split(/\s+/);
+  const STALL = CRATES.indexOf('llama-cpp-sys-2@0.1.146');
+  const TOTAL = 732;
+  let n = TOTAL - CRATES.length - 1;  // units done; the last one is the app crate
+  let i = 0;                          // next crate in CRATES
+
+  // cargo's progress bar, pinned under the log.
+  const bar = active => {
+    const W = 57, filled = Math.floor(W * n / TOTAL);
+    let s = `${n}/${TOTAL}: ${active.join(', ')}`;
+    if (s.length > 64) s = s.slice(0, 61) + ',...';
+    barEl.innerHTML = `    <span class="cyan">Building</span> [${'='.repeat(filled - 1)}>${' '.repeat(W - filled)}] ${s}`;
+  };
+  const busy = c => c.split('@')[0] + (/-sys|^tauri|^serde$|^rkyv$|^tao$/.test(c) ? '(build)' : '');
+  const upcoming = () => [STALL >= i && STALL < i + 3 ? CRATES[STALL] : null, ...CRATES.slice(i, i + 4)]
+    .filter((c, k, a) => c && a.indexOf(c) === k).slice(0, 4).map(busy);
+
+  // What's already on screen when it loads: the crates in the screenshot this is modeled on.
+  `fastrand@2.3.0 crossbeam-epoch@0.9.18 clang-sys@1.8.1 httpdate@1.0.3 rustix@0.38.44 atomic-waker@1.1.2
+   try-lock@0.2.5 rustls-pki-types@1.11.0 rayon-core@1.12.1 prettyplease@0.2.37 want@0.3.1 h2@0.4.8
+   crossbeam-deque@0.8.6 minimal-lexical@0.2.1 bytemuck@1.21.0 untrusted@0.9.0 nom@7.1.3
+   security-framework-sys@2.14.0 libloading@0.8.9 either@1.14.0 rustls@0.23.23 tower-layer@0.3.3
+   bindgen@0.72.1 rustix@1.0.8 native-tls@0.2.14 itertools@0.12.1 tempfile@3.17.1 security-framework@2.11.1
+   http-body-util@0.1.2 cexpr@0.6.0 num-integer@0.1.46 sync_wrapper@1.0.2 encoding_rs@0.8.35 objc2-metal@0.3.2
+   objc2-quartz-core@0.3.2 objc2-core-image@0.3.2 objc2-cloud-kit@0.3.2 objc2-core-data@0.3.2
+   system-configuration-sys@0.6.0 zune-core@0.4.12 rustc-hash@2.1.1 shlex@1.3.0 subtle@2.6.1 zeroize@1.8.1
+   zune-jpeg@0.4.21 rayon@1.10.0 objc2-core-graphics@0.3.2 cmake@0.1.58 strength_reduce@0.2.4
+   byteorder-lite@0.1.0 hyper@1.6.0 signal-hook@0.3.18 publicsuffix@2.3.0 objc2-core-video@0.3.2 image@0.25.6
+   transpose@0.2.3 nix@0.30.1 objc2-app-kit@0.3.2 tokio-native-tls@0.3.1 tower@0.5.2 hyper-util@0.1.10
+   num-complex@0.4.6 serde_urlencoded@0.7.1 objc2-core-audio-types@0.3.2 mac-notification-sys@0.6.6
+   signal-hook-registry@1.4.5 rustls-webpki@0.102.8 weezl@0.1.8 rustversion@1.0.19 rust_decimal@1.37.2
+   hyper-tls@0.6.0 rustfft@6.4.1 jpeg-decoder@0.3.1`.trim().split(/\s+/).forEach(compiling);
+  bar(upcoming());
+
+  const compileNext = () => {
+    compiling(CRATES[i]);
+    i++; n++;
+    // The build script's own warning (llama.cpp's cmake): just noise, the build goes on.
+    if (CRATES[i - 1].startsWith('llama-cpp-sys-2'))
+      line(`<span class="yellow">warning</span><span class="bold">:</span> llama-cpp-sys-2@0.1.146: CMAKE_OSX_DEPLOYMENT_TARGET is 10.15; ggml-metal needs 13.0, building it with a runtime check`);
+  };
+
+  // Holding: crates go by unevenly until llama-cpp-sys-2 starts, and its build script then holds the bar.
+  let run = null;
+  const hold = () => {
+    if (run) return;
+    if (i <= STALL) compileNext();
+    bar(i > STALL ? [busy(CRATES[STALL])] : upcoming());
+    if (i <= STALL) setTimeout(hold, 250 + Math.random() * 700);
+  };
+  setTimeout(hold, 400);
+
+  const loadedAt = Date.now();
+  const elapsed = () => {
+    const s = Math.round((Date.now() - loadedAt) / 1000) + 214;
+    return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+  };
+  const prompt = () => {
+    barEl.textContent = '';
+    line(`roy@MacBook-Pro app % <span class="cursor"></span>`);
+    document.getElementById('title').textContent = 'app — -zsh — 158×46';
+  };
+
+  const APP_WARNING = [
+    `<span class="yellow">warning</span><span class="bold">: unused variable: \`window\`</span>`,
+    `   <span class="blue">--&gt;</span> src/lib.rs:214:9`,
+    `    <span class="blue">|</span>`,
+    `<span class="blue">214</span> <span class="blue">|</span>     let window = app.get_webview_window("main").unwrap();`,
+    `    <span class="blue">|</span>         <span class="yellow">^^^^^^</span> <span class="yellow">help: if this is intentional, prefix it with an underscore: \`_window\`</span>`,
+    `    <span class="blue">|</span>`,
+    `    <span class="blue">=</span> <span class="bold">note</span>: \`#[warn(unused_variables)]\` on by default`,
+    ``,
+  ];
+  const ERROR = [
+    `<span class="red">error[E0308]</span><span class="bold">: mismatched types</span>`,
+    `   <span class="blue">--&gt;</span> src/lib.rs:388:25`,
+    `    <span class="blue">|</span>`,
+    `<span class="blue">388</span> <span class="blue">|</span>         let port: u16 = settings.get("server_port");`,
+    `    <span class="blue">|</span>                   <span class="blue">---</span>   <span class="red">^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected \`u16\`, found \`Option&lt;&amp;str&gt;\`</span>`,
+    `    <span class="blue">|</span>                   <span class="blue">|</span>`,
+    `    <span class="blue">|</span>                   <span class="blue">expected due to this</span>`,
+    `    <span class="blue">|</span>`,
+    `    <span class="blue">=</span> <span class="bold">note</span>: expected type \`u16\``,
+    `               found enum \`Option&lt;&amp;str&gt;\``,
+    ``,
+    `<span class="bold">For more information about this error, try \`rustc --explain E0308\`.</span>`,
+    `<span class="yellow">warning</span><span class="bold">:</span> \`app\` (lib) generated 1 warning`,
+    `<span class="red">error</span><span class="bold">:</span> could not compile \`app\` (lib) due to 1 previous error; 1 warning emitted`,
+    `failed to build app: failed to build app`,
+    `       <span class="red">Error</span> failed to build app: failed to build app`,
+    `<span class="red"> ELIFECYCLE </span> Command failed with exit code 1.`,
+  ];
+  const B = `${ROOT}/target/release/bundle`;
+
+  // Started: the rest of the crates over 80% of the run, then the app crate, then the ending.
+  const tick = () => {
+    const f = (Date.now() - run.at) / run.durationMs;
+    const due = Math.min(CRATES.length, run.from + Math.floor((CRATES.length - run.from) * f / 0.8));
+    while (i < due) compileNext();
+    if (i < CRATES.length) bar(upcoming());
+    else if (!run.app) {
+      run.app = true;
+      line(`   <span class="green">Compiling</span> app v0.1.0 (${ROOT})`);
+      bar(['app']);
+    }
+    if (f >= 0.86 && !run.warned) { run.warned = true; APP_WARNING.forEach(l => line(l)); }
+    if (demo.outcome === 'fail') {
+      if (f >= 1) { ERROR.forEach(l => line(l)); prompt(); demo.trigger(); return; }
+    } else {
+      if (f >= 0.93 && !run.finished) {
+        run.finished = true; n = TOTAL; barEl.textContent = '';
+        line(`<span class="yellow">warning</span><span class="bold">:</span> \`app\` (lib) generated 1 warning`);
+        line(`    <span class="green">Finished</span> \`release\` profile [optimized] target(s) in ${elapsed()}`);
+        line(`       <span class="green">Built</span> application at: ${ROOT}/target/release/app`);
+        line(`        <span class="green">Info</span> Patching binary "${ROOT}/target/release/app" for type app`);
+        line(`    <span class="green">Bundling</span> Observer.app (${B}/macos/Observer.app)`);
+      }
+      if (f >= 0.96 && !run.dmg) {
+        run.dmg = true;
+        line(`    <span class="green">Bundling</span> Observer_3.1.0_aarch64.dmg (${B}/dmg/Observer_3.1.0_aarch64.dmg)`);
+        line(`     <span class="green">Running</span> bundle_dmg.sh`);
+      }
+      if (f >= 1) {
+        line(`    <span class="green">Finished</span> 2 bundles at:`);
+        line(`        ${B}/macos/Observer.app`);
+        line(`        ${B}/dmg/Observer_3.1.0_aarch64.dmg`);
+        line();
+        prompt(); demo.trigger(); return;
+      }
+    }
+    setTimeout(tick, 200);
+  };
+
+  demo.onStart = durationMs => { run = { at: Date.now(), durationMs, from: i }; tick(); };
+</script>
+</body>
+</html>

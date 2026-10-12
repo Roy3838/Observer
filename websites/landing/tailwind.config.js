@@ -8,6 +8,7 @@ export default {
     extend: {
       fontFamily: {
         'golos': ['Golos Text', 'sans-serif'],
+        'serif': ['Newsreader', 'Georgia', 'serif'],
       },
     },
   },

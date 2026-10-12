@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<!-- Android Studio (new UI, Dark) building "Pantry" with Build > Make Project: the Build tool
+     window's Build Output tab, the task tree on the left and Gradle's console on the right, under
+     PantryRepository.kt in the editor. Holds on :app:compileDebugKotlin (spinner, "Gradle Build
+     Running" in the status bar) while Kotlin deprecation warnings trickle in: warnings aren't a
+     failure. When the suite starts it, it ends by ?outcome=: success, Kotlin finishes at 55% of the
+     run, the dex/package tasks follow, then BUILD SUCCESSFUL and "Build Pantry: finished"; fail,
+     compileDebugKotlin fails with two errors in PantryRepository.kt (red squiggle in the editor),
+     BUILD FAILED and "Build Pantry: failed". Strings follow Gradle/Kotlin 2 output and the Build
+     window on developer.android.com/studio/run; icons are JetBrains' own (androidstudio_assets/). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pantry – PantryRepository.kt [Pantry.app.main]</title>
+<link rel="stylesheet" href="fonts/inter.css">
+<link rel="stylesheet" href="fonts/jetbrains-mono.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #2b2d30; color: #dfe1e5; font: 13px Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+         display: grid; grid-template-columns: 40px 1fr 40px; grid-template-rows: 40px 1fr 24px; }
+  img.i { width: 16px; height: 16px; display: block; flex: none; }
+  img.i20 { width: 20px; height: 20px; display: block; }
+  body, .editor, .con { font-variant-ligatures: none; }
+  .mono { font-family: "JetBrains Mono", Menlo, monospace; }
+  /* Main toolbar */
+  .tbar { grid-column: 1 / 4; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 12px; border-bottom: 1px solid #1e1f22; }
+  .lights { display: flex; gap: 8px; margin-right: 18px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+  .w { height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 6px; font-weight: 600; }
+  .w.n { font-weight: 400; }
+  .badge { width: 20px; height: 20px; border-radius: 4px; background: linear-gradient(135deg, #b35bd6, #6d61f2); color: #fff; font: 600 10px Inter; display: grid; place-items: center; }
+  .sp { flex: 1; }
+  .ib { width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; }
+  .runw { display: flex; align-items: center; gap: 2px; }
+  /* Stripes */
+  .stripe { display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 8px; }
+  .stripe .ib.on { background: #3574f0; }
+  .stripe .ib.on img { filter: brightness(0) invert(1); }
+  .stripe hr { width: 20px; border: 0; border-top: 1px solid #393b40; margin: 2px 0; }
+  .center { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #1e1f22; border-left: 1px solid #1e1f22; border-right: 1px solid #1e1f22; }
+  /* Editor */
+  .tabs { height: 38px; flex: none; display: flex; background: #1e1f22; border-bottom: 1px solid #393b40; }
+  .tab { display: flex; align-items: center; gap: 6px; padding: 0 12px; position: relative; color: #dfe1e5; }
+  .tab.on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: #3574f0; }
+  .tab .x { opacity: .6; }
+  .editor { flex: 1; display: flex; overflow: hidden; font: 13px/20px "JetBrains Mono", Menlo, monospace; min-height: 0; position: relative; }
+  .gut { width: 56px; flex: none; text-align: right; padding: 6px 18px 0 0; color: #4b5059; }
+  .code { flex: 1; padding-top: 6px; white-space: pre; color: #bcbec4; }
+  .kw { color: #cf8e6d; } .str { color: #6aab73; } .num { color: #2aacb8; } .com { color: #7a7e85; } .ann { color: #b3ae60; } .fn { color: #56a8f5; } .prop { color: #c77dba; }
+  .err { text-decoration: underline wavy #f75464; text-decoration-skip-ink: none; text-underline-offset: 3px; }
+  .estripe { position: absolute; right: 2px; width: 10px; height: 3px; background: #f75464; display: none; }
+  .failed .estripe { display: block; }
+  .inspect { position: absolute; right: 16px; top: 8px; display: flex; gap: 8px; align-items: center; font-size: 12px; }
+  /* Build tool window */
+  .tw { height: 54%; flex: none; display: flex; flex-direction: column; background: #2b2d30; border-top: 1px solid #1e1f22; min-height: 0; }
+  .twh { height: 36px; flex: none; display: flex; align-items: center; padding: 0 8px 0 12px; gap: 4px; border-bottom: 1px solid #1e1f22; }
+  .twh b { font-weight: 600; margin-right: 14px; }
+  .twt { height: 36px; display: flex; align-items: center; gap: 6px; padding: 0 10px; position: relative; }
+  .twt.on::after { content: ''; position: absolute; left: 6px; right: 6px; bottom: 0; height: 2px; background: #3574f0; }
+  .twt img { width: 12px; height: 12px; opacity: .7; }
+  .twb { flex: 1; display: flex; min-height: 0; }
+  .mini { width: 34px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 10px; border-right: 1px solid #1e1f22; }
+  .mini .stop { width: 12px; height: 12px; border-radius: 2px; background: #6f737a; }
+  .running .mini .stop { background: #db5c5c; }
+  .tree { width: 47%; flex: none; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; padding: 4px 0 6px; border-right: 1px solid #1e1f22; }
+  .node { height: 24px; display: flex; align-items: center; gap: 6px; white-space: nowrap; padding-right: 10px; }
+  .node .t { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .node .g { color: #6f737a; }
+  .node .d { color: #6f737a; }
+  .node.sel { background: #2e436e; }
+  .node.root .t b { font-weight: 600; }
+  .chev { width: 16px; display: grid; place-items: center; color: #6f737a; font-size: 10px; }
+  .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #4e5157; border-top-color: #a8adbd; animation: spin .9s linear infinite; flex: none; margin: 0 1px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .skip { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #9da0a8; position: relative; flex: none; margin: 0 1px; }
+  .skip::after { content: ''; position: absolute; left: 5px; top: -1px; width: 1.5px; height: 14px; background: #9da0a8; transform: rotate(45deg); }
+  .kt { width: 16px; height: 16px; flex: none; }
+  .con { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; padding: 6px 12px; font: 12.5px/19px "JetBrains Mono", Menlo, monospace; color: #bcbec4; white-space: pre-wrap; word-break: break-all; background: #1e1f22; }
+  .con .ce { color: #f75464; } .con .cw { color: #e0b252; } .con a { color: #548af7; text-decoration: underline; }
+  /* Status bar */
+  .sbar { grid-column: 1 / 4; display: flex; align-items: center; gap: 14px; padding: 0 12px; color: #9da0a8; font-size: 12px; border-top: 1px solid #1e1f22; }
+  .crumbs { display: flex; gap: 6px; align-items: center; }
+  .prog { display: flex; align-items: center; gap: 8px; }
+  .bar { width: 140px; height: 4px; border-radius: 2px; background: #43454a; overflow: hidden; position: relative; }
+  .bar::after { content: ''; position: absolute; top: 0; bottom: 0; width: 40%; background: #548af7; border-radius: 2px; animation: indet 1.6s ease-in-out infinite; }
+  @keyframes indet { 0% { left: -40%; } 100% { left: 100%; } }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body class="running">
+<div class="tbar">
+  <div class="lights"><i></i><i></i><i></i></div>
+  <div class="w"><span class="badge">PA</span>Pantry<img class="i" src="androidstudio_assets/general_chevronDown.svg"></div>
+  <div class="w n"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ced0d6" stroke-width="1.1"><circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="5.5" r="1.5"/><path d="M4.5 5v6M11.5 7c0 3-7 2-7 4"/></svg>main<img class="i" src="androidstudio_assets/general_chevronDown.svg"></div>
+  <div class="sp"></div>
+  <div class="w n"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ced0d6" stroke-width="1.1"><rect x="4" y="1.5" width="8" height="13" rx="1.5"/><path d="M7 12.5h2"/></svg>Pixel 8 API 35<img class="i" src="androidstudio_assets/general_chevronDown.svg"></div>
+  <div class="w n"><svg width="16" height="16" viewBox="0 0 16 16"><path fill="#3ddc84" d="M3 11a5 5 0 0 1 10 0zM5.2 6.6 4 4.6m6.8 2L12 4.6" stroke="#3ddc84" stroke-width="1"/><circle cx="6" cy="9" r=".8" fill="#2b2d30"/><circle cx="10" cy="9" r=".8" fill="#2b2d30"/></svg>app<img class="i" src="androidstudio_assets/general_chevronDown.svg"></div>
+  <div class="runw"><div class="ib"><img class="i" src="androidstudio_assets/run_run.svg"></div><div class="ib"><img class="i" src="androidstudio_assets/run_debug.svg"></div>
+    <div class="ib"><img class="i" src="androidstudio_assets/general_moreVertical.svg"></div></div>
+  <div class="sp"></div>
+  <div class="ib"><img class="i" src="androidstudio_assets/build_build.svg"></div>
+  <div class="ib"><img class="i" src="androidstudio_assets/general_search.svg"></div>
+  <div class="ib"><img class="i" src="androidstudio_assets/general_settings.svg"></div>
+  <div class="ib"><img class="i" src="androidstudio_assets/general_user.svg"></div>
+</div>
+<div class="stripe">
+  <div class="ib"><img class="i20" src="androidstudio_assets/toolwindows_project_20x20.svg"></div>
+  <div class="ib"><img class="i20" src="androidstudio_assets/toolwindows_commit_20x20.svg"></div>
+  <div class="ib"><img class="i20" src="androidstudio_assets/toolwindows_structure_20x20.svg"></div>
+  <div class="ib"><img class="i20" src="androidstudio_assets/toolwindows_bookmarks_20x20.svg"></div>
+  <div class="sp"></div>
+  <div class="ib on"><img class="i20" src="androidstudio_assets/toolwindows_build_20x20.svg"></div>
+  <div class="ib"><img class="i20" src="androidstudio_assets/toolwindows_run_20x20.svg"></div>
+  <div class="ib"><img class="i20" src="androidstudio_assets/toolwindows_problems_20x20.svg"></div>
+  <div class="ib"><img class="i20" src="androidstudio_assets/toolwindows_messages_20x20.svg"></div>
+  <div class="ib" style="margin-bottom:8px"><img class="i20" src="androidstudio_assets/toolwindows_vcs_20x20.svg"></div>
+</div>
+<div class="center" id="center">
+  <div class="tabs">
+    <div class="tab"><svg class="kt" viewBox="0 0 16 16"><path d="M2 2h12L8 8l6 6H2z" fill="none" stroke="#9e7bf0" stroke-width="1.3" stroke-linejoin="round"/></svg>MainActivity.kt<img class="i x" src="androidstudio_assets/general_closeSmall.svg"></div>
+    <div class="tab on"><svg class="kt" viewBox="0 0 16 16"><path d="M2 2h12L8 8l6 6H2z" fill="none" stroke="#9e7bf0" stroke-width="1.3" stroke-linejoin="round"/></svg>PantryRepository.kt<img class="i x" src="androidstudio_assets/general_closeSmall.svg"></div>
+    <div class="tab"><svg class="kt" viewBox="0 0 16 16"><path d="M2 2h12L8 8l6 6H2z" fill="none" stroke="#9e7bf0" stroke-width="1.3" stroke-linejoin="round"/></svg>ItemEntity.kt<img class="i x" src="androidstudio_assets/general_closeSmall.svg"></div>
+    <div class="tab"><img class="i" src="androidstudio_assets/fileTypes_gradle.svg">build.gradle.kts (:app)<img class="i x" src="androidstudio_assets/general_closeSmall.svg"></div>
+  </div>
+  <div class="editor"><div class="gut" id="gut"></div><div class="code" id="code"></div>
+    <div class="inspect" id="inspect"></div>
+    <div class="estripe" style="top:46%"></div><div class="estripe" style="top:58%"></div>
+  </div>
+  <div class="tw">
+    <div class="twh"><b>Build</b>
+      <div class="twt">Sync<img src="androidstudio_assets/general_close.svg"></div>
+      <div class="twt on">Build Output<img src="androidstudio_assets/general_close.svg"></div>
+      <div class="twt">Build Analyzer<img src="androidstudio_assets/general_close.svg"></div>
+      <div class="sp"></div><div class="ib"><img class="i" src="androidstudio_assets/general_moreVertical.svg"></div>
+    </div>
+    <div class="twb">
+      <div class="mini"><img class="i" src="androidstudio_assets/build_rebuild.svg"><div class="stop"></div><img class="i" src="androidstudio_assets/general_pin.svg"><img class="i" src="androidstudio_assets/general_show.svg"></div>
+      <div class="tree" id="tree"></div>
+      <div class="con" id="con"></div>
+    </div>
+  </div>
+</div>
+<div class="stripe">
+  <div class="ib"><img class="i20" src="androidstudio_assets/toolwindows_notifications_20x20.svg"></div>
+  <div class="ib"><img class="i20" src="androidstudio_assets/gradle_tw.svg"></div>
+</div>
+<div class="sbar">
+  <div class="crumbs">Pantry › app › src › main › java › com › pantry › app › data › <span style="color:#dfe1e5">PantryRepository.kt</span></div>
+  <div class="sp"></div>
+  <div class="prog" id="status"></div>
+  <span>57:28</span><span>LF</span><span>UTF-8</span><span>4 spaces</span>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const ROOT = '/Users/roy/AndroidStudioProjects/Pantry';
+  const SRC = 'app/src/main/java/com/pantry/app';
+
+  // ---- Editor: PantryRepository.kt, lines 52–68 (scrolled to the code the build trips on), with a small Kotlin highlighter.
+  const FIRST = 52;
+  const CODE = `    /** Items expiring within [days], for the "Use soon" shelf. */
+    suspend fun expiringWithin(days: Int): List<PantryItem> {
+        val cutoff = clock.millis() + days * DAY_MS
+        return dao.all()
+            .filter { it.bestBefore != null }
+            .filter { it.expiresAt <= cutoff }
+            .map { it.toModel() }
+    }
+
+    private fun ItemEntity.toModel() = PantryItem(
+        id = id,
+        name = name,
+        quantity = quantity,
+        bestBefore = bestBefore,
+        daysLeft = daysUntil(bestBefore),
+    )
+
+    private fun daysUntil(epochMs: Long): Int =`;
+  const KW = /\b(private|val|var|fun|suspend|return|if|else|null|class|object|it)\b/g;
+  const hl = line => {
+    if (/^\s*\/\*\*/.test(line)) return `<span class="com">${esc(line)}</span>`;
+    let h = esc(line)
+      .replace(/("[^"]*")/g, '\u0001$1\u0002')
+      .replace(KW, m => m === 'it' ? m : `<span class="kw">${m}</span>`)
+      .replace(/\bfun<\/span> (\w+\.)?(\w+)/g, (m, recv = '', name) => `fun</span> ${recv}<span class="fn">${name}</span>`)
+      .replace(/\.(bestBefore|expiresAt|millis)\b(?!\()/g, '.<span class="prop">$1</span>')
+      .replace(/\b(DAY_MS)\b/g, '<span class="prop">$1</span>')
+      .replace(/\u0001([^\u0002]*)\u0002/g, '<span class="str">$1</span>');
+    return h;
+  };
+  const lines = CODE.split('\n');
+  $('gut').innerHTML = lines.map((_, k) => FIRST + k).join('<br>');
+  const renderCode = failed => {
+    $('code').innerHTML = lines.map((l, k) => {
+      let h = hl(l);
+      if (failed && FIRST + k === 57) h = h.replace('.<span class="prop">expiresAt</span>', '.<span class="prop err">expiresAt</span>');
+      if (failed && FIRST + k === 66) h = h.replace('daysUntil(bestBefore)', 'daysUntil(<span class="err">bestBefore</span>)');
+      return h;
+    }).join('\n');
+    $('inspect').innerHTML = failed
+      ? `<img class="i" src="androidstudio_assets/status_error.svg">2 <img class="i" src="androidstudio_assets/status_warning.svg">1`
+      : `<img class="i" src="androidstudio_assets/status_warning.svg">1`;
+  };
+  renderCode(false);
+
+  // ---- Build tree + console
+  const tree = [], con = [];
+  const loadedAt = Date.now(), SINCE = 161000;  // the build had been going 2m41s when the page opened
+  const elapsed = () => Date.now() - loadedAt + SINCE;
+  const dur = ms => { const s = Math.round(ms / 1000), m = Math.floor(s / 60); return m ? `${m} min, ${s % 60} sec` : `${s} sec`; };
+  const at = () => { const d = new Date(); return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}, ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`; };
+
+  const ICON = {
+    ok: '<img class="i" src="androidstudio_assets/general_greenCheckmark.svg">',
+    run: '<div class="spin"></div>', skip: '<div class="skip"></div>',
+    err: '<img class="i" src="androidstudio_assets/status_error.svg">', warn: '<img class="i" src="androidstudio_assets/status_warning.svg">',
+    kt: '<svg class="kt" viewBox="0 0 16 16"><path d="M2 2h12L8 8l6 6H2z" fill="none" stroke="#9e7bf0" stroke-width="1.3" stroke-linejoin="round"/></svg>',
+  };
+  const renderTree = () => {
+    $('tree').innerHTML = tree.map(n => `<div class="node${n.cls ? ' ' + n.cls : ''}" style="padding-left:${8 + n.lvl * 20}px">
+      <span class="chev">${n.open === undefined ? '' : n.open ? '⌄' : '›'}</span>${ICON[n.icon] || ''}<span class="t">${n.html}</span><span class="d">${n.d || ''}</span></div>`).slice(-60).join('');
+    $('con').innerHTML = `<div>${con.slice(-80).join('\n')}</div>`;
+  };
+  const task = (name, state, d) => {
+    const icon = state === 'NO-SOURCE' || state === 'SKIPPED' ? 'skip' : 'ok';
+    tree.push({ lvl: 1, icon, html: `${name}${state && icon === 'ok' ? ` <span class="g">${state}</span>` : ''}`, d });
+    con.push(`&gt; Task ${name}${state ? ' ' + state : ''}`);
+  };
+
+  const rootNode = { lvl: 0, open: true, icon: 'run', cls: 'root', html: '<b>Build Pantry:</b> <span class="g">running…</span>' };
+  tree.push(rootNode, { lvl: 1, icon: undefined, html: '<span style="margin-left:-20px">⤓</span> Download info' });
+  con.push(`Executing tasks: [:app:assembleDebug] in project ${ROOT}`, '', 'Starting Gradle Daemon...', 'Gradle Daemon started in 1 s 412 ms', '');
+  [[':app:checkKotlinGradlePluginConfigurationErrors', 'SKIPPED'], [':app:preBuild', 'UP-TO-DATE'], [':app:preDebugBuild', 'UP-TO-DATE'],
+   [':app:mergeDebugNativeDebugMetadata', 'NO-SOURCE'], [':app:generateDebugBuildConfig', 'UP-TO-DATE', '1 ms'], [':app:checkDebugAarMetadata', '', '41 ms'],
+   [':app:generateDebugResValues', 'UP-TO-DATE', '1 ms'], [':app:mapDebugSourceSetPaths', '', '6 ms'], [':app:generateDebugResources', 'UP-TO-DATE', '1 ms'],
+   [':app:mergeDebugResources', '', '1 sec, 211 ms'], [':app:packageDebugResources', '', '212 ms'], [':app:parseDebugLocalResources', '', '96 ms'],
+   [':app:createDebugCompatibleScreenManifests', 'UP-TO-DATE', '1 ms'], [':app:extractDeepLinksDebug', 'UP-TO-DATE', '2 ms'],
+   [':app:processDebugMainManifest', '', '141 ms'], [':app:processDebugManifest', '', '22 ms'], [':app:processDebugManifestForPackage', '', '18 ms'],
+   [':app:processDebugResources', '', '1 sec, 640 ms'], [':app:kspDebugKotlin', '', '38 sec, 412 ms']].forEach(([n, s, d]) => task(n, s, d));
+  const kotlin = { lvl: 1, open: true, icon: 'run', html: ':app:compileDebugKotlin' };
+  tree.push(kotlin);
+  con.push('&gt; Task :app:compileDebugKotlin');
+
+  // Kotlin warnings, under the task in the tree and as w: lines in the console.
+  const WARN = [
+    ['ui/scan/ScanScreen.kt', 'ui/scan', 88, 31, "'val LocalLifecycleOwner: ProvidableCompositionLocal&lt;LifecycleOwner&gt;' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package."],
+    ['ui/home/HomeScreen.kt', 'ui/home', 142, 17, "'fun Divider(modifier: Modifier = ..., thickness: Dp = ..., color: Color = ...): Unit' is deprecated. Renamed to HorizontalDivider."],
+    ['data/sync/SyncWorker.kt', 'data/sync', 54, 9, "Parameter 'attempt' is never used."],
+  ];
+  let warned = 0;
+  const warn = () => {
+    if (kotlin.icon !== 'run' || warned >= WARN.length) return;  // only while Kotlin is compiling
+    const [file, dir, l, c, msg] = WARN[warned++];
+    const name = file.split('/').pop();
+    tree.push({ lvl: 2, open: true, icon: 'kt', html: `${name} <span class="g">${SRC}/${dir}</span>` }, { lvl: 3, icon: 'warn', html: `${msg} <span class="g">:${l}</span>` });
+    con.push(`<span class="cw">w: file://${ROOT}/${SRC}/${file}:${l}:${c} ${msg}</span>`);
+    kotlin.html = `:app:compileDebugKotlin <span class="g">${warned} warning${warned > 1 ? 's' : ''}</span>`;
+    renderTree();
+  };
+  warn();
+  const status = html => { $('status').innerHTML = html; };
+  status('Gradle Build Running<div class="bar"></div>');
+  renderTree();
+  setTimeout(warn, 9000);
+
+  const finish = ok => {
+    document.body.classList.remove('running');
+    const ms = elapsed(), s = Math.round(ms / 1000), gr = `${Math.floor(s / 60)}m ${s % 60}s`;
+    rootNode.icon = ok ? 'ok' : 'err';
+    rootNode.html = `<b>Build Pantry:</b> <span class="g">${ok ? 'finished' : 'failed'} At ${at()}</span>`;
+    rootNode.d = dur(ms);
+    status(`Gradle build ${ok ? 'finished' : 'failed'} in ${Math.floor(s / 60)} m ${s % 60} s ${ms % 1000} ms`);
+    return gr;
+  };
+
+  demo.onStart = durationMs => {
+    const t0 = Date.now(), ok = demo.outcome === 'success';
+    setTimeout(warn, durationMs * 0.2);
+    if (ok) {
+      const REST = [[':app:compileDebugJavaWithJavac', 'NO-SOURCE'], [':app:hiltAggregateDepsDebug', '', '1 sec, 82 ms'], [':app:hiltJavaCompileDebug', '', '6 sec, 310 ms'],
+        [':app:transformDebugClassesWithAsm', '', '2 sec, 47 ms'], [':app:dexBuilderDebug', '', '9 sec, 512 ms'], [':app:mergeDebugGlobalSynthetics', '', '214 ms'],
+        [':app:mergeProjectDexDebug', '', '3 sec, 188 ms'], [':app:mergeDebugJavaResource', '', '1 sec, 340 ms'], [':app:mergeDebugJniLibFolders', 'UP-TO-DATE', '1 ms'],
+        [':app:validateSigningDebug', 'UP-TO-DATE', '1 ms'], [':app:writeDebugAppMetadata', 'UP-TO-DATE', '1 ms'], [':app:packageDebug', '', '4 sec, 66 ms'],
+        [':app:createDebugApkListingFileRedirect', '', '3 ms'], [':app:assembleDebug', '', '']];
+      setTimeout(() => {
+        kotlin.icon = 'ok'; kotlin.d = dur(elapsed() - 39000); kotlin.open = false;
+        // Collapse the warnings under the finished task, as the tree does.
+        for (let k = tree.length - 1; tree[k] !== kotlin; k--) if (tree[k].lvl > 1) tree.splice(k, 1);
+        renderTree();
+        REST.forEach(([n, s, d], k) => setTimeout(() => {
+          task(n, s, d);
+          if (k === REST.length - 1) {
+            const gr = finish(true);
+            con.push('', `BUILD SUCCESSFUL in ${gr}`, '47 actionable tasks: 26 executed, 21 up-to-date', '', '<a>Build Analyzer</a> results available');
+            renderTree(); demo.trigger();
+          } else renderTree();
+        }, (durationMs * 0.45) * (k + 1) / REST.length - 50));
+      }, durationMs * 0.55);
+    } else {
+      setTimeout(() => {
+        kotlin.icon = 'err'; kotlin.d = dur(elapsed() - 39000);
+        kotlin.html = `:app:compileDebugKotlin <span class="g">2 errors ${warned} warnings</span>`;
+        const file = `${SRC}/data/PantryRepository.kt`;
+        tree.push({ lvl: 2, open: true, icon: 'kt', html: `PantryRepository.kt <span class="g">${SRC}/data</span>` },
+          { lvl: 3, icon: 'err', cls: 'sel', html: `Unresolved reference 'expiresAt'. <span class="g">:57</span>` },
+          { lvl: 3, icon: 'err', html: `Argument type mismatch: actual type is 'Long?', but 'Long' was expected. <span class="g">:66</span>` },
+          { lvl: 1, icon: 'err', html: 'org.gradle.api.GradleException: Compilation error. See log for more details' });
+        const gr = finish(false);
+        con.push(`<span class="ce">e: file://${ROOT}/${file}:57:26 Unresolved reference 'expiresAt'.</span>`,
+          `<span class="ce">e: file://${ROOT}/${file}:66:30 Argument type mismatch: actual type is 'Long?', but 'Long' was expected.</span>`, '',
+          '&gt; Task :app:compileDebugKotlin FAILED', '', 'FAILURE: Build failed with an exception.', '', '* What went wrong:',
+          "Execution failed for task ':app:compileDebugKotlin'.",
+          '&gt; A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction',
+          '   &gt; Compilation error. See log for more details', '', '* Try:', '&gt; Run with --info or --debug option to get more log output.',
+          '&gt; Run with --scan to get full insights.', '&gt; Get more help at <a>https://help.gradle.org</a>.', '', `BUILD FAILED in ${gr}`,
+          '21 actionable tasks: 20 executed, 1 up-to-date');
+        document.body.classList.add('failed');
+        renderCode(true); renderTree(); demo.trigger();
+      }, durationMs);
+    }
+  };
+</script>
+</body>
+</html>

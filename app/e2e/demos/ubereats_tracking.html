@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<!-- Uber Eats order tracking (ubereats.com/orders/…), Thai food from Valencia St to a flat on Liberty
+     St in the Mission. Holds on "Preparing your order…" with Marcus (the courier) waiting at the
+     restaurant. When the suite starts it, Marcus picks up the order (15%) and is "Heading your way"
+     (30%), the car moving along the real streets (Valencia → 17th → Guerrero → Liberty, routed by OSRM)
+     with the ETA counting down. It ends by ?outcome=: success, "Almost here" (the car keeps creeping
+     the last block afterwards); fail, "Your order was canceled": Marcus couldn't complete it, refund.
+     Map: OpenStreetMap tiles (z16), muted toward Uber's grey style; logo and Uber Move fonts from
+     ubereats.com (ubereats_assets/, fonts/uber-move.css). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Uber Eats</title>
+<link rel="stylesheet" href="fonts/uber-move.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; display: flex; flex-direction: column; background: #fff; color: #000;
+         font: 16px UberMoveText, system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 22px; line-height: 1; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  header { height: 72px; flex: none; display: flex; align-items: center; gap: 22px; padding: 0 32px; border-bottom: 1px solid #f3f3f3; }
+  header .burger { font-size: 26px; font-variation-settings: 'FILL' 0; }
+  header img { height: 22px; }
+  .pill { height: 40px; border-radius: 20px; background: #f3f3f3; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 500; font-size: 14px; }
+  .pill .ms { font-size: 18px; }
+  .seg { display: flex; background: #f3f3f3; border-radius: 20px; padding: 4px; font: 500 14px UberMoveText, sans-serif; }
+  .seg span { padding: 8px 14px; border-radius: 16px; } .seg .on { background: #000; color: #fff; }
+  .srch { flex: 1; height: 44px; border-radius: 22px; background: #f3f3f3; display: flex; align-items: center; gap: 10px; padding: 0 16px; color: #545454; font-size: 15px; }
+  .cart { height: 44px; border-radius: 22px; background: #000; color: #fff; display: flex; align-items: center; gap: 8px; padding: 0 18px; font-weight: 500; font-size: 14px; }
+  .cart .ms { font-size: 20px; }
+  .main { flex: 1; display: flex; min-height: 0; }
+  .side { width: 440px; flex: none; padding: 36px 32px; overflow: hidden; display: flex; flex-direction: column; }
+  h1 { font: 700 34px/40px UberMove, UberMoveText, sans-serif; margin: 0; letter-spacing: -0.3px; }
+  .eta { margin-top: 8px; font-size: 16px; color: #545454; }
+  .bars { display: flex; gap: 6px; margin-top: 22px; }
+  .bars i { flex: 1; height: 4px; border-radius: 2px; background: #e8e8e8; position: relative; overflow: hidden; }
+  .bars i.done { background: #000; }
+  .bars i.cur { background: #e8e8e8; }
+  .bars i.cur::after { content: ''; position: absolute; inset: 0; background: #000; animation: fillbar 2.2s ease-in-out infinite; transform-origin: left; }
+  @keyframes fillbar { 0% { transform: scaleX(0); } 70%, 100% { transform: scaleX(1); opacity: .0; } 60% { opacity: 1; } }
+  .msg { margin-top: 18px; font-size: 15px; color: #000; line-height: 22px; }
+  .card { margin-top: 26px; display: flex; align-items: center; gap: 14px; padding: 16px 0; border-top: 1px solid #f3f3f3; border-bottom: 1px solid #f3f3f3; }
+  .face { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(160deg, #6b4a36, #2d1f17); position: relative; flex: none; display: grid; place-items: center; }
+  .face .ms { color: #e9d4c3; font-size: 40px; margin-top: 8px; }
+  .face b { position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.18); font: 500 12px UberMoveText; padding: 2px 6px; display: flex; align-items: center; gap: 2px; white-space: nowrap; }
+  .face b .ms { font-size: 12px; color: #000; margin: 0; }
+  .who { flex: 1; } .who div { font-weight: 500; } .who small { display: block; font-size: 14px; color: #545454; margin-top: 3px; }
+  .rb { width: 44px; height: 44px; border-radius: 50%; background: #f3f3f3; display: grid; place-items: center; }
+  .rb .ms { font-size: 20px; }
+  .od { margin-top: 26px; }
+  .od h3 { font: 700 20px UberMove, sans-serif; margin: 0 0 14px; }
+  .line { display: flex; gap: 12px; align-items: center; font-size: 15px; margin-top: 12px; }
+  .line .ms { font-size: 20px; color: #000; font-variation-settings: 'FILL' 0; }
+  .line small { color: #545454; display: block; font-size: 14px; margin-top: 2px; }
+  .qty { width: 26px; height: 26px; border: 1px solid #e8e8e8; border-radius: 4px; display: grid; place-items: center; font-size: 13px; flex: none; }
+  .tot { display: flex; justify-content: space-between; font-weight: 500; margin-top: 18px; padding-top: 14px; border-top: 1px solid #f3f3f3; }
+  .help { margin-top: auto; display: flex; gap: 10px; }
+  .help div { height: 44px; border-radius: 22px; background: #f3f3f3; display: flex; align-items: center; padding: 0 18px; font-weight: 500; font-size: 15px; }
+  /* Map */
+  .map { flex: 1; position: relative; overflow: hidden; background: #ececec; }
+  #world { position: absolute; left: 0; top: 0; }
+  #tiles img { position: absolute; width: 256px; height: 256px; filter: grayscale(.9) brightness(1.06) contrast(.88); }
+  #world svg { position: absolute; left: 0; top: 0; overflow: visible; }
+  .pin { position: absolute; transform: translate(-50%, -50%); }
+  .store { width: 34px; height: 34px; border-radius: 8px; background: #000; display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+  .store .ms { color: #fff; font-size: 18px; }
+  .home { width: 34px; height: 34px; border-radius: 50%; background: #000; display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+  .home .ms { color: #fff; font-size: 18px; }
+  .tag { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.2); padding: 6px 10px; font: 500 13px UberMoveText; white-space: nowrap; }
+  #car { width: 46px; height: 46px; transition: left .9s linear, top .9s linear; }
+  #car .halo { position: absolute; inset: 0; border-radius: 50%; background: rgba(0,0,0,.12); animation: halo 2s ease-out infinite; }
+  @keyframes halo { 0% { transform: scale(.6); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+  #car svg { position: absolute; left: 11px; top: 4px; transition: transform .9s linear; }
+  .attr { position: absolute; right: 0; bottom: 0; background: rgba(255,255,255,.8); font-size: 11px; color: #545454; padding: 2px 6px; }
+  .ctrl { position: absolute; right: 16px; bottom: 32px; display: flex; flex-direction: column; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  .ctrl span { width: 40px; height: 40px; display: grid; place-items: center; font-family: 'Material Symbols Outlined'; font-size: 22px; }
+  .ctrl span + span { border-top: 1px solid #eee; }
+  .canceled #route, .canceled #car { display: none; }
+  .canceled .map #tiles { opacity: .55; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<header>
+  <span class="ms burger">menu</span>
+  <img src="ubereats_assets/logo.svg" alt="Uber Eats">
+  <div class="seg"><span class="on">Delivery</span><span>Pickup</span></div>
+  <div class="pill"><span class="ms">location_on</span>84 Liberty St · Now</div>
+  <div class="srch"><span class="ms" style="font-variation-settings:'FILL' 0">search</span>Search Uber Eats</div>
+  <div class="cart"><span class="ms">shopping_cart</span>0 carts</div>
+</header>
+<div class="main">
+  <div class="side">
+    <h1 id="h1"></h1>
+    <div class="eta" id="eta"></div>
+    <div class="bars" id="bars"><i></i><i></i><i></i><i></i></div>
+    <div class="msg" id="msg"></div>
+    <div class="card" id="card">
+      <div class="face"><span class="ms">person</span><b>4.96<span class="ms">star</span></b></div>
+      <div class="who"><div>Marcus</div><small>Silver Toyota Prius · 8KXP212</small></div>
+      <div class="rb"><span class="ms">chat_bubble</span></div><div class="rb"><span class="ms">call</span></div>
+    </div>
+    <div class="od">
+      <h3>Order details</h3>
+      <div class="line"><span class="ms">storefront</span><div>Golden Lotus Thai Kitchen<small>Order #9F2C1 · 3 items</small></div></div>
+      <div class="line"><div class="qty">1</div>Pad See Ew with Chicken</div>
+      <div class="line"><div class="qty">1</div>Green Curry (Medium spice)</div>
+      <div class="line"><div class="qty">1</div>Thai Iced Tea</div>
+      <div class="line"><span class="ms">home</span><div>84 Liberty St, Apt 2<small>Leave at door</small></div></div>
+      <div class="tot"><span>Total</span><span>$38.42</span></div>
+    </div>
+    <div class="help"><div>Help</div><div>Share tracking</div></div>
+  </div>
+  <div class="map">
+    <div id="world"><div id="tiles"></div>
+      <svg id="route" width="1" height="1"><polyline id="done" fill="none" stroke="#000" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" opacity=".25"/>
+        <polyline id="todo" fill="none" stroke="#000" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/></svg>
+      <div class="pin" id="storePin"><div class="store"><span class="ms">restaurant</span></div><div class="tag">Golden Lotus Thai Kitchen</div></div>
+      <div class="pin" id="homePin"><div class="home"><span class="ms">home</span></div></div>
+      <div class="pin" id="car"><div class="halo"></div>
+        <svg width="24" height="38" viewBox="0 0 24 38"><rect x="2" y="2" width="20" height="34" rx="7" fill="#fff" stroke="#000" stroke-width="2"/><rect x="5" y="9" width="14" height="7" rx="2" fill="#000"/><rect x="5" y="25" width="14" height="5" rx="2" fill="#000"/></svg></div>
+    </div>
+    <div class="ctrl"><span>add</span><span>remove</span></div>
+    <div class="attr">© OpenStreetMap contributors</div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  // Tiles and the route, in z16 pixels relative to the top-left tile (from OSRM + OSM; see map.json).
+  const MAP = {"z": 16, "x0": 10479, "y0": 25332, "nx": 5, "ny": 4, "center": [664.3, 579.0]};
+  const ROUTE = [[709.1, 334.3], [709.2, 335.7], [709.7, 341.9], [710.0, 346.8], [716.5, 431.5], [716.8, 436.9], [714.6, 437.1], [711.2, 437.4], [695.5, 438.6], [690.9, 439.0], [672.7, 440.5], [654.4, 441.8], [618.9, 444.7], [616.3, 444.9], [611.7, 445.3], [612.0, 448.0], [616.0, 484.6], [619.2, 518.7], [619.6, 523.2], [619.9, 525.7], [626.2, 596.9], [626.6, 601.0], [626.8, 603.6], [630.4, 640.0], [633.3, 674.8], [633.6, 678.9], [633.9, 681.4], [637.8, 717.9], [640.8, 752.6], [641.1, 756.6], [636.7, 756.9], [618.2, 758.1]];
+
+  MAP.center = [(ROUTE[0][0] + ROUTE.at(-1)[0]) / 2, (ROUTE[0][1] + ROUTE.at(-1)[1]) / 2];
+  $('tiles').innerHTML = Array.from({ length: MAP.nx * MAP.ny }, (_, k) => {
+    const i = k % MAP.nx, j = Math.floor(k / MAP.nx);
+    return `<img src="ubereats_assets/tile_${MAP.x0 + i}_${MAP.y0 + j}.png" style="left:${i * 256}px;top:${j * 256}px">`;
+  }).join('');
+  const place = (el, [x, y]) => { el.style.left = x + 'px'; el.style.top = y + 'px'; };
+  place($('storePin'), ROUTE[0]); place($('homePin'), ROUTE.at(-1));
+  const fit = () => {
+    const m = document.querySelector('.map');
+    $('world').style.transform = `translate(${m.clientWidth / 2 - MAP.center[0]}px, ${m.clientHeight / 2 - MAP.center[1]}px)`;
+  };
+  fit(); addEventListener('resize', fit);
+
+  // Position along the route by fraction of its length.
+  const segs = ROUTE.slice(1).map((p, i) => Math.hypot(p[0] - ROUTE[i][0], p[1] - ROUTE[i][1]));
+  const total = segs.reduce((a, b) => a + b, 0);
+  const at = frac => {
+    let d = Math.max(0, Math.min(1, frac)) * total;
+    for (let i = 0; i < segs.length; i++) {
+      if (d <= segs[i] || i === segs.length - 1) {
+        const t = segs[i] ? Math.min(1, d / segs[i]) : 0, a = ROUTE[i], b = ROUTE[i + 1];
+        return { pt: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], i, ang: Math.atan2(b[0] - a[0], a[1] - b[1]) * 180 / Math.PI };
+      }
+      d -= segs[i];
+    }
+  };
+  let progress = 0, parked = true;  // parked: waiting just up Valencia while the food is made
+  const drawCar = () => {
+    const { pt, i, ang } = parked ? { pt: [ROUTE[0][0] - 5, ROUTE[0][1] - 110], i: 0, ang: 180 } : at(progress);
+    place($('car'), pt);
+    $('car').querySelector('svg').style.transform = `rotate(${ang}deg)`;
+    $('done').setAttribute('points', [...ROUTE.slice(0, i + 1), pt].map(p => p.join(',')).join(' '));
+    $('todo').setAttribute('points', [pt, ...ROUTE.slice(i + 1)].map(p => p.join(',')).join(' '));
+  };
+
+  const clock = min => new Date(Date.now() + min * 60000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const STAGES = {
+    preparing: { h1: 'Preparing your order…', step: 1, msg: 'Golden Lotus Thai Kitchen is preparing your order. Marcus will pick it up soon.' },
+    pickup: { h1: 'Picking up your order…', step: 1, msg: 'Marcus has arrived at Golden Lotus Thai Kitchen and is picking up your order.' },
+    heading: { h1: 'Heading your way…', step: 2, msg: 'Marcus is on the way with your order.' },
+    almost: { h1: 'Almost here', step: 3, msg: 'Marcus is almost at 84 Liberty St. Your order will be left at your door.' },
+    canceled: { h1: 'Your order was canceled', step: -1, msg: "Marcus wasn't able to complete your delivery. You'll be refunded $38.42 to your Visa •••• 4021 within 3–5 business days." },
+  };
+  let stage = 'preparing', etaMin = 24;
+  const show = () => {
+    const s = STAGES[stage];
+    $('h1').textContent = s.h1;
+    $('msg').textContent = s.msg;
+    $('eta').textContent = stage === 'canceled' ? 'Canceled at ' + clock(0) : stage === 'preparing' || stage === 'pickup' ? `Latest arrival by ${clock(etaMin + 6)}` : `Arriving at ${clock(etaMin)}`;
+    [...$('bars').children].forEach((b, k) => b.className = s.step < 0 ? '' : k < s.step ? 'done' : k === s.step ? 'cur' : '');
+    document.body.classList.toggle('canceled', stage === 'canceled');
+    $('card').style.display = stage === 'canceled' ? 'none' : '';
+  };
+  show(); drawCar();
+  setInterval(show, 15000);  // the clock moves on
+
+  demo.onStart = durationMs => {
+    const t0 = Date.now(), fail = demo.outcome === 'fail', END = 0.78;  // END: how far along Marcus is when it ends
+    const step = () => {
+      const f = (Date.now() - t0) / durationMs;
+      if (f >= 1) {
+        stage = fail ? 'canceled' : 'almost';
+        if (!fail) { etaMin = 2; progress = END; parked = false; }
+        show(); drawCar(); demo.trigger();
+        // Afterwards, Marcus creeps along the last block (success); nothing moves on a cancel.
+        if (!fail) setInterval(() => { progress = Math.min(0.97, progress + 0.004); drawCar(); }, 1000);
+        return;
+      }
+      if (f >= 0.3) {
+        stage = 'heading'; parked = false;
+        progress = END * (f - 0.3) / 0.7;
+        etaMin = Math.max(6, Math.round(13 - 7 * (f - 0.3) / 0.7));
+      } else if (f >= 0.15) { stage = 'pickup'; etaMin = 14; parked = false; }
+      show();
+      drawCar();
+      setTimeout(step, 1000);
+    };
+    step();
+  };
+</script>
+</body>
+</html>

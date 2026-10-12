@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<!-- Gmail inbox (Primary tab), waiting on a reply from Dana Whitfield, a recruiter at Linear. Her
+     thread ("Dana Whitfield, me 3", read) is already in the inbox from load, ending with the user's
+     follow-up sent this morning. Other mail keeps arriving the whole time: a Primary message now and
+     then, the rest bumping the Promotions / Social / Updates "new" chips. When the suite starts it, a
+     decoy from Dana Kim (a friend, same first name) lands mid-run (marked 'decoy'); then it ends by
+     ?outcome=: success, Dana replies with an offer and her thread jumps to the top, unread; fail, the
+     follow-up bounces: Mail Delivery Subsystem threads into the same conversation ("Address not
+     found"), so only the snippet says it isn't her. Logo: Gmail's 2026 mark (gmail_assets/). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Inbox (4) - jordan.lee.design@gmail.com - Gmail</title>
+<link rel="stylesheet" href="fonts/google-sans.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #f6f8fc; color: #1f1f1f; font: 14px Roboto, "Google Sans Text", Arial, sans-serif;
+         display: grid; grid-template-columns: 256px 1fr 56px; grid-template-rows: 64px 1fr; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 20px; line-height: 1; color: #444746; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20; user-select: none; }
+  .fill { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+  .ib { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+  .ib .ms { font-size: 24px; }
+  /* Header */
+  header { grid-column: 1 / 4; display: flex; align-items: center; padding: 8px; }
+  .brand { width: 248px; display: flex; align-items: center; gap: 4px; padding-left: 4px; flex: none; }
+  .brand .ib { width: 48px; height: 48px; }
+  .logo { display: flex; align-items: center; gap: 8px; font: 22px "Google Sans", sans-serif; color: #444746; padding-left: 4px; }
+  .logo img { width: 32px; height: 32px; }
+  .search { flex: 1; max-width: 720px; height: 48px; background: #e9eef6; border-radius: 24px; display: flex; align-items: center; padding: 0 4px; gap: 4px; }
+  .search span.ph { flex: 1; font: 16px "Google Sans", sans-serif; color: #444746; }
+  .hr { margin-left: auto; display: flex; align-items: center; gap: 4px; padding-right: 8px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: #7b1fa2; color: #fff; display: grid; place-items: center; font: 500 15px "Google Sans", sans-serif; margin: 0 4px 0 8px; }
+  /* Nav */
+  nav { padding-right: 16px; }
+  .compose { margin: 8px 0 16px 8px; height: 56px; width: 140px; border-radius: 16px; background: #c2e7ff; display: flex; align-items: center; gap: 12px; padding: 0 20px 0 16px; font: 500 14px "Google Sans", sans-serif; color: #001d35; }
+  .compose .ms { font-size: 24px; color: #001d35; }
+  .ni { height: 32px; display: flex; align-items: center; gap: 18px; padding: 0 12px 0 26px; border-radius: 0 16px 16px 0; font: 14px "Google Sans Text", Roboto, sans-serif; color: #202124; }
+  .ni .t { flex: 1; } .ni .c { font-size: 12px; font-weight: 700; }
+  .ni.on { background: #d3e3fd; font-weight: 700; color: #001d35; }
+  .ni.on .ms { color: #001d35; }
+  .lh { display: flex; align-items: center; justify-content: space-between; padding: 16px 12px 6px 26px; font: 500 16px "Google Sans", sans-serif; }
+  /* Main */
+  main { background: #fff; border-radius: 16px; margin-bottom: 16px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  .tb { height: 48px; flex: none; display: flex; align-items: center; padding: 0 16px 0 10px; gap: 4px; }
+  .tb .ms { font-size: 20px; }
+  .tb .sp { flex: 1; } .tb .pg { font-size: 12px; color: #444746; margin-right: 12px; }
+  .tabs { display: flex; flex: none; border-bottom: 1px solid #f1f1f1; }
+  .tab { flex: 0 1 252px; height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 16px; position: relative; font: 500 14px "Google Sans", sans-serif; color: #444746; min-width: 0; }
+  .tab .ms { font-size: 20px; }
+  .tab .tx { display: flex; flex-direction: column; min-width: 0; }
+  .tab .tl { display: flex; align-items: center; gap: 8px; }
+  .tab .sub { font: 12px Roboto, sans-serif; color: #444746; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .tab.on { color: #0b57d0; } .tab.on .ms { color: #0b57d0; }
+  .tab.on::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: #0b57d0; }
+  .chip { font: 500 11px "Google Sans", sans-serif; color: #fff; border-radius: 8px; padding: 1px 6px; }
+  #rows { flex: 1; overflow: hidden; }
+  .row { display: flex; align-items: center; height: 40px; padding: 0 16px 0 10px; box-shadow: inset 0 -1px 0 0 rgba(100,121,143,.12); background: #f2f6fc; white-space: nowrap; }
+  .row.un { background: #fff; }
+  .row.un .snd, .row.un .sub, .row.un .dt { font-weight: 700; color: #1f1f1f; }
+  .row .ms { font-size: 20px; color: #c4c7c5; }
+  .row .ib { width: 32px; height: 32px; }
+  .snd { width: 200px; flex: none; padding: 0 16px 0 10px; overflow: hidden; text-overflow: ellipsis; color: #1f1f1f; }
+  .snd small { font-size: 12px; color: #444746; font-weight: 400; margin-left: 4px; }
+  .msg { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .sub { color: #1f1f1f; }
+  .snip { color: #5f6368; }
+  .dt { width: 80px; flex: none; text-align: right; font-size: 12px; color: #444746; }
+  .lbl { font-size: 12px; background: #ddd; border-radius: 4px; padding: 0 4px; margin-right: 6px; color: #444746; font-weight: 400; }
+  .att { display: inline-flex; align-items: center; gap: 6px; height: 24px; border: 1px solid #c4c7c5; border-radius: 12px; padding: 0 10px 0 6px; font-size: 12px; font-weight: 500; color: #444746; margin-left: 8px; vertical-align: middle; }
+  .att i { width: 16px; height: 16px; border-radius: 2px; background: #ea4335; color: #fff; font: 700 7px/16px Roboto; text-align: center; font-style: normal; }
+  .row.tall { height: 64px; align-items: flex-start; padding-top: 10px; }
+  .foot { padding: 14px 24px; font-size: 12px; color: #444746; display: flex; justify-content: space-between; }
+  /* Side panel */
+  aside { display: flex; flex-direction: column; align-items: center; gap: 20px; padding-top: 18px; }
+  aside .app { width: 22px; height: 22px; border-radius: 4px; display: grid; place-items: center; }
+  aside .app .ms { font-size: 18px; color: #fff; }
+  aside hr { width: 20px; border: 0; border-top: 1px solid #c4c7c5; margin: 0; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="ib"><span class="ms">menu</span></div><div class="logo"><img src="gmail_assets/gmail_2026.svg">Gmail</div></div>
+  <div class="search"><div class="ib"><span class="ms">search</span></div><span class="ph">Search mail</span><div class="ib"><span class="ms">tune</span></div></div>
+  <div class="hr">
+    <div class="ib"><span class="ms">help</span></div><div class="ib"><span class="ms">settings</span></div>
+    <div class="ib"><svg width="22" height="22" viewBox="0 0 24 24"><defs><linearGradient id="gem" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#217bfe"/><stop offset=".5" stop-color="#078efb"/><stop offset="1" stop-color="#ac87eb"/></linearGradient></defs><path fill="url(#gem)" d="M12 2c0 5.5 4.5 10 10 10-5.5 0-10 4.5-10 10 0-5.5-4.5-10-10-10 5.5 0 10-4.5 10-10z"/></svg></div><div class="ib"><span class="ms">apps</span></div>
+    <div class="avatar">J</div>
+  </div>
+</header>
+<nav>
+  <div class="compose"><span class="ms">edit</span>Compose</div>
+  <div class="ni on"><span class="ms fill">inbox</span><span class="t">Inbox</span><span class="c" id="inboxCount"></span></div>
+  <div class="ni"><span class="ms">star</span><span class="t">Starred</span></div>
+  <div class="ni"><span class="ms">schedule</span><span class="t">Snoozed</span></div>
+  <div class="ni"><span class="ms">send</span><span class="t">Sent</span></div>
+  <div class="ni"><span class="ms">draft</span><span class="t">Drafts</span><span class="c" style="font-weight:400">3</span></div>
+  <div class="ni"><span class="ms">shopping_bag</span><span class="t">Purchases</span><span class="c" style="font-weight:400">2</span></div>
+  <div class="ni"><span class="ms">expand_more</span><span class="t">More</span></div>
+  <div class="lh">Labels<span class="ms">add</span></div>
+  <div class="ni"><span class="ms">label</span><span class="t">Job search</span></div>
+  <div class="ni"><span class="ms">label</span><span class="t">Receipts</span></div>
+  <div class="ni"><span class="ms">label</span><span class="t">Travel</span></div>
+</nav>
+<main>
+  <div class="tb">
+    <div class="ib"><span class="ms">check_box_outline_blank</span></div><span class="ms" style="font-size:16px;margin-left:-10px">arrow_drop_down</span>
+    <div class="ib"><span class="ms">refresh</span></div><div class="ib"><span class="ms">more_vert</span></div>
+    <div class="sp"></div><span class="pg" id="pg"></span>
+    <div class="ib"><span class="ms" style="color:#c4c7c5">chevron_left</span></div><div class="ib"><span class="ms">chevron_right</span></div>
+  </div>
+  <div class="tabs">
+    <div class="tab on"><span class="ms fill">inbox</span><div class="tx"><div class="tl">Primary</div></div></div>
+    <div class="tab" id="tab-promotions"><span class="ms">sell</span><div class="tx"><div class="tl">Promotions<span class="chip" style="background:#188038"></span></div><div class="sub"></div></div></div>
+    <div class="tab" id="tab-social"><span class="ms">group</span><div class="tx"><div class="tl">Social<span class="chip" style="background:#0b57d0"></span></div><div class="sub"></div></div></div>
+    <div class="tab" id="tab-updates"><span class="ms">info</span><div class="tx"><div class="tl">Updates<span class="chip" style="background:#e37400"></span></div><div class="sub"></div></div></div>
+  </div>
+  <div id="rows"></div>
+</main>
+<aside>
+  <div class="app" style="background:#1a73e8"><span class="ms">calendar_month</span></div>
+  <div class="app" style="background:#fbbc04"><span class="ms">lightbulb</span></div>
+  <div class="app" style="background:#1a73e8;border-radius:50%"><span class="ms">check</span></div>
+  <div class="app" style="background:#1a73e8;border-radius:50%"><span class="ms">person</span></div>
+  <hr><span class="ms" style="color:#444746">add</span>
+</aside>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const now = Date.now();
+  const clock = t => new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const day = daysAgo => new Date(now - daysAgo * 864e5).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  // A thread in the Primary list. `when` is a timestamp (today) or a date string.
+  const T = (from, subject, snippet, when, o = {}) => ({ from, subject, snippet, when, unread: false, ...o });
+  const min = m => now - m * 60000;
+  const DANA = T('Dana Whitfield, me <small>3</small>', 'Re: Final round — Senior Product Designer',
+    "Hi Dana, Just wanted to follow up on Thursday's final round — I really enjoyed meeting the team, and I'm happy to share anything else that would help…", min(212), { id: 'dana', label: 'Job search' });
+  const threads = [
+    T('Maya Chen', 'Portfolio review notes', 'Hey! Went through the case studies last night — a few thoughts on the Ramp one, mostly about how you frame the metrics…', min(26), { unread: true }),
+    T('Google', 'Security alert', 'A new sign-in on Mac. jordan.lee.design@gmail.com. We noticed a new sign-in to your Google Account on a Mac device. If this was you, you don\'t need to do anything.', min(71)),
+    T('Wellfound', '3 new design roles you might like', 'Senior Product Designer at Vanta · Staff Designer at Retool · Product Designer, Growth at Mercury — based on your profile and saved searches.', min(134), { unread: true }),
+    DANA,
+    T('Chase', 'Your statement is ready', 'Your Chase Freedom Unlimited® statement is available. Minimum payment due: $35.00 by Nov 4.', min(301)),
+    T('Alex Romero', 'Re: Tahoe weekend', 'ok I booked the cabin!! venmo me $142 whenever. also who\'s bringing the speaker', day(1), { unread: true }),
+    T('Figma', 'Your receipt from Figma', 'Receipt #2214-8830 · Professional plan (monthly) · $15.00 · Paid Oct 11', day(1)),
+    T('Notion Team', 'What\'s new in Notion: Mail, Calendar and more', 'Your workspace just got a few upgrades. Here\'s a quick tour of everything we shipped this month.', day(2)),
+    T('Priya Natarajan', 'Coffee next week?', 'Would love to hear how the search is going. I\'m free Tue/Wed afternoon near Hayes Valley if that works.', day(2)),
+    T('United Airlines', 'Your trip confirmation: SFO → JFK', 'Confirmation number: K7Q2RD. Thursday, November 13 · UA 1532 · Departs 7:05 AM. View or change your trip.', day(3), { label: 'Travel' }),
+    T('Sam Okafor', 'design crit slides', 'Here are the slides from Friday. Lmk if you want to present the onboarding flow next time', day(3)),
+    T('Google Calendar', 'Updated invitation: Mock interview w/ Theo', 'Theo Park has updated the invitation. When: Wed Oct 15 · 4pm – 5pm (PDT). Joining: meet.google.com/xqe-ftbn-vkr', day(4)),
+    T('Linear', 'Your interview is confirmed', 'Hi Jordan, you\'re confirmed for your final round on Thursday, Oct 9. Here\'s your schedule and who you\'ll be meeting.', day(6), { label: 'Job search' }),
+    T('Venmo', 'Alex Romero paid you $38.00', 'Alex Romero paid you $38.00 · 🍜 ramen. Your Venmo balance is $64.12.', day(7)),
+  ];
+
+  const render = () => {
+    $('rows').innerHTML = threads.map(t => `
+      <div class="row${t.unread ? ' un' : ''}${t.attach ? ' tall' : ''}">
+        <div class="ib"><span class="ms">check_box_outline_blank</span></div><div class="ib"><span class="ms">star</span></div>
+        <div class="snd">${t.from}</div>
+        <div class="msg">${t.label ? `<span class="lbl">${t.label}</span>` : ''}<span class="sub">${esc(t.subject)}</span><span class="snip"> - ${esc(t.snippet)}</span>
+          ${t.attach ? `<div style="margin-top:6px"><span class="att"><i>PDF</i>${t.attach}</span></div>` : ''}</div>
+        <div class="dt">${typeof t.when === 'number' ? clock(t.when) : t.when}</div>
+      </div>`).join('');
+    const unread = threads.filter(t => t.unread).length;
+    $('inboxCount').textContent = unread || '';
+    $('pg').textContent = `1–50 of ${(2418 + arrived).toLocaleString('en-US')}`;
+  };
+
+  // Other tabs: a count of new mail and who it's from.
+  const TABS = { promotions: [], social: [], updates: [] };
+  const tabs = () => Object.entries(TABS).forEach(([k, senders]) => {
+    const el = $(`tab-${k}`);
+    el.querySelector('.chip').textContent = senders.length ? `${senders.length} new` : '';
+    el.querySelector('.chip').style.display = senders.length ? '' : 'none';
+    el.querySelector('.sub').textContent = [...new Set(senders.slice().reverse())].join(', ');
+  });
+  TABS.promotions.push('Uniqlo', 'Spotify'); TABS.updates.push('LinkedIn');
+
+  // What keeps arriving: mostly the other tabs, now and then something in Primary.
+  const NOISE = [
+    ['promotions', 'Airbnb'], ['updates', 'Google Play'], ['promotions', 'Warby Parker'], ['social', 'LinkedIn'],
+    ['primary', T('Calendly', 'New Event: Priya Natarajan - 30 Minute Meeting', 'Hi Jordan, A new event has been scheduled. Event Type: 30 Minute Meeting. Invitee: Priya Natarajan. Tue, Oct 14, 3:00pm – 3:30pm', 0)],
+    ['promotions', 'Patagonia'], ['updates', 'Chase'], ['social', 'Instagram'],
+    ['primary', T('GitHub', '[jordanlee/portfolio] Deploy succeeded', 'The deployment of jordanlee/portfolio to production succeeded. View deployment · Visit site', 0)],
+    ['promotions', 'Sweetgreen'], ['updates', 'Dribbble'], ['promotions', 'Allbirds'],
+    ['primary', T('Wellfound', 'Retool viewed your profile', 'A recruiter at Retool viewed your profile. Companies are 3× more likely to reach out after a view — keep your profile fresh.', 0)],
+    ['social', 'Strava'], ['promotions', 'Uber Eats'], ['updates', 'Medium Daily Digest'],
+    ['primary', T('Squarespace', 'Your domain jordanlee.design renews soon', 'Your domain renews on Nov 2, 2026 for $20.00/yr. No action is needed if your payment method is up to date.', 0)],
+  ];
+  let arrived = 0, ni = 0;
+  const arrive = ([where, what]) => {
+    arrived++;
+    if (where === 'primary') { threads.unshift({ ...what, when: Date.now(), unread: true }); threads.length = Math.min(threads.length, 16); render(); }
+    else { TABS[where].push(what); tabs(); }
+  };
+  render(); tabs();
+
+  const noise = () => {
+    arrive(NOISE[ni++ % NOISE.length]);
+    setTimeout(noise, 35000 + Math.random() * 45000);
+  };
+  setTimeout(noise, 20000 + Math.random() * 20000);
+
+  // A thread moving to the top with a new message in it.
+  const bump = (t, patch) => { threads.splice(threads.indexOf(t), 1); Object.assign(t, patch, { when: Date.now(), unread: true }); threads.unshift(t); arrived++; render(); };
+
+  demo.onStart = durationMs => {
+    // The decoy: a different Dana, a friend.
+    setTimeout(() => {
+      arrive(['primary', T('Dana Kim', 'climbing thurs?', 'are you still down for mission cliffs thursday at 7? I can grab you a guest pass', 0)]);
+      demo.mark('decoy', { from: 'Dana Kim' });
+    }, durationMs * 0.45);
+    setTimeout(() => {
+      if (demo.outcome === 'success') bump(DANA, {
+        from: 'Dana, me <small>4</small>',
+        snippet: "Hi Jordan, I'm thrilled to share that the team would love to have you join Linear as a Senior Product Designer! I've attached your offer letter — let's find 20 minutes tomorrow to walk through it…",
+        attach: 'Offer Letter - Jordan Lee.pdf',
+      });
+      else bump(DANA, {
+        from: 'Dana, me, Mail Delivery Subsystem <small>4</small>',
+        snippet: "Address not found. Your message wasn't delivered to dana.whitfield@linear.app because the address couldn't be found, or is unable to receive mail.",
+      });
+      demo.trigger();
+    }, durationMs);
+  };
+</script>
+</body>
+</html>

@@ -3,8 +3,7 @@ import { Github, ArrowRight, Youtube, Mail, MessageCircle, Twitter, Instagram, M
 import ObserverLanding from './ObserverLanding';
 import DownloadsSection from './DownloadsSection';
 import EnterpriseSection from './EnterpriseSection';
-import RecipeBuilder from './RecipeBuilder';
-import CommunityAgents from './CommunityAgents';
+import UseCaseShowcase from './UseCaseShowcase';
 
 const LandingPage = () => {
   return (
@@ -18,7 +17,7 @@ const LandingPage = () => {
           </div>
           <div className="flex items-center space-x-7 md:space-x-9 -mr-2">
             <button onClick={() => document.getElementById('downloads')?.scrollIntoView({ behavior: 'smooth' })} className="text-gray-400 hover:text-white transition hidden md:inline">Download</button>
-            <button onClick={() => document.getElementById('agents')?.scrollIntoView({ behavior: 'smooth' })} className="text-gray-400 hover:text-white transition hidden md:inline">Agents</button>
+            <button onClick={() => document.getElementById('use-cases')?.scrollIntoView({ behavior: 'smooth' })} className="text-gray-400 hover:text-white transition hidden md:inline">Use cases</button>
             <Link to="/howitworks" className="text-gray-400 hover:text-white transition hidden md:inline">How it works</Link>
             <a href="https://discord.gg/wnBb7ZQDUC" className="text-gray-400 hover:text-white transition hidden md:inline">Community</a>
             <a href="https://github.com/Roy3838/Observer" className="flex items-center space-x-2 bg-white/10 px-4 py-2 rounded-lg hover:bg-white/20 transition">
@@ -34,11 +33,46 @@ const LandingPage = () => {
         <ObserverLanding />
       </header>
 
-      {/* Sub-hero: build an agent in one sentence, replaces the old static "How Agents Work" diagram */}
-      <RecipeBuilder />
+      {/* Use-case showcase, generated from the MCP e2e suite */}
+      <UseCaseShowcase />
 
-      {/* Community Agents */}
-      <CommunityAgents />
+      {/* Closing line for the showcase: the two local engines behind every demo above */}
+      <section className="pb-24 md:pb-32 bg-[#0D1321]">
+        <div className="container mx-auto px-6 max-w-5xl">
+          <h2 className="font-golos font-bold text-4xl md:text-6xl text-white tracking-tight text-center mb-16 md:mb-20">
+            All using local AI, built in
+          </h2>
+          <div className="grid md:grid-cols-2 gap-16 md:gap-20">
+            {[
+              { logo: '/logos/transformersjs.svg', alt: 'Transformers.js', h: 'h-7', title: 'In your browser',
+                text: 'Run AI in a browser tab and leave it monitoring.',
+                facts: [['Runs on', 'WebGPU, in your tab'], ['Install', 'Nothing'], ['Your screen', 'Stays on your machine']],
+                href: 'https://app.observer-ai.com', cta: 'Open the web app' },
+              { logo: '/logos/llama-cpp.svg', alt: 'llama.cpp', h: 'h-9', title: 'In the desktop app',
+                text: 'Download the app to run AI with Metal acceleration.',
+                facts: [['Runs on', 'Metal, on your Mac'], ['Install', 'Desktop app'], ['Your screen', 'Stays on your machine']],
+                href: '#downloads', cta: 'Download Observer' },
+            ].map(c => (
+              <div key={c.alt} className="flex flex-col">
+                <div className="h-9 flex items-center mb-8"><img src={c.logo} alt={c.alt} className={c.h} /></div>
+                <h3 className="text-2xl text-white tracking-tight">{c.title}</h3>
+                <p className="text-gray-400 text-lg leading-relaxed mt-2 mb-8">{c.text}</p>
+                <dl className="border-t border-white/10 mb-8">
+                  {c.facts.map(([k, v]) => (
+                    <div key={k} className="flex items-baseline justify-between gap-6 py-3.5 border-b border-white/10">
+                      <dt className="font-mono text-xs uppercase tracking-wider text-gray-400">{k}</dt>
+                      <dd className="text-gray-200 text-right">{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <a href={c.href} className="group mt-auto inline-flex items-center gap-1.5 text-white hover:text-gray-300 transition self-start">
+                  {c.cta}<ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* Enterprise Section */}
       <EnterpriseSection />

@@ -4,8 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "npm run sync && vite",
+    "sync": "node scripts/sync-showcase.mjs",
+    "build": "npm run sync && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

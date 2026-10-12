@@ -75,6 +75,22 @@ export const DEMOS: DemoSpec[] = [
       { prompt: 'Send me a browser notification if my Colab training crashes.', notifyOn: ['fail'] },
     ],
   },
+  {
+    // Warnings print either way (a build-script one while holding, an unused variable at the end).
+    demo: 'cargo_build.html',
+    prompts: [
+      { prompt: 'Send me a browser notification when my build finishes compiling.', notifyOn: ['success', 'fail'] },
+      { prompt: 'Send me a browser notification if my Rust build fails.', notifyOn: ['fail'] },
+    ],
+  },
+  {
+    // An IDE instead of a terminal. Kotlin deprecation warnings print either way (yellow, under the task).
+    demo: 'androidstudio_build.html',
+    prompts: [
+      { prompt: 'Send me a browser notification when my Android Studio build finishes.', notifyOn: ['success', 'fail'] },
+      { prompt: 'Send me a browser notification if my Android build fails.', notifyOn: ['fail'] },
+    ],
+  },
   // Waiting for an event rather than a job: `fail` is the other way the wait ends, which only
   // some prompts care about. Group messages keep arriving in the WhatsApp demo the whole time.
   {
@@ -91,6 +107,33 @@ export const DEMOS: DemoSpec[] = [
     prompts: [
       { prompt: "Send me a browser notification when I'm out of the Ticketmaster queue.", notifyOn: ['success', 'fail'] },
       { prompt: "Send me a browser notification when it's my turn to buy tickets.", notifyOn: ['success'] },
+    ],
+  },
+  {
+    // success = "Almost here" (the courier is a block or two out); fail = the order is canceled mid-delivery.
+    // "Picking up" and "Heading your way" (with a falling ETA) come first and aren't "almost here".
+    demo: 'ubereats_tracking.html',
+    prompts: [
+      { prompt: 'Send me a browser notification when my Uber Eats driver is almost here.', notifyOn: ['success'] },
+      { prompt: 'Send me a browser notification when my Uber Eats driver is almost here, or if my order gets canceled.', notifyOn: ['success', 'fail'] },
+    ],
+  },
+  {
+    // success = Dana Whitfield replies (her thread was already in the inbox, read); fail = the follow-up to
+    // her bounces, threaded into the same conversation. A different Dana (Dana Kim) emails mid-run.
+    demo: 'gmail_inbox.html',
+    prompts: [
+      { prompt: 'Send me a browser notification when Dana Whitfield replies to my email.', notifyOn: ['success'] },
+      { prompt: 'Send me a browser notification when Dana Whitfield replies, or if my email to her bounces.', notifyOn: ['success', 'fail'] },
+    ],
+  },
+  {
+    // A price level rather than an end state. success = BTC breaks below 80,000; fail = it rallies
+    // through 82,500 instead. Two near misses (~80,120, ~80,040) come first: notifying on those is a false positive.
+    demo: 'tradingview_btc.html',
+    prompts: [
+      { prompt: 'Send me a browser notification if Bitcoin drops below $80,000.', notifyOn: ['success'] },
+      { prompt: 'Send me a browser notification if Bitcoin goes below $80,000 or above $82,500.', notifyOn: ['success', 'fail'] },
     ],
   },
   {

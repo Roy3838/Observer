@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<!-- TradingView Supercharts: BTCUSD (Bitstamp) on the 1-minute chart, ticking live. The user is
+     waiting on a price level, not a job. Holds drifting between ~80,500 and ~81,600 (floor 80,250).
+     When the suite starts it there are two near misses (down to ~80,120 and ~80,040, each marked
+     'near_miss'), then it ends by ?outcome=: success, the price breaks below 80,000 and stays below;
+     fail, it rallies through 82,500 instead and stays above. The trigger is the first tick past the
+     level. Clamps keep every tick (so every candle's low/high) on the right side until then.
+     Layout, icons and symbol logos copied from tradingview.com/chart (tradingview_assets/). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BTCUSD 81,214 ▼ −2.95%</title>
+<style>
+  * { box-sizing: border-box; }
+  :root { --up: #089981; --down: #f23645; --ink: #0f0f0f; --mute: #6a6d78; --line: #e0e3eb; --hover: #f0f3fa; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #ebebeb; color: var(--ink); font-size: 14px;
+         font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, sans-serif;
+         display: grid; grid-template-columns: 52px 1fr 300px 45px; grid-template-rows: 38px 1fr; column-gap: 4px; row-gap: 4px; }
+  svg { display: block; }
+  [data-ic="Manage layouts"] svg, [data-ic="watchlists-button"] svg { width: 10px; height: 5px; margin-left: 4px; }
+  .ic { display: grid; place-items: center; color: #131722; }
+  .topleft { background: #fff; display: grid; place-items: center; }
+  .top { grid-column: 2 / 5; background: #fff; display: flex; align-items: center; padding: 0 6px 0 0; gap: 2px; white-space: nowrap; }
+  .top .btn { height: 34px; display: flex; align-items: center; gap: 4px; padding: 0 6px; border-radius: 4px; font-size: 14px; }
+  .top .div { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+  .top .sym { height: 30px; display: flex; align-items: center; gap: 6px; background: #f2f2f2; border-radius: 15px; padding: 0 6px 0 12px; font-weight: 700; font-size: 14px; letter-spacing: .2px; }
+  .top .sym .ic svg { width: 18px; height: 18px; }
+  .top .grey { color: #b2b5be; }
+  .top .sp { flex: 1; }
+  .top .trade { height: 30px; border: 1px solid #d1d4dc; border-radius: 15px; padding: 0 12px; display: flex; align-items: center; margin-left: 6px; }
+  .top .upg { height: 30px; background: #0f0f0f; color: #fff; border-radius: 15px; padding: 0 12px; display: flex; align-items: center; margin-left: 6px; }
+  .left { background: #fff; display: flex; flex-direction: column; align-items: center; padding-top: 6px; gap: 4px; }
+  .left .ic { width: 36px; height: 36px; border-radius: 4px; }
+  .left .ic.on { background: var(--hover); }
+  .left hr { width: 32px; border: 0; border-top: 1px solid var(--line); margin: 6px 0; }
+  /* Chart */
+  .center { background: #fff; border-radius: 0 6px 6px 0; position: relative; display: flex; flex-direction: column; min-width: 0; }
+  #wrap { flex: 1; position: relative; }
+  #cv { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .legend { position: absolute; left: 10px; top: 8px; z-index: 2; pointer-events: none; }
+  .l1 { display: flex; align-items: center; gap: 6px; font-size: 16px; }
+  .l1 img { width: 16px; height: 16px; border-radius: 50%; }
+  .l1 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--up); box-shadow: 0 0 0 3px rgba(8,153,129,.2); margin: 0 6px; }
+  .ohlc { font-size: 13px; display: flex; gap: 8px; }
+  .ohlc b { font-weight: 400; color: var(--ink); }
+  .sb { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--mute); }
+  .sb div { border: 1px solid; border-radius: 4px; padding: 2px 10px; text-align: center; line-height: 14px; font-size: 13px; }
+  .sb div small { display: block; font-size: 10px; letter-spacing: .3px; }
+  .sb .sell { color: var(--down); } .sb .buy { color: #2962ff; }
+  .vol { margin-top: 8px; font-size: 13px; }
+  .wm { position: absolute; left: 12px; bottom: 34px; z-index: 2; font: 700 19px -apple-system, sans-serif; display: flex; align-items: center; gap: 6px; color: #131722; }
+  .bottom { height: 38px; flex: none; border-top: 1px solid var(--line); display: flex; align-items: center; padding: 0 10px; gap: 2px; font-size: 13px; }
+  .bottom span { padding: 4px 6px; border-radius: 4px; }
+  .bottom .sp { flex: 1; }
+  /* Watchlist + details */
+  .widget { background: #fff; border-radius: 6px 0 0 6px; display: flex; flex-direction: column; overflow: hidden; }
+  .wh { height: 46px; display: flex; align-items: center; padding: 0 8px 0 16px; gap: 4px; font-weight: 600; font-size: 15px; flex: none; }
+  .wh .sp { flex: 1; }
+  .cols, .row { display: grid; grid-template-columns: 1fr 78px 64px 58px; align-items: center; padding: 0 8px 0 16px; }
+  .cols { height: 28px; color: var(--mute); font-size: 13px; border-bottom: 1px solid var(--line); }
+  .cols span:not(:first-child), .row span:not(:first-child) { text-align: right; }
+  .sec { height: 30px; display: flex; align-items: center; gap: 10px; padding: 0 16px; color: var(--mute); font-size: 11px; letter-spacing: .6px; border-bottom: 1px solid var(--line); }
+  .row { height: 29px; font-size: 14px; }
+  .row .s { display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; }
+  .row img { width: 18px; height: 18px; border-radius: 50%; flex: none; }
+  .row.sel { outline: 2px solid #131722; outline-offset: -3px; border-radius: 6px; background: var(--hover); }
+  .up { color: var(--up); } .down { color: var(--down); }
+  .det { border-top: 4px solid #ebebeb; padding: 14px 16px; flex: 1; }
+  .dh { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; }
+  .dh img { width: 24px; height: 24px; border-radius: 50%; }
+  .dsub { font-size: 13px; margin-top: 14px; } .dsub2 { font-size: 13px; color: var(--mute); margin-top: 6px; }
+  .big { margin-top: 18px; display: flex; align-items: baseline; gap: 6px; }
+  .big b { font-size: 30px; font-weight: 600; } .big small { font-size: 12px; } .big span { font-size: 17px; }
+  .mo { font-size: 13px; color: var(--up); margin-top: 6px; display: flex; align-items: center; gap: 6px; }
+  .mo i { width: 7px; height: 7px; border-radius: 50%; background: var(--up); }
+  .ks { margin-top: 22px; font-weight: 600; font-size: 14px; }
+  .kv { display: flex; justify-content: space-between; font-size: 13px; margin-top: 10px; } .kv b { font-weight: 600; }
+  .rbar { background: #fff; display: flex; flex-direction: column; align-items: center; padding-top: 6px; gap: 6px; }
+  .rbar .ic.on { background: var(--hover); border-radius: 6px; }
+  .rbar .sp { flex: 1; }
+</style>
+<script src="demo-contract.js"></script>
+<script src="tradingview_assets/icons.js"></script>
+</head>
+<body>
+<div class="topleft"><svg width="28" height="28" viewBox="0 0 28 28"><path fill="#131722" d="M5 8h18v1.5H5zM5 13.25h18v1.5H5zM5 18.5h18V20H5z"/></svg></div>
+<div class="top">
+  <div class="sym">BTCUSD</div>
+  <div class="btn"><span class="ic" data-ic="Compare symbols"></span></div>
+  <div class="div"></div>
+  <div class="btn">1m</div>
+  <div class="div"></div>
+  <div class="btn"><span class="ic" data-ic="Candles"></span></div>
+  <div class="div"></div>
+  <div class="btn"><span class="ic" data-ic="Indicators"></span>Indicators</div>
+  <div class="btn"><span class="ic" data-ic="Indicator templates"></span></div>
+  <div class="div"></div>
+  <div class="btn"><span class="ic" data-ic="Create alert"></span>Alert</div>
+  <div class="btn"><span class="ic" data-ic="Bar replay"></span>Replay</div>
+  <div class="div"></div>
+  <div class="btn grey"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M9 11h9a4 4 0 0 1 0 8h-4M12 8l-3 3 3 3"/></svg></div>
+  <div class="btn grey"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M19 11h-9a4 4 0 0 0 0 8h4M16 8l3 3-3 3"/></svg></div>
+  <div class="sp"></div>
+  <div class="btn"><span class="ic" data-ic="Layout setup"></span></div>
+  <div class="btn">Save<span class="ic" data-ic="Manage layouts"></span></div>
+  <div class="div"></div>
+  <div class="btn"><span class="ic" data-ic="Quick search"></span></div>
+  <div class="btn"><span class="ic" data-ic="Settings"></span></div>
+  <div class="btn"><span class="ic" data-ic="Fullscreen mode"></span></div>
+  <div class="btn"><span class="ic" data-ic="Snapshot"></span></div>
+  <div class="btn"><span class="ic" data-ic="Share"></span></div>
+  <div class="trade">Trade</div>
+  <div class="upg">Upgrade</div>
+</div>
+<div class="left">
+  <span class="ic on" data-ic="Cross"></span><span class="ic" data-ic="Trendline"></span><span class="ic" data-ic="Fib retracement"></span>
+  <span class="ic" data-ic="XABCD pattern"></span><span class="ic" data-ic="Long position"></span><span class="ic" data-ic="Brush"></span>
+  <span class="ic" data-ic="Text"></span><span class="ic" data-ic="Icon"></span><hr>
+  <span class="ic" data-ic="Measure"></span><span class="ic" data-ic="Zoom in"></span><hr>
+  <span class="ic" data-ic="Magnet"></span><span class="ic" data-ic="Keep drawing"></span><span class="ic" data-ic="Lock drawings and indicators"></span>
+  <span class="ic" data-ic="Hide all drawings"></span><hr><span class="ic" data-ic="Remove objects"></span>
+</div>
+<div class="center">
+  <div id="wrap">
+    <canvas id="cv"></canvas>
+    <div class="legend">
+      <div class="l1"><img src="tradingview_assets/XTVCBTC.svg">Bitcoin / U.S. Dollar · 1 · Bitstamp<span class="dot"></span>
+        <span class="ohlc" id="ohlc"></span></div>
+      <div class="sb"><div class="sell"><span id="sell"></span><small>SELL</small></div>0<div class="buy"><span id="buy"></span><small>BUY</small></div></div>
+      <div class="vol">Vol · BTC <span id="vol"></span></div>
+    </div>
+    <div class="wm"><svg width="34" height="18" viewBox="0 0 36 28"><path fill="#131722" d="M14 22H7V11H0V4h14v18zM28 22h-8l7.5-18h8L28 22z"/><circle cx="20" cy="8" r="4" fill="#131722"/></svg>TradingView</div>
+  </div>
+  <div class="bottom"><span>1D</span><span>5D</span><span>1M</span><span>3M</span><span>6M</span><span>YTD</span><span>1Y</span><span>5Y</span><span>All</span>
+    <div class="sp"></div><span id="clock"></span><span>%</span><span>log</span><span style="color:#2962ff">auto</span></div>
+</div>
+<div class="widget">
+  <div class="wh">Watchlist<span class="ic" data-ic="watchlists-button"></span><div class="sp"></div><span class="ic" data-ic="Add symbol"></span><span class="ic" data-ic="Advanced view"></span><span class="ic" data-ic="settings-button"></span></div>
+  <div class="cols"><span>Symbol</span><span>Last</span><span>Chg</span><span>Chg%</span></div>
+  <div id="wl"></div>
+  <div class="det">
+    <div class="dh"><img src="tradingview_assets/XTVCBTC.svg">BTCUSD</div>
+    <div class="dsub">Bitcoin / U.S. Dollar · BITSTAMP</div>
+    <div class="dsub2">Spot · Crypto</div>
+    <div class="big"><b id="bigp"></b><small>USD</small><span id="bigc"></span></div>
+    <div class="mo"><i></i>Market open</div>
+    <div class="ks">Key stats</div>
+    <div class="kv"><span>Volume</span><b id="dvol">1.41K</b></div>
+    <div class="kv"><span>Average Volume (30D)</span><b>1.49K</b></div>
+    <div class="kv"><span>Trading volume 24h</span><b>24.17B</b></div>
+    <div class="kv"><span>Market capitalization</span><b>1.62T</b></div>
+  </div>
+</div>
+<div class="rbar">
+  <span class="ic on" data-ic="Watchlist"></span><span class="ic" data-ic="Alerts"></span><span class="ic" data-ic="Object tree and data window"></span>
+  <div class="sp"></div>
+  <span class="ic" data-ic="AI Copilot"></span><span class="ic" data-ic="Screeners"></span><span class="ic" data-ic="Pine"></span><span class="ic" data-ic="Calendars"></span>
+  <span class="ic" data-ic="Community"></span><span class="ic" data-ic="Notifications"></span><span class="ic" data-ic="Chats"></span>
+  <span class="ic" data-ic="Products"></span><span class="ic" data-ic="Help Center"></span>
+</div>
+
+<script>
+  document.querySelectorAll('[data-ic]').forEach(e => { e.innerHTML = TV_ICONS[e.dataset.ic] || ''; });
+  const $ = id => document.getElementById(id);
+  const fmt = (v, d = 0) => v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const sgn = (v, d = 0) => (v < 0 ? '−' : '+') + fmt(Math.abs(v), d);
+
+  const LOW = 80000, HIGH = 82500, PREV_CLOSE = 83679;  // PREV_CLOSE: yesterday's close, for Chg
+  demo.truth = { below: LOW, above: HIGH };
+
+  // ---- Price: a target-tracking random walk, clamped so no tick reaches a level before its time.
+  let price = 81214, target = 81100, floor = 80250, ceil = 82150;
+  const candles = [];  // { t (minute), o, h, l, c, v }
+  const minute = () => Math.floor(Date.now() / 60000);
+
+  // Three hours of 1-minute history, walking backwards from now so it ends at today's price.
+  (() => {
+    let p = price, m = minute();
+    const hist = [];
+    for (let k = 0; k < 180; k++) {
+      const drift = k < 40 ? 6 : k < 110 ? -9 : 3;  // reading back: sold off from ~82.4k this afternoon
+      const o = p + drift + (Math.random() - 0.5) * 70;
+      const c = p;
+      const h = Math.max(o, c) + Math.random() * 28, l = Math.min(o, c) - Math.random() * 28;
+      hist.push({ t: m - k, o, h, l: Math.max(l, 80330), c, v: 0.4 + Math.random() * 2.2 + Math.abs(o - c) / 40 });
+      p = o;
+    }
+    candles.push(...hist.reverse());
+    candles[candles.length - 1] = { t: m, o: price, h: price, l: price, c: price, v: 0.1 };
+  })();
+
+  const tick = () => {
+    const step = (target - price) * 0.06 + (Math.random() - 0.5) * 22;
+    price = Math.round(Math.min(ceil, Math.max(floor, price + step)));
+    const m = minute();
+    let c = candles[candles.length - 1];
+    if (c.t !== m) { c = { t: m, o: price, h: price, l: price, c: price, v: 0 }; candles.push(c); if (candles.length > 400) candles.shift(); }
+    c.c = price; c.h = Math.max(c.h, price); c.l = Math.min(c.l, price); c.v += 0.01 + Math.random() * 0.05 + Math.abs(step) / 900;
+  };
+
+  // ---- Drawing
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  const AXIS = 74, TAXIS = 28, BAR = 7.2;
+  const draw = () => {
+    const dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+    if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const pw = W - AXIS, ph = H - TAXIS;
+    const n = Math.floor((pw - 60) / BAR), vis = candles.slice(-n);
+    let lo = Math.min(...vis.map(c => c.l)), hi = Math.max(...vis.map(c => c.h));
+    const pad = (hi - lo) * 0.12 + 40; lo -= pad; hi += pad * 1.6;
+    const y = v => 90 + (hi - v) / (hi - lo) * (ph - 110);
+    const x = k => pw - 60 - (vis.length - 1 - k) * BAR;
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif';
+    // grid + price labels
+    const span = hi - lo, stepP = [20, 40, 50, 100, 200, 250, 500, 1000].find(s => span / s < 14);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    for (let v = Math.ceil(lo / stepP) * stepP; v < hi; v += stepP) {
+      const yy = Math.round(y(v)) + .5;
+      ctx.strokeStyle = '#f0f3fa'; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(pw, yy); ctx.stroke();
+      ctx.fillStyle = '#131722'; ctx.font = (v % (stepP * 2) === 0 ? '600 ' : '') + '12px -apple-system, sans-serif';
+      ctx.fillText(fmt(v), pw + 10, yy);
+    }
+    ctx.font = '12px -apple-system, sans-serif';
+    // time grid + labels every 15 min
+    ctx.textAlign = 'center';
+    vis.forEach((c, k) => {
+      if (c.t % 15) return;
+      const xx = Math.round(x(k)) + .5;
+      ctx.strokeStyle = '#f0f3fa'; ctx.beginPath(); ctx.moveTo(xx, 0); ctx.lineTo(xx, ph); ctx.stroke();
+      const d = new Date(c.t * 60000), lab = `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+      ctx.fillStyle = '#131722'; ctx.font = (d.getUTCMinutes() === 0 ? '600 ' : '') + '12px -apple-system, sans-serif';
+      ctx.fillText(lab, xx, ph + 14);
+    });
+    ctx.font = '12px -apple-system, sans-serif';
+    // volume
+    const vmax = Math.max(...vis.map(c => c.v));
+    vis.forEach((c, k) => {
+      const hh = c.v / vmax * ph * 0.16;
+      ctx.fillStyle = c.c >= c.o ? 'rgba(8,153,129,.45)' : 'rgba(242,54,69,.45)';
+      ctx.fillRect(Math.round(x(k) - BAR * 0.35), ph - hh, Math.max(1, Math.round(BAR * 0.7)), hh);
+    });
+    // candles
+    vis.forEach((c, k) => {
+      const col = c.c >= c.o ? '#089981' : '#f23645', xx = Math.round(x(k));
+      ctx.fillStyle = col;
+      ctx.fillRect(xx, Math.round(y(c.h)), 1, Math.max(1, Math.round(y(c.l) - y(c.h))));
+      const top = Math.round(y(Math.max(c.o, c.c))), bh = Math.max(1, Math.round(Math.abs(y(c.o) - y(c.c))));
+      ctx.fillRect(xx - Math.floor(BAR * 0.35), top, Math.max(1, Math.round(BAR * 0.7)), bh);
+    });
+    // last price line + tag with the countdown to the candle's close
+    const last = vis[vis.length - 1], col = last.c >= last.o ? '#089981' : '#f23645', ly = Math.round(y(last.c)) + .5;
+    ctx.strokeStyle = col; ctx.setLineDash([1, 3]); ctx.beginPath(); ctx.moveTo(0, ly); ctx.lineTo(pw, ly); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = col; ctx.fillRect(pw + 1, ly - 15, AXIS - 2, 30);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left';
+    ctx.fillText(fmt(last.c), pw + 8, ly - 7);
+    ctx.fillText(`00:${String(59 - new Date().getUTCSeconds()).padStart(2, '0')}`, pw + 8, ly + 7);
+    // axes borders
+    ctx.strokeStyle = '#e0e3eb'; ctx.beginPath(); ctx.moveTo(pw + .5, 0); ctx.lineTo(pw + .5, H); ctx.moveTo(0, ph + .5); ctx.lineTo(W, ph + .5); ctx.stroke();
+
+    // legend, watchlist row, details
+    const cc = last.c >= last.o ? 'up' : 'down';
+    $('ohlc').innerHTML = ['O', 'H', 'L', 'C'].map((k, i) => `<span><b>${k}</b><span class="${cc}">${fmt([last.o, last.h, last.l, last.c][i])}</span></span>`).join('')
+      + `<span class="${cc}">${sgn(last.c - last.o)} (${sgn((last.c - last.o) / last.o * 100, 2)}%)</span>`;
+    $('sell').textContent = fmt(last.c - 1); $('buy').textContent = fmt(last.c);
+    $('vol').innerHTML = `<span class="${cc}">${last.v.toFixed(2)}</span>`;
+    const chg = last.c - PREV_CLOSE, dir = chg >= 0 ? 'up' : 'down';
+    $('bigp').textContent = fmt(last.c);
+    $('bigc').innerHTML = `<span class="${dir}">${sgn(chg)}&nbsp; ${sgn(chg / PREV_CLOSE * 100, 2)}%</span>`;
+    const r = $('btcrow');
+    r.children[1].textContent = fmt(last.c); r.children[2].textContent = sgn(chg); r.children[3].textContent = sgn(chg / PREV_CLOSE * 100, 2) + '%';
+    r.className = `row sel`; [2, 3].forEach(i => r.children[i].className = dir);
+    const d = new Date();
+    $('clock').textContent = `${d.toISOString().slice(11, 19)} UTC`;
+  };
+
+  // ---- Watchlist
+  const WL = [
+    ['INDICES', [['s-and-p-500', 'SPX', 6612.4, -38.2], ['nasdaq-100', 'NDX', 24318.9, -197.6]]],
+    ['STOCKS', [['apple', 'AAPL', 247.66, -2.18], ['tesla', 'TSLA', 431.52, -9.44]]],
+    ['FUTURES', [['crude-oil', 'USOIL', 93.64, 1.97], ['gold', 'GOLD', 4165.35, -28.8], ['silver', 'SILVER', 60.152, -0.627]]],
+    ['FOREX', [['EU', 'EURUSD', 1.11554, -0.00419], ['JP', 'USDJPY', 158.681, 0.411]]],
+    ['CRYPTO', [['XTVCBTC', 'BTCUSD', 0, 0], ['XTVCETH', 'ETHUSD', 2871.4, -104.6]]],
+  ];
+  $('wl').innerHTML = WL.map(([sec, rows]) => `<div class="sec"><svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="#6a6d78" fill="none"/></svg>${sec}</div>` + rows.map(([logo, s, last, ch]) => {
+    const d = String(last).split('.')[1]?.length || 0, dir = ch >= 0 ? 'up' : 'down';
+    return `<div class="row"${s === 'BTCUSD' ? ' id="btcrow"' : ''}><span class="s"><img src="tradingview_assets/${logo}.svg">${s}</span><span>${fmt(last, d)}</span><span class="${dir}">${sgn(ch, d)}</span><span class="${dir}">${sgn(ch / (last - ch) * 100, 2)}%</span></div>`;
+  }).join('')).join('');
+
+  // ---- Holding: the target wanders between ~80.5k and ~81.6k.
+  let run = null;
+  const wander = () => { if (!run) target = 80500 + Math.random() * 1100; };
+  setInterval(wander, 18000);
+
+  // ---- Started: two near misses, then the break (or the rally), as fractions of the run.
+  const plan = () => {
+    const f = (Date.now() - run.at) / run.durationMs, fail = demo.outcome === 'fail';
+    if (run.done) return;
+    if (f < 0.2) target = 80900;
+    else if (f < 0.33) { target = 80060; floor = 80110; }       // near miss #1 (~80,120)
+    else if (f < 0.5) { target = 81050; floor = 80110; }
+    else if (f < 0.63) { target = 79900; floor = 80031; }       // near miss #2 (~80,040)
+    else if (f < 0.75) { target = 80700; floor = 80031; }
+    else if (!fail) { target = 79800; floor = 80004; }         // slides toward the level, held just above
+    else { target = 83100; floor = 80300; ceil = 82485; }       // rallies, held just below 82,500
+    if (!run.mark1 && f >= 0.32) { run.mark1 = true; demo.mark('near_miss', { low: Math.min(...candles.slice(-6).map(c => c.l)) }); }
+    if (!run.mark2 && f >= 0.62) { run.mark2 = true; demo.mark('near_miss', { low: Math.min(...candles.slice(-6).map(c => c.l)) }); }
+    // Past the run's length, it crosses as soon as the price is actually at the level.
+    if (f >= 1 && (fail ? price >= 82380 : price <= 80150)) {
+      run.done = true;
+      if (fail) { floor = 82520; ceil = 99999; price = 82500 + 40 + Math.round(Math.random() * 30); target = 82900; }
+      else { ceil = 79960; floor = 70000; price = 80000 - 40 - Math.round(Math.random() * 30); target = 79500; }
+      // Past the level, it keeps drifting on that side for the rest of the session.
+      setInterval(() => { target = fail ? 82650 + Math.random() * 600 : 79250 + Math.random() * 600; }, 15000);
+      tick(); draw(); demo.trigger();
+    }
+  };
+
+  const loop = () => { tick(); if (run) plan(); draw(); };
+  setInterval(loop, 450);
+  addEventListener('resize', draw);
+  draw();
+
+  demo.onStart = durationMs => { run = { at: Date.now(), durationMs }; };
+</script>
+</body>
+</html>
