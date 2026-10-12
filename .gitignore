@@ -338,3 +338,7 @@ api/*.db
 api/logs/
 api/certs/
 api/.env
+
+# Generated mobile files
+app/mobile/gen/apple/observer-mobile.xcodeproj/project.pbxproj
+app/mobile/gen/schemas/acl-manifests.json
