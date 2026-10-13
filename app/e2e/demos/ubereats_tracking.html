@@ -172,6 +172,7 @@
     pickup: { h1: 'Picking up your order…', step: 1, msg: 'Marcus has arrived at Golden Lotus Thai Kitchen and is picking up your order.' },
     heading: { h1: 'Heading your way…', step: 2, msg: 'Marcus is on the way with your order.' },
     almost: { h1: 'Almost here', step: 3, msg: 'Marcus is almost at 84 Liberty St. Your order will be left at your door.' },
+    late: { h1: 'Running late', step: 2, msg: 'Marcus is stuck in heavy traffic on Valencia St. Your order is running about 15 minutes behind.' },
     canceled: { h1: 'Your order was canceled', step: -1, msg: "Marcus wasn't able to complete your delivery. You'll be refunded $38.42 to your Visa •••• 4021 within 3–5 business days." },
   };
   let stage = 'preparing', etaMin = 24;
@@ -188,15 +189,18 @@
   setInterval(show, 15000);  // the clock moves on
 
   demo.onStart = durationMs => {
-    const t0 = Date.now(), fail = demo.outcome === 'fail', END = 0.78;  // END: how far along Marcus is when it ends
+    // ?outcome= success (almost here), fail (canceled) or late (stuck in traffic, ETA jumps ~15 min).
+    const t0 = Date.now(), fail = demo.outcome === 'fail', late = demo.outcome === 'late';
+    const END = late ? 0.45 : 0.78;  // END: how far along Marcus is when it ends
     const step = () => {
       const f = (Date.now() - t0) / durationMs;
       if (f >= 1) {
-        stage = fail ? 'canceled' : 'almost';
-        if (!fail) { etaMin = 2; progress = END; parked = false; }
+        stage = fail ? 'canceled' : late ? 'late' : 'almost';
+        if (late) etaMin += 15;
+        else if (!fail) { etaMin = 2; progress = END; parked = false; }
         show(); drawCar(); demo.trigger();
-        // Afterwards, Marcus creeps along the last block (success); nothing moves on a cancel.
-        if (!fail) setInterval(() => { progress = Math.min(0.97, progress + 0.004); drawCar(); }, 1000);
+        // Afterwards, Marcus creeps along (almost here, and slower when late); nothing moves on a cancel.
+        if (!fail) setInterval(() => { progress = Math.min(0.97, progress + (late ? 0.0005 : 0.004)); drawCar(); }, 1000);
         return;
       }
       if (f >= 0.3) {

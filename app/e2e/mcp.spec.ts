@@ -3,9 +3,10 @@
 //   SETUP    demo holds in progress; the MCP gets the prompt once and must leave an agent
 //            running (no follow-up questions: anything else is NO_AGENT / ASKED_USER_INFO)
 //   PRE      the job keeps going for a random 2–6 min; any notification → FALSE_POSITIVE
-//   TRIGGER  the demo ends (success or fail) and reports the instant it's on screen
-//   WINDOW   should notify: a notification within 60 s → PASS, none → MISSED
-//            shouldn't notify: silent for 3 min → PASS, any → FALSE_POSITIVE
+//   TRIGGER  the demo ends (one of its outcomes) and reports the instant it's on screen
+//   WINDOW   expect notify: a notification within 60 s → PASS, none → MISSED
+//            expect silent: silent for 3 min → PASS, any → FALSE_POSITIVE
+//            expect either: PASS after 60 s, notified or not
 //
 // Which model, tools or notification channel the MCP picks is never checked.
 
@@ -40,8 +41,10 @@ function judge(s: Scenario, events: SuiteEvent[]): { verdict: Verdict; latencyMs
   if (notes.some(n => !trigger || n.t < trigger.t)) return { verdict: 'FALSE_POSITIVE' };
   if (!trigger) return { verdict: 'DEMO_BROKEN' };
   const first = notes[0];
-  if (!s.shouldNotify) return { verdict: first ? 'FALSE_POSITIVE' : 'PASS' };
-  if (first && first.t - trigger.t <= WINDOW_MS) return { verdict: 'PASS', latencyMs: first.t - trigger.t };
+  const latencyMs = first ? first.t - trigger.t : undefined;
+  if (s.expect === 'silent') return { verdict: first ? 'FALSE_POSITIVE' : 'PASS' };
+  if (s.expect === 'either') return { verdict: 'PASS', latencyMs };
+  if (first && first.t - trigger.t <= WINDOW_MS) return { verdict: 'PASS', latencyMs };
   return { verdict: 'MISSED' };
 }
 
@@ -62,7 +65,7 @@ for (const s of SCENARIOS) {
     app = await openObserver(context);
 
     const demo = await context.newPage();
-    await demo.goto(`${pathToFileURL(`${E2E_DIR}demos/${s.demo}`).href}?outcome=${s.outcome}`);
+    await demo.goto(`${pathToFileURL(`${E2E_DIR}demos/${s.demo}`).href}?outcome=${s.param}`);
     // Chrome only lets a focused tab call getDisplayMedia, so Observer stays in front, like
     // a user chatting with it. The captured demo tab keeps rendering in the background.
     await app.bringToFront();
@@ -95,7 +98,8 @@ for (const s of SCENARIOS) {
         // WINDOW: wait out the window (or quiet period) from the trigger, unless already decided.
         const trigger = events.find(e => e.type === 'trigger');
         if (trigger && !has('notification')) {
-          const waitMs = s.shouldNotify ? WINDOW_MS : QUIET_MS;
+          // `either` keeps watching the window, so a late notification still gets a latency.
+          const waitMs = s.expect === 'silent' ? QUIET_MS : WINDOW_MS;
           await waitUntil(() => has('notification'), trigger.t + waitMs - Date.now());
         }
         ({ verdict, latencyMs } = judge(s, events));
@@ -110,7 +114,7 @@ for (const s of SCENARIOS) {
       await app.evaluate(() => (window as any).__observerE2E.reset()).catch(() => {});
 
       const result = {
-        id: s.id, demo: s.demo, outcome: s.outcome, prompt: s.prompt, shouldNotify: s.shouldNotify,
+        id: s.id, demo: s.demo, outcome: s.outcome, prompt: s.prompt, expect: s.expect,
         verdict: verdict ?? 'ERROR',
         latencyMs,
         setupMs: Date.now() - setupStart,

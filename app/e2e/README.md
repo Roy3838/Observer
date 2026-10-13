@@ -2,14 +2,14 @@
 
 A black-box test of the MCP: it gets **one prompt**, and the test only checks **when the agent it built notifies the user**. It never checks which model, tools or channel the MCP picks.
 
-Each scenario is a demo page, a prompt, an outcome (`success` / `fail`), and whether the user expects to be notified on that outcome:
+Each scenario is a demo page, a prompt, one of the demo's outcomes (`success` / `fail` for a job; its own names for a wait, like `almost_here` / `late` / `canceled`), and what an Observer agent should do on it: `notify`, stay `silent` (a notification is a false alarm), or `either` (the wait ended another way; notifying is fine and so is staying quiet):
 
 | Phase | What happens | Verdict |
 |---|---|---|
 | SETUP | The demo holds in progress; the MCP gets the prompt once | `NO_AGENT` if no agent is running when the MCP's turn ends (it asked a question, errored…); `ASKED_USER_INFO`; `SETUP_TIMEOUT` (15 min) |
 | PRE | The job keeps going for a random 2–6 min | any notification → `FALSE_POSITIVE` |
 | TRIGGER | The demo ends and reports the instant the end state is on screen | |
-| WINDOW | should notify: within 60 s → `PASS`, else `MISSED`; shouldn't: silent for 3 min → `PASS`, else `FALSE_POSITIVE` | |
+| WINDOW | notify: within 60 s → `PASS`, else `MISSED`; silent: quiet for 3 min → `PASS`, else `FALSE_POSITIVE`; either: `PASS` after 60 s | |
 
 A notification is any user-facing agent-code tool (`notify`, `sendTelegram`, `call`, `sound`, …), caught by the app's logger in `src/mcp/e2e.ts`. Failed sends count too.
 
@@ -34,8 +34,8 @@ caffeinate -dimsu pnpm e2e # unattended on a Mac: no sleep (keep it on power, li
 2. It loads already **in progress** and stays there indefinitely. On `demo.onStart = durationMs => …` it runs to its end over `durationMs`, ends by `demo.outcome`, and calls `demo.trigger()` the moment the end state is shown.
 3. Check it by hand: `demos/my_demo.html?outcome=fail&autostart=10000` ends after 10 s.
    Keep everything local so runs don't depend on the network: fonts the demos share are in `demos/fonts/` (Google Sans, Roboto, Geist, Material Symbols, YouTube Sans…), a demo's own images in `demos/<name>_assets/`. Use the real site's look and copy wherever possible; that's what the agent will see.
-   A demo can also be a wait for an event (a reply, your turn in a queue): `fail` is then the other way the wait ends, which only some prompts should notify on.
-4. Add it with its prompts to `scenarios.ts`. Prompts must not need contact info (no Telegram/SMS/email): the suite can't fill the `ask_user_info` modal.
+   A demo can also be a wait for an event (a reply, your turn in a queue). Give it the endings a real one has (`?outcome=late` in `ubereats_tracking.html`) and name them in `outcomes` in `scenarios.ts`.
+4. Add it with its prompts to `scenarios.ts`, each with an `expect` for every outcome. Prompts must not need contact info (no Telegram/SMS/email): the suite can't fill the `ask_user_info` modal.
 
 ## Pattern scenarios
 

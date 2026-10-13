@@ -35,7 +35,11 @@ const add = (demoWithQuery, prompt, kind, notifyOn) => {
   if (!list.some(p => p.prompt === prompt)) list.push({ prompt, kind, query, notifyOn });
 };
 
-for (const d of DEMOS) for (const p of d.prompts) add(d.demo, p.prompt, 'alert', p.notifyOn);
+// notifyOn: the demo's `?outcome=` values the prompt must notify on.
+for (const d of DEMOS) for (const p of d.prompts) {
+  const outcomes = d.outcomes ?? { success: 'success', fail: 'fail' };
+  add(d.demo, p.prompt, 'alert', Object.keys(p.expect).filter(o => p.expect[o] === 'notify').map(o => outcomes[o]));
+}
 for (const s of PATTERNS) {
   if (s.noAgent || s.demo.startsWith('blank')) continue;
   if (s.requires && !existsSync(join(e2e, 'demos', s.requires))) continue; // media not recorded yet

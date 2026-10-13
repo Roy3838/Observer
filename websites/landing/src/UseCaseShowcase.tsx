@@ -10,7 +10,8 @@ import { Phone, MessageCircle, MessageSquare, Mail, Hash, Send, ExternalLink, ty
 import data from './generated/showcase.json';
 
 type Outcome = 'success' | 'fail';
-interface Prompt { prompt: string; kind: 'alert' | 'pattern'; query: string; notifyOn: Outcome[] }
+// notifyOn: the demo's `?outcome=` values (success, fail, or a demo's own like `late`).
+interface Prompt { prompt: string; kind: 'alert' | 'pattern'; query: string; notifyOn: string[] }
 interface UseCase { channel?: { id: string; label: string }; id: string; file: string; title: string; category: string; pitch: string; prompts: Prompt[] }
 
 const CATEGORIES = data.categories as { id: string; label: string }[];

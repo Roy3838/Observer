@@ -16,7 +16,8 @@ const tourTitle = new URLSearchParams(location.search).get('title');
 document.title = tourTitle ? `${tourTitle} · Observer demo` : 'Observer E2E Demo';
 
 window.demo = {
-  outcome: new URLSearchParams(location.search).get('outcome') === 'fail' ? 'fail' : 'success',
+  // `success` or `fail`, or a demo's own ending (`late` in ubereats_tracking). Defaults to success.
+  outcome: new URLSearchParams(location.search).get('outcome') || 'success',
   startedAt: null,
   triggeredAt: null,
   onStart: null,
