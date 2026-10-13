@@ -30,9 +30,9 @@ const NOTIFY_TOOLS = new Set([
   'sendPushover', 'sendGotify', 'system_notify', 'notify', 'message', 'overlay',
 ]);
 
-// The demo finishes 30 s after its tab loads, usually before the agent is even running. If no
-// notification is seen this long after the agent starts, show the CTA anyway so the user is
-// never stuck.
+// The demo finishes 30 s after the user returns to its tab (or a minute after it opens, on
+// desktop). If no notification is seen this long after the agent starts, show the CTA anyway so
+// the user is never stuck.
 const NOTIFY_FALLBACK_MS = 90000;
 
 let snapshot: TutorialSnapshot = { phase: 'idle', agentId: null, demo: null };

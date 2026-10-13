@@ -8,6 +8,8 @@
 //
 // A demo implements `demo.onStart = durationMs => { ... }` and calls `demo.trigger()`.
 // Opened by hand (no suite), `?autostart=10000` skips holding and ends the job 10 s after load.
+// Opened by the app's first-run tutorial, `?tutorial=30000` holds until the user comes back to
+// the tab, then ends the job 30 s later (see the bottom of this file).
 
 // The suite's browser auto-selects the tab with exactly this title in the screen-share picker.
 // The app's first-run tutorial opens demos with `?title=GitHub Actions` instead, so the user
@@ -52,3 +54,52 @@ window.addEventListener('load', () => {
   const autostart = Number(new URLSearchParams(location.search).get('autostart'));
   if (autostart) window.demo.start(autostart);
 });
+
+// Tutorial mode. Opening the demo brings this tab to the front, but the user has to go back to
+// Observer to share it, and Chrome brings them back here the moment they do. So the job holds
+// until that return and the user watches it finish while Observer watches with them. A card
+// says what to do meanwhile; it hides as soon as they leave, so it's never in what Observer sees.
+const tutorialMs = Number(new URLSearchParams(location.search).get('tutorial'));
+if (tutorialMs) {
+  // The desktop app captures the browser window natively, so nobody ever comes back to the tab
+  // to notice: start anyway once there's been time to build the agent.
+  const FALLBACK_MS = 60000;
+  const start = () => window.demo.start(tutorialMs);
+  const card = tutorialCard(tourTitle);
+  let left = false;
+  const leave = () => { left = true; card.remove(); };
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) leave();
+    else if (left) start();
+  });
+  // Switching to another app (the desktop app) blurs the window without hiding the tab.
+  window.addEventListener('blur', leave);
+  setTimeout(start, FALLBACK_MS);
+}
+
+function tutorialCard(title) {
+  const host = document.createElement('div');
+  host.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:2147483647;';
+  // Shadow DOM so the demo page's own styles can't reach the card.
+  const root = host.attachShadow({ mode: 'open' });
+  const style = document.createElement('style');
+  style.textContent = `
+    .card { all: initial; display: block; box-sizing: border-box; max-width: min(440px, calc(100vw - 32px));
+      padding: 14px 18px; border-radius: 16px; background: #0f172a; color: #fff;
+      font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif; text-align: center;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.35); }
+    strong { font-weight: 600; }
+    span { color: rgba(255, 255, 255, 0.75); }`;
+  const card = document.createElement('div');
+  card.className = 'card';
+  // Text only: the title comes from the URL.
+  const head = document.createElement('strong');
+  head.textContent = title ? `This is your ${title} demo.` : 'This is your demo.';
+  const body = document.createElement('span');
+  body.textContent = ' Go back to Observer and share this tab. It starts running when you come back.';
+  card.append(head, body);
+  root.append(style, card);
+  const mount = () => { if (host.isConnected === false && !host.dataset.gone) document.body.append(host); };
+  if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
+  return { remove: () => { host.dataset.gone = '1'; host.remove(); } };
+}
