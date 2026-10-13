@@ -14,13 +14,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Send, Loader2, Info, Mic, Cpu } from 'lucide-react';
 import { useMCPContext } from '../../mcp/MCPContext';
 import { useAuth } from '@contexts/AuthContext';
-import { Analytics } from '@utils/analytics';
 import { StreamManager } from '@utils/streamManager';
 import { useSubscriberText } from '@hooks/useTranscriptionState';
 import { Logger } from '@utils/logging';
-import { isMobile, isWeb } from '@utils/platform';
 import { ModelManager, type Model } from '@utils/ModelManager';
-import DemoPickerSplash from './DemoPickerSplash';
+import { TUTORIAL_SUPPORTED } from './DemoPickerSplash';
 import RecipeInline from '../AICreator/RecipeInline';
 
 // Synthetic owner id for voice dictation on the hero splash screen — mirrors MCP.tsx's
@@ -28,11 +26,12 @@ import RecipeInline from '../AICreator/RecipeInline';
 const HERO_MIC_ID = 'observer-hero-mic';
 const DEFAULT_CLOUD_MODEL = 'gemini-2.5-flash-lite-free';
 
-// The tutorial has the user share a demo tab, which phones can't do: not the mobile apps, and
-// not mobile browsers (no getDisplayMedia). Desktop apps capture natively, so they're fine.
-const TUTORIAL_SUPPORTED = !isMobile() && !(isWeb() && !navigator.mediaDevices?.getDisplayMedia);
+interface ObserverHeroProps {
+  /** Reopens the first-run demo picker (owned by App, which opens it after onboarding). */
+  onShowTutorial?: () => void;
+}
 
-const ObserverHero: React.FC = () => {
+const ObserverHero: React.FC<ObserverHeroProps> = ({ onShowTutorial }) => {
   const { send, isRunning, modelName, setModelName } = useMCPContext();
   const { isAuthenticated } = useAuth();
   const [value, setValue] = useState('');
@@ -109,22 +108,6 @@ const ObserverHero: React.FC = () => {
   // (back to empty) hands control back to the wheels.
   const [userEdited, setUserEdited] = useState(false);
 
-  // First-run tutorial: pick one of the e2e demo pages, which opens in a new tab, and build a
-  // REAL agent that watches it (DemoPickerSplash / tutorialFlow).
-  const { user } = useAuth();
-  const tutorialKey = user && 'sub' in user && user.sub ? `observer_tutorial_seen_${user.sub}` : null;
-  const [isPickerOpen, setIsPickerOpen] = useState(false);
-
-  useEffect(() => {
-    if (TUTORIAL_SUPPORTED && tutorialKey && !localStorage.getItem(tutorialKey)) setIsPickerOpen(true);
-  }, [tutorialKey]);
-
-  const closePicker = (started: boolean) => {
-    if (!started) Analytics.tutorialSkipped();
-    setIsPickerOpen(false);
-    if (tutorialKey) localStorage.setItem(tutorialKey, 'true');
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const text = value.trim();
@@ -161,9 +144,9 @@ const ObserverHero: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4 relative">
-      {TUTORIAL_SUPPORTED && (
+      {TUTORIAL_SUPPORTED && onShowTutorial && (
         <button
-          onClick={() => setIsPickerOpen(true)}
+          onClick={onShowTutorial}
           className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition-colors"
           aria-label="Show tutorial"
           title="Show tutorial"
@@ -171,7 +154,6 @@ const ObserverHero: React.FC = () => {
           <Info className="h-6 w-6" />
         </button>
       )}
-      <DemoPickerSplash isOpen={isPickerOpen} onClose={closePicker} />
       <h1 className="text-2xl md:text-3xl font-semibold text-gray-800 mb-6 text-center">
         What do you want me to Observe?
       </h1>

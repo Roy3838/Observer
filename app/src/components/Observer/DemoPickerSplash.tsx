@@ -17,6 +17,11 @@ import { tutorialFlow } from '@utils/tutorialFlow';
 import { TUTORIAL_DEMOS, demoTabTitle, demoUrl } from '@utils/tutorialDemos';
 import OptionWheel from '../AICreator/OptionWheel';
 import { ACTIONS, composeRecipePrompt } from '../AICreator/RecipeSplash';
+import { isMobile, isWeb } from '@utils/platform';
+
+// The tutorial has the user share a demo tab, which phones can't do: not the mobile apps, and
+// not mobile browsers (no getDisplayMedia). Desktop apps capture natively, so they're fine.
+export const TUTORIAL_SUPPORTED = !isMobile() && !(isWeb() && !navigator.mediaDevices?.getDisplayMedia);
 
 // Previews are full-size screenshots, so rather than download all of them up front, fetch the
 // ones this many rows either side of the wheel's focus. The wheel loops and auto-cycles one row

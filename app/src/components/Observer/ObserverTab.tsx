@@ -53,6 +53,7 @@ interface ObserverTabProps {
   startingAgents: Set<string>;
   onToggleAgent: (agentId: string, isCurrentlyRunning: boolean) => void;
   onOpenMicroAgents?: () => void;
+  onShowTutorial?: () => void;
 }
 
 const ObserverTab: React.FC<ObserverTabProps> = ({
@@ -68,6 +69,7 @@ const ObserverTab: React.FC<ObserverTabProps> = ({
   startingAgents,
   onToggleAgent,
   onOpenMicroAgents,
+  onShowTutorial,
 }) => {
   const { messages, isRunning } = useMCPContext();
   const isEmpty = messages.length === 0 && !isRunning;
@@ -87,7 +89,7 @@ const ObserverTab: React.FC<ObserverTabProps> = ({
           />
           <TutorialDemoBanner />
           {isEmpty ? (
-            <ObserverHero />
+            <ObserverHero onShowTutorial={onShowTutorial} />
           ) : (
             <div className="flex-1 min-h-0">
               <MCP

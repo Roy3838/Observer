@@ -56,6 +56,7 @@ import CommunityTab from '@components/CommunityTab';
 import GetStarted from '@components/GetStarted';
 import ObserverTab from '@components/Observer/ObserverTab';
 import RecipeSplash from '@components/AICreator/RecipeSplash';
+import DemoPickerSplash, { TUTORIAL_SUPPORTED } from '@components/Observer/DemoPickerSplash';
 import { useTutorialFlow, tutorialFlow } from '@utils/tutorialFlow';
 import JupyterServerModal from '@components/JupyterServerModal';
 import { generateAgentFromSimpleConfig } from '@utils/agentTemplateManager';
@@ -163,6 +164,7 @@ function AppContent() {
   const [isWelcomeUpsellOpen, setIsWelcomeUpsellOpen] = useState(false);
   const [welcomeUpsellVariant, setWelcomeUpsellVariant] = useState<'onboarding' | 'activation'>('onboarding');
   const [isRecipeSplashOpen, setIsRecipeSplashOpen] = useState(false);
+  const [isDemoPickerOpen, setIsDemoPickerOpen] = useState(false);
   const [showLocalModeWarning, setShowLocalModeWarning] = useState(false);
   const [isLocalOnboardingActive, setIsLocalOnboardingActive] = useState(false);
 
@@ -1094,6 +1096,14 @@ function AppContent() {
         onClose={() => { setIsRecipeSplashOpen(false); markTutorialSeen(); }}
       />
 
+      <DemoPickerSplash
+        isOpen={isDemoPickerOpen}
+        onClose={started => {
+          if (!started) Analytics.tutorialSkipped();
+          setIsDemoPickerOpen(false);
+        }}
+      />
+
       {/* The first-run demo's notification landed: same free-trial pitch as post-ToS. */}
       <WelcomeModal
         isOpen={tutorialPhase === 'notified'}
@@ -1109,6 +1119,12 @@ function AppContent() {
         onClose={() => {
           setIsWelcomeUpsellOpen(false);
           markOnboardingComplete();
+          // First run ends in the demo tutorial, now that the user is signed in and through
+          // ToS, attribution and the free-trial pitch.
+          if (welcomeUpsellVariant === 'onboarding' && TUTORIAL_SUPPORTED) {
+            setActiveTab('observerChat');
+            setIsDemoPickerOpen(true);
+          }
         }}
         onViewAllTiers={() => setActiveTab('obServer')}
         mode="upsell"
@@ -1343,6 +1359,7 @@ function AppContent() {
             startingAgents={startingAgents}
             onToggleAgent={toggleAgent}
             onOpenMicroAgents={() => setActiveTab('myAgents')}
+            onShowTutorial={() => setIsDemoPickerOpen(true)}
           />
         </div>
 
