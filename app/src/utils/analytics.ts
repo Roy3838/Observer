@@ -20,7 +20,7 @@ export const Analytics = {
   // ── Recipe builder (IFTTT onboarding hero) ──────────────────────────────────
   recipeShown: () => track('recipe_builder_shown'),
   recipeBuilt: (trigger: string, action: string, modelMode?: string) => track('recipe_built', { trigger, action, modelMode }),
-  tutorialStarted: () => track('recipe_tutorial_started'),
+  tutorialStarted: (demo: string, action: string) => track('recipe_tutorial_started', { demo, action }),
   tutorialSkipped: () => track('recipe_tutorial_skipped'),
 
   // ── Attribution (asked right after ToS, before the welcome upsell) ──────────

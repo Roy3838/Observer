@@ -10,7 +10,10 @@
 // Opened by hand (no suite), `?autostart=10000` skips holding and ends the job 10 s after load.
 
 // The suite's browser auto-selects the tab with exactly this title in the screen-share picker.
-document.title = 'Observer E2E Demo';
+// The app's first-run tutorial opens demos with `?title=GitHub Actions` instead, so the user
+// can find the tab in the picker (and the desktop MCP can find the window) by name.
+const tourTitle = new URLSearchParams(location.search).get('title');
+document.title = tourTitle ? `${tourTitle} · Observer demo` : 'Observer E2E Demo';
 
 window.demo = {
   outcome: new URLSearchParams(location.search).get('outcome') === 'fail' ? 'fail' : 'success',

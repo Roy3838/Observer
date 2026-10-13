@@ -3,7 +3,6 @@ import { isTauri, isDesktop } from './platform';
 import { Logger } from '@utils/logging';
 import { decodeBase64PCM, PCM_SAMPLE_RATE } from './audio/pcmUtils';
 import { SensorSettings } from './settings';
-import { tutorialStreamCapture } from './tutorialStreamCapture';
 
 /** Callback type for receiving PCM samples from unified pipeline */
 export type PCMCallback = (samples: Float32Array, streamType: 'screenAudio' | 'microphone') => void;
@@ -123,14 +122,6 @@ class TauriStreamCapture {
   };
 
   private pendingAcquisitions = new Map<MasterStreamType, Promise<void>>();
-
-  // True while the display stream is the synthetic onboarding-tutorial canvas rather than
-  // a real native capture — captureFrame's raw-byte-channel shortcut must not be used here.
-  private isTutorialDisplay = false;
-
-  isTutorialDisplayActive(): boolean {
-    return this.isTutorialDisplay;
-  }
 
   /**
    * A capture target chosen ahead of time (e.g. by the MCP `select_screen_target` tool),
@@ -258,21 +249,6 @@ class TauriStreamCapture {
       case 'display':
         if (this.streams.screenVideoStream) return;
 
-        // Onboarding tutorial agent: hand it a synthetic progress-bar canvas instead of
-        // the native screen-capture plugin. One-shot — consuming the flag here means only
-        // this acquisition gets the fake screen, never a later unrelated agent. This is
-        // consumed here (at the moment a real capture would otherwise start) rather than
-        // when list_screen_targets/select_screen_target run, so those tools can be
-        // called (and re-called) freely without spending the flag early.
-        if (SensorSettings.consumeMcpTutorialMode()) {
-          Logger.info("TauriCapture", "Tutorial mode: substituting synthetic screen stream");
-          const tutorialStream = tutorialStreamCapture.createStream();
-          this.streams.screenVideoStream = tutorialStream;
-          this.streams.screenVideoStreamWithPip = tutorialStream;
-          this.isTutorialDisplay = true;
-          break;
-        }
-
         Logger.info("TauriCapture", "Starting video capture");
         const videoResult = await this.startVideoStream();
         this.streams.screenVideoStream = videoResult.cleanStream;
@@ -346,13 +322,7 @@ class TauriStreamCapture {
   teardownMasterStream(type: MasterStreamType): void {
     switch (type) {
       case 'display':
-        if (this.isTutorialDisplay) {
-          Logger.info("TauriCapture", "Tearing down tutorial screen stream");
-          tutorialStreamCapture.stop();
-          this.isTutorialDisplay = false;
-          this.streams.screenVideoStream = null;
-          this.streams.screenVideoStreamWithPip = null;
-        } else if (this.videoStreamResult) {
+        if (this.videoStreamResult) {
           Logger.info("TauriCapture", "Tearing down video stream");
           this.videoStreamResult.stop();
           this.videoStreamResult = null;

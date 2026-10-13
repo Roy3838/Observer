@@ -420,7 +420,7 @@ class Manager {
   ): Promise<string | null> {
     // For Tauri screen capture, use raw frame bytes from channel
     // This is more reliable than canvas-backed video element (especially on iOS)
-    if (!isWeb() && streamType === 'screen' && !tauriStreamCapture.isTutorialDisplayActive()) {
+    if (!isWeb() && streamType === 'screen') {
       const rawFrame = tauriStreamCapture.getLatestBase64Frame();
       if (!rawFrame) {
         Logger.warn("StreamManager", "Cannot capture screen: no raw frame available from channel");

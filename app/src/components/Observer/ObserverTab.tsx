@@ -15,6 +15,7 @@ import { useMCPContext } from '../../mcp/MCPContext';
 import MCP from '@components/AICreator/MCP';
 import ObserverHero from './ObserverHero';
 import RunningAgentsStrip from './RunningAgentsStrip';
+import TutorialDemoBanner from './TutorialDemoBanner';
 import { FloatingAgentsProvider, useFloatingAgents } from './FloatingAgentsContext';
 import { AgentLiveStateProvider } from './AgentLiveStateContext';
 
@@ -84,6 +85,7 @@ const ObserverTab: React.FC<ObserverTabProps> = ({
             onToggle={onToggleAgent}
             onSelectAgent={onOpenMicroAgents}
           />
+          <TutorialDemoBanner />
           {isEmpty ? (
             <ObserverHero />
           ) : (

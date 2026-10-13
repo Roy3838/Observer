@@ -181,29 +181,6 @@ class SettingsManager {
         localStorage.setItem(this.SELF_HOSTED_WHISPER_URL_KEY, url);
     }
 
-    // MCP "tutorial mode" — set right before a single send() from the RecipeSplash tutorial
-    // path so capture_screen / list_screen_targets hand the model a synthetic progress-bar
-    // stream instead of opening the real screen picker. In-memory only (not localStorage):
-    // it must never survive a reload or leak into a later, unrelated chat turn, so each
-    // read consumes it (see isMcpTutorialMode).
-    private mcpTutorialMode = false;
-
-    public setMcpTutorialMode(value: boolean): void {
-        this.mcpTutorialMode = value;
-    }
-
-    public isMcpTutorialMode(): boolean {
-        return this.mcpTutorialMode;
-    }
-
-    // One-shot consume: call once a tool has committed to using (or not using) the
-    // tutorial stream, so the flag can't leak into the next request from the same session.
-    public consumeMcpTutorialMode(): boolean {
-        const value = this.mcpTutorialMode;
-        this.mcpTutorialMode = false;
-        return value;
-    }
-
     // --- DESKTOP SCREEN CAPTURE QUALITY ---
     // Tunable max width / JPEG quality / FPS, pushed to the Rust capture backend
     // (sc_set_capture_config) right before each capture starts. Defaults = "Low" tier:

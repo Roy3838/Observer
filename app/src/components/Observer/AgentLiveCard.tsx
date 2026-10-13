@@ -64,16 +64,13 @@ const AgentLiveCard: React.FC<AgentLiveCardProps> = ({ agent, isRunning, isStart
   useEffect(() => {
     if (tutorial.phase === 'building' && isRunning) tutorialFlow.attachAgent(agent.id);
   }, [tutorial.phase, isRunning, agent.id]);
-  // The demo agent being stopped ends the demo (no bar left to wait on).
+  // The demo agent being stopped ends the demo (nothing left to wait on).
   useEffect(() => {
-    if (tutorial.agentId === agent.id && !isRunning && (tutorial.phase === 'monitoring' || tutorial.phase === 'finished')) tutorialFlow.reset();
+    if (tutorial.agentId === agent.id && !isRunning && tutorial.phase === 'monitoring') tutorialFlow.reset();
   }, [tutorial.phase, tutorial.agentId, isRunning, agent.id]);
   const isTutorialAgent = tutorial.agentId === agent.id;
   const monitoringCopy = isTutorialAgent && tutorial.phase === 'monitoring'
-    ? "This is your micro agent! It's monitoring a download on a loop" : null;
-  // Points at the countdown in the status line, since that's what ticks over to the next loop.
-  const finishedCopy = isTutorialAgent && tutorial.phase === 'finished'
-    ? 'The download is finished! On the next loop the agent will notice' : null;
+    ? "This is your micro agent! It checks the demo tab on a loop" : null;
   const { popOut, dock, isOverDockTarget, dragSessionRef, setCardEl, measureSlot } = useFloatingAgents();
 
   // Set when flyToCorner sent this card out (no drag involved): it animates from the inline
@@ -237,15 +234,7 @@ const AgentLiveCard: React.FC<AgentLiveCardProps> = ({ agent, isRunning, isStart
           <div className={`flex items-center gap-1.5 text-xs min-w-0 ${isOverrun ? 'text-orange-500' : 'text-gray-400'}`}>
             <span className="flex-shrink-0">{isSleeping ? 'Sleeping' : (isOverrun && OVERRUN_LABEL[liveStatus]) || STATUS_LABEL[liveStatus]}</span>
             {timeLabel && <><span className="flex-shrink-0">·</span>
-              <span className="relative flex-shrink-0">
-                {timeLabel}
-                {finishedCopy && (
-                  <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 z-20 select-none pointer-events-none flex flex-col items-center whitespace-normal">
-                    <span className="block w-3 h-3 bg-slate-900 rotate-45 -mb-1.5" />
-                    <span className="block bg-slate-900 text-white rounded-2xl px-4 py-3 shadow-lg text-sm font-medium text-center normal-case">{finishedCopy}</span>
-                  </span>
-                )}
-              </span></>}
+              <span className="relative flex-shrink-0">{timeLabel}</span></>}
             <span className="flex-shrink-0">·</span>
             <span key={lastWord} className="font-mono font-semibold text-gray-600 truncate animate-fade-in">{lastWord || '—'}</span>
           </div>

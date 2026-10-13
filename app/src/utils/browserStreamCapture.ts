@@ -4,8 +4,6 @@
  */
 
 import { Logger } from './logging';
-import { tutorialStreamCapture } from './tutorialStreamCapture';
-import { SensorSettings } from './settings';
 
 export type MasterStreamType = 'display' | 'camera' | 'microphone' | 'screenAudio';
 
@@ -32,9 +30,6 @@ class BrowserStreamCapture {
 
   private pendingAcquisitions = new Map<MasterStreamType, Promise<void>>();
   private mockCameraAnimationId: number | null = null;
-  // True while the display stream is the synthetic onboarding-tutorial canvas rather than
-  // a real getDisplayMedia capture.
-  private isTutorialDisplay = false;
 
   /**
    * Called when a master stream dies on its own (user hit "Stop sharing",
@@ -165,18 +160,6 @@ class BrowserStreamCapture {
       case 'display':
         if (this.streams.masterDisplayStream) return;
 
-        // Onboarding tutorial agent: hand it a synthetic progress-bar canvas instead of
-        // opening the real screen-share picker. One-shot — consuming the flag here means
-        // only this acquisition gets the fake screen, never a later unrelated agent.
-        if (SensorSettings.consumeMcpTutorialMode()) {
-          Logger.info("BrowserCapture", "Tutorial mode: substituting synthetic screen stream");
-          const tutorialStream = tutorialStreamCapture.createStream();
-          this.streams.masterDisplayStream = tutorialStream;
-          this.streams.screenVideoStream = tutorialStream;
-          this.isTutorialDisplay = true;
-          break;
-        }
-
         Logger.info("BrowserCapture", "Requesting display media with audio");
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
@@ -277,12 +260,7 @@ class BrowserStreamCapture {
       case 'display':
         if (this.streams.masterDisplayStream) {
           Logger.info("BrowserCapture", "Tearing down display stream");
-          if (this.isTutorialDisplay) {
-            tutorialStreamCapture.stop();
-            this.isTutorialDisplay = false;
-          } else {
-            this.streams.masterDisplayStream.getTracks().forEach(track => track.stop());
-          }
+          this.streams.masterDisplayStream.getTracks().forEach(track => track.stop());
           this.streams.masterDisplayStream = null;
           this.streams.screenVideoStream = null;
           this.streams.screenAudioStream = null;
@@ -327,10 +305,6 @@ class BrowserStreamCapture {
   private handleStreamEnd(type: MasterStreamType): void {
     Logger.warn("BrowserCapture", `Master ${type} stream ended unexpectedly`);
     this.onStreamEnd?.(type);
-  }
-
-  isTutorialDisplayActive(): boolean {
-    return this.isTutorialDisplay;
   }
 
   /**

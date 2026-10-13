@@ -28,7 +28,6 @@ import { tauriStreamCapture } from '@utils/tauriStreamCapture';
 import { setAgentCrop } from '@utils/screenCapture';
 import { isDesktop, isWeb } from '@utils/platform';
 import { browserStreamCapture } from '@utils/browserStreamCapture';
-import { tutorialStreamCapture } from '@utils/tutorialStreamCapture';
 import { SensorSettings } from '@utils/settings';
 import { normalizeWhitelistCode } from '@utils/whitelistCode';
 import { fetchStatus } from './remote';
@@ -247,15 +246,6 @@ async function grabTauriFrame(data: Record<string, unknown>, noFrameError: strin
     return { error: msg };
   }
 
-  // Onboarding tutorial: the stream is a synthetic canvas, not the native plugin, so no raw
-  // frames ever arrive for getLatestBase64Frame() — serve a still of the fake screen instead.
-  if (tauriStreamCapture.isTutorialDisplayActive()) {
-    return {
-      data,
-      images: [`data:image/jpeg;base64,${tutorialStreamCapture.captureStillFrame()}`],
-    };
-  }
-
   const FRAME_TIMEOUT_MS = 15000;
   const POLL_MS = 200;
   const deadline = Date.now() + FRAME_TIMEOUT_MS;
@@ -275,10 +265,6 @@ async function grabTauriFrame(data: Record<string, unknown>, noFrameError: strin
     images: [`data:image/jpeg;base64,${raw}`],
   };
 }
-
-// Sentinel target id used to stand in for a real screen/window during the RecipeSplash
-// onboarding tutorial (see SensorSettings.isMcpTutorialMode / tutorialStreamCapture).
-const TUTORIAL_TARGET_ID = 'tutorial';
 
 /**
  * Desktop app: start the live stream on a target from list_screen_targets with no selector
@@ -303,21 +289,17 @@ async function captureScreenDesktop(targetId: unknown): Promise<ToolResult> {
     );
   }
 
-  let target: Record<string, unknown> = { id: TUTORIAL_TARGET_ID, kind: 'window', name: 'Downloader.app', width: 960, height: 540 };
-  // The tutorial target needs no seating: the synthetic stream is substituted inside
-  // tauriStreamCapture the moment the display stream is acquired.
-  if (targetId !== TUTORIAL_TARGET_ID) {
-    try {
-      const targets = await tauriStreamCapture.getTargets(false);
-      const match = targets.find(t => t.id === targetId);
-      if (!match) {
-        return { error: `Target '${targetId}' is no longer available (window may have closed). Re-run list_screen_targets.` };
-      }
-      target = { id: match.id, kind: match.kind, name: match.name, width: match.width, height: match.height };
-      tauriStreamCapture.setPreselectedTarget(match.id);
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : String(e) };
+  let target: Record<string, unknown>;
+  try {
+    const targets = await tauriStreamCapture.getTargets(false);
+    const match = targets.find(t => t.id === targetId);
+    if (!match) {
+      return { error: `Target '${targetId}' is no longer available (window may have closed). Re-run list_screen_targets.` };
     }
+    target = { id: match.id, kind: match.kind, name: match.name, width: match.width, height: match.height };
+    tauriStreamCapture.setPreselectedTarget(match.id);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
   }
 
   return grabTauriFrame(
@@ -728,17 +710,6 @@ export const TOOLS: ToolDefinition[] = [
           },
         };
       }
-      // Onboarding tutorial: hand back exactly one synthetic target instead of enumerating
-      // real windows. Peek only (never consumes the flag) — list/see can be called freely;
-      // the flag is actually spent later, at the moment a stream is really acquired.
-      if (SensorSettings.isMcpTutorialMode()) {
-        return {
-          data: {
-            platform: 'desktop',
-            targets: [{ id: TUTORIAL_TARGET_ID, kind: 'window', name: 'Downloader.app', appName: 'Downloader', width: 960, height: 540, isPrimary: false }],
-          },
-        };
-      }
       try {
         const targets = await tauriStreamCapture.getTargets(false);
         return {
@@ -774,12 +745,6 @@ export const TOOLS: ToolDefinition[] = [
     execute: async (args): Promise<ToolResult> => {
       if (!isDesktop()) {
         return { error: 'see_screen_target is desktop-only; on web the OS picker shows the screens at start_agent.' };
-      }
-      if (args.target_id === TUTORIAL_TARGET_ID) {
-        return {
-          data: { id: TUTORIAL_TARGET_ID, kind: 'window', name: 'Downloader.app', appName: 'Downloader', width: 960, height: 540, hasThumbnail: true },
-          images: [`data:image/jpeg;base64,${tutorialStreamCapture.captureStillFrame()}`],
-        };
       }
       try {
         const targets = await tauriStreamCapture.getTargets(true);
@@ -820,11 +785,6 @@ export const TOOLS: ToolDefinition[] = [
     execute: async (args): Promise<ToolResult> => {
       if (!isDesktop()) {
         return { error: 'select_screen_target is desktop-only; on web the OS picker handles selection at start_agent.' };
-      }
-      if (args.target_id === TUTORIAL_TARGET_ID) {
-        // Nothing to pre-seat: the tutorial stream is substituted automatically, inside
-        // tauriStreamCapture, the moment start_agent actually acquires the display stream.
-        return { data: { selected: true, id: TUTORIAL_TARGET_ID, kind: 'window', name: 'Downloader.app', width: 960, height: 540 } };
       }
       try {
         const targets = await tauriStreamCapture.getTargets(false);

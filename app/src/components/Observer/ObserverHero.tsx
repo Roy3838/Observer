@@ -14,21 +14,23 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Send, Loader2, Info, Mic, Cpu } from 'lucide-react';
 import { useMCPContext } from '../../mcp/MCPContext';
 import { useAuth } from '@contexts/AuthContext';
-import { SensorSettings } from '@utils/settings';
 import { Analytics } from '@utils/analytics';
-import { tutorialFlow } from '@utils/tutorialFlow';
 import { StreamManager } from '@utils/streamManager';
 import { useSubscriberText } from '@hooks/useTranscriptionState';
 import { Logger } from '@utils/logging';
+import { isMobile, isWeb } from '@utils/platform';
 import { ModelManager, type Model } from '@utils/ModelManager';
-import TutorialBubble from './TutorialBubble';
-import TutorialSpotlight from './TutorialSpotlight';
-import RecipeInline, { type TutorialStep } from '../AICreator/RecipeInline';
+import DemoPickerSplash from './DemoPickerSplash';
+import RecipeInline from '../AICreator/RecipeInline';
 
 // Synthetic owner id for voice dictation on the hero splash screen — mirrors MCP.tsx's
 // MCP_MIC_ID so it routes through the same StreamManager / TranscriptionRouter path.
 const HERO_MIC_ID = 'observer-hero-mic';
 const DEFAULT_CLOUD_MODEL = 'gemini-2.5-flash-lite-free';
+
+// The tutorial has the user share a demo tab, which phones can't do: not the mobile apps, and
+// not mobile browsers (no getDisplayMedia). Desktop apps capture natively, so they're fine.
+const TUTORIAL_SUPPORTED = !isMobile() && !(isWeb() && !navigator.mediaDevices?.getDisplayMedia);
 
 const ObserverHero: React.FC = () => {
   const { send, isRunning, modelName, setModelName } = useMCPContext();
@@ -107,47 +109,20 @@ const ObserverHero: React.FC = () => {
   // (back to empty) hands control back to the wheels.
   const [userEdited, setUserEdited] = useState(false);
 
-  // First-run guided demo, layered on the wheels: ends in building a REAL agent that watches
-  // a synthetic progress bar (SensorSettings.mcpTutorialMode / tutorialStreamCapture).
+  // First-run tutorial: pick one of the e2e demo pages, which opens in a new tab, and build a
+  // REAL agent that watches it (DemoPickerSplash / tutorialFlow).
   const { user } = useAuth();
   const tutorialKey = user && 'sub' in user && user.sub ? `observer_tutorial_seen_${user.sub}` : null;
-  const [tutorialStep, setTutorialStep] = useState<TutorialStep | null>(null);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   useEffect(() => {
-    if (tutorialKey && !localStorage.getItem(tutorialKey)) setTutorialStep('hello');
+    if (TUTORIAL_SUPPORTED && tutorialKey && !localStorage.getItem(tutorialKey)) setIsPickerOpen(true);
   }, [tutorialKey]);
 
-  const endTutorial = () => {
-    setTutorialStep(null);
+  const closePicker = (started: boolean) => {
+    if (!started) Analytics.tutorialSkipped();
+    setIsPickerOpen(false);
     if (tutorialKey) localStorage.setItem(tutorialKey, 'true');
-  };
-
-  const skipTutorial = () => { Analytics.tutorialSkipped(); SensorSettings.setMcpTutorialMode(false); endTutorial(); };
-  const replayTutorial = () => {
-    Analytics.tutorialStarted();
-    setValue('');
-    setUserEdited(false);
-    setTutorialStep('hello');
-  };
-
-  // Clicking anything in the sidebar means the user is leaving — drop the tutorial rather than
-  // leave the app greyed out behind them (the hero stays mounted, just hidden, on tab switch).
-  useEffect(() => {
-    if (!tutorialStep) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if ((e.target as Element | null)?.closest?.('[data-app-sidebar]')) skipTutorial();
-    };
-    document.addEventListener('pointerdown', onPointerDown, true);
-    return () => document.removeEventListener('pointerdown', onPointerDown, true);
-    // skipTutorial is recreated each render but only touches stable setters/storage.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tutorialStep, tutorialKey]);
-
-  const tutorial = {
-    step: tutorialStep,
-    onOkay: () => { Analytics.tutorialStarted(); SensorSettings.setMcpTutorialMode(true); setTutorialStep('notify'); },
-    onSkip: skipTutorial,
-    onActionPicked: () => setTutorialStep('ready'),
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -155,12 +130,6 @@ const ObserverHero: React.FC = () => {
     const text = value.trim();
     if (!text || isRunning) return;
     if (isRecording) stopMic();
-    if (tutorialStep) {
-      // Only the 'ready' step should build the demo agent; anything earlier is a custom send.
-      if (tutorialStep === 'ready') tutorialFlow.start();
-      else SensorSettings.setMcpTutorialMode(false);
-      endTutorial();
-    }
     setValue('');
     setUserEdited(false);
     void send(text);
@@ -192,9 +161,9 @@ const ObserverHero: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4 relative">
-      {!tutorialStep && (
+      {TUTORIAL_SUPPORTED && (
         <button
-          onClick={replayTutorial}
+          onClick={() => setIsPickerOpen(true)}
           className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition-colors"
           aria-label="Show tutorial"
           title="Show tutorial"
@@ -202,7 +171,7 @@ const ObserverHero: React.FC = () => {
           <Info className="h-6 w-6" />
         </button>
       )}
-      <TutorialSpotlight spot={tutorialStep} />
+      <DemoPickerSplash isOpen={isPickerOpen} onClose={closePicker} />
       <h1 className="text-2xl md:text-3xl font-semibold text-gray-800 mb-6 text-center">
         What do you want me to Observe?
       </h1>
@@ -258,28 +227,17 @@ const ObserverHero: React.FC = () => {
         <button
           type="submit"
           disabled={isRunning || !value.trim()}
-          className={`p-4 md:p-5 bg-gray-700 text-white rounded-full hover:bg-gray-800 disabled:bg-gray-300 transition-colors flex items-center flex-shrink-0 ${tutorialStep === 'ready' ? 'animate-nudge-soft' : ''}`}
-          data-spot="ready"
+          className="p-4 md:p-5 bg-gray-700 text-white rounded-full hover:bg-gray-800 disabled:bg-gray-300 transition-colors flex items-center flex-shrink-0"
           title="Send"
         >
           {isRunning ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
         </button>
-        {tutorialStep === 'ready' && (
-          <TutorialBubble placement="above-right" anchorClass="absolute top-0 right-0">
-            <div className="w-64 flex flex-col items-end">
-              <div className="bg-slate-900 text-white rounded-2xl px-4 py-3 shadow-lg text-sm font-medium text-center">
-                Perfect! I have everything I need.
-              </div>
-              <div className="w-3 h-3 bg-slate-900 rotate-45 -mt-1.5 mr-6" />
-            </div>
-          </TutorialBubble>
-        )}
       </form>
 
       {/* Pinned behind the form at a fixed spot — absolutely positioned so it never moves
           when the textarea above grows with wrapped text. */}
-      <div className={`absolute left-1/2 -translate-x-1/2 top-[72%] md:top-[64%] scale-90 md:scale-100 origin-top pointer-events-auto ${tutorialStep ? 'z-20' : 'z-0'}`}>
-        <RecipeInline tutorial={tutorial} onPromptChange={prompt => { if (!userEdited) setValue(prompt); }} />
+      <div className="absolute left-1/2 -translate-x-1/2 top-[72%] md:top-[64%] scale-90 md:scale-100 origin-top pointer-events-auto z-0">
+        <RecipeInline onPromptChange={prompt => { if (!userEdited) setValue(prompt); }} />
       </div>
     </div>
   );
