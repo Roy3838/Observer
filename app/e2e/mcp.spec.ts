@@ -78,7 +78,7 @@ for (const s of SCENARIOS) {
     const setupStart = Date.now();
     try {
       // SETUP: one prompt, no follow-ups.
-      const send = app.evaluate(p => (window as any).__observerE2E.send(p) as Promise<string>, s.prompt);
+      const send = app.evaluate(p => (window as any).__observerE2E.send(p) as Promise<string>, s.prompt + (process.env.E2E_PROMPT_SUFFIX ?? ''));
       mcpReply = await Promise.race([send, sleep(SETUP_MS).then(() => null)]);
       if (mcpReply === null) {
         verdict = 'SETUP_TIMEOUT';
@@ -128,12 +128,22 @@ for (const s of SCENARIOS) {
       };
       fs.mkdirSync(RESULTS_DIR, { recursive: true });
       fs.appendFileSync(`${RESULTS_DIR}/results.jsonl`, JSON.stringify(result) + '\n');
-      const base = `${RESULTS_DIR}/${s.id.replace(/[^\w-]+/g, '_')}`;
+      const base = `${RESULTS_DIR}/${s.id.replace(/[^\w-]+/g, '_')}_r${testInfo.repeatEachIndex}`;
       fs.writeFileSync(`${base}.transcript.json`, JSON.stringify(transcript, null, 2));
+      // Same prompt and frame as iteration 1, sent again: if the answer moves, the model call is what's unstable.
+      for (const a of agentReport) {
+        const it1 = a.iterations?.[0];
+        if (!it1?.image || !it1.prompt) continue;
+        a.replay = await app.evaluate(([m, p, img]) => (window as any).__observerE2E.replay(m, p, img, 6), [a.model_name, it1.prompt, it1.image] as const).catch((e: any) => String(e));
+      }
       agentReport.forEach((a, i) => {
         if (a.lastImage) fs.writeFileSync(`${base}.agent${i + 1}-last.png`, Buffer.from(String(a.lastImage).replace(/^data:[^,]*,/, ''), 'base64'));
+        // Every iteration's frame, to tell a stale or wrong first frame from a wrong answer.
+        a.iterations.forEach(it => {
+          if (it.image) fs.writeFileSync(`${base}.agent${i + 1}-it${it.n}.png`, Buffer.from(String(it.image).replace(/^data:[^,]*,/, ''), 'base64'));
+        });
       });
-      fs.writeFileSync(`${base}.agents.json`, JSON.stringify(agentReport.map(a => ({ ...a, lastImage: a.lastImage ? '(saved as png)' : undefined })), null, 2));
+      fs.writeFileSync(`${base}.agents.json`, JSON.stringify(agentReport.map(a => ({ ...a, lastImage: a.lastImage ? '(saved as png)' : undefined, iterations: a.iterations.map(it => ({ ...it, image: it.image ? '(saved as png)' : undefined })) })), null, 2));
       await testInfo.attach('result.json', { body: JSON.stringify({ ...result, transcript }, null, 2), contentType: 'application/json' });
       console.log(`${s.id}: ${result.verdict}${latencyMs !== undefined ? ` (${Math.round(latencyMs / 1000)} s after trigger)` : ''}`);
     }

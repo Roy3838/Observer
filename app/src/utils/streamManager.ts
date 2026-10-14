@@ -33,7 +33,7 @@ type StreamListener = (state: StreamState) => void;
  * single place crop fractions become pixels, so the same crop is correct no
  * matter what resolution the underlying capture happens to produce.
  */
-function resolveCrop(
+export function resolveCrop(
   crop: CropConfig,
   frameWidth: number,
   frameHeight: number,

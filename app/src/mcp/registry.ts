@@ -25,7 +25,7 @@ import type { TokenProvider } from '@utils/main_loop';
 import { checkPhoneWhitelist } from '@utils/pre-flight';
 import { downloadLocalModel, LOCAL_MODEL_CHOICES, type LocalModelChoice } from './localModel';
 import { tauriStreamCapture } from '@utils/tauriStreamCapture';
-import { setAgentCrop } from '@utils/screenCapture';
+import { setAgentCrop, getAgentCrop, cropDataUrl } from '@utils/screenCapture';
 import { isDesktop, isWeb } from '@utils/platform';
 import { browserStreamCapture } from '@utils/browserStreamCapture';
 import { SensorSettings } from '@utils/settings';
@@ -275,18 +275,19 @@ async function grabTauriFrame(data: Record<string, unknown>, noFrameError: strin
  * returned as-is and target_id is not applied.
  */
 async function captureScreenDesktop(targetId: unknown): Promise<ToolResult> {
-  if (typeof targetId !== 'string' || !targetId) {
-    return { error: 'On desktop, capture_screen needs a target_id from list_screen_targets.' };
-  }
-
+  // A live stream is reused as-is, so no target_id is needed to look at it again (agent_id previews).
   if (tauriStreamCapture.isStreamAvailable('screenVideo')) {
     return grabTauriFrame(
       {
         captured: true,
-        note: `A screen stream was already live (only one can run at a time), so this frame is from that stream and target '${targetId}' was NOT applied. Check the image is what you expected; to switch targets, stop the agents using the screen first.`,
+        note: `A screen stream was already live (only one can run at a time), so this frame is from that stream${targetId ? ` and target '${targetId}' was NOT applied` : ''}. Check the image is what you expected; to switch targets, stop the agents using the screen first.`,
       },
       'The screen stream is live but no frame has arrived yet. Call capture_screen again.',
     );
+  }
+
+  if (typeof targetId !== 'string' || !targetId) {
+    return { error: 'On desktop, capture_screen needs a target_id from list_screen_targets.' };
   }
 
   let target: Record<string, unknown>;
@@ -537,6 +538,9 @@ export const TOOLS: ToolDefinition[] = [
     execute: async (args): Promise<ToolResult> => {
       const existing = await getAgent(args.id);
       if (!existing) return { error: `Agent '${args.id}' does not exist. Use create_agent to make a new one.` };
+      if (isAgentLoopRunning(args.id)) {
+        return { error: `Agent '${args.id}' is running: its old prompt and code would keep acting while you edit. stop_agent first, then edit_agent, then start_agent again.` };
+      }
       const agent: CompleteAgent = {
         id: args.id,
         name: args.name,
@@ -853,19 +857,32 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'capture_screen',
-    description: 'Start the live screen stream a $SCREEN agent will use and return one frame from it, so you can SEE exactly what will be monitored before building the agent. The frame comes from the real capture pipeline, so it is the image to read a set_screen_crop box_2d from. On the desktop app pass target_id (from list_screen_targets): the stream starts on that screen/window with NO selector popping up; only one screen stream runs at a time, so if one is already live (e.g. a running agent\'s) you get its frame and target_id is not applied. On web / mobile web (no target_id) this opens the browser screen-share picker (pick a screen, window, or tab). On the mobile app (no target_id) it triggers the OS screen-capture picker and captures the WHOLE screen (iOS broadcast / Android screen-record permission): the user must approve the system prompt, and on iOS there can be a few seconds of delay before the first frame — if this returns a "no frame yet" message, just call it again. The stream stays live — start_agent reuses it without prompting again. Call it BEFORE create_agent for any agent whose system_prompt uses $SCREEN.',
+    description: 'Start the live screen stream a $SCREEN agent will use and return one frame from it, so you can SEE exactly what will be monitored before building the agent. The frame comes from the real capture pipeline, so it is the image to read a set_screen_crop box_2d from. On the desktop app pass target_id (from list_screen_targets): the stream starts on that screen/window with NO selector popping up; only one screen stream runs at a time, so if one is already live (e.g. a running agent\'s) you get its frame and target_id is not applied. On web / mobile web (no target_id) this opens the browser screen-share picker (pick a screen, window, or tab). On the mobile app (no target_id) it triggers the OS screen-capture picker and captures the WHOLE screen (iOS broadcast / Android screen-record permission): the user must approve the system prompt, and on iOS there can be a few seconds of delay before the first frame — if this returns a "no frame yet" message, just call it again. The stream stays live — start_agent reuses it without prompting again. Call it BEFORE create_agent for any agent whose system_prompt uses $SCREEN. Pass agent_id (after set_screen_crop) to see the frame CROPPED exactly as that agent model will receive it on every iteration, with the crop pixel size: do this before every start_agent to check the crop (the whole status text inside it with a margin, the label included, nothing misleading). The stream must already be live from an earlier capture_screen.',
     parameters: {
       type: 'object',
       properties: {
         target_id: { type: 'string', description: 'Desktop app only (required there): the id of the target to capture, from list_screen_targets. Omit on web / mobile.' },
+        agent_id: { type: 'string', description: 'Return the frame cropped by the set_screen_crop of this agent instead of the full frame. The target is already seated, so target_id is not needed.' },
       },
     },
     multimodal: true,
     // Same platform split as StreamManager: browser → getDisplayMedia; Tauri → native plugin
     // (desktop seats the target up front so no selector opens).
-    execute: async (args): Promise<ToolResult> => isWeb()
-      ? captureScreenWeb()
-      : isDesktop() ? captureScreenDesktop(args.target_id) : captureScreenTauri(),
+    execute: async (args): Promise<ToolResult> => {
+      const result = isWeb()
+        ? await captureScreenWeb()
+        : isDesktop() ? await captureScreenDesktop(args.target_id) : await captureScreenTauri();
+      if (!args.agent_id || result.error || !result.images?.[0]) return result;
+
+      // Preview the agent's crop: the same fractions and resolveCrop its loop applies.
+      const crop = getAgentCrop(args.agent_id, 'screen');
+      if (!crop) return { ...result, data: { ...(result.data as object), note: `Agent '${args.agent_id}' has no crop set: this is the full frame it will receive.` } };
+      const cropped = await cropDataUrl(result.images[0], crop);
+      return {
+        data: { agent_id: args.agent_id, cropped: true, crop_px: [cropped.width, cropped.height], note: 'This is exactly what the model of the agent receives each iteration.' },
+        images: [cropped.dataUrl],
+      };
+    },
   },
   {
     name: 'download_model',

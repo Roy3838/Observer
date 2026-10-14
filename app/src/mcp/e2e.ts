@@ -15,6 +15,7 @@ import { Logger } from '@utils/logging';
 import { getRunningAgentIds, stopAgentLoop, type TokenProvider } from '@utils/main_loop';
 import { listAgents, deleteAgent, getAgentCode, getAgentMemory, getAllMemories, deleteMemory } from '@utils/agent_database';
 import { IterationStore } from '@utils/IterationStore';
+import { ModelManager } from '@utils/ModelManager';
 import { listConversations, loadConversation } from './conversationStore';
 import type { WireMessage } from './types';
 import type { UseMCPReturn } from './useMCP';
@@ -95,6 +96,8 @@ async function agentReport(since = 0) {
         tools: it.tools.map(t => `${t.name}:${t.status}${t.error ? ` (${t.error})` : ''}`),
         hasError: it.hasError,
         skipped: it.isSkipped ? it.skipReason : undefined,
+        image: it.modelImages?.[0],
+        prompt: it.modelPrompt,
       })),
       lastImage: [...iterations].reverse().find(it => it.modelImages?.length)?.modelImages?.[0],
     };
@@ -123,6 +126,16 @@ function createApi(h: () => E2EHandles) {
       };
     },
     agentReport,
+    /** Send the same prompt + image to a model `n` times: is the answer the same every time? */
+    replay: async (modelName: string, modifiedPrompt: string, image: string, n: number) => {
+      const token = await h().getToken()().catch(() => undefined);
+      const out: (number | string)[] = [];
+      for (let i = 0; i < n; i++) {
+        const r = await ModelManager.getInstance().sendPrompt(modelName, { modifiedPrompt, images: [image] } as any, token);
+        out.push((r.decision as any)?.noul ?? 'n/a');
+      }
+      return out;
+    },
     /** Every memory slot, including ones written for an id that isn't an agent. */
     memories: () => getAllMemories(),
     /** Stop and delete every agent so the next scenario starts from an empty Observer.

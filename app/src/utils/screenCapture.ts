@@ -1,4 +1,4 @@
-import { StreamManager } from './streamManager';
+import { StreamManager, resolveCrop } from './streamManager';
 
 /**
  * A crop region stored as fractions of the captured frame (0–1), NOT pixels.
@@ -43,6 +43,24 @@ export function getAgentCrop(agentId: string, streamType: 'camera' | 'screen'): 
   const agentConfig = agentCropConfigs.get(agentId);
   if (!agentConfig) return null;
   return streamType === 'camera' ? agentConfig.camera || null : agentConfig.screen || null;
+}
+
+/**
+ * Apply a crop to a full-frame image (data URL), exactly as the agent loop will on each
+ * iteration (same resolveCrop). Used to preview what a crop will send to the model.
+ */
+export async function cropDataUrl(
+  dataUrl: string,
+  crop: CropConfig,
+): Promise<{ dataUrl: string; width: number; height: number }> {
+  const bitmap = await createImageBitmap(await (await fetch(dataUrl)).blob());
+  const px = resolveCrop(crop, bitmap.width, bitmap.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = px.width;
+  canvas.height = px.height;
+  canvas.getContext('2d')!.drawImage(bitmap, px.x, px.y, px.width, px.height, 0, 0, px.width, px.height);
+  bitmap.close();
+  return { dataUrl: canvas.toDataURL('image/png'), width: px.width, height: px.height };
 }
 
 export function removeAgentCrops(agentId: string): void {

@@ -65,6 +65,7 @@ User: yes
 MCP: ask_user_info kind='phone' channel='voice' // modal returns the user's connected code; never ask for a phone number in chat
 MCP: create_agent // a download percentage is a dial watcher: model_name 'clef-flash'; prompt asks if the download is still in progress
 MCP: set_screen_crop 'agent_id' // dial watcher: crop to the percentage/bar; if not sure about coordinates use capture_screen again
+MCP: capture_screen 'agent_id' // returns the frame cropped exactly as the agent's model will get it: the whole percentage and its label are inside, nothing cut off. If not, stop here: set_screen_crop again and re-check
 MCP: start_agent // reuses the stream capture_screen started`
     : `# Golden Path — Web / Mobile app (sub-agentic)
 User: can you monitor my steam download?
@@ -76,6 +77,7 @@ User: please call me
 MCP: ask_user_info kind='phone' channel='voice' // modal returns the user's connected code; never ask for a phone number in chat
 MCP: create_agent // a download percentage is a dial watcher: model_name 'clef-flash'; prompt asks if the download is still in progress
 MCP: set_screen_crop 'agent_id' // dial watcher: crop to the percentage/bar; if not sure about coordinates use capture_screen again
+MCP: capture_screen 'agent_id' // returns the frame cropped exactly as the agent's model will get it: the whole percentage and its label are inside, nothing cut off. If not, stop here: set_screen_crop again and re-check
 MCP: start_agent`;
 
 
@@ -83,10 +85,12 @@ MCP: start_agent`;
     ? `MCP: stop_agent // always stop agent when re-cropping or re-editing before starting again
 MCP: capture_screen 'target_id' // restart the stream on the target and read the corrected box_2d off this fresh frame
 MCP: set_screen_crop 'agent_id'
+MCP: capture_screen 'agent_id' // check the crop on the exact frame the agent will get
 MCP: start_agent // reuses the stream capture_screen started`
     : `MCP: stop_agent // always stop agent when re-cropping or re-editing before starting again
 MCP: capture_screen // share again and read the corrected box_2d off this fresh frame
 MCP: set_screen_crop 'agent_id'
+MCP: capture_screen 'agent_id' // check the crop on the exact frame the agent will get
 MCP: start_agent`;
 
   const proactiveTools = desktop
@@ -185,12 +189,12 @@ That is a decision model's whole scope: a dial that stays in place and indicates
 ## Dial watchers (decision model)
 
 clef-flash is a decision model (OneJev is its local counterpart): instead of writing text, it answers ONE yes/no question about the image with a probability, \`decision.noul\`. It is reliable when the image is just the indicator, so:
-1. **Crop to the dial** with \`set_screen_crop\`: the percentage, timer, bar or status line together with its own label or status text ("Uploading 38%", "Building", the bar's caption), nothing else. Not a sliver: a bar alone can't tell full-and-done from almost-there. On \`$CAMERA\` there is no crop, so use a decision model only if the widget fills the frame; otherwise use an LLM.
+1. **Crop to the dial** with \`set_screen_crop\`: the percentage, timer, bar or status line together with its own label or status text ("Uploading 38%", "Building", the bar's caption), nothing else. Not a sliver: a bar alone can't tell full-and-done from almost-there. Draw the box with a margin: every character of the status text fully inside, the label included, and at least ~60px tall. A box a few percent off cuts the text ("In progres") and the model answers about the cut text, not the dial. Then call \`capture_screen\` with the \`agent_id\`: it returns the frame cropped exactly as the model will receive it. Look at it. If the text is cut, the label is missing, or anything else on it could pass for another state, \`set_screen_crop\` again and re-check; only then \`start_agent\`. On \`$CAMERA\` there is no crop, so use a decision model only if the widget fills the frame; otherwise use an LLM.
 2. **Ask whether the widget still shows in-progress**, and act when the answer turns to no: "Is there a download percentage below 100% on screen?" Describe what the widget SHOWS (a number below 100%, a partly filled bar, a timer counting), never the process behind it ("is it still building / compiling / running?"). Watching the in-progress reading (never "is it finished?") catches every ending: completed, failed, cancelled, or the widget disappearing because the UI moved on. So it is also the agent for "only if it fails" or "if it asks for my permission": those end the in-progress reading too, and a notice on the other endings is fine.
 3. **system_prompt:** only that question plus \`$SCREEN\`. No "You are…", no instructions, no keywords, no Describe/Decide steps.
-4. **code:** act when \`decision.noul < 0.25 || decision.dropped\` (it's no longer in progress), attach \`screen\` (if the tool takes images) so the user sees how it ended, then \`await stopAgent()\`: the job ends once and the indicator stays gone. \`decision.dropped\` turns true when noul has stayed well below where this run started for a few iterations: some endings (a full red bar, a "can't join" card where the spinner was) only fall to mid-range. A decision model can't tell how the job ended, so word the message neutrally ("Your upload stopped: it finished or failed"), never "It's done!" or "You're in!". \`response\` is null with a decision model; never use \`decision\` with an LLM.
+4. **code:** the condition is ALWAYS exactly \`decision.noul < 0.25 || decision.dropped\` (it's no longer in progress): never \`>\`, never another number, never a flipped question (the question is "is it still showing?", so "yes" is a HIGH noul and the agent acts when it drops). Act on it, attach \`screen\` (if the tool takes images) so the user sees how it ended, then \`await stopAgent()\`: the job ends once and the indicator stays gone. \`decision.dropped\` turns true when noul has stayed well below where this run started for a few iterations: some endings (a full red bar, a "can't join" card where the spinner was) only fall to mid-range. A decision model can't tell how the job ended, so word the message neutrally ("Your upload stopped: it finished or failed"), never "It's done!" or "You're in!". \`response\` is null with a decision model; never use \`decision\` with an LLM.
 5. **loop_interval:** 5–10s, a decision model answers fast.
-6. **Verify:** the job is still running while you build the agent, so the first \`get_iteration\` must show the dial in progress with a high \`noul\` (e.g. \`noul 0.97\`). If it's low, the crop or the question is wrong: fix it with \`set_screen_crop\` / \`edit_agent\`, don't change the threshold. Then take the second look (a newer iteration): same dial, same place, still high.
+6. **Never change a running agent.** A running agent acts on its old crop, question and code while you fix them, so a bad first frame notifies the user. Any change is always: \`stop_agent\` → \`set_screen_crop\` / \`edit_agent\` → \`capture_screen\` with the \`agent_id\` to check the crop → \`start_agent\` ( \`edit_agent\` refuses a running agent). **Verify:** the job is still running while you build the agent, so the first \`get_iteration\` must show the dial in progress with a high \`noul\` (e.g. \`noul 0.97\`). If it's low, the crop or the question is wrong: \`stop_agent\` first, fix it, check the crop, start again; don't change the threshold. Then take the second look (a newer iteration): same dial, same place, still high.
 
 The perfect \`create_agent\` for that steam example (a dial watcher, cropped to the download percentage):
 
