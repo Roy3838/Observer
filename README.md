@@ -202,7 +202,8 @@ App Tools:
 ## Code Tab
 
 The "Code" tab receives the following variables as context before running: 
-* `response` - The model's response
+* `response` - The model's response (`null` when using a decision model)
+* `decision` - The decision model's answer (`null` for text models, see [Decision Models](#decision-models))
 * `agentId` - The id of the agent running the code
 * `screen` - The screen if captured 
 * `camera` - The camera if captured 
@@ -228,6 +229,46 @@ appendMemory(`[${time}] ${cleanedResponse}`);
 // Send to Telegram if the model mentions a word
 if(response.includes("word")){
   sendTelegram(cleanedResponse, "12345678") // Example chat_id
+}
+```
+
+### Decision Models
+
+Decision models don't write text, they answer typed questions with probabilities. `response` is `null` and the result is in `decision` instead.
+
+**Plain-text prompt** – a single yes/no (`noul`) question, the sensor images are the state:
+```
+Is there a person in the room? $CAMERA
+```
+`decision` is one answer:
+```javascript
+// { type: 'noul', noul: 0.94, start: 0.12, dropped: false }
+if (decision.noul > 0.8) {
+  sendTelegram("12345678", "Someone is in the room", camera);
+}
+```
+* `noul` - Probability of "yes" (0 to 1)
+* `start` - Average `noul` over the run's first 3 iterations
+* `dropped` - `true` once `noul` has stayed well below `start` for 3 iterations in a row (useful for "tell me when this finishes")
+
+**JSON prompt** – several questions at once. `decision` is an object keyed by question id:
+```json
+{
+  "state": "<image:1>",
+  "questions": {
+    "person": { "type": "noul", "instructions": "Is there a person?" },
+    "pet": { "type": "choice", "instructions": "Which pet is visible?", "criteria": { "dog": "A dog", "cat": "A cat", "none": "No pet" } },
+    "mess": { "type": "score", "instructions": "How messy is the room?", "criteria": ["Clean", "A bit messy", "Very messy"] }
+  }
+}
+```
+Add an image sensor (`$SCREEN`, `$CAMERA` or `$IMEMORY`) after the JSON to capture the image. `<image:N>` marks where each captured image goes in the state; if the state has no markers, the images are placed at the top.
+```javascript
+// decision.person → { type: 'noul', noul }
+// decision.pet    → { type: 'choice', choice, probabilities, confidence }
+// decision.mess   → { type: 'score', score, legend, probabilities, confidence }
+if (decision.pet.choice === "dog" && decision.pet.confidence > 0.7) {
+  appendMemory(`[${time()}] Dog spotted`);
 }
 ```
 
