@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<!-- A Mac where the user is supposed to be coding: VS Code full screen, typing. Holds there until the
+     suite starts it; then two quick work detours (Slack at 25% of the run, an MDN page in Chrome at
+     55%, each marked 'app') and back to VS Code, and it ends by ?outcome=:
+       success  the user drifts to the X feed in Chrome and stays there, scrolling
+       video    the user opens a YouTube coding tutorial ("TypeScript Generics in 10 Minutes") and stays
+       fail     the user keeps coding: nothing changes at the end
+     Every switch marks 'app' ({ name }). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>checkout.ts — acme-store</title>
+<link rel="stylesheet" href="fonts/inter.css">
+<link rel="stylesheet" href="fonts/google-sans.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<link rel="stylesheet" href="desktop_assets/macos.css">
+<style>
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 20px; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+  .pane { display: none !important; }
+  .pane.on { display: flex !important; }
+  /* VS Code */
+  .vs { background: #1f1f1f; color: #ccc; font-size: 13px; flex-direction: column; }
+  .vs .tb { height: 32px; background: #181818; display: flex; align-items: center; justify-content: center; color: #9d9d9d; font-size: 12px; position: relative; border-bottom: 1px solid #2b2b2b; }
+  .vs .row { flex: 1; display: flex; min-height: 0; }
+  .vs .act { width: 48px; background: #181818; display: flex; flex-direction: column; align-items: center; gap: 22px; padding-top: 12px; color: #858585; }
+  .vs .act .on { color: #fff; }
+  .vs .exp { width: 230px; background: #181818; border-right: 1px solid #2b2b2b; padding: 8px 0; }
+  .vs .exp .h { padding: 0 16px 8px; font-size: 11px; letter-spacing: .5px; color: #bbb; }
+  .vs .exp div.f { padding: 2px 16px; white-space: nowrap; } .vs .exp .sel { background: #37373d; color: #fff; }
+  .vs .ed { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .vs .tabs { height: 35px; background: #181818; display: flex; }
+  .vs .tabs span { padding: 0 14px; display: flex; align-items: center; border-right: 1px solid #2b2b2b; color: #9d9d9d; }
+  .vs .tabs .on { background: #1f1f1f; color: #fff; border-top: 1px solid #0078d4; }
+  .vs pre { margin: 0; padding: 8px 0; font: 13px/19px Menlo, Monaco, monospace; flex: 1; overflow: hidden; }
+  .vs pre .ln { display: inline-block; width: 48px; text-align: right; padding-right: 18px; color: #6e7681; }
+  .k { color: #569cd6; } .s { color: #ce9178; } .f { color: #dcdcaa; } .t { color: #4ec9b0; } .c { color: #6a9955; } .v { color: #9cdcfe; }
+  .vs .status { height: 22px; background: #0078d4; color: #fff; display: flex; gap: 16px; align-items: center; padding: 0 10px; font-size: 12px; }
+  .caret { border-left: 2px solid #aeafad; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { border-color: transparent; } }
+  /* Slack */
+  .sl { background: #fff; color: #1d1c1d; font-family: Inter, sans-serif; font-size: 15px; flex-direction: column; }
+  .sl .top { height: 40px; background: #3f0e40; display: flex; align-items: center; justify-content: center; position: relative; }
+  .sl .top span { width: 600px; height: 26px; border-radius: 6px; background: #5d3a5e; color: #ddd; display: flex; align-items: center; padding: 0 10px; font-size: 13px; }
+  .sl .body { flex: 1; display: flex; min-height: 0; }
+  .sl .side { width: 260px; background: #3f0e40; color: #cfc3cf; padding: 12px 8px; }
+  .sl .side .ws { color: #fff; font-weight: 800; font-size: 18px; padding: 4px 10px 14px; }
+  .sl .side div.ch { padding: 4px 10px; border-radius: 6px; } .sl .side .on { background: #1164a3; color: #fff; }
+  .sl .side .h { padding: 14px 10px 4px; font-size: 14px; }
+  .sl .chan { flex: 1; display: flex; flex-direction: column; }
+  .sl .chan .hd { height: 50px; border-bottom: 1px solid #ddd; display: flex; align-items: center; padding: 0 20px; font-weight: 800; font-size: 18px; }
+  .sl .msgs { flex: 1; padding: 10px 20px; display: flex; flex-direction: column; justify-content: flex-end; }
+  .sl .m { display: flex; gap: 10px; padding: 8px 0; }
+  .sl .m .av { width: 36px; height: 36px; border-radius: 6px; flex: none; }
+  .sl .m b { font-weight: 800; } .sl .m small { color: #616061; font-size: 12px; margin-left: 6px; }
+  .sl .box { margin: 0 20px 20px; border: 1px solid #bbb; border-radius: 8px; height: 80px; padding: 12px; color: #616061; }
+  /* Chrome */
+  .cr { flex-direction: column; background: #fff; }
+  .cr .strip { height: 40px; background: #dee1e6; display: flex; align-items: flex-end; padding: 0 0 0 80px; gap: 2px; position: relative; }
+  .cr .strip .mac-lights { left: 14px; top: 20px; }
+  .cr .tab { width: 220px; height: 32px; border-radius: 8px 8px 0 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; font: 12px Inter, sans-serif; color: #3c4043; white-space: nowrap; overflow: hidden; }
+  .cr .tab.on { background: #fff; }
+  .cr .tab i { width: 16px; height: 16px; border-radius: 3px; flex: none; display: grid; place-items: center; font-style: normal; font-size: 10px; font-weight: 700; color: #fff; }
+  .cr .omni { height: 40px; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid #dadce0; color: #5f6368; }
+  .cr .omni .url { flex: 1; height: 30px; border-radius: 15px; background: #f1f3f4; display: flex; align-items: center; gap: 8px; padding: 0 14px; font: 14px Inter, sans-serif; color: #202124; }
+  .cr .page { flex: 1; overflow: hidden; position: relative; display: none; }
+  .cr .page.on { display: flex; }
+  /* MDN */
+  .mdn { font-family: Inter, sans-serif; color: #1b1b1b; }
+  .mdn .side { width: 260px; border-right: 1px solid #cdcdcd; padding: 20px; font-size: 14px; line-height: 28px; color: #4e4e4e; }
+  .mdn .side b { color: #1b1b1b; }
+  .mdn .main { flex: 1; padding: 26px 50px; }
+  .mdn h1 { font-size: 34px; margin: 0 0 16px; font-weight: 600; letter-spacing: -.5px; }
+  .mdn p { font-size: 16px; line-height: 26px; max-width: 720px; }
+  .mdn pre { background: #f2f1f1; border-radius: 6px; padding: 16px; font: 14px/21px Menlo, monospace; max-width: 720px; }
+  /* X */
+  .x { background: #fff; font-family: Inter, -apple-system, sans-serif; color: #0f1419; justify-content: center; }
+  .x .nav { width: 260px; padding: 10px 20px; display: flex; flex-direction: column; gap: 6px; font-size: 19px; }
+  .x .nav div { display: flex; gap: 18px; align-items: center; padding: 10px 12px; }
+  .x .nav .ms { font-size: 26px; } .x .nav .on { font-weight: 700; }
+  .x .nav .logo { font-size: 28px; font-weight: 900; }
+  .x .feed { width: 600px; border-left: 1px solid #eff3f4; border-right: 1px solid #eff3f4; overflow: hidden; position: relative; }
+  .x .feed .hd { display: flex; height: 53px; border-bottom: 1px solid #eff3f4; font-weight: 700; font-size: 15px; background: rgba(255,255,255,.9); position: relative; z-index: 2; }
+  .x .feed .hd span { flex: 1; display: grid; place-items: center; color: #536471; } .x .feed .hd .on { color: #0f1419; box-shadow: inset 0 -4px 0 #1d9bf0; }
+  .x .posts { position: absolute; top: 53px; left: 0; right: 0; transition: transform 1.2s ease; }
+  .x .post { display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #eff3f4; font-size: 15px; line-height: 20px; }
+  .x .post .av { width: 40px; height: 40px; border-radius: 50%; flex: none; }
+  .x .post b { font-weight: 700; } .x .post .h { color: #536471; }
+  .x .post .img { margin-top: 10px; height: 220px; border-radius: 16px; border: 1px solid #cfd9de; }
+  .x .post .acts { display: flex; justify-content: space-between; color: #536471; font-size: 13px; margin-top: 10px; max-width: 420px; }
+  .x .right { width: 320px; padding: 12px 24px; }
+  .x .right .search { height: 42px; border-radius: 21px; background: #eff3f4; display: flex; align-items: center; gap: 10px; padding: 0 16px; color: #536471; }
+  .x .right .box { border: 1px solid #eff3f4; border-radius: 16px; margin-top: 16px; padding: 12px 16px; font-size: 15px; line-height: 20px; }
+  .x .right .box h3 { margin: 0 0 10px; font-size: 20px; } .x .right .box div { padding: 8px 0; } .x .right .box small { color: #536471; display: block; }
+  /* YouTube */
+  .yt { background: #fff; font-family: Roboto, Arial, sans-serif; color: #0f0f0f; padding: 20px 24px; gap: 24px; }
+  .yt .col { flex: 1; min-width: 0; }
+  .yt .player { aspect-ratio: 16 / 9; background: #1e1e1e; border-radius: 12px; position: relative; overflow: hidden; }
+  .yt .player pre { margin: 0; padding: 40px 50px; font: 22px/34px Menlo, monospace; color: #d4d4d4; }
+  .yt .player .bar { position: absolute; left: 12px; right: 12px; bottom: 44px; height: 4px; background: rgba(255,255,255,.3); }
+  .yt .player .bar i { display: block; height: 100%; background: #f00; width: 3%; }
+  .yt .player .ctl { position: absolute; left: 16px; bottom: 12px; color: #fff; font-size: 14px; display: flex; gap: 16px; align-items: center; }
+  .yt .player .cam { position: absolute; right: 18px; bottom: 60px; width: 150px; height: 112px; border-radius: 10px; background: linear-gradient(160deg, #6c7a89, #39424e); }
+  .yt h1 { font-size: 20px; margin: 12px 0 8px; }
+  .yt .ch { display: flex; gap: 12px; align-items: center; font-size: 14px; }
+  .yt .ch .av { width: 40px; height: 40px; border-radius: 50%; background: #c45a2e; }
+  .yt .ch small { color: #606060; display: block; font-size: 12px; }
+  .yt .ch .sub { margin-left: 18px; background: #0f0f0f; color: #fff; border-radius: 18px; padding: 9px 16px; font-weight: 500; }
+  .yt .recs { width: 400px; }
+  .yt .rec { display: flex; gap: 8px; margin-bottom: 10px; font-size: 14px; line-height: 20px; }
+  .yt .rec .th { width: 168px; height: 94px; border-radius: 8px; flex: none; }
+  .yt .rec small { color: #606060; display: block; font-size: 12px; line-height: 18px; }
+</style>
+<script src="demo-contract.js"></script>
+<script src="desktop_assets/macos.js"></script>
+</head>
+<body>
+<div class="mac-window full pane vs on" id="vscode">
+  <div class="tb"><div class="mac-lights"><i></i><i></i><i></i></div>checkout.ts — acme-store</div>
+  <div class="row">
+    <div class="act"><span class="ms on">description</span><span class="ms">search</span><span class="ms">account_tree</span><span class="ms">bug_report</span><span class="ms">extension</span></div>
+    <div class="exp"><div class="h">EXPLORER: ACME-STORE</div>
+      <div class="f">▾ src</div><div class="f">&nbsp;&nbsp;▾ lib</div><div class="f sel">&nbsp;&nbsp;&nbsp;&nbsp;checkout.ts</div><div class="f">&nbsp;&nbsp;&nbsp;&nbsp;orders.ts</div><div class="f">&nbsp;&nbsp;&nbsp;&nbsp;stripe.ts</div>
+      <div class="f">&nbsp;&nbsp;▸ app</div><div class="f">▸ tests</div><div class="f">package.json</div><div class="f">tsconfig.json</div></div>
+    <div class="ed">
+      <div class="tabs"><span class="on">checkout.ts</span><span>stripe.ts</span><span>orders.ts</span></div>
+<pre id="code"></pre>
+    </div>
+  </div>
+  <div class="status"><span>⎇ fix/checkout-tax</span><span>✓ 0 ⚠ 2</span><span style="margin-left:auto">TypeScript</span></div>
+</div>
+
+<div class="mac-window full pane sl" id="slack">
+  <div class="top"><div class="mac-lights"><i></i><i></i><i></i></div><span>Search Acme</span></div>
+  <div class="body">
+    <div class="side"><div class="ws">Acme</div><div class="h">Channels</div><div class="ch"># general</div><div class="ch on"># eng</div><div class="ch"># launch</div><div class="h">Direct messages</div><div class="ch">Ana Torres</div><div class="ch">Ben Ortiz</div></div>
+    <div class="chan"><div class="hd"># eng</div>
+      <div class="msgs">
+        <div class="m"><div class="av" style="background:#188038"></div><div><b>Ben Ortiz</b><small>9:52 AM</small><br>Staging is green again, the flaky checkout test was a timezone thing.</div></div>
+        <div class="m"><div class="av" style="background:#e8710a"></div><div><b>Ana Torres</b><small>9:58 AM</small><br>@Roy is the tax-exempt path going in today? QA wants it by 3.</div></div>
+        <div class="m"><div class="av" style="background:#7b5ea7"></div><div><b>Roy</b><small>10:01 AM</small><br>Yep, writing it now. PR before lunch.</div></div>
+      </div>
+      <div class="box">Message #eng</div></div>
+  </div>
+</div>
+
+<div class="mac-window full pane cr" id="chrome">
+  <div class="strip"><div class="mac-lights"><i></i><i></i><i></i></div><div class="tab" id="tab"><i id="fav"></i><span id="tabt"></span></div><div class="tab"><i style="background:#3c4043">G</i>Inbox (4) - roy@acme.dev</div></div>
+  <div class="omni"><span class="ms">arrow_back</span><span class="ms">arrow_forward</span><span class="ms">refresh</span><div class="url"><span class="ms" style="font-size:16px">tune</span><span id="url"></span></div><span class="ms">more_vert</span></div>
+
+  <div class="page mdn" id="p-mdn">
+    <div class="side"><b>Array</b><br>Array.prototype.at()<br>Array.prototype.filter()<br>Array.prototype.find()<br>Array.prototype.map()<br><b>Array.prototype.reduce()</b><br>Array.prototype.some()</div>
+    <div class="main"><h1>Array.prototype.reduce()</h1>
+      <p>The <code>reduce()</code> method of <code>Array</code> instances executes a user-supplied "reducer" callback function on each element of the array, in order, passing in the return value from the calculation on the preceding element.</p>
+<pre>const array1 = [1, 2, 3, 4];
+const initialValue = 0;
+const sumWithInitial = array1.reduce(
+  (accumulator, currentValue) => accumulator + currentValue,
+  initialValue,
+);
+console.log(sumWithInitial); // 10</pre></div>
+  </div>
+
+  <div class="page x" id="p-x">
+    <div class="nav"><div class="logo">𝕏</div><div class="on"><span class="ms" style="font-variation-settings:'FILL' 1">home</span>Home</div><div><span class="ms">search</span>Explore</div><div><span class="ms">notifications</span>Notifications</div><div><span class="ms">mail</span>Messages</div><div><span class="ms">bookmark</span>Bookmarks</div><div><span class="ms">person</span>Profile</div></div>
+    <div class="feed"><div class="hd"><span class="on">For you</span><span>Following</span></div><div class="posts" id="posts"></div></div>
+    <div class="right"><div class="search"><span class="ms">search</span>Search</div>
+      <div class="box"><h3>What's happening</h3><div><small>Sports · Trending</small><b>Dodgers</b></div><div><small>Trending in Technology</small><b>#iOS27</b><small>12.4K posts</small></div><div><small>Entertainment · Trending</small><b>Severance</b></div><div><small>Trending</small><b>Lisbon</b><small>3,912 posts</small></div></div></div>
+  </div>
+
+  <div class="page yt" id="p-yt">
+    <div class="col">
+      <div class="player"><pre><span class="k">function</span> <span class="f">identity</span>&lt;<span class="t">T</span>&gt;(<span class="v">arg</span>: <span class="t">T</span>): <span class="t">T</span> {
+  <span class="k">return</span> <span class="v">arg</span>;
+}
+
+<span class="k">const</span> <span class="v">n</span> = <span class="f">identity</span>&lt;<span class="t">number</span>&gt;(<span class="s">42</span>);
+<span class="k">const</span> <span class="v">s</span> = <span class="f">identity</span>(<span class="s">"hi"</span>); <span class="c">// T is inferred</span></pre>
+        <div class="cam"></div><div class="bar"><i id="ytbar"></i></div><div class="ctl"><span class="ms" style="font-variation-settings:'FILL' 1">pause</span><span class="ms">skip_next</span><span class="ms">volume_up</span><span id="yttime">0:19 / 10:42</span></div></div>
+      <h1>TypeScript Generics in 10 Minutes</h1>
+      <div class="ch"><div class="av"></div><div><b>Code with Ana</b><small>412K subscribers</small></div><span class="sub">Subscribe</span></div>
+    </div>
+    <div class="recs">
+      <div class="rec"><div class="th" style="background:linear-gradient(135deg,#3178c6,#1e3a5f)"></div><div><b>Mapped Types Explained</b><small>Code with Ana<br>88K views · 2 weeks ago</small></div></div>
+      <div class="rec"><div class="th" style="background:linear-gradient(135deg,#f7df1e,#c9a800)"></div><div><b>Array.reduce() in 5 minutes</b><small>Fireship-ish<br>1.2M views · 1 year ago</small></div></div>
+      <div class="rec"><div class="th" style="background:linear-gradient(135deg,#635bff,#2b2470)"></div><div><b>Stripe Payment Intents, end to end</b><small>Stripe Developers<br>210K views · 8 months ago</small></div></div>
+      <div class="rec"><div class="th" style="background:linear-gradient(135deg,#0f9d58,#0b5e36)"></div><div><b>Writing tests that don't flake</b><small>Testing Weekly<br>45K views · 3 weeks ago</small></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  Mac.mount({ app: 'Code', menus: ['File', 'Edit', 'Selection', 'View', 'Go', 'Run', 'Terminal', 'Window', 'Help'], battery: 71 });
+  const $ = id => document.getElementById(id);
+  const CODE = [
+    '<span class="k">import</span> { <span class="v">stripe</span> } <span class="k">from</span> <span class="s">"./stripe"</span>;',
+    '<span class="k">import</span> <span class="k">type</span> { <span class="t">Cart</span>, <span class="t">Address</span>, <span class="t">Customer</span> } <span class="k">from</span> <span class="s">"./types"</span>;',
+    '',
+    '<span class="k">const</span> <span class="v">TAX_BPS</span>: <span class="t">Record</span>&lt;<span class="t">string</span>, <span class="t">number</span>&gt; = { <span class="v">CA</span>: <span class="s">725</span>, <span class="v">NY</span>: <span class="s">400</span>, <span class="v">TX</span>: <span class="s">625</span> };',
+    '',
+    '<span class="k">export function</span> <span class="f">salesTax</span>(<span class="v">cart</span>: <span class="t">Cart</span>, <span class="v">to</span>: <span class="t">Address</span>, <span class="v">who</span>: <span class="t">Customer</span>): <span class="t">number</span> {',
+  ];
+  const TYPED = [
+    '  <span class="k">if</span> (<span class="v">who</span>.<span class="v">taxExempt</span>) <span class="k">return</span> <span class="s">0</span>;',
+    '  <span class="k">const</span> <span class="v">bps</span> = <span class="v">TAX_BPS</span>[<span class="v">to</span>.<span class="v">state</span>] ?? <span class="s">0</span>;',
+    '  <span class="k">return</span> <span class="t">Math</span>.<span class="f">round</span>((<span class="f">subtotal</span>(<span class="v">cart</span>) * <span class="v">bps</span>) / <span class="s">10_000</span>);',
+    '}',
+    '',
+    '<span class="c">// Exempt customers still get a receipt line, at 0%.</span>',
+    '<span class="k">export function</span> <span class="f">taxLine</span>(<span class="v">who</span>: <span class="t">Customer</span>) {',
+    '  <span class="k">return</span> <span class="v">who</span>.<span class="v">taxExempt</span> ? <span class="s">"Tax (exempt)"</span> : <span class="s">"Sales tax"</span>;',
+    '}',
+  ];
+  let li = 0, ci = 0;
+  const paint = () => {
+    const done = TYPED.slice(0, li);
+    const cur = (TYPED[li % TYPED.length] ?? '').slice(0, ci).replace(/<[^>]*$/, '');
+    $('code').innerHTML = [...CODE, ...done, cur + '<span class="caret"></span>'].map((l, i) => `<span class="ln">${i + 1}</span>${l}`).join('\n');
+  };
+  setInterval(() => {
+    if (li >= TYPED.length) { li = 0; } // start the block over; nobody reads that closely
+    const target = TYPED[li];
+    if (ci < target.length) ci += 6; else { li++; ci = 0; }
+    paint();
+  }, 120);
+  paint();
+
+  // The X feed: posts keep scrolling by.
+  const POSTS = [
+    ['#f4a261', 'dril-adjacent', '@not_dril', 'they should make a version of the gym where you just lie down', 0],
+    ['#2a9d8f', 'Marques B.', '@mkbhd_fan', 'The new iPhone camera bump is so big it has its own weather system', 1],
+    ['#e76f51', 'Golden Retriever Daily', '@goldens', 'He waited by the door for 3 hours for this moment 🥹', 1],
+    ['#264653', 'Tech Twitter Drama', '@techdrama', 'BREAKING: two founders are arguing about tabs vs spaces again. Thread 🧵', 0],
+    ['#8338ec', 'Lisbon Eats', '@lisboneats', 'If you only eat one pastel de nata this year make it this one', 1],
+    ['#ff006e', 'NBA Highlights', '@nbahl', 'This no-look pass should be illegal', 1],
+    ['#3a86ff', 'Startup Memes', '@startupmemes', 'me: I\'ll just check X for 2 minutes\nalso me, 45 minutes later:', 0],
+  ];
+  let pi = 0;
+  const post = ([bg, name, handle, text, img]) => `<div class="post"><div class="av" style="background:${bg}"></div><div style="flex:1"><b>${name}</b> <span class="h">${handle} · ${1 + (pi++ % 9)}h</span><div>${text.replace(/\n/g, '<br>')}</div>${img ? `<div class="img" style="background:linear-gradient(135deg,${bg},#fff)"></div>` : ''}<div class="acts"><span>💬 ${12 + pi * 7}</span><span>🔁 ${40 + pi * 13}</span><span>♥ ${300 + pi * 91}</span><span>📊 ${12 + pi}K</span></div></div></div>`;
+  $('posts').innerHTML = [...POSTS, ...POSTS].map(post).join('');
+  let scroll = 0;
+
+  const PAGES = {
+    mdn: ['Array.prototype.reduce() - JavaScript | MDN', 'developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/reduce', '#000', 'M'],
+    x: ['Home / X', 'x.com/home', '#000', '𝕏'],
+    yt: ['TypeScript Generics in 10 Minutes - YouTube', 'youtube.com/watch?v=Jx8tGk3kq2c', '#f00', '▶'],
+  };
+  const APPS = { vscode: ['Code', ['File', 'Edit', 'Selection', 'View', 'Go', 'Run', 'Terminal', 'Window', 'Help']], slack: ['Slack', ['File', 'Edit', 'View', 'Go', 'Window', 'Help']], chrome: ['Google Chrome', ['File', 'Edit', 'View', 'History', 'Bookmarks', 'Profiles', 'Tab', 'Window', 'Help']] };
+  let ytAt = 0;
+  // Switch to an app (and a Chrome page), marking it.
+  const show = (name, page) => {
+    for (const id of Object.keys(APPS)) $(id).classList.toggle('on', id === name);
+    Mac.setApp(...APPS[name]);
+    if (page) {
+      for (const p of Object.keys(PAGES)) $(`p-${p}`).classList.toggle('on', p === page);
+      const [title, url, bg, glyph] = PAGES[page];
+      $('tabt').textContent = title; $('url').textContent = url; $('fav').style.background = bg; $('fav').textContent = glyph;
+      if (page === 'yt') ytAt = Date.now();
+    }
+    demo.mark('app', { name: page ?? name });
+  };
+  setInterval(() => {
+    if ($('p-x').classList.contains('on')) { scroll = (scroll + 260) % 1800; $('posts').style.transform = `translateY(-${scroll}px)`; }
+    if ($('p-yt').classList.contains('on')) {
+      const s = 19 + Math.floor((Date.now() - ytAt) / 1000);
+      $('yttime').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} / 10:42`;
+      $('ytbar').style.width = `${(s / 642) * 100}%`;
+    }
+  }, 2500);
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  demo.onStart = async durationMs => {
+    const D = durationMs, at = Date.now();
+    const until = f => sleep(Math.max(0, at + D * f - Date.now()));
+    await until(0.25); show('slack');
+    await sleep(Math.min(15000, D * 0.06)); show('vscode');
+    await until(0.55); show('chrome', 'mdn');
+    await sleep(Math.min(20000, D * 0.08)); show('vscode');
+    await until(1);
+    if (demo.outcome === 'success') show('chrome', 'x');
+    else if (demo.outcome === 'video') show('chrome', 'yt');
+    demo.trigger();
+  };
+</script>
+</body>
+</html>

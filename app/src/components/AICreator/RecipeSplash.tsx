@@ -27,6 +27,7 @@ import { useAuth } from '@contexts/AuthContext';
 import { Analytics } from '@utils/analytics';
 import type { WhitelistChannel } from '@utils/logging';
 import EditableWheel from './EditableWheel';
+import { SHOWN, isCameraDemo } from '@utils/groundTruth';
 import type { WheelOption } from './OptionWheel';
 
 export type ContactKind = 'phone' | 'email' | 'telegram' | 'discord' | 'none';
@@ -43,23 +44,12 @@ export interface ActionOption extends WheelOption {
   channel?: WhitelistChannel;
 }
 
-export const TRIGGERS: TriggerOption[] = [
-  { id: 'download_done',   label: 'my download is finished',    sensor: '$SCREEN', promptFragment: 'my download finishes' },
-  { id: 'person_camera',   label: 'a person is on camera',      sensor: '$CAMERA', promptFragment: 'a person appears on my camera' },
-  { id: 'render_fails',    label: 'my render fails',            sensor: '$SCREEN', promptFragment: 'my render fails or errors out' },
-  { id: 'github_workflow', label: 'my GitHub workflow finishes', sensor: '$SCREEN', promptFragment: 'my GitHub Actions workflow finishes running' },
-  { id: 'docker_built',    label: 'my Docker image is built',   sensor: '$SCREEN', promptFragment: 'my Docker image finishes building' },
-  { id: 'cowork_done',     label: 'Claude Cowork finishes',     sensor: '$SCREEN', promptFragment: 'Claude Cowork finishes its task' },
-  { id: 'uber_arrives',    label: 'my Uber arrives',            sensor: '$SCREEN', promptFragment: 'my Uber arrives (the app shows the driver has arrived)' },
-  { id: 'meeting_starts',  label: 'my meeting starts',          sensor: '$SCREEN', promptFragment: 'my meeting starts (a calendar notification or the meeting window appears)' },
-  { id: 'minecraft_death', label: 'my Minecraft character dies', sensor: '$SCREEN', promptFragment: 'my Minecraft character dies' },
-  { id: 'steam_ready',     label: 'my Steam game is ready',     sensor: '$SCREEN', promptFragment: 'my Steam game finishes downloading and is ready to play' },
-  { id: 'distracted',      label: "I'm distracted",             sensor: '$SCREEN', promptFragment: 'I get distracted (e.g. social media or YouTube on screen)' },
-  { id: 'printer_fails',   label: 'my 3D printer fails',        sensor: '$CAMERA', promptFragment: 'my 3D print fails (spaghetti, detached print, or a clog)' },
-  { id: 'battery_low',     label: 'my battery is low',          sensor: '$SCREEN', promptFragment: 'my battery indicator shows low battery' },
-  { id: 'hour_passes',     label: 'an hour passes',             sensor: '$SCREEN', promptFragment: 'an hour passes (log what is on my screen)' },
-  { id: 'tickets_available', label: 'tickets are available',    sensor: '$SCREEN', promptFragment: 'tickets become available on the page I have open' },
-];
+// What the wheel can detect: the When of every demo in the ground truth (utils/groundTruth.ts), the
+// same list the landing page spins and the e2e suite tests. The Then wheel stays open: every
+// integration goes with every When, even the odd pairs.
+export const TRIGGERS: TriggerOption[] = SHOWN.map(u => ({
+  id: u.id, label: u.when, sensor: isCameraDemo(u) ? '$CAMERA' : '$SCREEN', promptFragment: u.when,
+}));
 
 export const ACTIONS: ActionOption[] = [
   { id: 'email',    label: 'send me an email',    contact: 'email',    actionFragment: 'send me an email' },
@@ -72,7 +62,8 @@ export const ACTIONS: ActionOption[] = [
 ];
 
 /**
- * Composes the one-sentence MCP prompt from a trigger/action combo.
+ * Composes the one-sentence MCP prompt from a trigger/action combo: "When …, then …", the
+ * ground truth's own shape (utils/groundTruth.ts), plus where to watch and which model to use.
  *
  * Deliberately emits the notification *intent* only ("send me an SMS") and never a phone
  * number / chat_id / webhook: the MCP collects those itself via `ask_user_info`, which can
@@ -100,7 +91,7 @@ export function composeRecipePrompt(
   const actionFrag = action?.actionFragment ?? '';
   const phrase = action?.contact === 'email' && authEmail ? ` at ${authEmail}` : '';
   const modelClause = mode === 'local' ? 'Use a local model.' : 'Use a cloud model.';
-  return `${watchClause} When ${triggerFrag}, ${actionFrag}${phrase}. ${modelClause}`;
+  return `${watchClause} When ${triggerFrag}, then ${actionFrag}${phrase}. ${modelClause}`;
 }
 
 interface RecipeSplashProps {

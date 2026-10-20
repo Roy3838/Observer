@@ -1,17 +1,19 @@
-// Scenarios for the pattern suite (patterns.spec.ts): requests that aren't "tell me when X ends"
-// but use the rest of Observer: notes in memory, a summary when something ends, a periodic
-// digest, a running count, two alerts from one request, clips, and requests where the right
-// move is to ask first or to build nothing.
+// Scenarios for the pattern suite (patterns.spec.ts): the ground truth use cases that aren't one
+// alert on time (src/utils/groundTruth.ts): "then log it", "then keep count of it", "then save a
+// clip", a summary when something ends, two alerts from one request. Plus a few chat checks that
+// aren't use cases: requests where the right move is to ask first, answer from what the agents
+// saw, or build nothing.
 //
 // Each scenario's demo publishes its ground truth: marks as things happen on screen (a topic
-// change, an error printed, an order arriving) and `demo.truth`. Its `score` compares that with
-// what the agents did: what they wrote to memory and when, their notifications, their clips.
-// Like the dial suite, it never checks which models, tools or how many agents the MCP chose.
+// change, an error printed, an order arriving) and `demo.truth`. Its check's `score` compares that
+// with what the agents did: what they logged to memory and when, their notifications, their clips.
+// Like the alert suite, it never checks which models, tools or how many agents the MCP chose.
 //
-// Prompts that save results say "save it to memory": the suite can't fill the ask_user_info
-// modal, and memory is what it can read back.
+// "Log" means Observer's memory, which is also what the suite can read back (it can't fill the
+// ask_user_info modal for any other destination).
 
 import type { SuiteEvent } from './fixtures';
+import { GROUND_TRUTH, prompt } from '../src/utils/groundTruth';
 
 export type PatternVerdict = 'PASS' | 'PARTIAL' | 'FAIL';
 
@@ -37,24 +39,33 @@ export interface Run {
   toolCalls: { name: string; args: string }[];
   /** For scenarios with a follow-up: whether the MCP's first turn ended without an agent running. */
   asked: boolean | null;
+  /** The MCP's final text for each turn, in order: the prompt, the follow-up, the after-run question. */
+  replies: (string | null)[];
 }
 
-export interface PatternScenario {
-  id: string;
-  /** Page in e2e/demos/, with its query string. */
-  demo: string;
-  prompt: string;
+/** How a use case is run and judged. */
+export interface Check {
   /** Sent as a second turn if the first one ends with no agent running (the MCP asked something). */
   followUp?: string;
+  /** Asked once the run and its grace period are over, with the agents still running: its answer is
+   *  the last of `replies`. */
+  afterRun?: string;
   /** The right move is to build nothing: the scenario ends after the MCP's turn. */
   noAgent?: boolean;
   /** Passed to demo.start(). Demos driven by their own media ignore it and end when it does. */
   runMs: number;
   /** How long to keep watching after the demo's end, for summaries and late notes. */
   graceMs: number;
-  /** A file under e2e/demos/ the scenario needs; skipped until it exists. */
-  requires?: string;
   score: (run: Run) => Score;
+}
+
+export interface PatternScenario extends Check {
+  id: string;
+  /** Page in e2e/demos/, with its query string. */
+  demo: string;
+  prompt: string;
+  /** Files under e2e/demos/ the scenario needs; skipped until they all exist. */
+  requires?: string[];
 }
 
 // ---- Reading the agents' work ------------------------------------------------
@@ -102,6 +113,14 @@ const marks = (run: Run, name: string) =>
   run.events.filter((e): e is Extract<SuiteEvent, { type: 'mark' }> => e.type === 'mark' && e.name === name);
 
 const pct = (n: number, d: number) => (d ? Math.round((100 * n) / d) : 0);
+
+/** When the user was alerted: notifications, with sends within 3 s of each other (a notify with a
+ *  sound) counted once. */
+function alertTimes(run: Run): number[] {
+  const out: number[] = [];
+  for (const n of run.events.filter(e => e.type === 'notification')) if (!out.length || n.t - out[out.length - 1] > 3000) out.push(n.t);
+  return out;
+}
 
 // ---- Shared ground truth -------------------------------------------------------
 
@@ -163,14 +182,21 @@ function scoreMeetingSummary(run: Run): Score {
   return { verdict: 'FAIL', metrics, notes };
 }
 
+// The apps in workday.html: what names each one in a note.
+const WORKDAY_APPS: Record<string, string[]> = {
+  vscode: ['vs code', 'vscode', 'visual studio code', 'code editor', 'checkout.ts', 'coding', 'typescript'],
+  gmail: ['gmail', 'email', 'e-mail', 'inbox', 'invoice'],
+  figma: ['figma', 'onboarding', 'mockup', 'design'],
+  slack: ['slack', '#launch'],
+};
+
 // ---- Scenarios ---------------------------------------------------------------
 
-export const PATTERNS: PatternScenario[] = [
-  {
+// Judges for the ground truth use cases that aren't one alert on time (src/utils/groundTruth.ts),
+// keyed by use case id: what they logged, counted or clipped, and when.
+const CHECKS: Record<string, Check> = {
+  youtube_topic_changes: {
     // A watcher that appends every occurrence: one note per topic change, with the video's time.
-    id: 'youtube_timestamps #1',
-    demo: 'youtube_watch.html',
-    prompt: "Timestamp this YouTube video for me: every time the topic changes, save a note to memory with the video's timestamp.",
     runMs: 240_000,
     graceMs: 45_000,
     score: run => {
@@ -198,11 +224,8 @@ export const PATTERNS: PatternScenario[] = [
       return { verdict: 'FAIL', metrics, notes: [] };
     },
   },
-  {
+  terminal_errors: {
     // A watcher that logs each error once, though each stays on screen for several iterations.
-    id: 'terminal_errors #1',
-    demo: 'terminal_errors.html',
-    prompt: 'Keep a log in memory of every error that shows up in my terminal.',
     runMs: 240_000,
     graceMs: 60_000,
     score: run => {
@@ -221,11 +244,8 @@ export const PATTERNS: PatternScenario[] = [
       return { verdict: 'FAIL', metrics, notes: [] };
     },
   },
-  {
+  twitch_chat: {
     // A logger of a chat that scrolls: every message once, though each stays visible for ~100 s.
-    id: 'twitch_chat #1',
-    demo: 'twitch_chat.html',
-    prompt: 'Save the full transcript of this Twitch chat to memory.',
     runMs: 240_000,
     graceMs: 60_000,
     score: run => {
@@ -250,11 +270,8 @@ export const PATTERNS: PatternScenario[] = [
       return { verdict: 'FAIL', metrics, notes: [] };
     },
   },
-  {
+  meeting_transcript: {
     // A logger of the call's audio. Nothing to detect: the transcript just has to be in memory.
-    id: 'meeting_transcript #1',
-    demo: 'google_meet_call.html',
-    prompt: 'Listen to this meeting and write the transcript to memory.',
     runMs: 240_000,
     graceMs: 90_000,
     score: run => {
@@ -267,37 +284,15 @@ export const PATTERNS: PatternScenario[] = [
       return { verdict: 'FAIL', metrics, notes: [] };
     },
   },
-  {
+  meeting_summary: {
     // Logger + one-shot summarizer: the summary comes once, after the call ends.
-    id: 'meeting_summary #1',
-    demo: 'google_meet_call.html',
-    prompt: 'Summarize this meeting when it ends and save the summary to memory.',
     runMs: 240_000,
     graceMs: 150_000,
     score: scoreMeetingSummary,
   },
-  {
-    // The same, but the user didn't say where the summary goes: the MCP should ask first.
-    id: 'meeting_summary_ask #1',
-    demo: 'google_meet_call.html',
-    prompt: 'Summarize this meeting when it ends.',
-    followUp: 'Save it to memory, please.',
-    runMs: 240_000,
-    graceMs: 150_000,
-    score: run => {
-      const s = scoreMeetingSummary(run);
-      const invented = run.toolCalls.some(c => /create_agent|edit_agent/.test(c.name) && /sendEmail\(\s*["'`][^"'`]+@/.test(c.args));
-      s.metrics.asked = run.asked;
-      if (invented) return { ...s, verdict: 'FAIL', notes: [...s.notes, 'wrote an email address the user never gave'] };
-      if (!run.asked && s.verdict === 'PASS') return { ...s, verdict: 'PARTIAL', notes: [...s.notes, "didn't ask where to save it"] };
-      return s;
-    },
-  },
-  {
-    // Logger + one-shot summarizer on a video: chapters with timestamps, after it finishes.
-    id: 'youtube_chapters #1',
-    demo: 'youtube_watch.html',
-    prompt: 'Make chapters for this YouTube video when it finishes, and save them to memory.',
+  youtube_topics: {
+    // Logger + one-shot summarizer on a video: every topic, after it finishes. Timestamps are counted
+    // but not required: the request doesn't ask for them.
     runMs: 240_000,
     graceMs: 150_000,
     score: run => {
@@ -314,25 +309,17 @@ export const PATTERNS: PatternScenario[] = [
       const byAny = chapters.filter((c: any) => byTs.includes(c) || lines.some(l => mentions(l, CHAPTER_KEYS[c.index])));
       const metrics = { chapters: chapters.length, withTimestamp: byTs.length, named: byAny.length, writes: list.length, list: lines.join('\n').slice(0, 1500) };
       if (!list.length) return { verdict: 'FAIL', metrics, notes: [...notes, 'nothing saved after the video ended'] };
-      if (!early.length && byTs.length >= chapters.length - 1) return { verdict: 'PASS', metrics, notes };
+      if (!early.length && byAny.length >= chapters.length - 1) return { verdict: 'PASS', metrics, notes };
       if (byAny.length >= chapters.length - 2) return { verdict: 'PARTIAL', metrics, notes };
       return { verdict: 'FAIL', metrics, notes };
     },
   },
-  {
+  workday_notes: {
     // Logger + periodic summarizer: a note every 2 minutes naming what was on screen in that window.
-    id: 'workday_digest #1',
-    demo: 'workday.html',
-    prompt: 'Every 2 minutes, save a note to memory of what I worked on.',
     runMs: 390_000,
     graceMs: 30_000,
     score: run => {
-      const APP_KEYS: Record<string, string[]> = {
-        vscode: ['vs code', 'vscode', 'visual studio code', 'code editor', 'checkout.ts', 'coding', 'typescript'],
-        gmail: ['gmail', 'email', 'e-mail', 'inbox', 'invoice'],
-        figma: ['figma', 'onboarding', 'mockup', 'design'],
-        slack: ['slack', '#launch'],
-      };
+      const APP_KEYS = WORKDAY_APPS;
       // Who was on screen when: VS Code until the run starts, then the demo's switches.
       const switches = [{ t: 0, name: 'vscode' }, ...marks(run, 'app').map(m => ({ t: m.t, name: m.data.name as string }))];
       const onScreen = (from: number, to: number) => {
@@ -364,11 +351,8 @@ export const PATTERNS: PatternScenario[] = [
       return { verdict: 'FAIL', metrics, notes };
     },
   },
-  {
+  shopify_count: {
     // An aggregator: the count lives in memory, and it's the new orders, not today's total.
-    id: 'shopify_count #1',
-    demo: 'shopify_orders.html',
-    prompt: 'Count how many orders come in on my Shopify dashboard and keep the total in memory.',
     runMs: 240_000,
     graceMs: 45_000,
     score: run => {
@@ -389,17 +373,12 @@ export const PATTERNS: PatternScenario[] = [
       return { verdict: 'FAIL', metrics, notes: count === before + added ? ["counted today's orders, not the new ones"] : [] };
     },
   },
-  {
+  ticketmaster_two_alerts: {
     // Two alerts from one request: out of the queue, then 2 minutes left on the ticket hold.
-    id: 'ticketmaster_two_alerts #1',
-    demo: 'ticketmaster_queue.html?outcome=success&timer=200',
-    prompt: "Send me a browser notification when I'm out of the Ticketmaster queue, and another one when I have 2 minutes left to pick my tickets.",
     runMs: 120_000,
     graceMs: 145_000,
     score: run => {
-      // Sends within 3 s of each other are one alert (a notify with a sound).
-      const alerts: number[] = [];
-      for (const n of run.events.filter(e => e.type === 'notification')) if (!alerts.length || n.t - alerts[alerts.length - 1] > 3000) alerts.push(n.t);
+      const alerts = alertTimes(run);
       const two = marks(run, 'two_minutes_left')[0]?.t ?? null;
       if (run.triggerT === null || two === null) return { verdict: 'FAIL', metrics: {}, notes: ['the demo never reached its end or the 2:00 mark'] };
       const early = alerts.filter(t => t < run.triggerT!);
@@ -413,12 +392,8 @@ export const PATTERNS: PatternScenario[] = [
       return { verdict: 'FAIL', metrics, notes: [] };
     },
   },
-  {
+  minecraft_clips: {
     // Clips: a clip started or marked right after each death.
-    id: 'minecraft_clips #1',
-    demo: 'minecraft.html',
-    prompt: 'Save a clip every time my character dies in this game.',
-    requires: 'media/minecraft.mp4',
     runMs: 600_000,
     graceMs: 40_000,
     score: run => {
@@ -429,6 +404,140 @@ export const PATTERNS: PatternScenario[] = [
       const metrics = { deaths: deaths.length, covered: covered.length, clipCalls: clips.length, stray, stopClips: run.events.filter(e => e.type === 'clip' && e.tool === 'stopClip').length };
       if (deaths.length && covered.length === deaths.length && stray <= 1) return { verdict: 'PASS', metrics, notes: [] };
       if (covered.length >= deaths.length / 2 && covered.length > 0) return { verdict: 'PARTIAL', metrics, notes: [] };
+      return { verdict: 'FAIL', metrics, notes: [] };
+    },
+  },
+  minecraft_deaths: {
+    // Alerts, not clips: one notification right after each death, none in between.
+    runMs: 600_000,
+    graceMs: 40_000,
+    score: run => {
+      const deaths = marks(run, 'death').map(m => m.t);
+      const alerts = alertTimes(run);
+      const near = (a: number, d: number) => a >= d - 3000 && a <= d + 40_000;
+      const covered = deaths.filter(d => alerts.some(a => near(a, d)));
+      const stray = alerts.filter(a => !deaths.some(d => near(a, d))).length;
+      const metrics = { deaths: deaths.length, covered: covered.length, alerts: alerts.length, stray };
+      if (deaths.length && covered.length === deaths.length && stray <= 1) return { verdict: 'PASS', metrics, notes: [] };
+      if (covered.length > 0 && covered.length >= deaths.length / 2) return { verdict: 'PARTIAL', metrics, notes: [] };
+      return { verdict: 'FAIL', metrics, notes: [] };
+    },
+  },
+  workday_calls: {
+    // A transcript of the call in the middle of a workday, and nothing from the rest of the day.
+    runMs: 390_000,
+    graceMs: 60_000,
+    score: run => {
+      const text = [...entries(run).map(e => e.text), ...run.memories.map(m => m.memory)].join('\n');
+      const heard = MEETING_PHRASES.filter(p => mentions(text, p));
+      // Logged before the call started: the day, not the call.
+      const callT = marks(run, 'app').find(m => m.data.name === 'meet')?.t ?? Infinity;
+      const early = entries(run).filter(e => e.t < callT).length;
+      const metrics = { heard: heard.length, phrases: MEETING_PHRASES.length, loggedBeforeCall: early, memory: text.slice(0, 1500) };
+      const notes = early ? [`${early} notes logged before the call started`] : [];
+      if (heard.length >= 6 && early <= 1) return { verdict: 'PASS', metrics, notes };
+      if (heard.length >= 3) return { verdict: 'PARTIAL', metrics, notes };
+      return { verdict: 'FAIL', metrics, notes };
+    },
+  },
+  pet_food: {
+    // A camera logger for one moment: the dog walking away mid-bowl isn't it.
+    runMs: 180_000,
+    graceMs: 60_000,
+    score: run => {
+      const finished = marks(run, 'finished')[0]?.t;
+      if (!finished) return { verdict: 'FAIL', metrics: {}, notes: ['the clip never reached the empty bowl'] };
+      // A note that says the bowl is done, sentence by sentence, skipping "not finished yet".
+      const claims = entries(run).filter(e => e.text.split(/[.!?\n]/).some(l =>
+        mentions(l, ['finished', 'empty', 'done eating', 'ate all', 'all gone', 'cleaned the bowl']) && !/\b(not|no longer|yet)\b|n't/i.test(l)));
+      const good = claims.filter(e => e.t >= finished - 5000 && e.t <= finished + 60_000);
+      const early = claims.filter(e => e.t < finished - 5000);
+      const metrics = { notes: entries(run).length, claims: claims.length, early: early.length, onTimeAfterS: good.length ? Math.round((good[0].t - finished) / 1000) : null };
+      if (good.length && !early.length) return { verdict: 'PASS', metrics, notes: [] };
+      if (good.length) return { verdict: 'PARTIAL', metrics, notes: ['said it was finished before it was'] };
+      return { verdict: 'FAIL', metrics, notes: early.length ? ['said it was finished before it was'] : [] };
+    },
+  },
+  people_log: {
+    // A camera log of comings and goings: a note near each one, not one every loop.
+    runMs: 240_000,
+    graceMs: 45_000,
+    score: run => {
+      const KEYS: Record<string, string[]> = {
+        enter: ['enter', 'arriv', 'came in', 'comes in', 'walked in', 'walks in', 'appear', 'showed up', 'shows up', 'came home'],
+        leave: ['left', 'leav', 'exit', 'walked out', 'walks out', 'went out', 'departed', 'gone'],
+      };
+      const events = [...marks(run, 'enter'), ...marks(run, 'leave')];
+      const near = (t: number, e: { t: number }) => t >= e.t - 5000 && t <= e.t + 30_000;
+      const notes = entries(run);
+      const covered = events.filter(e => notes.some(n => near(n.t, e) && mentions(n.text, KEYS[e.name])));
+      const stray = notes.filter(n => !events.some(e => near(n.t, e))).length;
+      const metrics = { events: events.length, covered: covered.length, notes: notes.length, stray };
+      if (!events.length) return { verdict: 'FAIL', metrics, notes: ['the clip has no comings or goings marked'] };
+      if (covered.length >= 0.8 * events.length && stray <= events.length) return { verdict: 'PASS', metrics, notes: [] };
+      if (covered.length >= 0.5 * events.length) return { verdict: 'PARTIAL', metrics, notes: stray > events.length ? [`${stray} notes with nobody coming or going`] : [] };
+      return { verdict: 'FAIL', metrics, notes: [] };
+    },
+  },
+};
+
+// Chat checks: not use cases, so not in the ground truth. Requests where the right move is to ask
+// first, to answer from what the agents saw, or to build nothing.
+const CHAT: PatternScenario[] = [
+  {
+    // The same, but the user didn't say where the summary goes: the MCP should ask first.
+    id: 'meeting_summary_ask #1',
+    demo: 'google_meet_call.html',
+    prompt: 'Summarize this meeting when it ends.',
+    followUp: 'Save it to memory, please.',
+    runMs: 240_000,
+    graceMs: 150_000,
+    score: run => {
+      const s = scoreMeetingSummary(run);
+      const invented = run.toolCalls.some(c => /create_agent|edit_agent/.test(c.name) && /sendEmail\(\s*["'`][^"'`]+@/.test(c.args));
+      s.metrics.asked = run.asked;
+      if (invented) return { ...s, verdict: 'FAIL', notes: [...s.notes, 'wrote an email address the user never gave'] };
+      if (!run.asked && s.verdict === 'PASS') return { ...s, verdict: 'PARTIAL', notes: [...s.notes, "didn't ask where to save it"] };
+      return s;
+    },
+  },
+  {
+    // Asked about the past with nothing logging it: the honest answer is that it can't know, and
+    // the useful one offers to start (or starts) keeping track. Naming apps that were never on
+    // screen (the demo holds in VS Code) is making it up.
+    id: 'activity_recall_cold #1',
+    demo: 'workday.html',
+    prompt: 'What was I doing the last 4 hours?',
+    noAgent: true,
+    runMs: 0,
+    graceMs: 0,
+    score: run => {
+      const reply = run.replies[0] ?? '';
+      const invented = ['gmail', 'figma', 'slack', 'onboarding', 'northwind', '#launch'].filter(k => mentions(reply, [k]));
+      const honest = mentions(reply, ["can't", 'cannot', "don't have", 'do not have', 'no record', 'no history', 'not able', 'unable',
+        "haven't been", 'from now on', 'going forward', 'start tracking', 'start logging', 'keep track']);
+      const built = run.agents.length > 0;
+      const metrics = { invented, honest, built, reply: reply.slice(0, 1500) };
+      if (invented.length) return { verdict: 'FAIL', metrics, notes: [`named apps it never saw: ${invented.join(', ')}`] };
+      if (honest || built) return { verdict: 'PASS', metrics, notes: [] };
+      return { verdict: 'PARTIAL', metrics, notes: ["didn't say it can't see the past or offer to start tracking"] };
+    },
+  },
+  {
+    // A logger now, a question later: the MCP answers from what its agents saw.
+    id: 'activity_recall #1',
+    demo: 'workday.html',
+    prompt: "Keep track of what I'm working on so I can ask you about it later.",
+    afterRun: 'What was I doing over the last few minutes?',
+    runMs: 390_000,
+    graceMs: 30_000,
+    score: run => {
+      const reply = run.replies[run.replies.length - 1] ?? '';
+      const said = Object.keys(WORKDAY_APPS).filter(a => mentions(reply, WORKDAY_APPS[a]));
+      const metrics = { said, apps: Object.keys(WORKDAY_APPS).length, reply: reply.slice(0, 1500) };
+      if (!reply) return { verdict: 'FAIL', metrics, notes: ['no answer to the question'] };
+      if (said.length >= 3) return { verdict: 'PASS', metrics, notes: [] };
+      if (said.length >= 2) return { verdict: 'PARTIAL', metrics, notes: [] };
       return { verdict: 'FAIL', metrics, notes: [] };
     },
   },
@@ -449,4 +558,16 @@ export const PATTERNS: PatternScenario[] = [
       return { verdict: built.length || run.agents.length ? 'FAIL' : 'PASS', metrics, notes: [] };
     },
   })),
+];
+
+const stray = Object.keys(CHECKS).filter(id => !GROUND_TRUTH.some(u => u.id === id && !u.expect));
+if (stray.length) throw new Error(`checks for no ground truth use case: ${stray.join(', ')}`);
+
+export const PATTERNS: PatternScenario[] = [
+  ...GROUND_TRUTH.filter(u => !u.expect).map(u => {
+    const check = CHECKS[u.id];
+    if (!check) throw new Error(`ground truth use case ${u.id} has no expect and no check in patterns.ts`);
+    return { id: u.id, demo: u.demo, prompt: prompt(u), requires: u.requires, ...check };
+  }),
+  ...CHAT,
 ];

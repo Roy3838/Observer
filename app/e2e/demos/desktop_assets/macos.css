@@ -1,0 +1,78 @@
+/* A macOS Sonoma desktop for demos that run in a native app: menu bar (app menus, battery, wifi,
+   clock), wallpaper, windows with traffic lights, the dock and notification banners. Built by
+   macos.js (Mac.mount); a demo puts its app window(s) inside <body class="mac">. */
+* { box-sizing: border-box; }
+body.mac {
+  margin: 0; height: 100vh; overflow: hidden; position: relative;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Helvetica Neue", sans-serif; font-size: 13px;
+  background: #1c2a4a radial-gradient(120% 90% at 20% 110%, #f2a35e 0%, #d4568a 28%, #6b3fa0 52%, #1f2f6b 78%, #0d1630 100%);
+  color: #1d1d1f;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Menu bar */
+.mac-menubar {
+  position: absolute; top: 0; left: 0; right: 0; height: 24px; z-index: 50;
+  display: flex; align-items: center; gap: 20px; padding: 0 10px 0 14px;
+  background: rgba(22, 22, 30, .38); backdrop-filter: blur(30px) saturate(1.6); -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  color: #fff; font-size: 13px; letter-spacing: -.08px; text-shadow: 0 0 1px rgba(0,0,0,.2);
+}
+.mac-menubar .apple { width: 14px; height: 16px; fill: #fff; margin-right: 2px; }
+.mac-menubar .app { font-weight: 700; }
+.mac-menubar .menus { display: flex; gap: 20px; }
+.mac-menubar .status { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.mac-menubar .status svg { fill: #fff; display: block; }
+.mac-battery { display: flex; align-items: center; gap: 5px; }
+.mac-battery .pct { font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.mac-battery .body { position: relative; width: 25px; height: 12px; border: 1.2px solid rgba(255,255,255,.55); border-radius: 3.5px; padding: 1.2px; }
+.mac-battery .body::after { content: ''; position: absolute; right: -3.4px; top: 3.4px; width: 1.8px; height: 3.6px; background: rgba(255,255,255,.55); border-radius: 0 1px 1px 0; }
+.mac-battery .fill { height: 100%; background: #fff; border-radius: 1.6px; }
+.mac-battery.low .fill { background: #ff453a; }
+.mac-battery .bolt { position: absolute; inset: 0; display: none; place-items: center; }
+.mac-battery.charging .bolt { display: grid; }
+.mac-battery .bolt svg { width: 9px; height: 11px; fill: #fff; stroke: rgba(0,0,0,.5); stroke-width: .8px; }
+.mac-clock { font-variant-numeric: tabular-nums; }
+
+/* Windows */
+.mac-window {
+  position: absolute; display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 10px; background: #fff;
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.35), 0 22px 70px rgba(0,0,0,.45);
+}
+.mac-window.full { top: 24px; left: 0; right: 0; bottom: 0; border-radius: 0; }
+.mac-titlebar {
+  height: 28px; flex: none; position: relative; display: flex; align-items: center; justify-content: center;
+  background: #ececec; border-bottom: 1px solid #d5d5d5; color: #4d4d4d; font-size: 13px; font-weight: 600;
+}
+.mac-titlebar.dark { background: #2b2b2b; border-bottom-color: #111; color: #b5b5b5; }
+.mac-lights { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); display: flex; gap: 8px; }
+.mac-lights i { width: 12px; height: 12px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.18); }
+.mac-lights i:nth-child(1) { background: #ff5f57; } .mac-lights i:nth-child(2) { background: #febc2e; } .mac-lights i:nth-child(3) { background: #28c840; }
+.mac-window.inactive .mac-lights i { background: #d6d6d6; }
+
+/* Dock */
+.mac-dock {
+  position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 40;
+  display: flex; align-items: flex-end; gap: 6px; padding: 5px 6px 6px; border-radius: 18px;
+  background: rgba(240, 240, 248, .32); backdrop-filter: blur(30px) saturate(1.6); -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  box-shadow: 0 0 0 .5px rgba(255,255,255,.35) inset, 0 10px 30px rgba(0,0,0,.25);
+}
+.mac-dock .icon { width: 48px; height: 48px; border-radius: 11px; display: grid; place-items: center; position: relative;
+  color: #fff; font-size: 24px; font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.mac-dock .icon.open::after { content: ''; position: absolute; bottom: -5px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: rgba(255,255,255,.85); }
+.mac-dock .sep { width: 1px; height: 44px; background: rgba(255,255,255,.35); margin: 0 3px 2px; }
+
+/* Notification banner (top right, under the menu bar) */
+.mac-notes { position: absolute; top: 32px; right: 10px; z-index: 60; display: flex; flex-direction: column; gap: 8px; width: 344px; }
+.mac-note {
+  display: flex; gap: 10px; align-items: flex-start; padding: 11px 14px 12px 11px; border-radius: 16px;
+  background: rgba(246, 246, 246, .82); backdrop-filter: blur(30px) saturate(1.8); -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.12), 0 10px 30px rgba(0,0,0,.22); color: #1d1d1f; font-size: 13px; line-height: 17px;
+  animation: mac-note-in .45s cubic-bezier(.2,.9,.3,1.1);
+}
+.mac-note .ico { width: 34px; height: 34px; border-radius: 8px; flex: none; display: grid; place-items: center; color: #fff; font-size: 18px; }
+.mac-note .txt { flex: 1; min-width: 0; }
+.mac-note .hd { display: flex; justify-content: space-between; gap: 8px; }
+.mac-note .hd b { font-weight: 600; }
+.mac-note .hd span { color: #808080; font-size: 12px; }
+@keyframes mac-note-in { from { transform: translateX(380px); } to { transform: none; } }

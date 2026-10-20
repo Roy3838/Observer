@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<!-- A Pokémon MMO client (Padventures) grinding wild battles in Mt. Mortar with an Alolan Raichu: wild
+     Pokémon (single or hordes of up to five) appear in the Battle List next to Raichu's yellow and pink
+     moves, Raichu knocks them out, the next battle starts. Holds grinding commons until the suite
+     starts it; then a plain Tyrogue shows up twice along the way (marked 'decoy': not the one the
+     user wants), and it ends by ?outcome=: success, a Cloned Tyrogue appears and the battle waits for
+     the user; fail, the client loses its connection to the server. Sprites are original pixel art
+     drawn here, not the games' assets. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Padventures Client v12.0.3.5</title>
+<link rel="stylesheet" href="fonts/inter.css">
+<link rel="stylesheet" href="desktop_assets/macos.css">
+<style>
+  #game { left: 40px; top: 40px; width: 1200px; height: 740px; }
+  .gm { flex: 1; display: flex; flex-direction: column; background: #10141c; font-family: "Trebuchet MS", Verdana, sans-serif; color: #fff; position: relative; min-height: 0; }
+  .scene { height: 470px; position: relative; overflow: hidden;
+           background: linear-gradient(#6b5a4a 0%, #8a7560 38%, #a58f72 39%, #8d7a5f 100%); }
+  .scene::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, rgba(0,0,0,.05) 0 24px, transparent 24px 48px); }
+  .plat { position: absolute; border-radius: 50%; background: radial-gradient(#b8a07c, #8a7458); box-shadow: inset 0 -8px 0 rgba(0,0,0,.15); }
+  .foes { position: absolute; right: 70px; top: 40px; width: 560px; height: 230px; display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 6px 22px; }
+  .foe { display: flex; flex-direction: column; align-items: center; transition: opacity .6s, transform .6s; }
+  .foe.out { opacity: 0; transform: translateY(20px); }
+  .foe canvas { image-rendering: pixelated; width: 104px; height: 104px; }
+  .foe .hp { width: 76px; height: 6px; background: #333; border: 1px solid #000; margin-top: 4px; }
+  .foe .hp i { display: block; height: 100%; background: #3cd070; }
+  .me { position: absolute; left: 120px; bottom: 6px; }
+  .me canvas { image-rendering: pixelated; width: 210px; height: 210px; }
+  .mybox { position: absolute; right: 60px; bottom: 30px; width: 300px; background: rgba(250, 248, 240, .95); color: #222; border: 3px solid #4a4a4a; border-radius: 8px; padding: 8px 12px; font-size: 15px; font-weight: 700; }
+  .mybox .hp { height: 8px; background: #555; border-radius: 4px; margin: 6px 0 2px; } .mybox .hp i { display: block; width: 100%; height: 100%; background: #3cd070; border-radius: 4px; }
+  .mybox small { font-weight: 400; color: #555; }
+  .bottom { flex: 1; display: flex; gap: 10px; padding: 10px; background: #1b2230; border-top: 3px solid #0a0d13; min-height: 0; }
+  .text { width: 330px; background: #f8f8f0; color: #222; border: 3px solid #4a5568; border-radius: 8px; padding: 14px 16px; font-size: 17px; line-height: 25px; font-weight: 700; }
+  .moves { width: 400px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .move { border-radius: 8px; border: 3px solid rgba(0,0,0,.35); padding: 8px 12px; color: #222; font-weight: 700; font-size: 16px; display: flex; flex-direction: column; justify-content: center; }
+  .move small { font-weight: 400; font-size: 12px; opacity: .8; }
+  .move.el { background: linear-gradient(#ffe46b, #f7d02c); } .move.ps { background: linear-gradient(#ff8fb1, #f95587); }
+  .list { flex: 1; background: #232c3d; border: 2px solid #3b475e; border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; min-width: 0; }
+  .list .h { font-size: 13px; color: #9fb0cc; font-weight: 700; letter-spacing: .5px; margin-bottom: 6px; display: flex; justify-content: space-between; }
+  .list .row { display: flex; align-items: center; gap: 8px; padding: 3px 4px; font-size: 15px; border-bottom: 1px solid #2f3a50; }
+  .list .row canvas { width: 26px; height: 26px; image-rendering: pixelated; }
+  .list .row .lv { margin-left: auto; color: #9fb0cc; font-size: 13px; }
+  .list .row.clone { color: #c9a6ff; }
+  .chat { position: absolute; left: 10px; top: 10px; width: 330px; background: rgba(0,0,0,.45); border-radius: 6px; padding: 6px 8px; font: 12px/17px Inter, sans-serif; color: #e8e8e8; }
+  .chat b { color: #8fd3ff; font-weight: 600; }
+  .dc { display: none; position: absolute; inset: 0; background: rgba(0,0,0,.6); z-index: 5; place-items: center; }
+  .dc div { width: 420px; background: #232c3d; border: 2px solid #3b475e; border-radius: 10px; padding: 22px; text-align: center; font-size: 16px; line-height: 24px; }
+  .dc b { display: block; font-size: 20px; margin-bottom: 8px; color: #ff8080; }
+  .dc span { display: inline-block; margin-top: 16px; padding: 8px 22px; background: #3b82f6; border-radius: 6px; font-weight: 700; }
+</style>
+<script src="demo-contract.js"></script>
+<script src="desktop_assets/macos.js"></script>
+</head>
+<body>
+<div class="mac-window" id="game">
+  <div class="mac-titlebar dark"><div class="mac-lights"><i></i><i></i><i></i></div><span>Padventures Client v12.0.3.5</span></div>
+  <div class="gm">
+    <div class="scene">
+      <div class="plat" style="right:110px;top:200px;width:480px;height:90px"></div>
+      <div class="plat" style="left:60px;bottom:-30px;width:340px;height:80px"></div>
+      <div class="foes" id="foes"></div>
+      <div class="me"><canvas id="raichu" width="24" height="24"></canvas></div>
+      <div class="mybox">Alolan Raichu <small>Lv. 54</small><div class="hp"><i></i></div><small>HP 142 / 142</small></div>
+      <div class="chat" id="chat"></div>
+    </div>
+    <div class="bottom">
+      <div class="text" id="text">What will Alolan Raichu do?</div>
+      <div class="moves">
+        <div class="move el">Thunderbolt<small>Electric · PP 14/24</small></div>
+        <div class="move ps">Psychic<small>Psychic · PP 9/16</small></div>
+        <div class="move el">Volt Switch<small>Electric · PP 31/32</small></div>
+        <div class="move ps">Psyshock<small>Psychic · PP 12/16</small></div>
+      </div>
+      <div class="list"><div class="h"><span>BATTLE LIST</span><span id="bcount">0</span></div><div id="list"></div></div>
+    </div>
+    <div class="dc" id="dc"><div><b>Connection lost</b>You have been disconnected from the server.<br>(Error 10054: connection reset by peer)<br><span>Reconnect</span></div></div>
+  </div>
+</div>
+
+<script>
+  Mac.mount({ app: 'Padventures', menus: ['Game', 'Window', 'Help'], battery: 91 });
+  const $ = id => document.getElementById(id);
+
+  // Original pixel sprites: a symmetric blob from a seed, in the species' colors.
+  const SPECIES = {
+    Machop: ['#8fa7c4', '#5b7290'], Mankey: ['#e8d3b0', '#a6714a'], Geodude: ['#9a9a8a', '#5d5d52'], Zubat: ['#6c8fd8', '#7a4fa8'],
+    Golbat: ['#5f7fd0', '#a24d8a'], Marill: ['#4fa3f0', '#f0f0f0'], Rattata: ['#9b6fb8', '#e8d8b0'], Graveler: ['#8b8b7b', '#4f4f45'],
+    Tyrogue: ['#c9a27a', '#6a4fb0'], 'Cloned Tyrogue': ['#c9a27a', '#6a4fb0'],
+  };
+  const seedOf = s => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const drawSprite = (canvas, name, size, glow) => {
+    const [a, b] = SPECIES[name];
+    const ctx = canvas.getContext('2d');
+    canvas.width = canvas.height = size;
+    let s = seedOf(name.replace('Cloned ', ''));
+    const rnd = () => (s = (s * 1103515245 + 12345) >>> 0) / 2 ** 32;
+    const half = Math.ceil(size / 2);
+    for (let y = 2; y < size - 1; y++) for (let x = 2; x < half; x++) {
+      const dx = (half - x) / half, dy = Math.abs(y - size / 2) / (size / 2);
+      if (rnd() < 0.85 - (dx * dx + dy * dy) * 0.9) {
+        ctx.fillStyle = rnd() < 0.7 ? a : b;
+        ctx.fillRect(x, y, 1, 1); ctx.fillRect(size - 1 - x, y, 1, 1);
+      }
+    }
+    ctx.fillStyle = '#111';
+    ctx.fillRect(half - 3, Math.floor(size * 0.38), 1, 2); ctx.fillRect(size - half + 2, Math.floor(size * 0.38), 1, 2);
+    if (glow) { canvas.style.filter = 'drop-shadow(0 0 6px #b78cff) drop-shadow(0 0 2px #b78cff) hue-rotate(200deg)'; }
+  };
+  // Raichu from behind: orange, a cream belly edge, a long tail.
+  (() => {
+    const c = $('raichu').getContext('2d');
+    const px = (x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
+    px(6, 6, 12, 14, '#c26a2c'); px(5, 8, 14, 10, '#c26a2c'); px(7, 2, 3, 5, '#7a4a2a'); px(14, 2, 3, 5, '#7a4a2a');
+    px(8, 3, 1, 3, '#f2c45a'); px(15, 3, 1, 3, '#f2c45a'); px(18, 14, 5, 2, '#7a4a2a'); px(21, 10, 2, 5, '#7a4a2a'); px(20, 8, 3, 3, '#f2c45a');
+    px(6, 18, 4, 3, '#a8561f'); px(14, 18, 4, 3, '#a8561f');
+  })();
+
+  const COMMONS = ['Machop', 'Mankey', 'Geodude', 'Zubat', 'Golbat', 'Marill', 'Rattata', 'Graveler'];
+  const pick = () => COMMONS[Math.floor(Math.random() * COMMONS.length)];
+  const CHAT = [['TrainerKai', 'anyone seen a clone today?'], ['mochi_pad', 'LF horde partner mt mortar'], ['Rhydon4ever', 'gg'],
+    ['TrainerKai', 'clones spawn rate feels nerfed'], ['xXDarkraiXx', 'selling PP ups 8k each'], ['mochi_pad', 'nvm found one']];
+  let ci = 0;
+  const chat = () => { const [w, m] = CHAT[ci++ % CHAT.length]; $('chat').insertAdjacentHTML('beforeend', `<div><b>${w}:</b> ${m}</div>`); while ($('chat').children.length > 4) $('chat').firstChild.remove(); };
+  for (let i = 0; i < 4; i++) chat();
+  setInterval(() => { if (Math.random() < 0.4) chat(); }, 5000);
+
+  const show = (names, clone) => {
+    $('foes').innerHTML = ''; $('list').innerHTML = '';
+    names.forEach(n => {
+      const lv = 20 + Math.floor(Math.random() * 8);
+      const f = document.createElement('div'); f.className = 'foe';
+      const cv = document.createElement('canvas'); drawSprite(cv, n, 20, clone);
+      f.append(cv); f.insertAdjacentHTML('beforeend', '<div class="hp"><i style="width:100%"></i></div>');
+      $('foes').append(f);
+      const r = document.createElement('div'); r.className = `row${clone ? ' clone' : ''}`;
+      const sc = document.createElement('canvas'); drawSprite(sc, n, 20, clone);
+      r.append(sc); r.insertAdjacentHTML('beforeend', `<span>${n}</span><span class="lv">Lv. ${lv}</span>`);
+      $('list').append(r);
+    });
+    $('bcount').textContent = names.length;
+    $('text').textContent = names.length > 1 ? 'A horde of wild Pokémon appeared!' : `A wild ${names[0]} appeared!`;
+  };
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // One battle: they appear, Raichu attacks, they faint.
+  const battle = async names => {
+    show(names);
+    await sleep(2200);
+    $('text').textContent = 'What will Alolan Raichu do?';
+    await sleep(1400);
+    $('text').textContent = names.length > 1 ? 'Alolan Raichu used Thunderbolt!' : `Alolan Raichu used ${Math.random() < 0.5 ? 'Psychic' : 'Thunderbolt'}!`;
+    await sleep(900);
+    document.querySelectorAll('.foe').forEach(f => { f.querySelector('.hp i').style.width = '0%'; f.classList.add('out'); });
+    await sleep(900);
+    $('text').textContent = names.length > 1 ? 'The wild horde fainted!' : `The wild ${names[0]} fainted!`;
+    await sleep(1200);
+    $('foes').innerHTML = ''; $('list').innerHTML = ''; $('bcount').textContent = '0';
+    $('text').textContent = '…';
+    await sleep(800);
+  };
+
+  let run = null, decoys = [];
+  (async () => {
+    for (;;) {
+      const t = run ? Date.now() - run.at : 0;
+      if (run && t >= run.durationMs) break;
+      if (run && decoys.length && t >= decoys[0]) {
+        decoys.shift();
+        demo.mark('decoy', { name: 'Tyrogue' });
+        await battle(['Tyrogue']);
+        continue;
+      }
+      const horde = Math.random() < 0.45;
+      await battle(horde ? Array.from({ length: 5 }, pick) : [pick()]);
+    }
+    if (demo.outcome === 'fail') {
+      $('dc').style.display = 'grid';
+      $('text').textContent = 'Connection lost.';
+    } else {
+      show(['Cloned Tyrogue'], true);
+      $('text').textContent = 'A wild Cloned Tyrogue appeared!';
+      setTimeout(() => { $('text').textContent = 'What will Alolan Raichu do?'; }, 2500);
+    }
+    demo.trigger();
+  })();
+
+  demo.onStart = durationMs => {
+    run = { at: Date.now(), durationMs };
+    decoys = [durationMs * 0.35, durationMs * 0.7];
+  };
+</script>
+</body>
+</html>

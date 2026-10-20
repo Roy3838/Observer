@@ -35,7 +35,7 @@ const RecipeMini: React.FC<RecipeMiniProps> = ({ onClick }) => {
     >
       <Sparkles className="w-3.5 h-3.5 shrink-0" />
       <span key={i} className="recipe-mini-fade">
-        When {trigger.label}, {action.label}
+        When {trigger.label}, then {action.label}
       </span>
       <style>{`
         @keyframes recipe-mini-fade-in { from { opacity: 0; } to { opacity: 1; } }

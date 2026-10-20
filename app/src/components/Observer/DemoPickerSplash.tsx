@@ -1,7 +1,7 @@
 // src/components/Observer/DemoPickerSplash.tsx
 //
 // The first-run tutorial: RecipeSplash's full-screen "When [wheel] then [wheel]" sentence, but
-// the trigger wheel picks one of the e2e demo pages (tutorialDemos.ts), with a big preview of
+// the trigger wheel picks one of the ground truth's demo pages (tutorialDemos.ts), with a big preview of
 // the one in focus. "Open demo" opens that demo in a new tab, where it runs on its own, and
 // sends the composed prompt to the MCP — from there Observer runs exactly as it would for any
 // real screen, share picker included. TutorialDemoBanner tells the user which tab to share.
@@ -28,9 +28,9 @@ export const TUTORIAL_SUPPORTED = !isMobile() && !(isWeb() && !navigator.mediaDe
 // every ~2 s, so the next preview is nearly always cached before it reaches the middle.
 const PREFETCH_ROWS = 3;
 
-// "Log it" writes memory, which agents also do on every loop, so the tutorial can't tell it
-// apart from the moment it's waiting for.
-const DEMO_ACTIONS = ACTIONS.filter(a => a.contact !== 'none');
+// Every integration, "log it" included: the tutorial waits for a notification, and a demo built
+// to log finishes on tutorialFlow's fallback timer instead.
+const DEMO_ACTIONS = ACTIONS;
 
 interface DemoPickerSplashProps {
   isOpen: boolean;

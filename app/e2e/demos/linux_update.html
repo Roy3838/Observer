@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<!-- Ubuntu 24.04 running Software Updater, with Details open (apt's log). Holds downloading the
+     updates ("Downloading 23 of 61", the count and speed creeping) until the suite starts it; then the
+     download finishes, "Installing updates…" unpacks and sets up packages over the run, and it ends
+     by ?outcome=: success, "The computer needs to restart to finish installing updates" with
+     Restart Now; fail, linux-image's post-installation script fails and the updater shows "Could not
+     install the upgrades". Marks 'installing' when the download is done. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Software Updater</title>
+<link rel="stylesheet" href="fonts/open-sans.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<link rel="stylesheet" href="desktop_assets/ubuntu.css">
+<style>
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 26px; line-height: 1; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  #upd { left: 300px; top: 150px; width: 700px; }
+  .up { padding: 22px 24px 20px; display: flex; gap: 18px; }
+  .up .logo { width: 64px; height: 64px; border-radius: 14px; background: linear-gradient(#f37b4a, #e95420); display: grid; place-items: center; color: #fff; flex: none; }
+  .up .logo .ms { font-size: 40px; }
+  .up .main { flex: 1; min-width: 0; }
+  .up h2 { margin: 2px 0 12px; font-size: 17px; font-weight: 700; color: #3d3d3d; }
+  .up .prog { height: 8px; border-radius: 4px; background: #dcdcdc; overflow: hidden; }
+  .up .prog i { display: block; height: 100%; background: #e95420; border-radius: 4px; }
+  .up .sub { margin-top: 8px; color: #6e6e6e; font-size: 13px; }
+  .up .exp { margin-top: 14px; font-size: 13px; color: #3d3d3d; display: flex; align-items: center; gap: 4px; }
+  .up .log { margin-top: 8px; height: 230px; background: #300a24; color: #f2f2f2; border-radius: 6px; padding: 8px 10px; font: 12px/17px "Ubuntu Mono", Menlo, monospace;
+             overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+  .up .log div { white-space: pre; }
+  .up .btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+  .end { display: none; }
+  .done .run { display: none; } .done .end { display: block; }
+</style>
+<script src="demo-contract.js"></script>
+<script src="desktop_assets/ubuntu.js"></script>
+</head>
+<body>
+<div class="ub-window" id="upd">
+  <div class="ub-titlebar">Software Updater<div class="btns"><i>–</i><i>□</i><i class="close">✕</i></div></div>
+  <div class="up">
+    <div class="logo" id="logo"><span class="ms">system_update_alt</span></div>
+    <div class="main">
+      <div class="run">
+        <h2 id="phase">Downloading updates…</h2>
+        <div class="prog"><i id="bar" style="width:20%"></i></div>
+        <div class="sub" id="sub">Downloading 23 of 61 · 1.9 MB/s</div>
+        <div class="exp">▾ Details</div>
+        <div class="log" id="log"></div>
+        <div class="btns"><span class="ub-btn">Cancel</span></div>
+      </div>
+      <div class="end" id="end"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  Ubuntu.mount({ dock: [
+    { bg: 'linear-gradient(#ff9500,#e66000)', glyph: '<span class="ms" style="font-size:28px">public</span>', open: true },
+    { bg: '#7c7c7c', glyph: '<span class="ms" style="font-size:28px">folder</span>' },
+    { bg: 'linear-gradient(#f37b4a,#e95420)', glyph: '<span class="ms" style="font-size:28px">shopping_bag</span>' },
+    { bg: '#300a24', glyph: '<span style="font:700 16px monospace">&gt;_</span>', open: true },
+    { bg: 'linear-gradient(#f37b4a,#e95420)', glyph: '<span class="ms" style="font-size:28px">system_update_alt</span>', open: true },
+    { bg: '#5e5e5e', glyph: '<span class="ms" style="font-size:28px">settings</span>' },
+  ] });
+  const $ = id => document.getElementById(id);
+  const line = t => { const d = document.createElement('div'); d.textContent = t; $('log').appendChild(d); while ($('log').children.length > 60) $('log').firstChild.remove(); };
+
+  const VER = '6.8.0-45', REL = '6.8.0-45.45';
+  const PKGS = [
+    ['libc6', '2.39-0ubuntu8.4'], ['libc-bin', '2.39-0ubuntu8.4'], ['openssl', '3.0.13-0ubuntu3.5'], ['libssl3t64', '3.0.13-0ubuntu3.5'],
+    ['firefox', '1:1snap1-0ubuntu5'], ['libnss3', '2:3.98-1build1.1'], ['python3.12', '3.12.3-1ubuntu0.8'], ['libpython3.12-stdlib', '3.12.3-1ubuntu0.8'],
+    ['gnome-shell', '46.0-0ubuntu6~24.04.6'], ['mutter-common', '46.2-1ubuntu0.24.04.10'], ['libmutter-14-0', '46.2-1ubuntu0.24.04.10'],
+    ['nautilus', '1:46.2-0ubuntu0.4'], ['snapd', '2.66.1+24.04'], ['systemd', '255.4-1ubuntu8.6'], ['libsystemd0', '255.4-1ubuntu8.6'],
+    ['udev', '255.4-1ubuntu8.6'], ['curl', '8.5.0-2ubuntu10.6'], ['libcurl4t64', '8.5.0-2ubuntu10.6'], ['tzdata', '2025b-0ubuntu0.24.04.1'],
+    ['libnvidia-gl-550', '550.163.01-0ubuntu0.24.04.1'], ['nvidia-driver-550', '550.163.01-0ubuntu0.24.04.1'],
+    [`linux-modules-${VER}-generic`, REL], [`linux-image-${VER}-generic`, REL], [`linux-modules-extra-${VER}-generic`, REL],
+    [`linux-headers-${VER}`, REL], [`linux-headers-${VER}-generic`, REL], ['linux-generic', '6.8.0-45.45'],
+  ];
+  const TOTAL = 61;
+
+  // Holding: downloading, the count creeping toward 40 and never past it.
+  let n = 0, pi = 0;
+  const get = () => {
+    n++;
+    const [p, v] = PKGS[pi++ % PKGS.length];
+    line(`Get:${n} http://us.archive.ubuntu.com/ubuntu noble-updates/main amd64 ${p} amd64 ${v} [${(200 + (n * 937) % 9000).toLocaleString('en-US')} kB]`);
+  };
+  while (n < 23) get();
+  const loadedAt = Date.now();
+  const dlTick = setInterval(() => {
+    const t = (Date.now() - loadedAt) / 1000;
+    if (n < 23 + Math.floor(17 * (1 - Math.exp(-t / 500)))) get();
+    $('bar').style.width = `${(n / TOTAL) * 100}%`;
+    $('sub').textContent = `Downloading ${n} of ${TOTAL} · ${(1.2 + Math.random() * 1.3).toFixed(1)} MB/s`;
+  }, 1500);
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  demo.onStart = async durationMs => {
+    clearInterval(dlTick);
+    const D = durationMs, at = Date.now();
+    // The rest of the download.
+    while (n < TOTAL) {
+      get();
+      $('bar').style.width = `${(n / TOTAL) * 100}%`;
+      $('sub').textContent = `Downloading ${n} of ${TOTAL} · ${(1.2 + Math.random() * 1.3).toFixed(1)} MB/s`;
+      await sleep(D * 0.2 / (TOTAL - 23));
+    }
+    line(`Fetched 412 MB in 4min 38s (1,482 kB/s)`);
+    demo.mark('installing');
+    $('phase').textContent = 'Installing updates…';
+    // Unpack then set up each package, with the kernel last.
+    const steps = [];
+    PKGS.forEach(([p, v]) => steps.push([`Preparing to unpack .../${p}_${v}_amd64.deb ...`, `Unpacking ${p} (${v}) over (previous) ...`]));
+    PKGS.forEach(([p, v]) => steps.push([`Setting up ${p} (${v}) ...`]));
+    const fail = demo.outcome === 'fail';
+    const per = (D * 0.8 - 2500) / steps.length;
+    for (let i = 0; i < steps.length; i++) {
+      const [p] = steps[i][0].startsWith('Setting up') ? PKGS[i - PKGS.length] : PKGS[i];
+      steps[i].forEach(line);
+      if (steps[i][0].startsWith(`Setting up linux-image-${VER}`)) {
+        ['Processing triggers for linux-image-' + VER + '-generic ...', `/etc/kernel/postinst.d/initramfs-tools:`, `update-initramfs: Generating /boot/initrd.img-${VER}-generic`].forEach(line);
+        if (fail) {
+          await sleep(Math.max(0, D - (Date.now() - at) - 1500));
+          ['E: /usr/share/initramfs-tools/hooks/zz-busybox failed with return 1.', 'update-initramfs: failed for /boot/initrd.img-' + VER + '-generic with 1.',
+            `run-parts: /etc/kernel/postinst.d/initramfs-tools exited with return code 1`,
+            `dpkg: error processing package linux-image-${VER}-generic (--configure):`,
+            ` installed linux-image-${VER}-generic package post-installation script subprocess returned error exit status 1`,
+            'Errors were encountered while processing:', ` linux-image-${VER}-generic`].forEach(line);
+          await sleep(1500);
+          $('logo').style.background = '#c7162b';
+          $('logo').innerHTML = '<span class="ms">error</span>';
+          $('end').innerHTML = `<h2>Could not install the upgrades</h2>
+            <div class="sub" style="color:#3d3d3d;font-size:14px;line-height:20px">The upgrade will continue but the 'linux-image-${VER}-generic' package may not be in a working state. Please consider submitting a bug report about it.</div>
+            <div class="sub" style="font-family:'Ubuntu Mono',Menlo,monospace;margin-top:12px">installed linux-image-${VER}-generic package post-installation script subprocess returned error exit status 1</div>
+            <div class="btns"><span class="ub-btn primary">Close</span></div>`;
+          document.body.classList.add('done');
+          demo.trigger();
+          return;
+        }
+      }
+      $('bar').style.width = `${((i + 1) / steps.length) * 100}%`;
+      $('sub').textContent = `Installing ${p}`;
+      await sleep(per);
+    }
+    ['Processing triggers for man-db (2.12.0-4build2) ...', 'Processing triggers for libc-bin (2.39-0ubuntu8.4) ...', 'Processing triggers for gnome-menus (3.36.0-1.1ubuntu3) ...'].forEach(line);
+    await sleep(Math.max(0, D - (Date.now() - at)));
+    $('logo').innerHTML = '<span class="ms">restart_alt</span>';
+    $('end').innerHTML = `<h2>The computer needs to restart to finish installing updates.</h2>
+      <div class="sub" style="color:#3d3d3d;font-size:14px">Please save your work before continuing.</div>
+      <div class="btns" style="margin-top:22px"><span class="ub-btn">Restart Later</span><span class="ub-btn primary">Restart Now…</span></div>`;
+    document.body.classList.add('done');
+    demo.trigger();
+  };
+</script>
+</body>
+</html>

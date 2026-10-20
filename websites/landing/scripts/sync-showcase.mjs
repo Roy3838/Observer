@@ -1,9 +1,9 @@
-// Builds the landing page's use-case showcase from the MCP e2e suite, so app/e2e stays the
-// single source of truth: prompts come from scenarios.ts / patterns.ts, presentation from
-// showcase.ts, and the demo pages themselves are copied from app/e2e/demos/.
+// Builds the landing page's When / Then wheels from the ground truth (app/src/utils/groundTruth.ts),
+// the same list the MCP e2e suite tests: one pair per demo, the row marked `show`, running against
+// the same demo page, copied here from app/e2e/demos/.
 //
 // Writes (both gitignored): src/generated/showcase.json and public/demos/.
-// Fails if a demo used by a scenario has no showcase entry, or the reverse.
+// Fails if a demo has no shown pair or more than one, or a shown pair is missing what the site needs.
 
 import { buildSync } from 'esbuild';
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -13,69 +13,42 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const landing = resolve(here, '..');
-const e2e = resolve(landing, '../../app/e2e');
+const app = resolve(landing, '../../app');
+const demos = join(app, 'e2e/demos');
 
-const scratch = join(tmpdir(), `observer-showcase-${process.pid}`);
-mkdirSync(scratch, { recursive: true });
-async function load(name) {
-  const outfile = join(scratch, `${name}.mjs`);
-  buildSync({ entryPoints: [join(e2e, `${name}.ts`)], bundle: true, format: 'esm', platform: 'node', outfile, logLevel: 'error' });
-  return import(pathToFileURL(outfile).href);
-}
-const { DEMOS } = await load('scenarios');
-const { PATTERNS } = await load('patterns');
-const { SHOWCASE, CATEGORIES, CHANNELS } = await load('showcase');
-rmSync(scratch, { recursive: true, force: true });
+const outfile = join(tmpdir(), `observer-ground-truth-${process.pid}.mjs`);
+buildSync({ entryPoints: [join(app, 'src/utils/groundTruth.ts')], bundle: true, format: 'esm', platform: 'node', outfile, logLevel: 'error' });
+const { GROUND_TRUTH, CHANNELS, NOTIFY } = await import(pathToFileURL(outfile).href);
+rmSync(outfile, { force: true });
 
-const useCases = new Map(); // demo file -> { prompts: [] }
-const add = (demoWithQuery, prompt, kind, notifyOn) => {
-  const [file, query = ''] = demoWithQuery.split('?');
-  if (!useCases.has(file)) useCases.set(file, { prompts: [] });
-  const list = useCases.get(file).prompts;
-  if (!list.some(p => p.prompt === prompt)) list.push({ prompt, kind, query, notifyOn });
-};
-
-// notifyOn: the demo's `?outcome=` values the prompt must notify on.
-for (const d of DEMOS) for (const p of d.prompts) {
-  const outcomes = d.outcomes ?? { success: 'success', fail: 'fail' };
-  add(d.demo, p.prompt, 'alert', Object.keys(p.expect).filter(o => p.expect[o] === 'notify').map(o => outcomes[o]));
-}
-for (const s of PATTERNS) {
-  if (s.noAgent || s.demo.startsWith('blank')) continue;
-  if (s.requires && !existsSync(join(e2e, 'demos', s.requires))) continue; // media not recorded yet
-  add(s.demo, s.prompt, 'pattern', []);
-}
-
+const file = u => u.demo.split('?')[0];
 const problems = [];
-for (const file of useCases.keys()) if (!SHOWCASE[file]) problems.push(`demo ${file} is in the e2e scenarios but has no entry in app/e2e/showcase.ts`);
-for (const file of Object.keys(SHOWCASE)) {
-  if (!existsSync(join(e2e, 'demos', file))) problems.push(`showcase entry ${file} has no file in app/e2e/demos/`);
+for (const f of new Set(GROUND_TRUTH.map(file))) {
+  const shown = GROUND_TRUTH.filter(u => file(u) === f && u.show);
+  if (shown.length !== 1) problems.push(`demo ${f} has ${shown.length} use cases with \`show\` (needs exactly one)`);
+  if (!existsSync(join(demos, f))) problems.push(`demo ${f} isn't in app/e2e/demos/`);
+}
+for (const u of GROUND_TRUTH.filter(u => u.show)) {
+  if (u.then === NOTIFY && !CHANNELS[u.show.channel]) problems.push(`${u.id} is an alert but its show has no channel`);
 }
 if (problems.length) {
   console.error(problems.map(p => `  ✗ ${p}`).join('\n'));
   process.exit(1);
 }
 
-// The e2e prompts all ask for a browser notification; show the demo's delivery channel instead.
-const withChannel = (prompt, channel) => {
-  if (!channel) return prompt;
-  const { phrase } = CHANNELS[channel];
-  return prompt.replace(/^send me a browser notification/i, m => (phrase[0].toUpperCase() + phrase.slice(1)))
-    .replace(/send me a browser notification/gi, phrase)
-    .replace(/another one/, 'another');
-};
-// Listed in showcase.ts order, not scenario order: the site's order is presentation.
-const order = Object.keys(SHOWCASE);
-const items = [...useCases].sort(([a], [b]) => order.indexOf(a) - order.indexOf(b)).map(([file, { prompts }]) => {
-  const entry = SHOWCASE[file];
-  const channel = entry.channel && { id: entry.channel, label: CHANNELS[entry.channel].label };
-  return { id: file.replace(/\.html$/, ''), file, ...entry, channel, prompts: prompts.map(p => ({ ...p, prompt: withChannel(p.prompt, entry.channel) })) };
-});
+// The suite asks for a browser notification; the site shows the channel's phrase instead.
+const items = GROUND_TRUTH
+  .filter(u => u.show && !u.requires?.some(f => !existsSync(join(demos, f)))) // recordings not added yet
+  .map(u => {
+    const [f, query = ''] = u.demo.split('?');
+    const channel = u.then === NOTIFY ? { id: u.show.channel, label: CHANNELS[u.show.channel].label } : null;
+    return { id: u.id, file: f, query, title: u.show.title, when: u.when, then: channel ? CHANNELS[u.show.channel].phrase : u.then, channel, alert: u.show.alert };
+  });
 mkdirSync(join(landing, 'src/generated'), { recursive: true });
-writeFileSync(join(landing, 'src/generated/showcase.json'), JSON.stringify({ categories: CATEGORIES, items }, null, 2));
+writeFileSync(join(landing, 'src/generated/showcase.json'), JSON.stringify({ items }, null, 2));
 
 const dest = join(landing, 'public/demos');
 rmSync(dest, { recursive: true, force: true });
-cpSync(join(e2e, 'demos'), dest, { recursive: true, filter: src => !src.endsWith('.DS_Store') && !src.endsWith('.py') });
+cpSync(demos, dest, { recursive: true, filter: src => !src.endsWith('.DS_Store') && !src.endsWith('.py') });
 
-console.log(`showcase: ${items.length} use cases, ${items.reduce((n, i) => n + i.prompts.length, 0)} prompts`);
+console.log(`showcase: ${items.length} When / Then pairs`);

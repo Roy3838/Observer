@@ -8,6 +8,7 @@
 //
 // A demo implements `demo.onStart = durationMs => { ... }` and calls `demo.trigger()`.
 // Opened by hand (no suite), `?autostart=10000` skips holding and ends the job 10 s after load.
+// `?muted=1` plays the demo silently (the landing page's showcase): its media still runs on time.
 // Opened by the app's first-run tutorial, `?tutorial=30000` holds until the user comes back to
 // the tab, then ends the job 30 s later (see the bottom of this file).
 
@@ -49,6 +50,11 @@ window.demo = {
     }, 50);
   },
 };
+
+if (new URLSearchParams(location.search).has('muted')) {
+  const play = HTMLMediaElement.prototype.play;
+  HTMLMediaElement.prototype.play = function () { this.muted = true; return play.call(this); };
+}
 
 window.addEventListener('load', () => {
   const autostart = Number(new URLSearchParams(location.search).get('autostart'));

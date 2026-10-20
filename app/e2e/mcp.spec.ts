@@ -13,7 +13,7 @@
 import { expect } from '@playwright/test';
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { test, openObserver, E2E_DIR, type SuiteEvent } from './fixtures';
+import { test, openObserver, isCameraDemo, useTabAsCamera, E2E_DIR, type SuiteEvent } from './fixtures';
 import { SCENARIOS, type Scenario } from './scenarios';
 
 const env = (name: string, fallback: number) => Number(process.env[name] ?? fallback);
@@ -50,6 +50,8 @@ function judge(s: Scenario, events: SuiteEvent[]): { verdict: Verdict; latencyMs
 
 for (const s of SCENARIOS) {
   test(s.id, async ({ observer }, testInfo) => {
+    const missing = s.requires?.find(f => !fs.existsSync(`${E2E_DIR}demos/${f}`));
+    test.skip(!!missing, `needs e2e/demos/${missing}`);
     test.setTimeout(SETUP_MS + PRE_MAX_MS + Math.max(WINDOW_MS, QUIET_MS) + 5 * 60_000);
     const { context, events } = observer;
     events.length = 0;
@@ -63,6 +65,7 @@ for (const s of SCENARIOS) {
     }
     await app.evaluate(() => (window as any).__observerE2E.reset());
     app = await openObserver(context);
+    if (isCameraDemo(s.demo)) await useTabAsCamera(app);
 
     const demo = await context.newPage();
     await demo.goto(`${pathToFileURL(`${E2E_DIR}demos/${s.demo}`).href}?outcome=${s.param}`);

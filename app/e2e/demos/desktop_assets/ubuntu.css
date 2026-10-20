@@ -1,0 +1,39 @@
+/* An Ubuntu 24.04 GNOME desktop: top bar (workspaces, clock, system icons), the left dock, the
+   Noble wallpaper and Yaru-style windows. Built by ubuntu.js (Ubuntu.mount). */
+* { box-sizing: border-box; }
+body.ubuntu {
+  margin: 0; height: 100vh; overflow: hidden; position: relative;
+  font-family: Ubuntu, "Open Sans", Cantarell, "Noto Sans", sans-serif; font-size: 14px; color: #3d3d3d;
+  background: #2c001e radial-gradient(140% 120% at 85% 110%, #e95420 0%, #c7376a 22%, #77216f 45%, #3b0c3a 70%, #1c0718 100%);
+}
+.ub-topbar {
+  position: absolute; top: 0; left: 0; right: 0; height: 32px; z-index: 50; background: #000; color: #fff;
+  display: flex; align-items: center; padding: 0 10px; font-size: 14px; font-weight: 600;
+}
+.ub-topbar .ws { display: flex; gap: 5px; align-items: center; padding: 0 10px; height: 22px; border-radius: 11px; }
+.ub-topbar .ws i { width: 8px; height: 8px; border-radius: 4px; background: #9a9a9a; display: block; }
+.ub-topbar .ws i.on { width: 30px; background: #fff; }
+.ub-topbar .clock { position: absolute; left: 50%; transform: translateX(-50%); font-variant-numeric: tabular-nums; }
+.ub-topbar .sys { margin-left: auto; display: flex; gap: 12px; align-items: center; padding: 0 10px; height: 24px; border-radius: 12px; }
+.ub-topbar .sys svg { display: block; }
+.ub-dock {
+  position: absolute; top: 32px; left: 0; bottom: 0; width: 64px; z-index: 40; background: rgba(23, 23, 23, .78);
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 0;
+}
+.ub-dock .icon { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; position: relative; color: #fff; font-size: 22px; font-weight: 700; }
+.ub-dock .icon.open::before { content: ''; position: absolute; left: -7px; top: 50%; width: 3px; height: 6px; margin-top: -3px; border-radius: 2px; background: #e95420; }
+.ub-dock .apps { margin-top: auto; width: 48px; height: 48px; display: grid; grid-template-columns: repeat(3, 6px); gap: 5px; place-content: center; }
+.ub-dock .apps i { width: 6px; height: 6px; border-radius: 50%; background: #fff; display: block; }
+.ub-window {
+  position: absolute; display: flex; flex-direction: column; overflow: hidden; border-radius: 12px 12px 0 0;
+  background: #fafafa; box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 18px 50px rgba(0,0,0,.5);
+}
+.ub-titlebar {
+  height: 38px; flex: none; position: relative; display: flex; align-items: center; justify-content: center;
+  background: #ebebeb; border-bottom: 1px solid #d8d4d0; font-weight: 700; font-size: 14px; color: #3d3d3d;
+}
+.ub-titlebar .btns { position: absolute; right: 8px; display: flex; gap: 10px; }
+.ub-titlebar .btns i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: #dcdcdc; font-style: normal; font-size: 13px; color: #3d3d3d; line-height: 1; }
+.ub-titlebar .btns i.close { background: #e95420; color: #fff; }
+.ub-btn { height: 34px; padding: 0 16px; border-radius: 6px; display: inline-grid; place-items: center; background: #e0e0e0; color: #3d3d3d; font-weight: 600; }
+.ub-btn.primary { background: #e95420; color: #fff; }

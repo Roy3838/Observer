@@ -4,7 +4,8 @@
 //            ends with no agent running (the MCP asked something), the follow-up is the answer.
 //   RUN      the suite starts the demo, which plays out (a video, a meeting, a workday, orders
 //            arriving) and marks what happens as it happens, then triggers at its end
-//   GRACE    the suite keeps watching for summaries and late notes, then scores the run
+//   GRACE    the suite keeps watching for summaries and late notes. A scenario with an after-run
+//            question asks it now, with the agents still running; then the suite scores the run
 //
 // Verdicts: PASS / PARTIAL / FAIL from the scenario's score, or NO_AGENT, SETUP_TIMEOUT,
 // DEMO_BROKEN. Results go to e2e/results/<run>/patterns.jsonl.
@@ -12,7 +13,7 @@
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { expect } from '@playwright/test';
-import { test, openObserver, E2E_DIR } from './fixtures';
+import { test, openObserver, isCameraDemo, useTabAsCamera, E2E_DIR } from './fixtures';
 import { PATTERNS, type PatternScenario, type Run, type Score } from './patterns';
 
 const SETUP_MS = Number(process.env.E2E_SETUP_MS ?? 15 * 60_000);
@@ -34,7 +35,8 @@ function demoUrl(s: PatternScenario): string {
 
 for (const s of PATTERNS) {
   test(s.id, async ({ observer }, testInfo) => {
-    test.skip(!!s.requires && !fs.existsSync(`${E2E_DIR}demos/${s.requires}`), `needs e2e/demos/${s.requires}`);
+    const missing = s.requires?.find(f => !fs.existsSync(`${E2E_DIR}demos/${f}`));
+    test.skip(!!missing, `needs e2e/demos/${missing}`);
     test.setTimeout(2 * SETUP_MS + s.runMs + s.graceMs + 10 * 60_000);
     const { context, events } = observer;
     events.length = 0;
@@ -45,6 +47,7 @@ for (const s of PATTERNS) {
     }
     await app.evaluate(() => (window as any).__observerE2E.reset());
     app = await openObserver(context);
+    if (isCameraDemo(s.demo)) await useTabAsCamera(app);
     const demo = await context.newPage();
     await demo.goto(demoUrl(s));
     await app.bringToFront();
@@ -83,7 +86,10 @@ for (const s of PATTERNS) {
           // Demos that play their own media end when it does; give them room past runMs.
           const ended = await waitUntil(() => events.some(e => e.type === 'trigger'), s.runMs + 4 * 60_000);
           if (!ended) verdict = 'DEMO_BROKEN';
-          else await sleep(s.graceMs);
+          else {
+            await sleep(s.graceMs);
+            if (s.afterRun) replies.push(await send(s.afterRun));
+          }
         }
       }
     } finally {
@@ -99,7 +105,7 @@ for (const s of PATTERNS) {
       if (!verdict) {
         const run: Run = {
           events: [...events], startT: startT || Date.now(), triggerT: events.find(e => e.type === 'trigger')?.t ?? null,
-          truth, memories, agents, toolCalls, asked,
+          truth, memories, agents, toolCalls, asked, replies,
         };
         try {
           score = s.score(run);

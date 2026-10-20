@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<!-- Steam for Mac, Downloads page: Cyberpunk 2077 (71.8 GB) downloading, two updates Up Next, one
+     update already Completed. Holds downloading (the bytes creep toward ~50% with a long time
+     remaining) until the suite starts it; then the download reaches 100% (marked 'downloaded'),
+     which is not the end: Steam goes on "Installing" it. It ends by ?outcome=: success, it moves to
+     Completed with a green PLAY button ("Ready to play"); fail, it stops with "DISK WRITE ERROR" and
+     Steam's error dialog. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Steam</title>
+<link rel="stylesheet" href="fonts/open-sans.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<link rel="stylesheet" href="desktop_assets/macos.css">
+<style>
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 20px; line-height: 1; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+  .st { flex: 1; display: flex; flex-direction: column; background: #1b2838; color: #c7d5e0; font-family: "Motiva Sans", "Open Sans", Arial, sans-serif; min-height: 0; }
+  .st .top { height: 34px; background: #171d25; display: flex; align-items: center; padding: 0 0 0 78px; gap: 14px; color: #8f98a0; font-size: 12px; position: relative; }
+  .st .top .mac-lights { left: 12px; }
+  .st .nav { height: 58px; background: #171d25; display: flex; align-items: center; gap: 26px; padding: 0 22px; border-bottom: 1px solid #0e141b; }
+  .st .nav span { font-size: 17px; font-weight: 700; letter-spacing: .4px; color: #dcdedf; }
+  .st .nav span.dim { color: #8f98a0; }
+  .st .nav .arrows { display: flex; gap: 10px; color: #8f98a0; margin-right: 6px; }
+  .st .body { flex: 1; overflow: hidden; padding: 0 0 46px; background: linear-gradient(#1b2838, #171a21 70%); }
+  .graph { height: 132px; position: relative; background: linear-gradient(#21354a, #1b2838); border-bottom: 1px solid #2a3f5a; display: flex; }
+  .graph .bars { flex: 1; display: flex; align-items: flex-end; gap: 2px; padding: 14px 18px 0; }
+  .graph .bars i { flex: 1; background: linear-gradient(#66c0f4, #2a6fa0); opacity: .85; }
+  .graph .bars i.d { background: linear-gradient(#a4d007, #4c6b22); }
+  .graph .stats { width: 300px; padding: 18px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; font-size: 11px; color: #8f98a0; letter-spacing: .5px; }
+  .graph .stats b { display: block; font-size: 17px; color: #dcdedf; letter-spacing: 0; font-weight: 600; margin-top: 2px; }
+  .sec { padding: 14px 22px 4px; font-size: 13px; color: #8f98a0; letter-spacing: .6px; display: flex; gap: 8px; align-items: center; }
+  .sec b { color: #dcdedf; font-weight: 600; }
+  .item { margin: 6px 22px; height: 92px; display: flex; align-items: center; gap: 18px; background: rgba(42, 63, 90, .35); padding: 10px; border-radius: 3px; }
+  .item.big { height: 128px; background: rgba(42, 63, 90, .55); }
+  .cap { width: 184px; height: 69px; border-radius: 2px; flex: none; display: grid; place-items: center; font-weight: 800; letter-spacing: 1px; font-size: 15px; text-align: center; line-height: 1.05; }
+  .item.big .cap { width: 284px; height: 106px; font-size: 24px; }
+  .item .info { flex: 1; min-width: 0; }
+  .item .name { color: #fff; font-size: 16px; font-weight: 600; }
+  .item .what { font-size: 12px; color: #8f98a0; margin-top: 3px; }
+  .item .status { font-size: 13px; color: #c7d5e0; margin-top: 10px; display: flex; justify-content: space-between; }
+  .item .status .err { color: #ff6b6b; font-weight: 700; letter-spacing: .4px; }
+  .item .prog { height: 6px; background: #0e141b; margin-top: 6px; border-radius: 1px; overflow: hidden; }
+  .item .prog i { display: block; height: 100%; background: linear-gradient(90deg, #47bfff, #1a44c2); }
+  .item .prog.inst i { background: linear-gradient(90deg, #a4d007, #536904); }
+  .item .act { width: 120px; display: flex; justify-content: flex-end; gap: 10px; color: #8f98a0; }
+  .item .act .circle { width: 34px; height: 34px; border-radius: 50%; background: #3d4450; display: grid; place-items: center; color: #dcdedf; }
+  .play { height: 34px; padding: 0 22px; border-radius: 2px; display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: #fff; letter-spacing: .5px;
+          background: linear-gradient(90deg, #5ba32b, #4c8b26); }
+  .st .foot { position: absolute; left: 0; right: 0; bottom: 0; height: 46px; background: #171d25; border-top: 1px solid #0e141b; display: flex; align-items: center; padding: 0 22px; font-size: 12px; color: #8f98a0; }
+  .st .foot b { color: #dcdedf; font-weight: 600; margin-left: 6px; } .st .foot .r { margin-left: auto; }
+  .dlg { display: none; position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: 520px; background: #3d4450; color: #dcdedf; box-shadow: 0 10px 40px rgba(0,0,0,.6); z-index: 20; font-size: 14px; }
+  .dlg .h { background: #171d25; padding: 10px 16px; font-weight: 700; }
+  .dlg .b { padding: 22px 18px; line-height: 20px; }
+  .dlg .b small { display: block; color: #8f98a0; margin-top: 10px; word-break: break-all; font-size: 12px; }
+  .dlg .f { display: flex; justify-content: flex-end; gap: 8px; padding: 0 18px 18px; }
+  .dlg .f span { padding: 8px 18px; background: #5c7e9f; border-radius: 2px; } .dlg .f span.p { background: #1a9fff; color: #fff; }
+</style>
+<script src="demo-contract.js"></script>
+<script src="desktop_assets/macos.js"></script>
+</head>
+<body>
+<div class="mac-window full">
+  <div class="st">
+    <div class="top"><div class="mac-lights"><i></i><i></i><i></i></div><span style="margin-left:auto;margin-right:14px">roy_medina ▾</span></div>
+    <div class="nav"><span class="arrows"><span class="ms">arrow_back</span><span class="ms">arrow_forward</span></span><span class="dim">STORE</span><span class="dim">LIBRARY</span><span class="dim">COMMUNITY</span><span class="dim">ROY_MEDINA</span></div>
+    <div class="body">
+      <div class="graph"><div class="bars" id="bars"></div>
+        <div class="stats"><div>CURRENT<b id="net">48.3 MB/s</b></div><div>PEAK<b>61.2 MB/s</b></div><div>TOTAL<b id="tot">34.2 GB</b></div><div>DISK USAGE<b id="disk">51.0 MB/s</b></div></div></div>
+
+      <div id="current">
+        <div class="item big">
+          <div class="cap" style="background:linear-gradient(135deg,#fcee0a,#f4c300 60%,#00f0ff);color:#111">CYBERPUNK<br>2077</div>
+          <div class="info">
+            <div class="name">Cyberpunk 2077</div>
+            <div class="what">Downloading game · 71.8 GB</div>
+            <div class="status"><span id="st">Downloading 47%</span><span id="eta">Time remaining 2:41:08</span></div>
+            <div class="prog" id="prog"><i id="bar" style="width:47%"></i></div>
+            <div class="status" style="margin-top:6px;color:#8f98a0"><span id="bytes">34.2 GB / 71.8 GB</span><span></span></div>
+          </div>
+          <div class="act" id="act"><span class="circle"><span class="ms">pause</span></span></div>
+        </div>
+      </div>
+
+      <div class="sec">UP NEXT <b>(2)</b><span style="margin-left:auto;font-size:12px">Auto-updates enabled</span></div>
+      <div class="item">
+        <div class="cap" style="background:linear-gradient(135deg,#2a1438,#6b1d2f 60%,#d9a441);color:#f3d17a">HADES II</div>
+        <div class="info"><div class="name">Hades II</div><div class="what">Update · 412.6 MB</div><div class="status"><span>Queued</span></div></div>
+        <div class="act"><span class="ms">close</span></div>
+      </div>
+      <div class="item">
+        <div class="cap" style="background:linear-gradient(135deg,#1c2a36,#3a5466);color:#e8a33d">COUNTER-STRIKE 2</div>
+        <div class="info"><div class="name">Counter-Strike 2</div><div class="what">Update · 1.1 GB</div><div class="status"><span>Queued</span></div></div>
+        <div class="act"><span class="ms">close</span></div>
+      </div>
+
+      <div class="sec">COMPLETED <b id="ncomp">(1)</b><span style="margin-left:auto;font-size:12px">Clear all</span></div>
+      <div id="completed">
+        <div class="item">
+          <div class="cap" style="background:linear-gradient(135deg,#2a0f3f,#c4334f);color:#fff">BALATRO</div>
+          <div class="info"><div class="name">Balatro</div><div class="what">Update · 22.4 MB</div><div class="status"><span>Ready to play</span></div></div>
+          <div class="act"><span class="play"><span class="ms">play_arrow</span>PLAY</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="foot"><span class="ms" style="margin-right:6px">download</span>DOWNLOADS<b id="footst">Downloading 47%</b><span class="r">FRIENDS &amp; CHAT</span></div>
+  </div>
+  <div class="dlg" id="dlg"><div class="h">Cyberpunk 2077 - Steam</div>
+    <div class="b">An error occurred while updating Cyberpunk 2077 (disk write error):<small>/Users/roy/Library/Application Support/Steam/steamapps/common/Cyberpunk 2077/archive/pc/content/basegame_4_gamedata.archive</small></div>
+    <div class="f"><span>Close</span><span class="p">Retry</span></div></div>
+</div>
+
+<script>
+  Mac.mount({ app: 'Steam', menus: ['File', 'Edit', 'View', 'Friends', 'Games', 'Window', 'Help'], battery: 88 });
+  const $ = id => document.getElementById(id);
+  const TOTAL_GB = 71.8;
+  let gb = 34.2, speed = 48.3;
+
+  // The bandwidth graph: one bar per tick, scrolling left.
+  const bars = [];
+  const pushBar = (v, disk) => {
+    bars.push([v, disk]); if (bars.length > 90) bars.shift();
+    $('bars').innerHTML = bars.map(([b, d]) => `<i class="${d ? 'd' : ''}" style="height:${Math.max(2, b / 70 * 100)}%"></i>`).join('');
+  };
+  for (let i = 0; i < 90; i++) pushBar(3 + Math.random() * 3);
+
+  const fmtEta = s => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+  const paint = (label, pct, eta, inst) => {
+    $('st').textContent = label; $('footst').textContent = label;
+    $('bar').style.width = `${pct}%`;
+    $('prog').classList.toggle('inst', !!inst);
+    $('eta').textContent = eta;
+    $('bytes').textContent = `${gb.toFixed(1)} GB / ${TOTAL_GB} GB`;
+    $('tot').textContent = `${gb.toFixed(1)} GB`;
+    $('net').textContent = `${speed.toFixed(1)} MB/s`;
+  };
+
+  // Holding: the bytes creep toward ~50% on a slow line; hours to go.
+  const loadedAt = Date.now();
+  let run = null;
+  const holdTick = setInterval(() => {
+    const t = (Date.now() - loadedAt) / 1000;
+    gb = 34.2 + 2.6 * (1 - Math.exp(-t / 600));
+    speed = 3.2 + Math.random() * 2.4;
+    pushBar(speed);
+    paint(`Downloading ${Math.floor(gb / TOTAL_GB * 100)}%`, gb / TOTAL_GB * 100, `Time remaining ${fmtEta((TOTAL_GB - gb) * 1024 / speed)}`);
+  }, 1000);
+
+  demo.onStart = durationMs => {
+    clearInterval(holdTick);
+    const at = Date.now(), from = gb, fail = demo.outcome === 'fail';
+    let marked = false;
+    const tick = setInterval(() => {
+      const f = Math.min((Date.now() - at) / durationMs, 1);
+      if (f < 0.7) {
+        // Downloading, faster now.
+        const g = f / 0.7;
+        gb = from + (TOTAL_GB - from) * g;
+        speed = 45 + Math.random() * 16;
+        pushBar(speed);
+        const left = (1 - g) * durationMs * 0.7 / 1000;
+        paint(`Downloading ${Math.floor(gb / TOTAL_GB * 100)}%`, gb / TOTAL_GB * 100, `Time remaining ${fmtEta(left)}`);
+      } else {
+        // Downloaded, now installing: the disk does the work.
+        if (!marked) { marked = true; gb = TOTAL_GB; demo.mark('downloaded'); }
+        const g = (f - 0.7) / 0.3;
+        speed = 0;
+        pushBar(4 + Math.random() * 6, true);
+        $('disk').textContent = `${(180 + Math.random() * 60).toFixed(1)} MB/s`;
+        const pct = fail ? Math.min(g, 0.62) * 100 : g * 100;
+        paint(`Installing ${Math.floor(pct)}%`, pct, `Time remaining ${fmtEta((1 - g) * durationMs * 0.3 / 1000)}`, true);
+      }
+      if (f < 1) return;
+      clearInterval(tick);
+      if (fail) {
+        $('st').innerHTML = '<span class="err">DISK WRITE ERROR</span>';
+        $('footst').textContent = 'Paused';
+        $('eta').textContent = '';
+        $('act').innerHTML = '<span class="circle"><span class="ms">play_arrow</span></span>';
+        $('dlg').style.display = 'block';
+      } else {
+        // Moves to Completed, ready to play.
+        $('current').innerHTML = '';
+        $('completed').insertAdjacentHTML('afterbegin', `<div class="item big">
+          <div class="cap" style="background:linear-gradient(135deg,#fcee0a,#f4c300 60%,#00f0ff);color:#111">CYBERPUNK<br>2077</div>
+          <div class="info"><div class="name">Cyberpunk 2077</div><div class="what">Game · 71.8 GB</div><div class="status"><span>Ready to play</span><span>100%</span></div><div class="prog inst"><i style="width:100%"></i></div></div>
+          <div class="act"><span class="play"><span class="ms">play_arrow</span>PLAY</span></div></div>`);
+        $('ncomp').textContent = '(2)';
+        $('footst').textContent = 'Download complete';
+      }
+      demo.trigger();
+    }, 1000);
+  };
+</script>
+</body>
+</html>

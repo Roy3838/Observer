@@ -2,7 +2,11 @@
 <!-- A Mac desktop where the user works in one full-screen app at a time: VS Code, Gmail, Figma,
      Slack. Holds in VS Code (typing) until the suite starts it; then the user switches apps on the
      schedule in SCHEDULE (seconds into the run) and the trigger fires when the run's time is up.
-     Marks every switch ('app', { name }); demo.truth.schedule has the plan. -->
+     Marks every switch ('app', { name }); demo.truth.schedule has the plan.
+     ?call=1: a workday with a call in it. VS Code, Gmail, then a Google Meet call (the weekly launch
+     sync from google_meet_call.html, heard through the tab's audio, each line marked 'line'), then
+     Figma and back to VS Code; it ignores durationMs and triggers when that day is over.
+     demo.truth.schedule is what actually happened, in seconds from the start. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -86,8 +90,21 @@
   .sl .m .av { width: 36px; height: 36px; border-radius: 6px; flex: none; }
   .sl .m b { font-weight: 800; } .sl .m small { color: #616061; font-size: 12px; margin-left: 6px; }
   .sl .box { margin: 0 20px 20px; border: 1px solid #bbb; border-radius: 8px; height: 80px; padding: 12px; color: #616061; }
+  /* Google Meet (call mode) */
+  .mt { background: #131314; color: #e3e3e3; font-family: 'Google Sans', Roboto, sans-serif; }
+  .mt .grid { position: absolute; left: 16px; right: 16px; top: 16px; bottom: 88px; display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); gap: 8px; }
+  .mt .tile { border-radius: 12px; background: #3c4043; position: relative; overflow: hidden; display: grid; place-items: center; }
+  .mt .tile .av { width: 104px; height: 104px; font-size: 44px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 500; }
+  .mt .tile .nm { position: absolute; left: 14px; bottom: 12px; font-size: 14px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+  .mt .tile.speaking { box-shadow: inset 0 0 0 3px #8ab4f8; }
+  .mt .tile.video { background: linear-gradient(160deg, #4a5a6a 0%, #2b3540 60%, #1f262d 100%); }
+  .mt .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 80px; display: flex; align-items: center; padding: 0 24px; font-size: 16px; gap: 14px; }
+  .mt .ctrls { position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
+  .mt .cbtn { width: 48px; height: 40px; border-radius: 20px; background: #333537; display: grid; place-items: center; }
+  .mt .cbtn.off { background: #f9dedc; color: #410e0b; } .mt .cbtn.end { width: 64px; background: #dc362e; color: #fff; }
 </style>
 <script src="demo-contract.js"></script>
+<script src="media/meeting.js"></script>
 </head>
 <body>
 <div class="menubar"><b id="appname">Code</b><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Window</span><span>Help</span><div class="r"><span>Mon Oct 12</span><span id="clock">9:41 AM</span></div></div>
@@ -149,12 +166,25 @@
   </div>
 </div>
 
+<div class="app mt" id="meet">
+  <div class="grid">
+    <div class="tile video" id="t-Ana"><span class="nm">Ana Torres</span></div>
+    <div class="tile" id="t-Ben"><div class="av" style="background:#188038">B</div><span class="nm">Ben Ortiz</span></div>
+    <div class="tile video" id="t-Priya" style="background:linear-gradient(200deg,#5d4a3a,#2c241d)"><span class="nm">Priya Shah</span></div>
+    <div class="tile"><div class="av" style="background:#7b5ea7">R</div><span class="nm">You</span></div>
+  </div>
+  <div class="bar"><span id="mclock">10:02 AM</span><span>|</span><span>Weekly launch sync</span>
+    <div class="ctrls"><div class="cbtn off"><span class="ms">mic_off</span></div><div class="cbtn"><span class="ms">videocam</span></div><div class="cbtn"><span class="ms">closed_caption</span></div><div class="cbtn"><span class="ms">present_to_all</span></div><div class="cbtn"><span class="ms">more_vert</span></div><div class="cbtn end"><span class="ms">call_end</span></div></div>
+  </div>
+</div>
+
 <script>
   const $ = id => document.getElementById(id);
-  const APPS = { vscode: ['Code', 'VS Code'], gmail: ['Google Chrome', 'Gmail'], figma: ['Figma', 'Figma'], slack: ['Slack', 'Slack'] };
+  const CALL = new URLSearchParams(location.search).has('call');
+  const APPS = { vscode: ['Code', 'VS Code'], gmail: ['Google Chrome', 'Gmail'], figma: ['Figma', 'Figma'], slack: ['Slack', 'Slack'], meet: ['Google Chrome', 'Google Meet'] };
   // [seconds into the run, app]: who's on screen from then on.
   const SCHEDULE = [[0, 'vscode'], [75, 'gmail'], [130, 'figma'], [220, 'slack'], [260, 'vscode'], [330, 'gmail']];
-  demo.truth = { schedule: SCHEDULE };
+  demo.truth = { schedule: CALL ? [] : SCHEDULE };
 
   const CODE = [
     '<span class="k">import</span> { <span class="v">stripe</span> } <span class="k">from</span> <span class="s">"./stripe"</span>;',
@@ -208,7 +238,8 @@
     if (current === 'vscode' && typed < TYPING.length) { typed += 3; paintCode(); }
     if (current === 'gmail' && replied < REPLY.length) { replied += 2; $('reply').textContent = REPLY.slice(0, replied); }
     if (current === 'figma') { const i = Math.floor((Date.now() / 6000) % 3); [0, 1, 2].forEach(j => { $(`f${j}`).classList.toggle('sel', j === i); $(`l${j}`).classList.toggle('sel', j === i); }); }
-    if (!run) return;
+    if (current === 'meet') $('mclock').textContent = $('clock').textContent;
+    if (!run || run.call) return;
     const s = (Date.now() - run.at) / 1000;
     while (step < SCHEDULE.length && s >= SCHEDULE[step][0]) {
       show(SCHEDULE[step][1]);
@@ -218,7 +249,38 @@
     if (s * 1000 >= run.durationMs && !run.done) { run.done = true; demo.trigger(); }
   }, 500);
 
-  demo.onStart = durationMs => { run = { at: Date.now(), durationMs }; };
+  // Call mode: the day runs on its own clock, with the call as long as the meeting audio.
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const speaking = who => ['Ana', 'Ben', 'Priya'].forEach(n => $(`t-${n}`).classList.toggle('speaking', n === who));
+  const say = (lines, onLine) => new Promise(resolve => {
+    let i = 0;
+    const next = () => {
+      if (i >= lines.length) { speaking(null); return resolve(); }
+      const line = lines[i];
+      onLine(i++, line);
+      speaking(line.who);
+      const audio = new Audio(line.file);
+      audio.onended = () => { speaking(null); setTimeout(next, 600); };
+      // Autoplay blocked (opened by hand without the suite's flag): move on after its duration.
+      audio.play().catch(() => setTimeout(audio.onended, line.duration * 1000));
+    };
+    next();
+  });
+  const callDay = async () => {
+    const at = Date.now();
+    const go = name => { show(name); demo.mark('app', { name }); demo.truth.schedule.push([Math.round((Date.now() - at) / 1000), name]); };
+    go('vscode'); await sleep(60_000);
+    go('gmail'); await sleep(50_000);
+    go('meet'); await say(MEETING.lines, i => demo.mark('line', { index: i })); await sleep(1500);
+    go('figma'); await sleep(60_000);
+    go('vscode'); await sleep(50_000);
+    demo.trigger();
+  };
+
+  demo.onStart = durationMs => {
+    run = { at: Date.now(), durationMs, call: CALL };
+    if (CALL) callDay();
+  };
 </script>
 </body>
 </html>

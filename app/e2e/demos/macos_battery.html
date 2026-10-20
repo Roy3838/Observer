@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<!-- A MacBook on battery: the user writes in Notes while the menu bar battery (percentage shown)
+     drains. Holds around 47% until the suite starts it; then it drains over the run and ends by
+     ?outcome=: success, it reaches 10%, the icon turns red and macOS shows its "Low Battery"
+     banner; fail, the charger goes in at 31% (a bolt appears and the percentage climbs back), so
+     the battery never got low. Marks 'battery' at 30% and 20% on the way down. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Notes</title>
+<link rel="stylesheet" href="fonts/inter.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<link rel="stylesheet" href="desktop_assets/macos.css">
+<style>
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 20px; line-height: 1; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+  #notes { top: 64px; left: 120px; width: 1040px; height: 620px; }
+  .nt { flex: 1; display: flex; min-height: 0; }
+  .nt .folders { width: 200px; background: rgba(236, 232, 240, .92); padding: 10px 8px; border-right: 1px solid #d9d6dc; font-size: 13px; }
+  .nt .folders .h { color: #8a8a8e; font-size: 11px; font-weight: 600; padding: 10px 8px 4px; }
+  .nt .folders div.f { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; }
+  .nt .folders div.f .ms { color: #e3a900; font-size: 18px; }
+  .nt .folders div.f b { margin-left: auto; color: #8a8a8e; font-weight: 400; }
+  .nt .folders .on { background: #d9d5de; }
+  .nt .list { width: 270px; border-right: 1px solid #e3e3e3; background: #fff; overflow: hidden; }
+  .nt .list .bar { height: 44px; border-bottom: 1px solid #ececec; display: flex; align-items: center; padding: 0 14px; color: #8a8a8e; gap: 14px; }
+  .nt .list .n { padding: 10px 16px; border-bottom: 1px solid #f0f0f0; }
+  .nt .list .n b { display: block; font-size: 13px; } .nt .list .n span { color: #8a8a8e; font-size: 12px; }
+  .nt .list .n.sel { background: #fde89a; border-radius: 6px; margin: 4px 6px; border: 0; }
+  .nt .doc { flex: 1; padding: 20px 46px; font-size: 15px; line-height: 23px; color: #1d1d1f; overflow: hidden; }
+  .nt .doc .dt { text-align: center; color: #8a8a8e; font-size: 12px; margin-bottom: 14px; }
+  .nt .doc h1 { font-size: 26px; margin: 0 0 12px; font-weight: 700; }
+  .nt .doc ul { margin: 6px 0 14px; padding-left: 22px; }
+  .caret { border-left: 2px solid #e3a900; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { border-color: transparent; } }
+</style>
+<script src="demo-contract.js"></script>
+<script src="desktop_assets/macos.js"></script>
+</head>
+<body>
+<div class="mac-window" id="notes">
+  <div class="mac-titlebar"><div class="mac-lights"><i></i><i></i><i></i></div></div>
+  <div class="nt">
+    <div class="folders">
+      <div class="h">iCloud</div>
+      <div class="f"><span class="ms">folder</span>All iCloud<b>48</b></div>
+      <div class="f on"><span class="ms">folder</span>Notes<b>31</b></div>
+      <div class="f"><span class="ms">folder</span>Travel<b>9</b></div>
+      <div class="f"><span class="ms">folder</span>Work<b>8</b></div>
+      <div class="h">On My Mac</div>
+      <div class="f"><span class="ms">folder</span>Notes<b>4</b></div>
+    </div>
+    <div class="list">
+      <div class="bar"><span class="ms" style="font-variation-settings:'FILL' 0">view_agenda</span><span class="ms" style="font-variation-settings:'FILL' 0">delete</span><span class="ms" style="margin-left:auto;font-variation-settings:'FILL' 0">edit_square</span></div>
+      <div class="n sel"><b>Lisbon trip</b><span>9:38 AM &nbsp;Flights, where to stay, food</span></div>
+      <div class="n"><b>Groceries</b><span>Yesterday &nbsp;Oat milk, eggs, coffee beans</span></div>
+      <div class="n"><b>Q4 goals</b><span>Saturday &nbsp;Ship the onboarding redesign</span></div>
+      <div class="n"><b>Book list</b><span>Friday &nbsp;Tomorrow, and Tomorrow, and…</span></div>
+      <div class="n"><b>Gift ideas</b><span>10/2/26 &nbsp;Mom: the ceramic class</span></div>
+      <div class="n"><b>Wi-Fi passwords</b><span>9/28/26 &nbsp;Studio: blue-heron-42</span></div>
+      <div class="n"><b>Apartment</b><span>9/20/26 &nbsp;Call the landlord about the heater</span></div>
+    </div>
+    <div class="doc">
+      <div class="dt">October 12, 2026 at 9:38 AM</div>
+      <h1>Lisbon trip</h1>
+      <b>Flights</b>
+      <ul><li>TAP TP 236, SFO → LIS, Thu Nov 19, 4:25 PM</li><li>Back Sun Nov 29, morning if possible</li></ul>
+      <b>Where to stay</b>
+      <ul><li>Alfama, near the Miradouro de Santa Luzia</li><li>Or Príncipe Real: quieter, close to the gardens</li></ul>
+      <b>Food</b>
+      <ul id="food"><li>Pastéis de Belém (go early, the line gets long)</li><li>Time Out Market for the first night</li><li><span id="typing"></span><span class="caret"></span></li></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+  Mac.mount({
+    app: 'Notes', menus: ['File', 'Edit', 'Format', 'View', 'Window', 'Help'], battery: 47,
+    dock: [
+      { bg: 'linear-gradient(#5ac8fa,#1e7cf2)', glyph: '<span class="ms">sentiment_satisfied</span>', open: true },
+      { bg: 'linear-gradient(#fff,#e5e5ea)', glyph: '<span class="ms" style="color:#1e7cf2">explore</span>', open: true },
+      { bg: 'linear-gradient(#5cd85c,#1fae3a)', glyph: '<span class="ms">chat_bubble</span>' },
+      { bg: 'linear-gradient(#69b5ff,#1a73e8)', glyph: '<span class="ms">mail</span>' },
+      { bg: 'linear-gradient(#ffe066,#f5c400)', glyph: '<span class="ms" style="color:#fff">edit_note</span>', open: true },
+      { bg: 'linear-gradient(#fff,#f2f2f2)', glyph: '<span class="ms" style="color:#ff3b30">calendar_month</span>' },
+      { bg: 'linear-gradient(#fc5c7d,#fa2d48)', glyph: '<span class="ms">music_note</span>' },
+      '|',
+      { bg: 'linear-gradient(#8e8e93,#636366)', glyph: '<span class="ms">settings</span>' },
+    ],
+  });
+
+  const $ = id => document.getElementById(id);
+  // A few things to add to the food list, typed slowly, then the next line.
+  const LINES = ['Cervejaria Ramiro: garlic prawns + the steak sandwich', 'Ginjinha in a chocolate cup at A Ginjinha', 'Manteigaria for more pastéis', 'Bairro Alto for dinner one night'];
+  let li = 0, ci = 0;
+  setInterval(() => {
+    const text = LINES[li % LINES.length];
+    if (ci < text.length) { $('typing').textContent = text.slice(0, ++ci); return; }
+    if (Math.random() < 0.85) return; // a pause before the next one
+    const done = document.createElement('li');
+    done.textContent = text;
+    $('typing').parentElement.before(done);
+    if ($('food').children.length > 7) $('food').firstElementChild.remove();
+    li++; ci = 0; $('typing').textContent = '';
+  }, 160);
+
+  // Holding: 47%, a point now and then but never below 45%.
+  let pct = 47, run = null, marked = new Set();
+  const hold = setInterval(() => { if (pct > 45 && Math.random() < 0.5) Mac.setBattery(--pct); }, 90000);
+
+  demo.onStart = durationMs => {
+    clearInterval(hold);
+    const from = pct, to = demo.outcome === 'success' ? 10 : 31, at = Date.now();
+    const tick = setInterval(() => {
+      const f = Math.min((Date.now() - at) / durationMs, 1);
+      const p = Math.round(from - (from - to) * f);
+      if (p !== pct) { pct = p; Mac.setBattery(pct); }
+      for (const m of [30, 20]) if (pct <= m && !marked.has(m)) { marked.add(m); demo.mark('battery', { pct: m }); }
+      if (f < 1) return;
+      clearInterval(tick);
+      if (demo.outcome === 'success') {
+        Mac.notify({ app: 'Battery', title: 'Low Battery', body: 'Your Mac will sleep soon unless plugged into a power outlet.', bg: 'linear-gradient(#8e8e93,#48484a)', icon: '<span class="ms" style="color:#ff453a">battery_alert</span>' });
+        demo.trigger();
+        // Keeps draining slowly afterwards, still on battery.
+        setInterval(() => { if (pct > 6) Mac.setBattery(--pct); }, 60000);
+      } else {
+        Mac.setBattery(pct, { charging: true });
+        demo.trigger();
+        setInterval(() => { if (pct < 100) Mac.setBattery(++pct, { charging: true }); }, 30000);
+      }
+    }, 250);
+  };
+</script>
+</body>
+</html>

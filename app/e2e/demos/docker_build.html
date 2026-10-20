@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<!-- `docker compose --progress=plain up --build -d` in a macOS Terminal window. Holds mid-pull: redis
+     is pulled, and postgres's last big layer creeps toward done while its other layers finish. When
+     the suite starts it, it ends by ?outcome=:
+       success  the pull finishes, BuildKit builds the api image step by step, the containers start
+                and the shell prompt comes back
+       fail     the build fails at `RUN npm ci` (exit code 1, "failed to solve"), then the prompt
+       pull     the layer download times out ("i/o timeout"), then the prompt
+     Plain progress prints "Pull complete" per layer and "DONE 0.4s" per build step all along the
+     way: none of those is the image being built. Marks 'pulled' when the pull is done. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>api — docker compose up --build — 120×38</title>
+<link rel="stylesheet" href="desktop_assets/macos.css">
+<style>
+  .term { flex: 1; overflow: hidden; padding: 6px 10px 8px; color: #e6e6e6; background: #1e1e1e; display: flex; flex-direction: column;
+          font: 13px/1.38 Menlo, "SF Mono", Monaco, monospace; }
+  #log { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+  #log > div { white-space: pre; }
+  .cursor { display: inline-block; width: 8px; height: 15px; background: #d0d0d0; vertical-align: -3px; }
+</style>
+<script src="demo-contract.js"></script>
+<script src="desktop_assets/macos.js"></script>
+</head>
+<body>
+<div class="mac-window full">
+  <div class="mac-titlebar dark"><div class="mac-lights"><i></i><i></i><i></i></div><span>api — docker compose up --build — 120×38</span></div>
+  <div class="term"><div id="log"></div></div>
+</div>
+
+<script>
+  Mac.mount({ app: 'Terminal', menus: ['Shell', 'Edit', 'View', 'Window', 'Help'], battery: 76 });
+  const log = document.getElementById('log');
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const line = text => {
+    const d = document.createElement('div');
+    d.innerHTML = esc(text) || ' ';
+    log.appendChild(d);
+    while (log.children.length > 160) log.firstChild.remove();
+  };
+  const PROMPT = 'roy@Roys-MacBook-Pro api % ';
+  const prompt = () => { const d = document.createElement('div'); d.innerHTML = `${PROMPT}<span class="cursor"></span>`; log.appendChild(d); };
+
+  // docker's progress bar: [=====>      ] in 50 columns.
+  const bar = f => { const n = Math.floor(50 * f); return `[${'='.repeat(Math.max(0, n - 1))}${n ? '>' : ''}${' '.repeat(50 - n)}]`; };
+  const mb = x => x >= 1 ? `${x.toFixed(x >= 100 ? 1 : 2)}MB` : `${Math.round(x * 1000)}kB`;
+  const dl = (id, done, total, what = 'Downloading') => line(` ${id} ${what} ${bar(done / total)}  ${mb(done)}/${mb(total)}`);
+
+  // What was already on screen when the window was opened: the command and most of the pull.
+  line(`${PROMPT}docker compose --progress=plain up --build -d`);
+  const PG = [['a2318d6c47ec', 29.13], ['5c1f2a8d03e7', 1.1], ['e7d1f3a5b2c4', 8.14], ['0b8a6c2e4f91', 1.25], ['9c43e1a7d5b2', 5.39], ['2f2c6b8e5d07', 112.6], ['71ad4e9b3f20', 0.009]];
+  [' redis Pulling', ' postgres Pulling', ' api Building'].forEach(l => line(l));
+  for (const [id] of PG) line(` ${id} Pulling fs layer`);
+  for (const id of ['f18232174bc9', '61a3e4f96b04', '3c3f5e2a8b17', 'd0e2b5f4a6c3']) line(` ${id} Pull complete`);
+  line(' redis Pulled');
+  for (const [id, total] of PG.filter(([id]) => id !== '2f2c6b8e5d07').slice(0, 3)) { line(` ${id} Download complete`); line(` ${id} Pull complete`); }
+  const BIG = '2f2c6b8e5d07', BIG_MB = 112.6;
+  let got = 31.4;
+  const loadedAt = Date.now();
+
+  // Holding: the big layer creeps toward ~60%, the small ones trickle in.
+  const pending = PG.filter(([id]) => id !== BIG).slice(3);
+  let run = null;
+  const holdTick = setInterval(() => {
+    const t = (Date.now() - loadedAt) / 1000;
+    got = 31.4 + 37 * (1 - Math.exp(-t / 400));
+    dl(BIG, got, BIG_MB);
+    if (pending.length && Math.random() < 0.15) { const [id] = pending.shift(); line(` ${id} Download complete`); }
+  }, 1400);
+
+  // The build, in BuildKit's plain progress.
+  const SHA = '3f9a1c7e5b2d4f6a8c0e1b3d5f7a9c2e4b6d8f0a1c3e5b7d9f2a4c6e8b0d1f3a';
+  const STEPS = [
+    ['#0 building with "desktop-linux" instance using docker driver'],
+    ['', '#1 [api internal] load build definition from Dockerfile', '#1 transferring dockerfile: 714B done', '#1 DONE 0.0s'],
+    ['', '#2 [api internal] load metadata for docker.io/library/node:20-alpine', '#2 DONE 1.2s'],
+    ['', '#3 [api internal] load .dockerignore', '#3 transferring context: 112B done', '#3 DONE 0.0s'],
+    ['', `#4 [api base 1/2] FROM docker.io/library/node:20-alpine@sha256:${SHA.slice(0, 64)}`, '#4 resolve docker.io/library/node:20-alpine 0.0s done', '#4 DONE 0.0s'],
+    ['', '#5 [api internal] load build context', '#5 transferring context: 1.84MB 0.3s done', '#5 DONE 0.4s'],
+    ['', '#6 [api base 2/2] WORKDIR /app', '#6 CACHED'],
+    ['', '#7 [api deps 1/2] COPY package.json package-lock.json ./', '#7 DONE 0.1s'],
+  ];
+  const NPM = [
+    '#8 [api deps 2/2] RUN npm ci',
+    '#8 4.112 npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory.',
+    '#8 6.874 npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported',
+    '#8 11.29 npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported',
+    '#8 19.07 npm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead',
+  ];
+  const NPM_OK = ['#8 38.41 ', '#8 38.41 added 1214 packages, and audited 1215 packages in 38s', '#8 38.42 ', '#8 38.42 211 packages are looking for funding', '#8 38.42   run `npm fund` for details', '#8 38.48 found 0 vulnerabilities', '#8 DONE 39.1s'];
+  const NPM_FAIL = [
+    '#8 21.63 npm error code EUSAGE', '#8 21.63 npm error', '#8 21.63 npm error `npm ci` can only install packages when your package.json and package-lock.json are in sync.',
+    '#8 21.63 npm error Missing: zod@3.23.8 from lock file', '#8 21.64 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-10-12T16_44_02_118Z-debug-0.log',
+    '#8 ERROR: process "/bin/sh -c npm ci" did not complete successfully: exit code: 1', '------', ' > [api deps 2/2] RUN npm ci:',
+    '21.63 npm error `npm ci` can only install packages when your package.json and package-lock.json are in sync.', '21.63 npm error Missing: zod@3.23.8 from lock file', '------',
+    'failed to solve: process "/bin/sh -c npm ci" did not complete successfully: exit code: 1',
+  ];
+  const AFTER = [
+    ['', '#9 [api build 1/2] COPY . .', '#9 DONE 0.3s'],
+    ['', '#10 [api build 2/2] RUN npm run build', '#10 1.204 ', '#10 1.204 > api@2.4.0 build', '#10 1.204 > tsc -p tsconfig.build.json', '#10 1.204 ', '#10 DONE 14.8s'],
+    ['', '#11 [api runtime 1/2] COPY --from=deps /app/node_modules ./node_modules', '#11 DONE 2.6s'],
+    ['', '#12 [api runtime 2/2] COPY --from=build /app/dist ./dist', '#12 DONE 0.1s'],
+  ];
+  const EXPORT = [
+    '', '#13 [api] exporting to image', '#13 exporting layers', '#13 exporting layers 3.4s done',
+    `#13 writing image sha256:${SHA} done`, '#13 naming to docker.io/library/api-api done', '#13 DONE 3.5s', '',
+    '#14 [api] resolving provenance for metadata file', '#14 DONE 0.0s',
+    ' api  Built', ' Network api_default  Creating', ' Network api_default  Created',
+    ' Container api-postgres-1  Creating', ' Container api-redis-1  Creating', ' Container api-postgres-1  Created', ' Container api-redis-1  Created',
+    ' Container api-api-1  Creating', ' Container api-api-1  Created', ' Container api-postgres-1  Starting', ' Container api-redis-1  Starting',
+    ' Container api-redis-1  Started', ' Container api-postgres-1  Started', ' Container api-api-1  Starting', ' Container api-api-1  Started',
+  ];
+  const TIMEOUT = [
+    ` postgres Error failed to copy: httpReadSeeker: failed open: failed to do request: Get "https://production.cloudflare.docker.com/registry-v2/docker/registry/v2/blobs/sha256/2f/2f2c6b8e5d07/data": dial tcp 104.16.98.215:443: i/o timeout`,
+    `Error response from daemon: failed to copy: httpReadSeeker: failed open: failed to do request: Get "https://production.cloudflare.docker.com/registry-v2/docker/registry/v2/blobs/sha256/2f/2f2c6b8e5d07/data": dial tcp 104.16.98.215:443: i/o timeout`,
+  ];
+
+  // Print `lines` spread over [from, to] of the run (fractions of durationMs).
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const over = async (lines, ms) => { for (const l of lines) { line(l); await sleep(ms / lines.length); } };
+
+  demo.onStart = async durationMs => {
+    clearInterval(holdTick);
+    const D = durationMs;
+    if (demo.outcome === 'pull') {
+      // The download crawls, then stalls, then times out.
+      const at = Date.now();
+      while (Date.now() - at < D * 0.7) { got = Math.min(got + 0.35, 70.9); dl(BIG, got, BIG_MB); await sleep(1400); }
+      await sleep(D * 0.3);
+      await over(TIMEOUT, 300);
+      prompt(); demo.trigger(); return;
+    }
+    // The rest of the pull: the big layer finishes, then everything extracts.
+    const at = Date.now();
+    while (Date.now() - at < D * 0.15) { got = Math.min(got + (BIG_MB - got) * 0.18 + 1, BIG_MB); dl(BIG, got, BIG_MB); await sleep(700); }
+    line(` ${BIG} Download complete`);
+    for (const [id] of pending) line(` ${id} Download complete`);
+    for (const [id, total] of PG.slice(3)) {
+      for (const f of [0.2, 0.6, 1]) { dl(id, total * f, total, 'Extracting'); await sleep(D * 0.004); }
+      line(` ${id} Pull complete`);
+    }
+    line(' postgres Pulled');
+    demo.mark('pulled');
+    await over(STEPS.flat(), D * 0.1);
+    await over(NPM, D * 0.25);
+    if (demo.outcome === 'fail') {
+      await sleep(Math.max(0, D - (Date.now() - at)));
+      await over(NPM_FAIL, 600);
+      prompt(); demo.trigger(); return;
+    }
+    await over(NPM_OK, D * 0.08);
+    await over(AFTER.flat(), D * 0.2);
+    const exportMs = Math.min(4000, D * 0.08);
+    await sleep(Math.max(0, D - (Date.now() - at) - exportMs));
+    await over(EXPORT, exportMs);
+    prompt(); demo.trigger();
+  };
+</script>
+</body>
+</html>

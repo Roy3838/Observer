@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<!-- The Claude desktop app in Cowork mode, working through a task on the user's files: the
+     conversation streams its tool steps, and the Progress panel ticks a five-step plan. Holds on step
+     2 (reading receipts, the count creeping) until the suite starts it; then the steps complete one by
+     one (each marked 'step'), the spreadsheet gets created at step 4, and it ends by ?outcome=:
+     success, step 5 finishes and Claude posts its summary with the file ("Task complete"); fail,
+     Claude stops at step 5 to ask permission to delete three files ("Waiting for your approval"). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Claude</title>
+<link rel="stylesheet" href="fonts/inter.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<link rel="stylesheet" href="desktop_assets/macos.css">
+<style>
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 18px; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+  .cl { flex: 1; display: flex; background: #faf9f5; color: #141413; font-family: Inter, -apple-system, sans-serif; font-size: 14px; min-height: 0; }
+  .cl .side { width: 248px; background: #f5f4ee; border-right: 1px solid #e8e6dc; display: flex; flex-direction: column; padding: 8px 10px; position: relative; }
+  .cl .side .lights { height: 30px; position: relative; }
+  .cl .side .new { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; color: #c96442; font-weight: 600; margin: 6px 0 10px; }
+  .cl .side .new .ms { background: #c96442; color: #fff; border-radius: 50%; width: 22px; height: 22px; display: grid; place-items: center; font-size: 16px; }
+  .cl .side .h { color: #8a8678; font-size: 12px; padding: 12px 10px 6px; }
+  .cl .side div.t { padding: 7px 10px; border-radius: 8px; color: #3d3929; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13.5px; }
+  .cl .side div.t.on { background: #ebe9e0; }
+  .cl .side .me { margin-top: auto; display: flex; gap: 10px; align-items: center; padding: 10px; }
+  .cl .side .me i { width: 28px; height: 28px; border-radius: 50%; background: #3d3929; color: #fff; display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 600; }
+  .cl .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .cl .tabs { height: 52px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #efede4; }
+  .cl .tabs div { display: flex; background: #efede4; border-radius: 10px; padding: 3px; }
+  .cl .tabs span { padding: 5px 16px; border-radius: 8px; color: #6b6758; font-size: 13px; font-weight: 500; }
+  .cl .tabs span.on { background: #fff; color: #141413; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .cl .conv { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 56px 10px; }
+  .cl .user { align-self: flex-end; max-width: 78%; background: #f0eee6; border-radius: 14px; padding: 12px 16px; line-height: 21px; margin: 18px 0; }
+  .cl .say { line-height: 23px; margin: 8px 0; font-size: 15px; color: #141413; }
+  .cl .tool { display: flex; align-items: center; gap: 8px; color: #6b6758; font-size: 13px; padding: 4px 0; }
+  .cl .tool .ms { font-size: 16px; color: #8a8678; }
+  .cl .tool code { font: 12.5px Menlo, monospace; color: #3d3929; background: #f0eee6; padding: 1px 5px; border-radius: 4px; }
+  .cl .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #e3ded0; border-top-color: #c96442; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cl .card { border: 1px solid #e3e0d4; border-radius: 12px; background: #fff; padding: 14px 16px; margin: 10px 0; max-width: 560px; }
+  .cl .card .ttl { font-weight: 600; display: flex; gap: 8px; align-items: center; }
+  .cl .card ul { margin: 8px 0 12px; padding-left: 20px; color: #3d3929; font: 12.5px/19px Menlo, monospace; }
+  .cl .card .btns { display: flex; gap: 8px; justify-content: flex-end; }
+  .cl .card .btns span { padding: 7px 14px; border-radius: 8px; border: 1px solid #e3e0d4; font-weight: 500; font-size: 13px; }
+  .cl .card .btns span.p { background: #141413; color: #fff; border-color: #141413; }
+  .cl .file { display: flex; gap: 12px; align-items: center; }
+  .cl .file .ic { width: 40px; height: 40px; border-radius: 8px; background: #1d6f42; color: #fff; display: grid; place-items: center; }
+  .cl .file small { color: #8a8678; display: block; }
+  .cl .input { margin: 0 56px 18px; border: 1px solid #e3e0d4; border-radius: 16px; background: #fff; padding: 14px 16px; color: #8a8678; display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .cl .input .stop { margin-left: auto; width: 30px; height: 30px; border-radius: 8px; background: #141413; display: grid; place-items: center; }
+  .cl .input .stop i { width: 10px; height: 10px; background: #fff; border-radius: 2px; display: block; }
+  .cl .panel { width: 300px; border-left: 1px solid #e8e6dc; background: #faf9f5; padding: 16px 18px; display: flex; flex-direction: column; gap: 18px; }
+  .cl .panel h4 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #3d3929; display: flex; justify-content: space-between; }
+  .cl .panel h4 small { color: #8a8678; font-weight: 500; }
+  .cl .step { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; font-size: 13.5px; color: #3d3929; line-height: 19px; }
+  .cl .step .dot { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #cfcabb; flex: none; margin-top: 1px; display: grid; place-items: center; }
+  .cl .step.done .dot { background: #c96442; border-color: #c96442; color: #fff; }
+  .cl .step.done .dot::after { content: '✓'; font-size: 11px; font-weight: 700; }
+  .cl .step.now .dot { border-color: #c96442; border-top-color: transparent; animation: spin 1s linear infinite; }
+  .cl .step.wait .dot { border-color: #d97706; background: #fef3c7; }
+  .cl .step small { display: block; color: #8a8678; font-size: 12px; }
+  .cl .box { border: 1px solid #e8e6dc; border-radius: 10px; background: #fff; padding: 10px 12px; font-size: 13px; color: #3d3929; display: flex; gap: 8px; align-items: center; }
+  .cl .status { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #6b6758; }
+</style>
+<script src="demo-contract.js"></script>
+<script src="desktop_assets/macos.js"></script>
+</head>
+<body>
+<div class="mac-window full">
+  <div class="cl">
+    <div class="side">
+      <div class="lights"><div class="mac-lights" style="left:2px"><i></i><i></i><i></i></div></div>
+      <div class="new"><span class="ms">add</span>New task</div>
+      <div class="h">Tasks</div>
+      <div class="t on">October expenses spreadsheet</div>
+      <div class="t">Rename vacation photos by date</div>
+      <div class="t">Draft Q4 board update from notes</div>
+      <div class="t">Organize Downloads folder</div>
+      <div class="h">Recents</div>
+      <div class="t">Lisbon itinerary ideas</div>
+      <div class="t">Explain this SQL query</div>
+      <div class="t">Cover letter for Linear</div>
+      <div class="me"><i>RM</i><span>Roy Medina<br><small style="color:#8a8678">Max plan</small></span></div>
+    </div>
+    <div class="main">
+      <div class="tabs"><div><span>Chat</span><span class="on">Cowork</span><span>Code</span></div></div>
+      <div class="conv" id="conv">
+        <div class="user">Go through my Receipts folder, pull out every expense from October, and put them in a spreadsheet grouped by category. Then clean up the duplicate receipts.</div>
+        <div class="say">I'll start by finding the October receipts, then read each one for the vendor, date and amount.</div>
+        <div class="tool"><span class="ms">folder_open</span>Listed 214 files in <code>~/Documents/Receipts</code></div>
+        <div class="tool"><span class="ms">filter_alt</span>Found 63 receipts dated October 2026</div>
+      </div>
+      <div class="input"><span class="ms">add</span>Reply to Claude…<span class="stop" id="stop"><i></i></span></div>
+    </div>
+    <div class="panel">
+      <div><h4>Progress <small id="pcount">1 of 5</small></h4><div id="steps"></div></div>
+      <div><h4>Working folder</h4><div class="box"><span class="ms">folder</span>~/Documents/Receipts</div></div>
+      <div><h4>Outputs</h4><div id="outputs" class="status">Nothing yet</div></div>
+      <div class="status" id="status" style="margin-top:auto"><span class="spin"></span>Working…</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  Mac.mount({ app: 'Claude', menus: ['File', 'Edit', 'View', 'Window', 'Help'], battery: 64 });
+  const $ = id => document.getElementById(id);
+  const STEPS = ['Find October receipts', 'Read vendor, date and amount', 'Categorize expenses', 'Build expenses-october.xlsx', 'Move duplicate receipts to Duplicates/'];
+  const state = ['done', 'now', '', '', ''], notes = ['63 found', '', '', '', ''];
+  const paintSteps = () => {
+    $('steps').innerHTML = STEPS.map((s, i) => `<div class="step ${state[i]}"><span class="dot"></span><span>${s}${notes[i] ? `<small>${notes[i]}</small>` : ''}</span></div>`).join('');
+    $('pcount').textContent = `${state.filter(s => s === 'done').length} of ${STEPS.length}`;
+  };
+  const conv = $('conv');
+  const add = html => { conv.insertAdjacentHTML('beforeend', html); while (conv.children.length > 22) conv.children[1].remove(); };
+  const tool = (icon, html) => add(`<div class="tool"><span class="ms">${icon}</span>${html}</div>`);
+
+  const VENDORS = ['uber', 'doordash', 'aws', 'figma', 'notion', 'delta', 'marriott', 'blue-bottle', 'apple', 'staples', 'lyft', 'github', 'zoom', 'wework', 'sweetgreen', 'adobe', 'shell', 'amazon', 'linear', 'vercel'];
+  const file = n => `receipt-10${String(1 + (n * 7) % 31).padStart(2, '0')}-${VENDORS[n % VENDORS.length]}.pdf`;
+  let read = 0;
+  const readOne = () => { read++; tool('description', `Read <code>${file(read)}</code>`); notes[1] = `${read} of 63`; paintSteps(); };
+  for (let i = 0; i < 26; i++) readOne();
+
+  // Holding: reading receipts, slower and slower, never past 41.
+  const loadedAt = Date.now();
+  const hold = setInterval(() => {
+    const t = (Date.now() - loadedAt) / 1000;
+    if (read < 26 + Math.floor(15 * (1 - Math.exp(-t / 400)))) readOne();
+  }, 2500);
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const finishStep = (i, note) => { state[i] = 'done'; if (note) notes[i] = note; if (i + 1 < STEPS.length) state[i + 1] = 'now'; paintSteps(); demo.mark('step', { step: i + 1 }); };
+
+  demo.onStart = async durationMs => {
+    clearInterval(hold);
+    const D = durationMs, at = Date.now();
+    while (read < 63) { readOne(); await sleep(D * 0.3 / (63 - 26)); }
+    finishStep(1, '63 of 63');
+    add('<div class="say">All 63 read. A few vendors show up under different names (Uber and Uber Eats, AWS and Amazon Web Services), so I\'ll normalize those while categorizing.</div>');
+    for (const c of ['Travel', 'Meals', 'Software', 'Lodging', 'Office']) { tool('label', `Categorized as <b>${c}</b>`); await sleep(D * 0.04); }
+    finishStep(2, '5 categories');
+    tool('table_chart', 'Created <code>expenses-october.xlsx</code>');
+    $('outputs').innerHTML = '<div class="file"><span class="ic"><span class="ms">table_chart</span></span><span>expenses-october.xlsx<small>Spreadsheet · 63 rows</small></span></div>';
+    await sleep(D * 0.08);
+    tool('functions', 'Added totals by category and a summary sheet');
+    await sleep(D * 0.07);
+    finishStep(3, '63 rows, 2 sheets');
+    tool('content_copy', 'Found 3 duplicate receipts (same vendor, date and amount)');
+    await sleep(Math.max(0, D - (Date.now() - at)));
+    if (demo.outcome === 'fail') {
+      state[4] = 'wait'; notes[4] = 'Needs your approval'; paintSteps();
+      add(`<div class="card"><div class="ttl"><span class="ms">delete</span>Allow Claude to delete 3 files?</div>
+        <ul><li>receipt-1004-uber (1).pdf</li><li>receipt-1017-doordash copy.pdf</li><li>receipt-1022-aws (2).pdf</li></ul>
+        <div class="btns"><span>Deny</span><span>Always allow</span><span class="p">Allow once</span></div></div>`);
+      $('status').innerHTML = '<span class="ms" style="color:#d97706">pause_circle</span>Waiting for your approval';
+      $('stop').style.visibility = 'hidden';
+    } else {
+      tool('drive_file_move', 'Moved 3 files to <code>Duplicates/</code>');
+      finishStep(4, '3 moved');
+      add(`<div class="say">Done! I found <b>63 October receipts</b> totaling <b>$2,847.19</b>: Travel $1,204.50, Lodging $689.00, Software $512.37, Meals $318.92, Office $122.40. The three duplicates are in <code>Duplicates/</code> if you want to double-check before deleting them.</div>
+        <div class="card"><div class="file"><span class="ic"><span class="ms">table_chart</span></span><span><b>expenses-october.xlsx</b><small>Spreadsheet · Open in Numbers</small></span></div></div>`);
+      $('status').innerHTML = '<span class="ms" style="color:#16a34a;font-variation-settings:\'FILL\' 1">check_circle</span>Task complete';
+      $('stop').style.visibility = 'hidden';
+    }
+    demo.trigger();
+  };
+  paintSteps();
+</script>
+</body>
+</html>

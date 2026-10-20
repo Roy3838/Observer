@@ -47,6 +47,17 @@ export const test = base.extend<{}, { observer: Observer }>({
         `--use-file-for-fake-audio-capture=${E2E_DIR}demos/media/silence.wav`,
       ],
     });
+    // Camera demos (camera_*.html) are recordings playing in a tab. With useTabAsCamera() the app's
+    // camera becomes a capture of that tab, picked by title like the screen; otherwise it stays
+    // Chrome's fake device (a test pattern), so an agent watching the camera by mistake sees nothing.
+    await context.addInitScript(() => {
+      if (location.protocol === 'file:') return;
+      const media = navigator.mediaDevices;
+      const getUserMedia = media.getUserMedia.bind(media);
+      media.getUserMedia = constraints => constraints?.video && (window as any).__e2eTabAsCamera
+        ? media.getDisplayMedia({ video: true, audio: false })
+        : getUserMedia(constraints);
+    });
     const events: SuiteEvent[] = [];
     await context.exposeFunction('__e2eReport', (event: any) => {
       events.push({ ...event, t: Date.now() });
@@ -55,6 +66,14 @@ export const test = base.extend<{}, { observer: Observer }>({
     await context.close();
   }, { scope: 'worker' }],
 });
+
+/** Demos that are a camera feed rather than a screen: their tab is what the app's camera sees. */
+export const isCameraDemo = (demo: string) => demo.startsWith('camera_');
+
+/** Makes the app's camera ($CAMERA) a capture of the demo tab, until the page reloads. */
+export async function useTabAsCamera(app: Page): Promise<void> {
+  await app.evaluate(() => { (window as any).__e2eTabAsCamera = true; });
+}
 
 /** Opens Observer with the e2e hooks installed and returns its page. */
 export async function openObserver(context: BrowserContext): Promise<Page> {

@@ -3,10 +3,12 @@
      thread ("Dana Whitfield, me 3", read) is already in the inbox from load, ending with the user's
      follow-up sent this morning. Other mail keeps arriving the whole time: a Primary message now and
      then, the rest bumping the Promotions / Social / Updates "new" chips. When the suite starts it, a
-     decoy from Dana Kim (a friend, same first name) lands mid-run (marked 'decoy'); then it ends by
-     ?outcome=: success, Dana replies with an offer and her thread jumps to the top, unread; fail, the
-     follow-up bounces: Mail Delivery Subsystem threads into the same conversation ("Address not
-     found"), so only the snippet says it isn't her. Logo: Gmail's 2026 mark (gmail_assets/). -->
+     receipt for an invoice that's already paid lands a quarter of the way in, then a decoy from Dana Kim
+     (a friend, same first name) mid-run (both marked 'decoy'); then it ends by ?outcome=: success, Dana
+     replies with an offer and her thread jumps to the top, unread; fail, the follow-up bounces: Mail
+     Delivery Subsystem threads into the same conversation ("Address not found"), so only the snippet
+     says it isn't her; invoice, Dana stays quiet and an overdue invoice from Adobe arrives instead.
+     Logo: Gmail's 2026 mark (gmail_assets/). -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -208,6 +210,11 @@
   const bump = (t, patch) => { threads.splice(threads.indexOf(t), 1); Object.assign(t, patch, { when: Date.now(), unread: true }); threads.unshift(t); arrived++; render(); };
 
   demo.onStart = durationMs => {
+    // A decoy for the invoice prompt: an invoice, but paid.
+    setTimeout(() => {
+      arrive(['primary', T('Webflow', 'Your invoice #WF-20931 has been paid', 'Thanks for your payment! Invoice #WF-20931 for your CMS site plan ($29.00) was paid on Oct 12, 2026 with Visa ending in 4417. No action is needed.', 0)]);
+      demo.mark('decoy', { from: 'Webflow' });
+    }, durationMs * 0.25);
     // The decoy: a different Dana, a friend.
     setTimeout(() => {
       arrive(['primary', T('Dana Kim', 'climbing thurs?', 'are you still down for mission cliffs thursday at 7? I can grab you a guest pass', 0)]);
@@ -219,6 +226,8 @@
         snippet: "Hi Jordan, I'm thrilled to share that the team would love to have you join Linear as a Senior Product Designer! I've attached your offer letter — let's find 20 minutes tomorrow to walk through it…",
         attach: 'Offer Letter - Jordan Lee.pdf',
       });
+      else if (demo.outcome === 'invoice') arrive(['primary', T('Adobe', 'Action required: your invoice #ADB-4471 is overdue',
+        'Your Creative Cloud All Apps payment of $59.99 (invoice #ADB-4471) is 7 days past due. Update your payment method by Oct 19 to avoid losing access to your apps.', 0)]);
       else bump(DANA, {
         from: 'Dana, me, Mail Delivery Subsystem <small>4</small>',
         snippet: "Address not found. Your message wasn't delivered to dana.whitfield@linear.app because the address couldn't be found, or is unable to receive mail.",
