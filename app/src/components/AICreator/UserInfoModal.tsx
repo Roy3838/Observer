@@ -15,6 +15,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Phone, Mail, Send, Hash, Bell, Check, Pencil, X,
   CheckCircle2, Loader, RefreshCw, XCircle, KeyRound, MessageSquare,
+  Cpu, Cloud, HardDrive,
 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import Modal from '@components/EditAgent/Modal';
@@ -311,7 +312,50 @@ const TestButton: React.FC<{ state: TestState; label: string; onClick: () => voi
   </button>
 );
 
-const UserInfoModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
+/** kind='model': download a local model now, or run in the cloud. Dismissing means cloud. */
+const ModelChoiceModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
+  const { requestId } = req;
+  const isDecision = req.model === 'onejev';
+  const localName = isDecision ? 'OneJev' : 'Qwen3.5 0.8B';
+  const cloudName = isDecision ? 'clef-flash' : 'gemma-3-12b-it';
+  const choose = (value: 'local' | 'cloud') => onResolve(requestId, { value });
+
+  const option = (value: 'local' | 'cloud', icon: React.ReactNode, title: string, detail: React.ReactNode) => (
+    <button
+      onClick={() => choose(value)}
+      className="w-full flex items-start gap-3 p-4 rounded-lg border border-gray-200 text-left hover:border-purple-400 hover:bg-purple-50 transition-colors"
+    >
+      <span className="flex-shrink-0 mt-0.5 text-purple-600">{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-gray-900">{title}</span>
+        <span className="block text-xs text-gray-500 mt-0.5 leading-5">{detail}</span>
+      </span>
+    </button>
+  );
+
+  return (
+    <Modal open onClose={() => choose('cloud')} className="w-full max-w-xl mx-4">
+      <div className="flex items-start gap-3 px-6 py-4 rounded-t-lg border-b border-gray-100">
+        <div className="flex-shrink-0 mt-0.5 flex items-center justify-center h-9 w-9 rounded-full bg-gray-100 text-gray-700">
+          <Cpu className="h-5 w-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-semibold leading-tight text-gray-900">Run this agent on your computer?</h2>
+          {req.reason && <p className="text-sm text-gray-500 mt-0.5">{req.reason}</p>}
+        </div>
+      </div>
+
+      <div className="p-6 space-y-3">
+        {option('local', <HardDrive className="h-5 w-5" />, `Download ${localName} (local)`, (
+          <>Private, free, no internet needed once downloaded. About 1 GB: <span className="font-medium text-gray-700">the download may take 10+ minutes</span>. You can leave your computer; the agent starts on its own when it's ready.</>
+        ))}
+        {option('cloud', <Cloud className="h-5 w-5" />, `Use ${cloudName} (cloud)`, 'Starts right away. Screenshots are sent to the cloud model.')}
+      </div>
+    </Modal>
+  );
+};
+
+const ContactInfoModal: React.FC<{ req: UserInfoRequest & { kind: UserInfoKind }; onResolve: UserInfoModalProps['onResolve'] }> = ({ req, onResolve }) => {
   const { user, getAccessToken } = useAuth();
   const { kind, channel, requestId } = req;
 
@@ -565,5 +609,10 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
     </Modal>
   );
 };
+
+const UserInfoModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) =>
+  req.kind === 'model'
+    ? <ModelChoiceModal req={req} onResolve={onResolve} />
+    : <ContactInfoModal req={{ ...req, kind: req.kind }} onResolve={onResolve} />;
 
 export default UserInfoModal;

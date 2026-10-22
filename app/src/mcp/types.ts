@@ -6,6 +6,8 @@
 // the OpenAI function-calling wire format so that the same registry + runner can later
 // drop into a real MCP server with only the transport swapped.
 
+import type { LocalModelChoice } from './localModel';
+
 /**
  * A single tool call requested by the model, in OpenAI shape.
  * `arguments` is a raw JSON string (as the API returns it); the runner parses + validates it.
@@ -102,7 +104,10 @@ export type UserInfoKind = 'phone' | 'email' | 'telegram' | 'discord' | 'pushove
  */
 export interface UserInfoRequest {
   requestId: string;
-  kind: UserInfoKind;
+  /** A contact kind, or 'model': whether to download a local model or run in the cloud. */
+  kind: UserInfoKind | 'model';
+  /** For `model`: which local model the download would fetch. */
+  model?: LocalModelChoice;
   /** For `phone`: which tool the code is for. 'whatsapp' also requires WhatsApp's 24h window. */
   channel?: 'sms' | 'voice' | 'whatsapp';
   /** The model's one-line "why I need this", shown to the user for context. */

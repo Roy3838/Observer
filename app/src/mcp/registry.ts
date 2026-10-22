@@ -603,14 +603,19 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'ask_user_info',
-    description: "Ask the user for a piece of contact info needed by a notification tool, via a guided modal. Use this INSTEAD of asking for a phone number / chat_id / webhook URL in chat prose — the modal walks the user through actually obtaining the value (QR codes, deep links, step-by-step instructions) and prefills anything they've given before. Call it BEFORE create_agent, once per piece of info you need. This BLOCKS until the user confirms. For kind='phone' the value is ALWAYS the user's 4-word Observer code for that channel (e.g. \"tree-book-shower-golden\"): the SMS code for sms, the WhatsApp code for whatsapp, either for voice. Never a phone number. Each channel has its own code, so ask again (with the right channel) when an agent uses both sendSms and sendWhatsapp. The modal only returns once it's connected, so you do NOT need a separate check_whitelist call for it; pass it verbatim as the phone_number/number argument to sendSms/sendWhatsapp/call. Observer never sends to raw phone numbers. For kind='telegram' the value is the user's separate 4-word Telegram code (not the phone code, never a numeric chat_id), already linked; pass it verbatim as sendTelegram's first argument. If the result is {skipped:true}, the user declined — ask them about it in chat rather than calling this again. Do not narrate the modal or tell the user to fill it in; they can see it.",
+    description: "Ask the user for a piece of contact info needed by a notification tool, via a guided modal. Use this INSTEAD of asking for a phone number / chat_id / webhook URL in chat prose — the modal walks the user through actually obtaining the value (QR codes, deep links, step-by-step instructions) and prefills anything they've given before. Call it BEFORE create_agent, once per piece of info you need. This BLOCKS until the user confirms. For kind='phone' the value is ALWAYS the user's 4-word Observer code for that channel (e.g. \"tree-book-shower-golden\"): the SMS code for sms, the WhatsApp code for whatsapp, either for voice. Never a phone number. Each channel has its own code, so ask again (with the right channel) when an agent uses both sendSms and sendWhatsapp. The modal only returns once it's connected, so you do NOT need a separate check_whitelist call for it; pass it verbatim as the phone_number/number argument to sendSms/sendWhatsapp/call. Observer never sends to raw phone numbers. For kind='telegram' the value is the user's separate 4-word Telegram code (not the phone code, never a numeric chat_id), already linked; pass it verbatim as sendTelegram's first argument. If the result is {skipped:true}, the user declined — ask them about it in chat rather than calling this again. kind='model' (with `model`: 'onejev' for a dial watcher, 'default' otherwise) asks whether to run the agent on a local model, which downloads now and may take 10+ minutes, or in the cloud; it returns {choice:'local'} (call download_model with that `model` next) or {choice:'cloud'} (use the cloud model). Ask it AFTER every other ask_user_info, right before download_model, so the user can walk away while it downloads. Do not narrate the modal or tell the user to fill it in; they can see it.",
     parameters: {
       type: 'object',
       properties: {
         kind: {
           type: 'string',
-          enum: ['phone', 'email', 'telegram', 'discord', 'pushover'],
-          description: "Which piece of info to collect: 'phone' for sendSms/call/sendWhatsapp, 'email' for sendEmail, 'telegram' for sendTelegram's code, 'discord' for sendDiscord's webhook URL, 'pushover' for sendPushover's user key.",
+          enum: ['phone', 'email', 'telegram', 'discord', 'pushover', 'model'],
+          description: "Which piece of info to collect: 'phone' for sendSms/call/sendWhatsapp, 'email' for sendEmail, 'telegram' for sendTelegram's code, 'discord' for sendDiscord's webhook URL, 'pushover' for sendPushover's user key, 'model' for local vs cloud model.",
+        },
+        model: {
+          type: 'string',
+          enum: LOCAL_MODEL_CHOICES,
+          description: "Only for kind='model': the local model the download would fetch — 'onejev' for a dial watcher, 'default' for everything else. Defaults to 'default'.",
         },
         channel: {
           type: 'string',
@@ -626,7 +631,7 @@ export const TOOLS: ToolDefinition[] = [
     },
     multimodal: false,
     execute: async (args, ctx): Promise<ToolResult> => {
-      const kind = args.kind as UserInfoKind;
+      const kind = args.kind as UserInfoKind | 'model';
       if (!kind) return { error: 'Provide a `kind` to ask for.' };
 
       // Non-React host (or a future MCP server transport): no modal to show, so tell the
@@ -645,10 +650,18 @@ export const TOOLS: ToolDefinition[] = [
           requestId: `info_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           kind,
           channel,
+          model: kind === 'model' ? (args.model === 'onejev' ? 'onejev' : 'default') : undefined,
           reason: typeof args.reason === 'string' ? args.reason : undefined,
         });
       } catch {
         return { error: 'Cancelled.' };
+      }
+
+      // Dismissing the model prompt means "don't download anything": run in the cloud.
+      if (kind === 'model') {
+        return response.value === 'local'
+          ? { data: { kind, choice: 'local', note: `Call download_model model='${args.model === 'onejev' ? 'onejev' : 'default'}' now, then create_agent with the model_name it returns.` } }
+          : { data: { kind, choice: 'cloud', note: 'Use the cloud model; do not call download_model.' } };
       }
 
       if (response.skipped) {
@@ -886,7 +899,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'download_model',
-    description: 'Download and load an on-device model so agents can run locally with NO cloud and NO API key. `model`: "onejev" (OneJev 0.8B, the decision model for dial watchers: one cropped percentage, progress bar, timer or counter; returns `decision: true`) or "default" (Qwen3.5 0.8B, a general LLM for everything else). Observer picks a transformers.js ONNX build in the browser, a llama.cpp GGUF in the desktop app. This BLOCKS while it downloads (about 1 GB) and loads; progress bars are shown to the user. When it resolves, the returned `model_name` is immediately usable as a `create_agent` model_name. Only one on-device model is loaded at a time, so loading one unloads the other.',
+    description: 'Download and load an on-device model so agents can run locally with NO cloud and NO API key. `model`: "onejev" (OneJev 0.8B, the decision model for dial watchers: one cropped percentage, progress bar, timer or counter; returns `decision: true`) or "default" (Qwen3.5 0.8B, a general LLM for everything else). Observer picks a transformers.js ONNX build in the browser, a llama.cpp GGUF in the desktop app. This BLOCKS while it downloads (about 1 GB) and loads; progress bars are shown to the user. When it resolves, the returned `model_name` is immediately usable as a `create_agent` model_name. If the download fails it returns `fallback: "cloud"` with the cloud model_name instead: use that. Only one on-device model is loaded at a time, so loading one unloads the other.',
     parameters: {
       type: 'object',
       properties: {
@@ -901,7 +914,14 @@ export const TOOLS: ToolDefinition[] = [
         const result = await downloadLocalModel(choice);
         return { data: result };
       } catch (e) {
-        return { error: e instanceof Error ? e.message : String(e) };
+        // A failed download falls back to the cloud counterpart instead of stalling the build.
+        const cloud = choice === 'onejev' ? 'clef-flash' : 'gemma-3-12b-it';
+        return { data: {
+          model_name: cloud,
+          fallback: 'cloud',
+          download_error: e instanceof Error ? e.message : String(e),
+          note: `The local download failed, so use the cloud model '${cloud}' instead. Tell the user in one line when you're done.`,
+        } };
       }
     },
   },
