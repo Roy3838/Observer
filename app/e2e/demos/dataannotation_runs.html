@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<!-- A DataAnnotation-style task: six model runs, each a blue dot while it works and a green check
+     when it's done. The annotator waits for all six. Runs finish one by one along the way, so
+     "5 of 6 done" comes before the end and isn't it. ?outcome=success: the last run finishes.
+     fail: a run errors out instead. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Task · Payroll reconciliation workpaper</title>
+<script src="demo-contract.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: #f4f5f7; color: #1f2328; }
+  header { background: #fff; border-bottom: 1px solid #e3e5e8; padding: 12px 28px; display: flex; justify-content: space-between; align-items: center; }
+  header b { font-size: 16px; }
+  header .timer { color: #59636e; font-size: 13px; }
+  main { max-width: 1000px; margin: 24px auto; padding: 0 20px; }
+  .prompt { background: #fff; border: 1px solid #e3e5e8; border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; }
+  .prompt h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #59636e; margin: 0 0 6px; }
+  .tabs { display: flex; gap: 18px; border-bottom: 1px solid #e3e5e8; margin-bottom: 0; }
+  .tabs span { padding: 8px 2px; color: #59636e; }
+  .tabs .on { color: #1f2328; border-bottom: 2px solid #2563eb; font-weight: 600; }
+  .runs { background: #fff; border: 1px solid #e3e5e8; border-radius: 10px; overflow: hidden; margin-top: 12px; }
+  .run { display: grid; grid-template-columns: 28px 1fr auto 28px 28px 20px; gap: 14px; align-items: center; padding: 14px 18px; border-bottom: 1px solid #eef0f2; font-size: 17px; }
+  .run:last-child { border-bottom: 0; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; background: #2f6fed; margin: 0 auto; }
+  .dot.working { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .ok { width: 22px; height: 22px; border: 2px solid #1a9c5b; border-radius: 50%; color: #1a9c5b; display: grid; place-items: center; font-size: 13px; font-weight: 800; }
+  .err { width: 22px; height: 22px; border-radius: 50%; background: #d1242f; color: #fff; display: grid; place-items: center; font-size: 14px; font-weight: 800; }
+  .txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .run.done .txt { text-decoration: underline; }
+  .run.failed .txt { color: #d1242f; }
+  .model { background: #eef0f2; border-radius: 6px; padding: 3px 10px; font-size: 14px; color: #59636e; }
+  .ic { color: #8c959f; text-align: center; }
+  .foot { display: flex; justify-content: space-between; margin-top: 14px; color: #59636e; font-size: 14px; }
+  .foot button { background: #2563eb; color: #fff; border: 0; border-radius: 6px; padding: 9px 18px; font-weight: 600; }
+  .foot button:disabled { background: #b6c6ea; }
+</style>
+</head>
+<body>
+<header><b>Rate &amp; compare · Audit workpaper task</b><span class="timer" id="timer"></span></header>
+<main>
+  <div class="prompt"><h2>Prompt</h2>Prepare an audit-style FY2023 payroll reconciliation workpaper from the attached ledgers and save it to /workdir.</div>
+  <div class="tabs"><span class="on">Runs</span><span>Rubric</span><span>Instructions</span></div>
+  <div class="runs" id="runs"></div>
+  <div class="foot"><span id="summary"></span><button id="next" disabled>Continue to rating</button></div>
+</main>
+<script>
+  const RUNS = [
+    ['Workpaper saved to **`/workdir/FY2023_Payroll_Reconciliation.xlsx`**', 'Opus 5'],
+    ['The workpaper is delivered at **`/workdir/FY2023_Payroll_Reconciliation_v2.xlsx`**', 'Opus 5'],
+    ['The workpaper is saved at **`/workdir/FY2023_Payroll_Rec.xlsx`**', 'Opus 5'],
+    ['Completed the audit-style payroll reconciliation workpaper and saved it', 'GPT 5.6'],
+    ['Completed and saved the audit-style workpaper: `/workdir/FY23_payroll.xlsx`', 'GPT 5.6'],
+    ['Completed and saved the audit-style workpaper: [Download FY2023_Payroll.xlsx]', 'GPT 5.6'],
+  ];
+  const ERROR = 'Run failed: sandbox timed out after 45 min (exit code 137)';
+  // Each run: 'working' | 'done' | 'failed'. Two are done when the page loads.
+  const state = ['working', 'working', 'done', 'working', 'done', 'working'];
+  const loadedAt = Date.now();
+
+  const render = () => {
+    document.getElementById('runs').innerHTML = RUNS.map(([text, model], i) => {
+      const s = state[i];
+      const icon = s === 'done' ? '<span class="ok">✓</span>' : s === 'failed' ? '<span class="err">!</span>' : '<span class="dot working"></span>';
+      const label = s === 'working' ? `Run ${i + 1} — Working…` : s === 'failed' ? `Run ${i + 1} — ${ERROR}` : `Run ${i + 1} — ${text}`;
+      return `<div class="run ${s}">${icon}<span class="txt">${label}</span><span class="model">${model}</span><span class="ic">⟳</span><span class="ic">🗑</span><span class="ic">⌄</span></div>`;
+    }).join('');
+    const done = state.filter(s => s === 'done').length;
+    const failed = state.includes('failed');
+    document.getElementById('summary').textContent = failed ? `${done} of 6 runs complete · 1 run failed` : `${done} of 6 runs complete`;
+    document.getElementById('next').disabled = done < 6;
+  };
+  setInterval(() => {
+    const m = Math.floor((Date.now() - loadedAt) / 60000) + 38;
+    document.getElementById('timer').textContent = `Time on task: ${Math.floor(m / 60)}h ${m % 60}m`;
+  }, 1000);
+  render();
+
+  demo.onStart = durationMs => {
+    // Runs 1, 2 and 4 finish along the way; run 6 is last.
+    [[0, 0.3], [3, 0.55], [1, 0.8]].forEach(([i, f]) => setTimeout(() => { state[i] = 'done'; render(); demo.mark('run_done', { run: i + 1 }); }, durationMs * f));
+    setTimeout(() => {
+      state[5] = demo.outcome === 'success' ? 'done' : 'failed';
+      render();
+      demo.trigger();
+    }, durationMs);
+  };
+</script>
+</body>
+</html>

@@ -6,6 +6,10 @@
 // the demo calls `demo.trigger()` once that end state is on screen. That instant is the
 // ground truth the agent's notification is timed against.
 //
+// Opened without ?outcome= (the landing page, the app's tutorial), a demo ends the way its shown
+// pair in groundTruth.ts alerts on: `<script src="demo-contract.js" data-outcome="fail">` on a
+// demo shown as "when it fails". sync-showcase.mjs checks the two agree.
+//
 // A demo implements `demo.onStart = durationMs => { ... }` and calls `demo.trigger()`.
 // Opened by hand (no suite), `?autostart=10000` skips holding and ends the job 10 s after load.
 // `?muted=1` plays the demo silently (the landing page's showcase): its media still runs on time.
@@ -19,8 +23,9 @@ const tourTitle = new URLSearchParams(location.search).get('title');
 document.title = tourTitle ? `${tourTitle} · Observer demo` : 'Observer E2E Demo';
 
 window.demo = {
-  // `success` or `fail`, or a demo's own ending (`late` in ubereats_tracking). Defaults to success.
-  outcome: new URLSearchParams(location.search).get('outcome') || 'success',
+  // `success` or `fail`, or a demo's own ending (`late` in ubereats_tracking). Defaults to the
+  // demo's data-outcome, else success.
+  outcome: new URLSearchParams(location.search).get('outcome') || document.currentScript?.dataset.outcome || 'success',
   startedAt: null,
   triggeredAt: null,
   onStart: null,

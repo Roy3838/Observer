@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<!-- An eBay listing you're winning, refreshing itself. Other bidders bid on it along the way but
+     stay below your max, so you're still the high bidder. ?outcome=success (outbid): someone
+     outbids you. fail (still_winning): you're still winning at the end, so stay quiet. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Leica M6 Classic 35mm Rangefinder Body | eBay</title>
+<script src="demo-contract.js"></script>
+<script src="reload_assets/reload.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 "Market Sans", system-ui, -apple-system, "Segoe UI", sans-serif; color: #191919; background: #fff; }
+  header { display: flex; align-items: center; gap: 20px; padding: 12px 32px; border-bottom: 1px solid #e5e5e5; }
+  .logo { font-size: 30px; font-weight: 700; letter-spacing: -2px; }
+  .logo i { font-style: normal; } .e { color: #e53238; } .b { color: #0064d2; } .a { color: #f5af02; } .y { color: #86b817; }
+  header input { flex: 1; max-width: 640px; border: 2px solid #191919; border-radius: 24px; padding: 9px 16px; }
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; max-width: 1100px; margin: 24px auto; padding: 0 24px; }
+  .img { aspect-ratio: 1; border-radius: 12px; background: radial-gradient(circle at 50% 45%, #444 0 22%, #111 23% 30%, #c9c9c9 31% 100%); }
+  h1 { font-size: 22px; margin: 0 0 12px; }
+  .banner { border-radius: 8px; padding: 10px 14px; font-weight: 700; margin-bottom: 14px; }
+  .banner.win { background: #e6f4ea; color: #137333; }
+  .banner.lost { background: #fde8e8; color: #c5221f; }
+  .bid { font-size: 28px; font-weight: 700; }
+  .muted { color: #707070; }
+  .row { margin: 6px 0; }
+  .btn { display: block; width: 100%; text-align: center; padding: 12px; border-radius: 24px; font-weight: 700; margin-top: 10px; border: 0; font-size: 15px; }
+  .btn.pri { background: #3665f3; color: #fff; }
+  .btn.sec { background: #fff; color: #3665f3; border: 1px solid #3665f3; }
+  .hist { margin-top: 18px; border-top: 1px solid #e5e5e5; padding-top: 10px; font-size: 13px; }
+  .hist div { display: flex; justify-content: space-between; padding: 3px 0; }
+</style>
+</head>
+<body>
+<header><div class="logo"><i class="e">e</i><i class="b">b</i><i class="a">a</i><i class="y">y</i></div><input value="leica m6" readonly></header>
+<main>
+  <div class="img"></div>
+  <div>
+    <h1>Leica M6 Classic 35mm Rangefinder Film Camera Body, Black, Serviced</h1>
+    <div id="bidbox"></div>
+    <div class="row muted">Your max bid: US $2,150.00</div>
+    <div class="row muted">Item updated <span data-checked></span></div>
+    <div class="hist" id="hist"></div>
+  </div>
+</main>
+<script>
+  const ends = Date.now() + 47 * 60000;
+  const history = [['a***e (212)', 1980], ['You', 1960], ['m***k (88)', 1900]];
+  let outbid = false;
+  const left = () => { const s = Math.max(0, Math.round((ends - Date.now()) / 1000)); return `${Math.floor(s / 60)}m ${s % 60}s`; };
+  const render = () => {
+    const [who, price] = history[0];
+    document.getElementById('bidbox').innerHTML = `
+      <div class="banner ${outbid ? 'lost' : 'win'}">${outbid ? "You've been outbid. Increase your bid to stay in the lead." : "You're the highest bidder."}</div>
+      <div class="bid">US $${price.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+      <div class="row muted">${history.length + 17} bids · Ends in ${left()}</div>
+      <button class="btn pri">${outbid ? 'Bid again' : 'Increase max bid'}</button>
+      <button class="btn sec">Add to Watchlist</button>`;
+    document.getElementById('hist').innerHTML = '<b>Bid history</b>' + history.slice(0, 5).map(([w, p]) => `<div><span>${w}</span><span>US $${p.toLocaleString('en-US')}.00</span></div>`).join('');
+  };
+  // eBay bids for you up to your max: an outside bid under it leaves you on top, a step above theirs.
+  const bidUnder = p => { history.unshift(['g***t (41)', p]); history.unshift(['You', p + 20]); };
+  const page = selfReload({ everyMs: 15000, render });
+
+  demo.onStart = durationMs => {
+    setTimeout(() => bidUnder(2040), durationMs * 0.35);
+    setTimeout(() => bidUnder(2110), durationMs * 0.7);
+    setTimeout(() => {
+      if (demo.outcome === 'success') { history.unshift(['r***o (530)', 2175]); outbid = true; }
+      page.now(() => demo.trigger());
+    }, durationMs);
+  };
+</script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<!-- The DMV's appointment finder, refreshing itself: "No appointments available" at every office
+     until the run ends. ?outcome=success: a cancellation opens a slot. fail (still_full): it never
+     does, so the right answer is silence. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DMV Appointments</title>
+<script src="demo-contract.js"></script>
+<script src="reload_assets/reload.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 "Roboto", system-ui, sans-serif; background: #f2f4f7; color: #1b2a3a; }
+  header { background: #0b3a66; color: #fff; padding: 14px 32px; display: flex; align-items: center; gap: 14px; }
+  header .seal { width: 38px; height: 38px; border-radius: 50%; background: #f2c14e; color: #0b3a66; display: grid; place-items: center; font-weight: 800; }
+  header b { font-size: 18px; }
+  nav { background: #12497d; padding: 8px 32px; font-size: 13px; color: #cfe0f1; }
+  main { max-width: 900px; margin: 28px auto; padding: 0 20px; }
+  h1 { font-size: 24px; margin: 0 0 6px; }
+  .sub { color: #5a6b7d; margin-bottom: 18px; }
+  .bar { display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #d6dde6; border-radius: 6px; padding: 12px 16px; margin-bottom: 14px; font-size: 14px; }
+  .bar .svc b { color: #0b3a66; }
+  .checked { color: #5a6b7d; font-size: 13px; }
+  .office { background: #fff; border: 1px solid #d6dde6; border-radius: 6px; padding: 16px 18px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .office h3 { margin: 0 0 2px; font-size: 16px; }
+  .office .addr { color: #5a6b7d; font-size: 13px; }
+  .none { color: #8a3b12; background: #fdf0e8; border: 1px solid #f3c9ad; padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 500; }
+  .slot { text-align: right; }
+  .slot .when { font-weight: 700; color: #136f3a; margin-bottom: 6px; }
+  .slot button { background: #136f3a; color: #fff; border: 0; border-radius: 4px; padding: 9px 18px; font-weight: 700; font-size: 14px; }
+  .office.open { border: 2px solid #136f3a; background: #f1faf4; }
+  .notice { background: #fff8e1; border: 1px solid #f0d98a; border-radius: 6px; padding: 12px 16px; margin-bottom: 18px; font-size: 14px; }
+</style>
+</head>
+<body>
+<header><div class="seal">DMV</div><b>Department of Motor Vehicles</b></header>
+<nav>Home › Appointments › Driver License &amp; ID Card Services</nav>
+<main>
+  <h1>Find an appointment</h1>
+  <div class="sub">Appointments open up when other customers cancel. Check back often.</div>
+  <div class="notice">Due to high demand, appointments in your area are fully booked for the next 90 days.</div>
+  <div class="bar">
+    <span class="svc">Service: <b>REAL ID / Driver License</b> · Within 25 miles of 94110</span>
+    <span class="checked">Last updated <span data-checked></span></span>
+  </div>
+  <div id="offices"></div>
+</main>
+<script>
+  const OFFICES = [
+    ['San Francisco', '1377 Fell St, San Francisco'],
+    ['Daly City', '1500 Sullivan Ave, Daly City'],
+    ['San Mateo', '425 N Amphlett Blvd, San Mateo'],
+    ['Oakland Claremont', '5300 Claremont Ave, Oakland'],
+    ['El Cerrito', '6400 Manila Ave, El Cerrito'],
+  ];
+  let open = false;
+  const render = () => {
+    document.getElementById('offices').innerHTML = OFFICES.map(([name, addr], i) => {
+      const slot = open && i === 1;
+      return `<div class="office${slot ? ' open' : ''}">
+        <div><h3>${name}</h3><div class="addr">${addr}</div></div>
+        ${slot
+          ? `<div class="slot"><div class="when">1 appointment available · Fri, Nov 7 · 9:20 AM</div><button>Book this appointment</button></div>`
+          : `<span class="none">No appointments available</span>`}
+      </div>`;
+    }).join('');
+  };
+  const page = selfReload({ everyMs: 15000, render });
+
+  demo.onStart = durationMs => {
+    setTimeout(() => {
+      if (demo.outcome === 'success') open = true;
+      page.now(() => demo.trigger());
+    }, durationMs);
+  };
+</script>
+</body>
+</html>

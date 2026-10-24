@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<!-- A host's Airbnb inbox. Automated messages from Airbnb itself (payouts, review reminders) keep
+     arriving and aren't guests. ?outcome=success (guest): a guest messages. fail (system_only): only
+     Airbnb's own messages arrive, so the right answer is silence. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Messages - Airbnb</title>
+<script src="demo-contract.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 "Circular", system-ui, -apple-system, "Segoe UI", sans-serif; color: #222; background: #fff; height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 14px 32px; border-bottom: 1px solid #ebebeb; }
+  header b { color: #ff385c; font-size: 22px; letter-spacing: -.5px; }
+  header nav { display: flex; gap: 22px; font-weight: 500; color: #555; }
+  header nav .on { color: #222; border-bottom: 2px solid #222; padding-bottom: 4px; }
+  .wrap { flex: 1; display: grid; grid-template-columns: 380px 1fr; min-height: 0; }
+  .list { border-right: 1px solid #ebebeb; overflow: auto; }
+  .list h2 { font-size: 22px; margin: 20px 24px 12px; }
+  .filters { display: flex; gap: 8px; margin: 0 24px 12px; }
+  .filters span { border: 1px solid #ddd; border-radius: 20px; padding: 5px 12px; font-size: 13px; }
+  .filters .on { background: #222; color: #fff; border-color: #222; }
+  .row { display: flex; gap: 12px; padding: 14px 24px; border-bottom: 1px solid #f3f3f3; }
+  .row.un { background: #fafafa; }
+  .av { width: 44px; height: 44px; border-radius: 50%; flex: none; display: grid; place-items: center; color: #fff; font-weight: 600; }
+  .meta { flex: 1; min-width: 0; }
+  .top { display: flex; justify-content: space-between; }
+  .name { font-weight: 600; }
+  .row.un .name::after { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ff385c; margin-left: 6px; vertical-align: middle; }
+  .time { color: #717171; font-size: 12px; }
+  .snip { color: #717171; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row.un .snip { color: #222; font-weight: 500; }
+  .trip { color: #717171; font-size: 12px; }
+  .empty { display: grid; place-items: center; color: #717171; }
+  .empty div { text-align: center; }
+  .empty b { display: block; color: #222; font-size: 18px; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header><b>airbnb</b><nav><span>Today</span><span>Calendar</span><span>Listings</span><span class="on">Messages</span></nav><span>Menu</span></header>
+<div class="wrap">
+  <div class="list">
+    <h2>Messages</h2>
+    <div class="filters"><span class="on">All</span><span>Hosting</span><span>Unread</span></div>
+    <div id="rows"></div>
+  </div>
+  <div class="empty"><div><b>Pick a conversation</b>Guest messages for Sunny loft in Mission District show up here.</div></div>
+</div>
+<script>
+  const now = Date.now();
+  const clock = t => new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const M = (name, color, snip, trip, when, unread = false) => ({ name, color, snip, trip, when, unread });
+  const rows = [
+    M('Airbnb', '#ff385c', 'Your payout of $412.60 was sent. It should arrive in 3–5 business days.', 'Payouts', clock(now - 40 * 60000)),
+    M('Lukas', '#3f6fb5', 'Thanks again, the place was perfect. Left the keys in the lockbox!', 'Oct 18 – 21 · Past guest', 'Yesterday'),
+    M('Airbnb', '#ff385c', 'Write a review for Lukas. You have 12 days left to share your experience.', 'Reviews', 'Yesterday'),
+    M('Sofía', '#2e8b57', 'Perfect, see you on the 29th!', 'Oct 29 – Nov 2 · Upcoming', 'Mon'),
+    M('Airbnb', '#ff385c', 'Your calendar is open for November. Hosts who update pricing earn more.', 'Hosting tips', 'Sun'),
+    M('Priya', '#8a4fbf', 'Is early check-in possible? Totally fine if not.', 'Oct 12 – 14 · Past guest', 'Oct 10'),
+  ];
+  const render = () => {
+    document.getElementById('rows').innerHTML = rows.map(r => `
+      <div class="row${r.unread ? ' un' : ''}">
+        <div class="av" style="background:${r.color}">${r.name[0]}</div>
+        <div class="meta"><div class="top"><span class="name">${r.name}</span><span class="time">${r.when}</span></div>
+          <div class="snip">${r.snip}</div><div class="trip">${r.trip}</div></div>
+      </div>`).join('');
+  };
+  const arrive = r => { rows.unshift({ ...r, when: clock(Date.now()), unread: true }); rows.length = Math.min(rows.length, 9); render(); };
+  render();
+
+  // Airbnb's own messages, now and then the whole time.
+  const SYSTEM = [
+    M('Airbnb', '#ff385c', 'Reminder: Sofía checks in in 5 days. Make sure your check-in instructions are up to date.', 'Reservations'),
+    M('Airbnb', '#ff385c', 'New smart pricing tip: weekends in your area are booking 18% higher.', 'Hosting tips'),
+    M('Airbnb', '#ff385c', 'Your payout of $286.10 was sent.', 'Payouts'),
+    M('Airbnb', '#ff385c', 'Lukas left you a 5-star review. Write yours to see it.', 'Reviews'),
+  ];
+  let si = 0;
+  const system = () => { arrive(SYSTEM[si++ % SYSTEM.length]); setTimeout(system, 40000 + Math.random() * 40000); };
+  setTimeout(system, 20000 + Math.random() * 20000);
+
+  demo.onStart = durationMs => {
+    setTimeout(() => {
+      if (demo.outcome === 'success') arrive(M('Daniel', '#d1771f', "Hi! We're outside but the lockbox code isn't working. Could you help?", 'Oct 24 – 27 · Checking in today'));
+      else arrive(SYSTEM[si++ % SYSTEM.length]);
+      demo.trigger();
+    }, durationMs);
+  };
+</script>
+</body>
+</html>

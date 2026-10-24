@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<!-- A sold-out product page refreshing itself. Other cards on the page are in stock the whole time
+     (they aren't the item). ?outcome=success: the item comes back in stock. fail (still_out): it
+     stays sold out, so the right answer is silence. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GeForce RTX 5090 Founders Edition | Voltmart</title>
+<script src="demo-contract.js"></script>
+<script src="reload_assets/reload.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: #fff; color: #1d1d1f; }
+  header { background: #111; color: #fff; padding: 12px 32px; display: flex; gap: 24px; align-items: center; }
+  header b { font-size: 20px; color: #ffd400; letter-spacing: -.5px; }
+  header input { flex: 1; max-width: 520px; padding: 8px 12px; border-radius: 4px; border: 0; }
+  .crumbs { padding: 10px 32px; font-size: 13px; color: #666; border-bottom: 1px solid #eee; }
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; max-width: 1080px; margin: 24px auto; padding: 0 24px; }
+  .img { aspect-ratio: 4/3; border-radius: 8px; background: linear-gradient(135deg, #2b2b2b, #0e0e0e); display: grid; place-items: center; color: #76b900; font-weight: 800; font-size: 34px; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  .sku { color: #777; font-size: 13px; margin-bottom: 14px; }
+  .price { font-size: 30px; font-weight: 700; margin-bottom: 14px; }
+  .status { font-weight: 700; margin-bottom: 14px; }
+  .status.out { color: #c40000; }
+  .status.in { color: #127a2f; }
+  .btn { display: block; width: 100%; padding: 14px; border-radius: 6px; border: 0; font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+  .btn.sold { background: #e5e5e5; color: #888; }
+  .btn.add { background: #ffd400; color: #111; }
+  .btn.notify { background: #fff; border: 1px solid #ccc; color: #333; }
+  .checked { color: #777; font-size: 12px; margin-top: 6px; }
+  .more { max-width: 1080px; margin: 10px auto 40px; padding: 0 24px; }
+  .more h2 { font-size: 18px; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .card { border: 1px solid #eee; border-radius: 8px; padding: 12px; font-size: 13px; }
+  .card .p { font-weight: 700; margin: 4px 0; }
+  .card .s { color: #127a2f; font-weight: 600; }
+</style>
+</head>
+<body>
+<header><b>VOLTMART</b><input value="rtx 5090" readonly></header>
+<div class="crumbs">Computers › Components › Graphics Cards › NVIDIA</div>
+<main>
+  <div class="img">RTX 5090</div>
+  <div>
+    <h1>NVIDIA GeForce RTX 5090 Founders Edition 32GB GDDR7</h1>
+    <div class="sku">Model: 900-1G144-2530-000 · SKU: 6614151</div>
+    <div class="price">$1,999.99</div>
+    <div id="buy"></div>
+    <div class="checked">Availability as of <span data-checked></span></div>
+  </div>
+</main>
+<section class="more">
+  <h2>Customers also viewed</h2>
+  <div class="cards">
+    <div class="card">RTX 5080 Founders Edition<div class="p">$999.99</div><div class="s">In stock · Add to cart</div></div>
+    <div class="card">RTX 5070 Ti 16GB<div class="p">$749.99</div><div class="s">In stock · Add to cart</div></div>
+    <div class="card">Radeon RX 9070 XT<div class="p">$599.99</div><div class="s">In stock · Add to cart</div></div>
+    <div class="card">1000W ATX 3.1 PSU<div class="p">$189.99</div><div class="s">In stock · Add to cart</div></div>
+  </div>
+</section>
+<script>
+  let inStock = false;
+  const render = () => {
+    document.getElementById('buy').innerHTML = inStock
+      ? `<div class="status in">In stock · Limit 1 per customer</div><button class="btn add">Add to cart</button>`
+      : `<div class="status out">Sold out</div><button class="btn sold" disabled>Sold Out</button><button class="btn notify">Notify me when available</button>`;
+  };
+  const page = selfReload({ everyMs: 15000, render });
+
+  demo.onStart = durationMs => {
+    setTimeout(() => {
+      if (demo.outcome === 'success') inStock = true;
+      page.now(() => demo.trigger());
+    }, durationMs);
+  };
+</script>
+</body>
+</html>

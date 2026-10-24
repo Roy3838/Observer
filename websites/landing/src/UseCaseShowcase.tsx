@@ -124,7 +124,6 @@ const UseCaseShowcase = () => {
 
   const src = useMemo(() => {
     const q = new URLSearchParams(pair.query);
-    if (!q.has('outcome')) q.set('outcome', 'success');
     q.set('muted', '1'); // the meeting and the video are here to be seen, not heard
     return `/demos/${pair.file}?${q}`;
   }, [pair]);

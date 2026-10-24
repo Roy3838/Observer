@@ -6,7 +6,7 @@
 // Fails if a demo has no shown pair or more than one, or a shown pair is missing what the site needs.
 
 import { buildSync } from 'esbuild';
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -28,8 +28,17 @@ for (const f of new Set(GROUND_TRUTH.map(file))) {
   if (shown.length !== 1) problems.push(`demo ${f} has ${shown.length} use cases with \`show\` (needs exactly one)`);
   if (!existsSync(join(demos, f))) problems.push(`demo ${f} isn't in app/e2e/demos/`);
 }
+// Opened without ?outcome= (here and in the app's tutorial), a demo ends by its data-outcome on
+// demo-contract.js, else success: that ending has to be one its shown pair alerts on.
+const JOB = { success: 'success', fail: 'fail' };
 for (const u of GROUND_TRUTH.filter(u => u.show)) {
   if (u.then === NOTIFY && !CHANNELS[u.show.channel]) problems.push(`${u.id} is an alert but its show has no channel`);
+  const [f, query = ''] = u.demo.split('?');
+  if (!u.expect || new URLSearchParams(query).has('outcome') || !existsSync(join(demos, f))) continue;
+  const html = readFileSync(join(demos, f), 'utf8');
+  const param = html.match(/<script[^>]*demo-contract\.js[^>]*data-outcome="([^"]+)"/)?.[1] ?? 'success';
+  const name = Object.entries(u.outcomes ?? JOB).find(([, p]) => p === param)?.[0];
+  if (u.expect[name] !== 'notify') problems.push(`${f} ends by default as "${param}", but ${u.id} doesn't alert on it: set data-outcome on its demo-contract.js tag`);
 }
 if (problems.length) {
   console.error(problems.map(p => `  ✗ ${p}`).join('\n'));

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<!-- Your own store's homepage, refreshing itself. The content changes along the way (the hero
+     banner rotates, a "N people viewing" counter moves), which isn't the site going down.
+     ?outcome=success (down): it comes back as a 502 Bad Gateway. fail (up): it stays up. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lumen Coffee Co. · Fresh roasted, shipped weekly</title>
+<script src="demo-contract.js"></script>
+<script src="reload_assets/reload.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: #2a1e14; background: #fbf7f2; }
+  .chrome { background: #dee1e6; padding: 8px 14px; display: flex; gap: 10px; align-items: center; font-size: 13px; }
+  .chrome .url { flex: 1; background: #fff; border-radius: 16px; padding: 5px 14px; color: #333; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 18px 40px; }
+  header b { font-size: 22px; letter-spacing: .5px; }
+  header nav { display: flex; gap: 24px; }
+  .hero { margin: 10px 40px; border-radius: 14px; padding: 60px 50px; color: #fff; }
+  .hero h1 { font-size: 40px; margin: 0 0 8px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 24px 40px; }
+  .p { background: #fff; border-radius: 12px; padding: 16px; }
+  .p .ph { height: 120px; border-radius: 8px; background: #c9a27a; margin-bottom: 10px; }
+  .viewing { margin: 0 40px; color: #8a6b4f; font-size: 13px; }
+  .err { font-family: Arial, sans-serif; background: #fff; color: #333; padding: 60px; }
+  .err h1 { font-size: 44px; margin: 0; } .err h2 { font-weight: 400; color: #666; }
+  .err .boxes { display: flex; gap: 40px; margin: 40px 0; }
+  .err .boxes div { text-align: center; } .err .boxes b { display: block; }
+  .bad { color: #bd2426; font-weight: 700; } .good { color: #2c7c34; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="chrome">⟵ ⟶ ⟳ <span class="url">https://lumencoffee.co</span> <span>Checked <span data-checked></span></span></div>
+<div id="page"></div>
+<script>
+  const HEROES = [['#6b3e26', 'Ethiopia Guji is back', 'Bright, floral, and only 200 bags this season.'],
+                  ['#2f4f4f', 'Subscribe & save 15%', 'Fresh roasted, shipped every week.'],
+                  ['#7a5230', 'Holiday blend pre-orders', 'Ships Nov 15.']];
+  let hero = 0, down = false;
+  const render = () => {
+    if (down) {
+      document.title = 'lumencoffee.co | 502: Bad gateway';
+      document.getElementById('page').innerHTML = `<div class="err"><h1>Bad gateway <span style="color:#999;font-size:20px">Error code 502</span></h1>
+        <h2>Visit cloudflare.com for more information.</h2>
+        <div class="boxes"><div>🖥<b>You</b>Browser <span class="good">Working</span></div><div>☁<b>Cloudflare</b>Network <span class="good">Working</span></div><div>🖧<b>lumencoffee.co</b>Host <span class="bad">Error</span></div></div>
+        <p><b>What happened?</b> The web server reported a bad gateway error.</p></div>`;
+      return;
+    }
+    const [bg, h, s] = HEROES[hero++ % HEROES.length];
+    document.getElementById('page').innerHTML = `
+      <header><b>LUMEN COFFEE CO.</b><nav><span>Shop</span><span>Subscriptions</span><span>Wholesale</span><span>Cart (0)</span></nav></header>
+      <div class="hero" style="background:${bg}"><h1>${h}</h1>${s}</div>
+      <div class="viewing">${12 + Math.floor(Math.random() * 30)} people are shopping right now</div>
+      <div class="grid">
+        <div class="p"><div class="ph"></div><b>Guji Natural</b><br>$22 · 12oz</div>
+        <div class="p"><div class="ph" style="background:#9c7a5b"></div><b>House Espresso</b><br>$18 · 12oz</div>
+        <div class="p"><div class="ph" style="background:#5c4033"></div><b>Decaf Colombia</b><br>$19 · 12oz</div>
+      </div>`;
+  };
+  const page = selfReload({ everyMs: 15000, render });
+
+  demo.onStart = durationMs => {
+    setTimeout(() => {
+      if (demo.outcome === 'success') down = true;
+      page.now(() => demo.trigger());
+    }, durationMs);
+  };
+</script>
+</body>
+</html>

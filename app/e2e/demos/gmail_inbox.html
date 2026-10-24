@@ -7,7 +7,8 @@
      (a friend, same first name) mid-run (both marked 'decoy'); then it ends by ?outcome=: success, Dana
      replies with an offer and her thread jumps to the top, unread; fail, the follow-up bounces: Mail
      Delivery Subsystem threads into the same conversation ("Address not found"), so only the snippet
-     says it isn't her; invoice, Dana stays quiet and an overdue invoice from Adobe arrives instead.
+     says it isn't her; invoice, Dana stays quiet and an overdue invoice from Adobe arrives instead;
+     lead, a new client asks about a $12k website redesign.
      Logo: Gmail's 2026 mark (gmail_assets/). -->
 <html lang="en">
 <head>
@@ -79,7 +80,7 @@
   aside .app .ms { font-size: 18px; color: #fff; }
   aside hr { width: 20px; border: 0; border-top: 1px solid #c4c7c5; margin: 0; }
 </style>
-<script src="demo-contract.js"></script>
+<script src="demo-contract.js" data-outcome="lead"></script>
 </head>
 <body>
 <header>
@@ -226,6 +227,8 @@
         snippet: "Hi Jordan, I'm thrilled to share that the team would love to have you join Linear as a Senior Product Designer! I've attached your offer letter — let's find 20 minutes tomorrow to walk through it…",
         attach: 'Offer Letter - Jordan Lee.pdf',
       });
+      else if (demo.outcome === 'lead') arrive(['primary', T('Rachel Osei', 'Website redesign for Osei & Park Dental: are you available?',
+        "Hi Jordan, I found your portfolio through Dribbble. We're a 3-location dental practice looking for a full website redesign this quarter, budget around $12k. Do you have time for a quick call this week?", 0)]);
       else if (demo.outcome === 'invoice') arrive(['primary', T('Adobe', 'Action required: your invoice #ADB-4471 is overdue',
         'Your Creative Cloud All Apps payment of $59.99 (invoice #ADB-4471) is 7 days past due. Update your payment method by Oct 19 to avoid losing access to your apps.', 0)]);
       else bump(DANA, {

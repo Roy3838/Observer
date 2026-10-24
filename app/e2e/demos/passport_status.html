@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<!-- A passport application status page, refreshing itself. Its "last updated" time moves with every
+     refresh, which isn't the status changing. ?outcome=success (approved): the status goes from
+     In Process to Approved. fail (still_in_process): it doesn't, so stay quiet. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Online Passport Status</title>
+<script src="demo-contract.js"></script>
+<script src="reload_assets/reload.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 "Source Sans Pro", system-ui, sans-serif; background: #f0f0f0; color: #1b1b1b; }
+  header { background: #112e51; color: #fff; padding: 18px 32px; font-size: 20px; font-weight: 700; }
+  main { max-width: 820px; margin: 30px auto; background: #fff; border-radius: 4px; padding: 28px 34px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .who { color: #555; margin-bottom: 22px; }
+  .steps { display: flex; margin: 10px 0 28px; }
+  .step { flex: 1; text-align: center; font-size: 13px; color: #888; position: relative; }
+  .step::before { content: ''; display: block; width: 22px; height: 22px; margin: 0 auto 6px; border-radius: 50%; background: #dfe1e2; }
+  .step.done { color: #1b1b1b; } .step.done::before { background: #00a91c; }
+  .step.cur { color: #112e51; font-weight: 700; } .step.cur::before { background: #005ea2; box-shadow: 0 0 0 4px #cfe8ff; }
+  .status { border-left: 6px solid #005ea2; background: #eff6fb; padding: 16px 20px; }
+  .status.ok { border-color: #00a91c; background: #ecf3ec; }
+  .status h2 { margin: 0 0 6px; font-size: 22px; }
+  .small { color: #555; font-size: 13px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<header>Passport Application Status</header>
+<main>
+  <h1>Your application status</h1>
+  <div class="who">Application for <b>M. RODRIGUEZ</b> · Locator ending in ••4417 · Routine service</div>
+  <div id="status"></div>
+  <div class="small">Status last updated: <span data-checked></span>. Please allow 6–8 weeks from the date you applied.</div>
+</main>
+<script>
+  const STEPS = ['Received', 'In Process', 'Approved', 'Mailed'];
+  let approved = false;
+  const render = () => {
+    const cur = approved ? 2 : 1;
+    document.getElementById('status').innerHTML = `
+      <div class="steps">${STEPS.map((s, i) => `<div class="step ${i < cur ? 'done' : i === cur ? 'cur' : ''}">${s}</div>`).join('')}</div>
+      ${approved
+        ? `<div class="status ok"><h2>Approved</h2>Your passport has been approved. It will be mailed to you within 1–2 weeks. We will send you a tracking number.</div>`
+        : `<div class="status"><h2>In Process</h2>We are reviewing your application. We will update your status when your passport is approved.</div>`}`;
+  };
+  const page = selfReload({ everyMs: 15000, render });
+
+  demo.onStart = durationMs => {
+    setTimeout(() => {
+      if (demo.outcome === 'success') approved = true;
+      page.now(() => demo.trigger());
+    }, durationMs);
+  };
+</script>
+</body>
+</html>

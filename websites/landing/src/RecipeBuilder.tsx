@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Clipboard, Share } from 'lucide-react';
 import EditableWheel from './wheel/EditableWheel';
 import type { WheelOption } from './wheel/OptionWheel';
+import data from './generated/showcase.json';
 
 interface TriggerOption extends WheelOption {
   sensor: '$SCREEN' | '$CAMERA';
@@ -17,29 +18,20 @@ interface ActionOption extends WheelOption {
   actionFragment: string;
 }
 
-const TRIGGERS: TriggerOption[] = [
-  { id: 'download_done',     label: 'my download is finished',     sensor: '$SCREEN', promptFragment: 'my download finishes' },
-  { id: 'person_camera',     label: 'a person is on camera',       sensor: '$CAMERA', promptFragment: 'a person appears on my camera' },
-  { id: 'render_fails',      label: 'my render fails',             sensor: '$SCREEN', promptFragment: 'my render fails or errors out' },
-  { id: 'github_workflow',   label: 'my GitHub workflow finishes', sensor: '$SCREEN', promptFragment: 'my GitHub Actions workflow finishes running' },
-  { id: 'docker_built',      label: 'my Docker image is built',    sensor: '$SCREEN', promptFragment: 'my Docker image finishes building' },
-  { id: 'cowork_done',       label: 'Claude Cowork finishes',      sensor: '$SCREEN', promptFragment: 'Claude Cowork finishes its task' },
-  { id: 'uber_arrives',      label: 'my Uber arrives',             sensor: '$SCREEN', promptFragment: 'my Uber arrives (the app shows the driver has arrived)' },
-  { id: 'meeting_starts',    label: 'my meeting starts',           sensor: '$SCREEN', promptFragment: 'my meeting starts (a calendar notification or the meeting window appears)' },
-  { id: 'minecraft_death',   label: 'my Minecraft character dies', sensor: '$SCREEN', promptFragment: 'my Minecraft character dies' },
-  { id: 'steam_ready',       label: 'my Steam game is ready',      sensor: '$SCREEN', promptFragment: 'my Steam game finishes downloading and is ready to play' },
-  { id: 'distracted',        label: "I'm distracted",              sensor: '$SCREEN', promptFragment: 'I get distracted (e.g. social media or YouTube on screen)' },
-  { id: 'printer_fails',     label: 'my 3D printer fails',         sensor: '$CAMERA', promptFragment: 'my 3D print fails (spaghetti, detached print, or a clog)' },
-  { id: 'battery_low',       label: 'my battery is low',           sensor: '$SCREEN', promptFragment: 'my battery indicator shows low battery' },
-  { id: 'hour_passes',       label: 'an hour passes',              sensor: '$SCREEN', promptFragment: 'an hour passes (log what is on my screen)' },
-  { id: 'tickets_available', label: 'tickets are available',       sensor: '$SCREEN', promptFragment: 'tickets become available on the page I have open' },
-];
+// The Whens are the ground truth's shown pairs (app/src/utils/groundTruth.ts, via
+// scripts/sync-showcase.mjs), in its order: the same list the e2e suite tests and the showcase spins.
+const TRIGGERS: TriggerOption[] = (data.items as { id: string; file: string; when: string }[]).map(u => ({
+  id: u.id,
+  label: u.when,
+  sensor: u.file.startsWith('camera_') ? '$CAMERA' : '$SCREEN',
+  promptFragment: u.when,
+}));
 
 const ACTIONS: ActionOption[] = [
+  { id: 'call',     label: 'call me',            actionFragment: 'call me with a phone call' },
   { id: 'email',    label: 'send me an email',   actionFragment: 'send me an email' },
   { id: 'whatsapp', label: 'send me a WhatsApp', actionFragment: 'send me a WhatsApp message' },
   { id: 'sms',      label: 'send me an SMS',     actionFragment: 'send me an SMS' },
-  { id: 'call',     label: 'call me',            actionFragment: 'call me with a phone call' },
   { id: 'telegram', label: 'send me a Telegram', actionFragment: 'send me a Telegram message' },
   { id: 'discord',  label: 'ping my Discord',    actionFragment: 'send a message to my Discord' },
   { id: 'log',      label: 'log it',             actionFragment: 'log it to memory' },
