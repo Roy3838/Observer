@@ -5,7 +5,8 @@
 // data layer (agent_database, IterationStore, main_loop, ModelManager, local model managers),
 // so the same registry can later be served from a real MCP server with the transport swapped.
 
-import type { ToolDefinition, ToolResult, WireToolSpec, UserInfoKind } from './types';
+import type { ToolDefinition, ToolResult, WireToolSpec, NotifyMethod, UserInfoRequestKind } from './types';
+import { captureScreen, captureCamera, grabTauriFrame } from './capture';
 import {
   listAgents,
   getAgent,
@@ -26,8 +27,7 @@ import { checkPhoneWhitelist } from '@utils/pre-flight';
 import { downloadLocalModel, LOCAL_MODEL_CHOICES, type LocalModelChoice } from './localModel';
 import { tauriStreamCapture } from '@utils/tauriStreamCapture';
 import { setAgentCrop, getAgentCrop, cropDataUrl } from '@utils/screenCapture';
-import { isDesktop, isWeb } from '@utils/platform';
-import { browserStreamCapture } from '@utils/browserStreamCapture';
+import { isDesktop } from '@utils/platform';
 import { SensorSettings } from '@utils/settings';
 import { normalizeWhitelistCode } from '@utils/whitelistCode';
 import { fetchStatus } from './remote';
@@ -136,8 +136,8 @@ async function checkContactCodes(agentCode: string, getToken?: TokenProvider): P
   for (const p of phoneNumbers) {
     if (p.isWhitelisted) continue;
     problems.push(p.isCode
-      ? `'${p.number}' is not whitelisted for ${p.channel}: the user has not connected this 4-word code for it. Call ask_user_info kind='phone' channel='${p.channel}' so they connect it, then edit_agent if the code changed and start_agent again.`
-      : `'${p.number}' is not a 4-word Observer code and phone numbers are never accepted. Call ask_user_info kind='phone' channel='${p.channel}' to get the user's code, replace it in the agent code with edit_agent, then start_agent again.`);
+      ? `'${p.number}' is not whitelisted for ${p.channel}: the user has not connected this 4-word code for it. Call ask_user_info kind='method' channel='${p.channel}' so they connect it, then edit_agent if the code changed and start_agent again.`
+      : `'${p.number}' is not a 4-word Observer code and phone numbers are never accepted. Call ask_user_info kind='method' channel='${p.channel}' to get the user's code, replace it in the agent code with edit_agent, then start_agent again.`);
   }
 
   const telegramRegex = /\bsendTelegram\(\s*["']([^"']+)["']/g;
@@ -145,126 +145,34 @@ async function checkContactCodes(agentCode: string, getToken?: TokenProvider): P
   for (const arg of telegramArgs) {
     const code = normalizeWhitelistCode(arg);
     if (!code) {
-      problems.push(`'${arg}' is not a 4-word Telegram code (numeric chat_ids are never accepted). Call ask_user_info kind='telegram' to get the user's code, replace it in the agent code with edit_agent, then start_agent again.`);
+      problems.push(`'${arg}' is not a 4-word Telegram code (numeric chat_ids are never accepted). Call ask_user_info kind='method' channel='telegram' to get the user's code, replace it in the agent code with edit_agent, then start_agent again.`);
     } else if (!(await fetchStatus('telegram', code)).linked) {
-      problems.push(`Telegram code '${code}' is not whitelisted: no Telegram chat is linked to it. Call ask_user_info kind='telegram' so the user links it, then edit_agent if the code changed and start_agent again.`);
+      problems.push(`Telegram code '${code}' is not whitelisted: no Telegram chat is linked to it. Call ask_user_info kind='method' channel='telegram' so the user links it, then edit_agent if the code changed and start_agent again.`);
     }
   }
 
   return problems.length ? `start_agent blocked by pre-flight: ${problems.join(' ')}` : null;
 }
 
+const NOTIFY_METHODS: NotifyMethod[] = ['browser', 'system', 'email', 'whatsapp', 'sms', 'voice', 'telegram', 'discord', 'pushover'];
+
+/** How the agent code uses what kind='method' returned, spelled out so the model can't mix codes up. */
+const METHOD_USAGE: Record<NotifyMethod, (v: string) => string> = {
+  browser: () => 'notify(title, message)',
+  system: () => 'system_notify(body, title?)',
+  email: v => `sendEmail("${v}", message, images?)`,
+  whatsapp: v => `sendWhatsapp("${v}", message, images?)`,
+  sms: v => `sendSms("${v}", message, images?)`,
+  voice: v => `call("${v}", message)`,
+  telegram: v => `sendTelegram("${v}", message, images?)`,
+  discord: v => `sendDiscord("${v}", message, images?)`,
+  pushover: v => `sendPushover("${v}", message, images?)`,
+};
+
 // ---------------------------------------------------------------------------
-// capture_screen helpers — return one preview frame and leave a live stream that
-// start_agent reuses. The platform split mirrors StreamManager (streamManager.ts):
-// isWeb() → browser getDisplayMedia; Tauri → the native screen-capture plugin, which
-// is itself platform-agnostic (iOS broadcast vs Android MediaProjection handled behind
-// one `start_capture_cmd`), so this layer needs no iOS/Android branching.
+// capture_screen on desktop — web and mobile capture lives in capture.ts, shared with the
+// ask_user_info 'screen' / 'camera' modal.
 // ---------------------------------------------------------------------------
-
-/** Web / mobile web: getDisplayMedia picker, grab one frame via a hidden <video>. */
-async function captureScreenWeb(): Promise<ToolResult> {
-  if (!navigator?.mediaDevices?.getDisplayMedia) {
-    return { error: 'Screen capture is not supported in this browser. Screen monitoring agents cannot be created here.' };
-  }
-  try {
-    await browserStreamCapture.acquireMasterStream('display');
-    const streams = browserStreamCapture.getStreams();
-    const videoTrack = streams.screenVideoStream?.getVideoTracks()[0];
-    if (!videoTrack) return { error: 'No video track acquired from screen share.' };
-
-    // Grab one frame via a hidden video element (works across all browsers).
-    const video = document.createElement('video');
-    video.srcObject = streams.screenVideoStream!;
-    video.muted = true;
-    await new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => resolve();
-      video.onerror = () => reject(new Error('Video metadata load failed'));
-      video.play().catch(reject);
-    });
-    // Give the first frame a moment to render.
-    await new Promise(r => setTimeout(r, 150));
-
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
-    canvas.getContext('2d')!.drawImage(video, 0, 0);
-    video.pause();
-
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-    const settings = videoTrack.getSettings();
-    return {
-      data: {
-        captured: true,
-        width: settings.width ?? canvas.width,
-        height: settings.height ?? canvas.height,
-        note: 'Stream is live and will be reused by start_agent — no second picker prompt.',
-      },
-      images: [dataUrl],
-    };
-  } catch (e) {
-    // User cancelled the picker or permission was denied.
-    const msg = e instanceof Error ? e.message : String(e);
-    // Safari rejects getDisplayMedia outside a user gesture, which an MCP tool call never is.
-    // Same message as main_loop.ts so the model relays it instead of suggesting a retry.
-    if (e instanceof Error && msg.includes('getDisplayMedia must be called from a user gesture handler')) {
-      return { error: "Safari is bad at screen sharing and can't start automatically, click on the Observer App Icon on the top left to enter the Sensor Permissions Menu and ask for screen sharing manually. Tell user Safari won't capture System Audio, and they have to setup screen sharing manually, and to use chrome, firefox or edge for the best experience." };
-    }
-    if (msg.includes('Permission denied') || msg.includes('NotAllowed') || msg.includes('user gesture')) {
-      return { error: 'Screen share was cancelled or denied. Ask the user if they want to try again.' };
-    }
-    return { error: msg };
-  }
-}
-
-/**
- * Mobile app (Tauri iOS/Android): trigger the native picker via tauriStreamCapture — the
- * same singleton the agent loop acquires, so the live stream is reused by start_agent.
- */
-function captureScreenTauri(): Promise<ToolResult> {
-  return grabTauriFrame(
-    { captured: true, note: 'Native screen capture is live (whole screen) and will be reused by start_agent — no second prompt.' },
-    'Screen capture started but no frame has arrived yet. On iOS, make sure you tapped "Start Broadcast" in the system sheet, then call capture_screen again.',
-  );
-}
-
-/**
- * Acquire tauriStreamCapture's display stream and return its newest frame. Frames arrive
- * asynchronously (on iOS the user taps "Start Broadcast" + a short countdown), so poll the
- * latest raw frame until one lands or we time out, rather than grabbing synchronously like
- * the browser path.
- */
-async function grabTauriFrame(data: Record<string, unknown>, noFrameError: string): Promise<ToolResult> {
-  try {
-    await tauriStreamCapture.acquireMasterStream('display');
-  } catch (e) {
-    // Android surfaces a real rejection on denial; iOS dismissal just yields no frames.
-    const msg = e instanceof Error ? e.message : String(e);
-    if (/denied|cancel|NotAllowed/i.test(msg)) {
-      return { error: 'Screen capture was cancelled or denied. Ask the user if they want to try again.' };
-    }
-    return { error: msg };
-  }
-
-  const FRAME_TIMEOUT_MS = 15000;
-  const POLL_MS = 200;
-  const deadline = Date.now() + FRAME_TIMEOUT_MS;
-  let raw: string | null = null;
-  while (Date.now() < deadline) {
-    raw = tauriStreamCapture.getLatestBase64Frame();
-    if (raw) break;
-    await new Promise(r => setTimeout(r, POLL_MS));
-  }
-
-  if (!raw) {
-    return { error: noFrameError };
-  }
-
-  return {
-    data,
-    images: [`data:image/jpeg;base64,${raw}`],
-  };
-}
 
 /**
  * Desktop app: start the live stream on a target from list_screen_targets with no selector
@@ -559,7 +467,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'check_whitelist',
-    description: "Pre-flight check for the phone notification tools (sendSms, call, sendWhatsapp). They only send to the user's 4-word Observer code once it is connected for that tool — the SMS code (texted to Observer) for sendSms, the WhatsApp code (sent on WhatsApp) for sendWhatsapp, either for call — and start_agent FAILS otherwise, so call this BEFORE start_agent for any agent that uses a phone tool. Pass the code the agent sends to (defaults to the user's saved code for that channel) and the channel. This does NOT block and shows the user nothing: it returns {whitelisted:true} if the code is connected, and FAILS if it isn't. On failure, call ask_user_info kind='phone' (same channel) to get the user connected, then call check_whitelist again (or just start_agent). Phone numbers are never accepted: if an agent uses one, replace it with the user's code.",
+    description: "Pre-flight check for the phone notification tools (sendSms, call, sendWhatsapp). They only send to the user's 4-word Observer code once it is connected for that tool — the SMS code (texted to Observer) for sendSms, the WhatsApp code (sent on WhatsApp) for sendWhatsapp, either for call — and start_agent FAILS otherwise, so call this BEFORE start_agent for any agent that uses a phone tool. Pass the code the agent sends to (defaults to the user's saved code for that channel) and the channel. This does NOT block and shows the user nothing: it returns {whitelisted:true} if the code is connected, and FAILS if it isn't. On failure, call ask_user_info kind='method' (same channel) to get the user connected, then call check_whitelist again (or just start_agent). Phone numbers are never accepted: if an agent uses one, replace it with the user's code.",
     parameters: {
       type: 'object',
       properties: {
@@ -576,7 +484,7 @@ export const TOOLS: ToolDefinition[] = [
       if (!code) {
         const saved = SensorSettings.defaultPhoneCode(args.channel ?? 'sms');
         return {
-          error: `'${raw}' is not an Observer code. The phone tools only send to the user's 4-word code${saved ? ` ('${saved}')` : ''}, never to a phone number: put the code in the agent instead${saved ? '' : " (ask_user_info kind='phone' gets it)"}, then check it.`,
+          error: `'${raw}' is not an Observer code. The phone tools only send to the user's 4-word code${saved ? ` ('${saved}')` : ''}, never to a phone number: put the code in the agent instead${saved ? '' : " (ask_user_info kind='method' gets it)"}, then check it.`,
         };
       }
 
@@ -597,41 +505,41 @@ export const TOOLS: ToolDefinition[] = [
         return { error: e instanceof Error ? e.message : String(e) };
       }
       return {
-        error: `Code '${code}' is not connected for ${channel}. Call ask_user_info kind='phone' channel='${channel}' so the user can connect it, then check again.`,
+        error: `Code '${code}' is not connected for ${channel}. Call ask_user_info kind='method' channel='${channel}' so the user can connect it, then check again.`,
       };
     },
   },
   {
     name: 'ask_user_info',
-    description: "Ask the user for a piece of contact info needed by a notification tool, via a guided modal. Use this INSTEAD of asking for a phone number / chat_id / webhook URL in chat prose — the modal walks the user through actually obtaining the value (QR codes, deep links, step-by-step instructions) and prefills anything they've given before. Call it BEFORE create_agent, once per piece of info you need. This BLOCKS until the user confirms. For kind='phone' the value is ALWAYS the user's 4-word Observer code for that channel (e.g. \"tree-book-shower-golden\"): the SMS code for sms, the WhatsApp code for whatsapp, either for voice. Never a phone number. Each channel has its own code, so ask again (with the right channel) when an agent uses both sendSms and sendWhatsapp. The modal only returns once it's connected, so you do NOT need a separate check_whitelist call for it; pass it verbatim as the phone_number/number argument to sendSms/sendWhatsapp/call. Observer never sends to raw phone numbers. For kind='telegram' the value is the user's separate 4-word Telegram code (not the phone code, never a numeric chat_id), already linked; pass it verbatim as sendTelegram's first argument. If the result is {skipped:true}, the user declined — ask them about it in chat rather than calling this again. kind='model' (with `model`: 'onejev' for a dial watcher, 'default' otherwise) asks whether to run the agent on a local model, which downloads now and may take 10+ minutes, or in the cloud; it returns {choice:'local'} (call download_model with that `model` next) or {choice:'cloud'} (use the cloud model). Ask it AFTER every other ask_user_info, right before download_model, so the user can walk away while it downloads. Do not narrate the modal or tell the user to fill it in; they can see it.",
+    description: "Ask the user for something only they can give, via a modal. This BLOCKS until they answer. Never ask for these in chat, and never narrate the modal: they can see it. kind='screen' / kind='camera': ONLY after capture_screen / capture_camera failed; the modal's button opens the share picker / camera permission (a click is what browsers like Safari require) and returns the same frame those tools return. kind='method': how the agent tells the user; pass `channel` when the user already named one (e.g. 'send me a WhatsApp' → channel='whatsapp'), omit it to let them pick. It returns {channel, value}: value is what the agent code passes to that channel's tool, already connected and verified (the user's 4-word code for whatsapp/sms/voice/telegram, their email, webhook or Pushover key; '' for browser and system). A returning user with a working connection is not shown anything. kind='model' (`model`: 'onejev' for a decision model, 'default' for an LLM): local or cloud; returns {choice:'local'} (call download_model with that `model` next) or {choice:'cloud'}. Ask it LAST, right before download_model. If the result is {skipped:true}, the user declined: ask them about it in chat instead of calling this again.",
     parameters: {
       type: 'object',
       properties: {
         kind: {
           type: 'string',
-          enum: ['phone', 'email', 'telegram', 'discord', 'pushover', 'model'],
-          description: "Which piece of info to collect: 'phone' for sendSms/call/sendWhatsapp, 'email' for sendEmail, 'telegram' for sendTelegram's code, 'discord' for sendDiscord's webhook URL, 'pushover' for sendPushover's user key, 'model' for local vs cloud model.",
+          enum: ['screen', 'camera', 'method', 'model'],
+          description: "'screen' / 'camera' for capture permission, 'method' for how to notify the user, 'model' for local vs cloud.",
+        },
+        channel: {
+          type: 'string',
+          enum: NOTIFY_METHODS,
+          description: "Only for kind='method': the channel the user already asked for. browser → notify(), system → system_notify() (desktop app), whatsapp → sendWhatsapp, sms → sendSms, voice → call, telegram → sendTelegram, email → sendEmail, discord → sendDiscord, pushover → sendPushover. Omit to show the picker.",
         },
         model: {
           type: 'string',
           enum: LOCAL_MODEL_CHOICES,
-          description: "Only for kind='model': the local model the download would fetch — 'onejev' for a dial watcher, 'default' for everything else. Defaults to 'default'.",
-        },
-        channel: {
-          type: 'string',
-          enum: ['sms', 'voice', 'whatsapp'],
-          description: "Only for kind='phone': which tool the code will be used with — sms (sendSms), voice (call), or whatsapp (sendWhatsapp). WhatsApp also needs WhatsApp's 24h window to be open. Defaults to sms.",
+          description: "Only for kind='model': the local model the download would fetch — 'onejev' for a decision model, 'default' for an LLM. Defaults to 'default'.",
         },
         reason: {
           type: 'string',
-          description: 'A short, friendly one-line explanation of what this will be used for, shown in the modal (e.g. "so I can text you when your render finishes").',
+          description: 'A short, friendly one-line explanation shown in the modal (e.g. "so I can watch the GitHub Actions tab we just opened").',
         },
       },
       required: ['kind'],
     },
-    multimodal: false,
+    multimodal: true,
     execute: async (args, ctx): Promise<ToolResult> => {
-      const kind = args.kind as UserInfoKind | 'model';
+      let kind = args.kind as UserInfoRequestKind;
       if (!kind) return { error: 'Provide a `kind` to ask for.' };
 
       // Non-React host (or a future MCP server transport): no modal to show, so tell the
@@ -639,17 +547,33 @@ export const TOOLS: ToolDefinition[] = [
       if (!ctx.requestUserInfo) {
         return { error: 'No interactive UI is available here. Ask the user for this value in chat instead.' };
       }
+      if (kind === 'screen' && isDesktop()) {
+        return { error: 'The desktop app needs no permission modal: use list_screen_targets, then capture_screen with a target_id.' };
+      }
 
-      const channel = kind === 'phone'
-        ? (args.channel === 'sms' ? 'sms' : args.channel === 'voice' ? 'voice' : 'whatsapp')
-        : undefined;
+      // The old contact kinds are a method with its channel fixed.
+      let method = NOTIFY_METHODS.includes(args.channel) ? (args.channel as NotifyMethod) : undefined;
+      if (kind === 'phone') {
+        method = args.channel === 'sms' || args.channel === 'voice' ? args.channel : 'whatsapp';
+        kind = 'method';
+      } else if (kind !== 'screen' && kind !== 'camera' && kind !== 'method' && kind !== 'model') {
+        method = kind;
+        kind = 'method';
+      }
+      if (method === 'system' && !isDesktop()) method = 'browser';
+
+      // Nothing to ask: no modal at all (the e2e suite, which can't answer one, relies on this).
+      if (kind === 'method' && (method === 'system'
+        || (method === 'browser' && (typeof Notification === 'undefined' || Notification.permission === 'granted')))) {
+        return { data: { kind, channel: method, value: '', use: METHOD_USAGE[method]('') } };
+      }
 
       let response;
       try {
         response = await ctx.requestUserInfo({
           requestId: `info_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           kind,
-          channel,
+          method: kind === 'method' ? method : undefined,
           model: kind === 'model' ? (args.model === 'onejev' ? 'onejev' : 'default') : undefined,
           reason: typeof args.reason === 'string' ? args.reason : undefined,
         });
@@ -665,16 +589,25 @@ export const TOOLS: ToolDefinition[] = [
       }
 
       if (response.skipped) {
-        return { data: { kind, skipped: true, note: 'The user dismissed the prompt without providing a value. Ask them about it in chat; do not call ask_user_info again for this.' } };
+        return { data: { kind, skipped: true, note: 'The user dismissed the prompt. Ask them about it in chat; do not call ask_user_info again for this.' } };
       }
 
-      const value = (response.value ?? '').trim();
-      if (!value) return { data: { kind, skipped: true } };
+      // The modal ran the capture itself, from its button click.
+      if (kind === 'screen' || kind === 'camera') {
+        return response.capture ?? { error: 'No frame was captured.' };
+      }
 
-      // The modal only resolves a phone once the code is confirmed connected, so a returned
-      // code is always ready to use — no separate check_whitelist needed.
-      return { data: { kind, value, ...(kind === 'phone' ? { channel, whitelisted: true } : {}) } };
+      const channel = response.method;
+      if (!channel) return { data: { kind, skipped: true } };
+      return { data: { kind, channel, value: response.value, use: METHOD_USAGE[channel](response.value) } };
     },
+  },
+  {
+    name: 'capture_camera',
+    description: "Open the camera a $CAMERA agent will use and return one frame from it, so you can SEE what will be watched before building the agent. The camera stays live and start_agent reuses it. Call it BEFORE create_agent for any agent whose system_prompt uses $CAMERA. If it fails (no permission, no camera), call ask_user_info kind='camera'.",
+    parameters: { type: 'object', properties: {} },
+    multimodal: true,
+    execute: () => captureCamera(),
   },
   {
     name: 'start_agent',
@@ -882,9 +815,7 @@ export const TOOLS: ToolDefinition[] = [
     // Same platform split as StreamManager: browser → getDisplayMedia; Tauri → native plugin
     // (desktop seats the target up front so no selector opens).
     execute: async (args): Promise<ToolResult> => {
-      const result = isWeb()
-        ? await captureScreenWeb()
-        : isDesktop() ? await captureScreenDesktop(args.target_id) : await captureScreenTauri();
+      const result = isDesktop() ? await captureScreenDesktop(args.target_id) : await captureScreen();
       if (!args.agent_id || result.error || !result.images?.[0]) return result;
 
       // Preview the agent's crop: the same fractions and resolveCrop its loop applies.
