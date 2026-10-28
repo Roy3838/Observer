@@ -201,8 +201,9 @@ export const GROUND_TRUTH: UseCase[] = [
   { id: 'distracted', demo: 'focus_session.html', when: 'I get distracted', then: NOTIFY,
     outcomes: { social: 'success', work_video: 'video', focused: 'fail' }, expect: { social: 'notify', work_video: 'either', focused: 'silent' },
     show: { title: 'Focus', channel: 'whatsapp', alert: 'You drifted to X. Back to work?' } },
+  // No work_video ending: YouTube is arguably social media, so neither answer would be wrong.
   { id: 'social_media', demo: 'focus_session.html', when: 'I go on social media', then: NOTIFY,
-    outcomes: { social: 'success', work_video: 'video', focused: 'fail' }, expect: { social: 'notify', work_video: 'silent', focused: 'silent' } },
+    outcomes: { social: 'success', focused: 'fail' }, expect: { social: 'notify', focused: 'silent' } },
   { id: 'opens_youtube', demo: 'focus_session.html', when: 'I open YouTube', then: NOTIFY,
     outcomes: { social: 'success', work_video: 'video', focused: 'fail' }, expect: { social: 'silent', work_video: 'notify', focused: 'silent' } },
 

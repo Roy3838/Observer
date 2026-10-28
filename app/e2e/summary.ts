@@ -9,10 +9,12 @@ export default function summary() {
   if (!fs.existsSync(file)) return;
   const results = fs.readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line));
   const passed = results.filter(r => r.verdict === 'PASS').length;
-  console.log(`\nMCP e2e: ${passed}/${results.length} passed (${Math.round(100 * passed / results.length)}%)`);
+  const partial = results.filter(r => r.verdict === 'PARTIAL').length;
+  console.log(`\nMCP e2e: ${passed}/${results.length} one-shot (${Math.round(100 * passed / results.length)}%), ${partial} partial (fired early, right from the trigger on)`);
   for (const r of results) {
     const latency = r.latencyMs !== undefined ? ` +${Math.round(r.latencyMs / 1000)}s` : '';
-    console.log(`  ${r.verdict.padEnd(16)} ${r.id}${latency}`);
+    const early = r.early ? ` [${r.early} early]` : '';
+    console.log(`  ${r.verdict.padEnd(16)} ${r.id}${latency}${early}`);
   }
   console.log(`Results: ${file}\n`);
 }

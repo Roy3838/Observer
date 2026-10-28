@@ -19,7 +19,7 @@ export default defineConfig({
     command: `pnpm vite --port ${port} --strictPort`,
     cwd: '..',
     url: `http://localhost:${port}`,
-    env: { VITE_E2E: '1' },
+    env: { VITE_E2E: '1', VITE_E2E_MODEL_CHOICE: process.env.E2E_MODEL_CHOICE ?? 'cloud' },
     // A dev server that's already up wasn't started with VITE_E2E=1, so don't reuse it.
     reuseExistingServer: false,
     timeout: 120_000,

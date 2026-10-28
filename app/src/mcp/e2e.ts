@@ -31,6 +31,12 @@ const NOTIFY_TOOLS = new Set([
 const MEMORY_TOOLS = new Set(['setMemory', 'appendMemory']);
 const CLIP_TOOLS = new Set(['startClip', 'stopClip', 'markClip', 'getVideo']);
 
+// How the suite answers ask_user_info kind='model', set by E2E_MODEL_CHOICE (playwright.config.ts).
+const MODEL_CHOICE: 'cloud' | 'local' | 'ask' =
+  import.meta.env.VITE_E2E_MODEL_CHOICE === 'local' || import.meta.env.VITE_E2E_MODEL_CHOICE === 'ask'
+    ? import.meta.env.VITE_E2E_MODEL_CHOICE
+    : 'cloud';
+
 export type E2EEvent =
   | { type: 'notification'; agentId: string; tool: string; ok: boolean; params: any }
   | { type: 'ask_user_info'; message: string }
@@ -176,6 +182,13 @@ export function installE2EHooks(h: E2EHandles): void {
       window.__e2eReport?.({
         type: 'clip', agentId: entry.source, tool: d.content.tool, ok: d.logType === 'tool-success', params: d.content.params,
       });
+    }
+    // The local-vs-cloud question has a fixed answer (E2E_MODEL_CHOICE, default cloud), so the
+    // run goes on. 'ask' leaves it unanswered, like any other modal.
+    if (entry.source === 'MCP' && entry.message === 'Awaiting user info: model' && MODEL_CHOICE !== 'ask') {
+      const requestId: string = d?.requestId;
+      setTimeout(() => handles.mcp().resolveUserInfo(requestId, { value: MODEL_CHOICE }), 0);
+      return;
     }
     // Nobody will fill the modal, so the run would hang: report it and unwind the run.
     if (entry.source === 'MCP' && entry.message.startsWith('Awaiting user info')) {
