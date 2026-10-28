@@ -185,7 +185,8 @@ const ToolCallDetailModal: React.FC<{
 const WorkingGroup: React.FC<{ batches: ToolCall[][]; toolStatus: Map<string, ToolStatusEntry>; messages: WireMessage[] }> = ({ batches, toolStatus, messages }) => {
   const calls = batches.flat();
   const isRunning = calls.some(tc => toolStatus.get(tc.id)?.status === 'running');
-  const hasError = calls.some(tc => toolStatus.get(tc.id)?.status === 'error');
+  const lastCall = calls[calls.length - 1];
+  const hasError = !!lastCall && toolStatus.get(lastCall.id)?.status === 'error';
   const [inspecting, setInspecting] = useState<ToolCall | null>(null);
   // Auto-collapse shortly after the run finishes, mirroring Cowork's "done, tucked away" feel.
   // Stays expanded while running or right after finishing so the last tool is still visible.
