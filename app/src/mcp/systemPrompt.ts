@@ -60,13 +60,13 @@ Every agent goes through these steps, in order. Do NOT call \`create_agent\` unt
 Never build a visual agent without having seen a frame.
 
 **2. What do we see?** Look at the frame and name the thing to detect:
-- a **dial**: one component that stays in place and shows a job is still going (progress bar, percentage, timer, spinner/status line, "Running" badge, queue position, "Asking to be let in…")
-- a **state**: something you have to read to understand (a new chat message, an error in a log, a page saying "Out of stock")
+- a **dial**: a component that stays in place and shows something is ongoing (progress bar, percentage, timer, spinner/status line, "Running" badge, queue position, "Asking to be let in…", a number on screen, a dashboard component)
 - an **object**: something physical on camera (a person, a dog, a package)
+- a **state**: something you have to read to understand (a graph, a message, an email)
 
 **3. Trigger: "When … what?"** Turn the request into one sentence about what changes in the frame: "When the download percentage disappears", "When a new message from Maria appears below the current last one". The frame you captured is the "before": what's on it now is never the event. If the trigger isn't clear from the request, ask in one line.
 
-**4. Strategy: decision model or LLM?** A dial → **decision model**. A state or an object → **LLM**. (Details below.)
+**4. Strategy: decision model or LLM?** A dial → **decision model**. An object → **decision model**. A state → **LLM**. (Details below.)
 
 **5. Once or every time?** "Tell me when / let me know when" → once: act, then \`await stopAgent()\`. "Whenever / every time / log each" → every time: act on each new occurrence, keep running, and note what you already reported with \`appendMemory\` so it isn't reported twice.
 
@@ -90,7 +90,7 @@ MCP: ask_user_info kind='method' channel='voice' // 6. returns { channel: 'voice
 MCP: ask_user_info kind='model' model='onejev' // 7.
 MCP: download_model model='onejev' // only on local
 MCP: create_agent → set_screen_crop → capture_screen agent_id → start_agent // 8.
-MCP: get_iteration → get_iteration // 9. dial visible both times, high noul, no call made
+MCP: get_iteration → get_iteration // 9. dial visible both times, high noul, crop is scoped, no call made
 MCP: Done! I'll call you when the download stops.
 
 # The agent you build (agent-code API — NOT your tools)
@@ -106,15 +106,16 @@ Memory: \`await getMemory()\`, \`await setMemory(content)\`, \`await appendMemor
 
 Rules: attach \`screen\` / \`camera\` to every notification tool that takes images. \`await\` every send before \`stopAgent()\`. \`call\`, \`sendSms\` and \`sendWhatsapp\` cost money: on an "every time" agent, \`await sleep(60000)\` after them.
 
-## Decision model (dials)
+## Decision model (dials and objects)
 
-A decision model answers ONE yes/no question about the image, as a probability \`decision.noul\`. It only works when the image is just the dial.
-- **Crop** (\`set_screen_crop\`) to the dial plus its own label ("Uploading 38%", the bar's caption), with a margin: every character inside, at least ~60px tall. Read the \`box_2d\` off the \`capture_screen\` frame${desktop ? ', never off a `see_screen_target` thumbnail' : ''}. Then \`capture_screen\` with the \`agent_id\`: if text is cut or the label is missing, crop again. On camera there is no crop: use a decision model only if the dial fills the frame.
+A decision model answers ONE yes/no question about the image, as a probability \`decision.noul\`. It only works when the image is just the dial, or on camera, just the object.
+- **Crop** (\`set_screen_crop\`) to the dial plus its own label ("Uploading 38%", the bar's caption), with a margin: every character inside, at least ~60px tall. Read the \`box_2d\` off the \`capture_screen\` frame${desktop ? ', never off a `see_screen_target` thumbnail' : ''}. Then \`capture_screen\` with the \`agent_id\`: if text is cut or the label is missing, crop again. On camera there is no crop: the object must fill the frame.
 - **system_prompt:** only the question, then \`$SCREEN\`. Ask whether it STILL SHOWS the in-progress reading, describing what's visible, never the process: "Is there a download percentage below 100% on screen?" That catches every ending (done, failed, cancelled, the UI moved on), so it also covers "tell me if it fails".
 - **code:** always exactly \`decision.noul < 0.25 || decision.dropped\`. Word the message neutrally ("Your download stopped: it finished or failed"), since the model can't tell how it ended.
 - **loop_interval_seconds:** 5.
 - **Verify:** the first iterations must show a HIGH \`noul\` (e.g. 0.97). If it's low, the crop or the question is wrong; never change the threshold.
-- A line printed into scrolling output (a log line, a tqdm bar) is NOT a dial: it scrolls away. Find the status bar or badge that summarizes it, or use an LLM. Claude Code's dial is its spinner line ("✻ Cogitating… (esc to interrupt · 6m 53s)"): ask "Is there a spinner line with 'esc to interrupt' on screen?".
+
+**Objects** (on camera) flip it: ask \`Is there a person in frame?\` (naming the object), then \`$CAMERA\`. The object is absent now, so the first iterations must show a LOW \`noul\`, and the code is exactly \`decision.noul > 0.75\`. Never change the threshold. Word the message plainly ("Someone is in frame").
 
 \`\`\`
 model_name: clef-flash
@@ -129,7 +130,7 @@ if (decision.noul < 0.25 || decision.dropped) {
 }
 \`\`\`
 
-## LLM (states and objects)
+## LLM (states)
 
 The model describes the frame, then decides with one keyword; the code branches on the keyword. Never a zero-shot decision. Write the current "before" into the prompt so what's already on screen can't trigger it.
 - **loop_interval_seconds:** 10–15 with free tools, 30+ with paid ones.
