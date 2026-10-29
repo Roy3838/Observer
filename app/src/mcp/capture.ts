@@ -12,6 +12,7 @@ import type { ToolResult } from './types';
 import { browserStreamCapture, mockCameraStreams } from '@utils/browserStreamCapture';
 import { tauriStreamCapture } from '@utils/tauriStreamCapture';
 import { isWeb } from '@utils/platform';
+import { StreamManager } from '@utils/streamManager';
 
 /** Thrown by getDisplayMedia outside a click; the cue to fall back to ask_user_info kind='screen'. */
 const NEEDS_GESTURE = /user gesture/i;
@@ -131,12 +132,22 @@ export async function grabTauriFrame(data: Record<string, unknown>, noFrameError
  * crashes); here that placeholder is torn down and reported, so the MCP asks for permission
  * instead of building an agent on top of it.
  */
-export async function captureCamera(): Promise<ToolResult> {
+export async function captureCamera(cameraId?: string): Promise<ToolResult> {
   if (!navigator?.mediaDevices?.getUserMedia) {
     return { error: 'Camera capture is not supported here. Tell the user to open Observer in Chrome, Edge or Firefox.' };
   }
   const impl = isWeb() ? browserStreamCapture : tauriStreamCapture;
   try {
+    if (cameraId) {
+      const cameras = await StreamManager.getAvailableCameraDevices();
+      if (!cameras.some(c => c.deviceId === cameraId)) {
+        return { error: `Camera '${cameraId}' is not available (it may have been unplugged). Re-run list_cameras.` };
+      }
+      // The live stream is reused as-is by acquireMasterStream, so switching means re-seating
+      // it; switchCameraDevice also moves any running $CAMERA agents onto the new camera.
+      const live = impl.getStreams().cameraStream?.getVideoTracks()[0]?.getSettings().deviceId;
+      if (live !== cameraId) await StreamManager.switchCameraDevice(cameraId);
+    }
     await impl.acquireMasterStream('camera');
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
@@ -153,6 +164,7 @@ export async function captureCamera(): Promise<ToolResult> {
     return {
       data: {
         captured: true,
+        camera_id: stream.getVideoTracks()[0]?.getSettings().deviceId,
         width: frame.width,
         height: frame.height,
         note: 'Camera is live and will be reused by start_agent — no second prompt.',
@@ -162,4 +174,32 @@ export async function captureCamera(): Promise<ToolResult> {
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/**
+ * The cameras capture_camera can open, by deviceId. Browsers blank the labels until camera
+ * permission is granted, so the model is told to capture once first when they're all empty.
+ */
+export async function listCameras(): Promise<ToolResult> {
+  if (!navigator?.mediaDevices?.enumerateDevices) {
+    return { error: 'Camera listing is not supported here. Tell the user to open Observer in Chrome, Edge or Firefox.' };
+  }
+  const devices = await StreamManager.getAvailableCameraDevices();
+  const preferred = StreamManager.getPreferredCameraDevice();
+  const live = (isWeb() ? browserStreamCapture : tauriStreamCapture)
+    .getStreams().cameraStream?.getVideoTracks()[0]?.getSettings().deviceId;
+  const cameras = devices.map((d, i) => ({
+    id: d.deviceId,
+    label: d.label || `Camera ${i + 1}`,
+    preferred: d.deviceId === preferred,
+    live: d.deviceId === live,
+  }));
+  const unlabeled = devices.length > 0 && devices.every(d => !d.label);
+  return {
+    data: {
+      cameras,
+      ...(cameras.length === 0 && { note: "No camera found. Call ask_user_info kind='camera'." }),
+      ...(unlabeled && { note: 'Camera names are hidden until permission is granted: call capture_camera once (no camera_id), then list_cameras again.' }),
+    },
+  };
 }

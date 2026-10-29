@@ -6,7 +6,7 @@
 // so the same registry can later be served from a real MCP server with the transport swapped.
 
 import type { ToolDefinition, ToolResult, WireToolSpec, NotifyMethod, UserInfoRequestKind } from './types';
-import { captureScreen, captureCamera, grabTauriFrame } from './capture';
+import { captureScreen, captureCamera, listCameras, grabTauriFrame } from './capture';
 import {
   listAgents,
   getAgent,
@@ -604,10 +604,22 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'capture_camera',
-    description: "Open the camera a $CAMERA agent will use and return one frame from it, so you can SEE what will be watched before building the agent. The camera stays live and start_agent reuses it. Call it BEFORE create_agent for any agent whose system_prompt uses $CAMERA. If it fails (no permission, no camera), call ask_user_info kind='camera'.",
-    parameters: { type: 'object', properties: {} },
+    description: "Open the camera a $CAMERA agent will use and return one frame from it, so you can SEE what will be watched before building the agent. The camera stays live and start_agent reuses it. Call it BEFORE create_agent for any agent whose system_prompt uses $CAMERA. Without camera_id it opens the user's last-chosen camera (or the default). If the user has more than one camera, named a specific one, or the frame shows the wrong view, call list_cameras and pass camera_id: there is one camera stream, so switching also moves any running $CAMERA agents to it. If it fails (no permission, no camera), call ask_user_info kind='camera'.",
+    parameters: {
+      type: 'object',
+      properties: {
+        camera_id: { type: 'string', description: 'Optional camera id from list_cameras. Omit to use the current camera.' },
+      },
+    },
     multimodal: true,
-    execute: () => captureCamera(),
+    execute: (args) => captureCamera(typeof args.camera_id === 'string' && args.camera_id ? args.camera_id : undefined),
+  },
+  {
+    name: 'list_cameras',
+    description: "List the cameras available to a $CAMERA agent, as text (id, label, preferred = the user's saved choice, live = the one open now). Call it when the user mentions a specific camera (\"my webcam\", \"the USB camera\", \"the back camera\") or capture_camera shows the wrong view, then capture_camera with the matching camera_id to switch and check it. Labels are hidden until camera permission is granted; if so, call capture_camera once first.",
+    parameters: { type: 'object', properties: {} },
+    multimodal: false,
+    execute: () => listCameras(),
   },
   {
     name: 'start_agent',
