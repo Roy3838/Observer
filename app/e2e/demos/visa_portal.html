@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<!-- A visa appointment portal, signed in, on the reschedule page: the current appointment is months
+     away and the calendar has nothing earlier. It refreshes itself (a crawler can't: it's behind the
+     login). Partway through, a slot opens that is LATER than the current one: not what was asked.
+     ?outcome=success (slot_opens): an earlier date turns green. fail (still_full): nothing earlier
+     ever opens. expired (logged_out): the session times out and the page asks to sign in again. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Visa Appointment Service</title>
+<script src="demo-contract.js"></script>
+<script src="reload_assets/reload.js"></script>
+<link rel="stylesheet" href="fonts/open-sans.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 "Open Sans", system-ui, sans-serif; background: #eef1f5; color: #1f2d3d; }
+  header { background: #1c3557; color: #fff; padding: 12px 28px; display: flex; align-items: center; justify-content: space-between; }
+  header .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 17px; }
+  header .brand i { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #c9a646; display: grid; place-items: center; font-style: normal; color: #c9a646; font-size: 13px; }
+  header .user { font-size: 13px; color: #c8d4e3; }
+  header .user b { color: #fff; }
+  header .user a { color: #9cc3ff; margin-left: 14px; }
+  .session { background: #fff7d6; color: #6b5300; font-size: 12px; padding: 6px 28px; border-bottom: 1px solid #ecd98c; }
+  .wrap { display: flex; max-width: 1180px; margin: 22px auto; gap: 22px; padding: 0 20px; }
+  aside { width: 220px; flex: none; background: #fff; border: 1px solid #d5dce5; border-radius: 6px; padding: 8px 0; height: fit-content; }
+  aside a { display: block; padding: 10px 18px; color: #1f2d3d; text-decoration: none; font-size: 13px; }
+  aside a.on { background: #e7eef8; border-left: 3px solid #1c3557; font-weight: 600; }
+  main { flex: 1; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: #5b6b7d; margin-bottom: 16px; }
+  .card { background: #fff; border: 1px solid #d5dce5; border-radius: 6px; padding: 16px 18px; margin-bottom: 14px; }
+  .card h2 { font-size: 14px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .4px; color: #5b6b7d; }
+  .cur { display: flex; justify-content: space-between; align-items: center; }
+  .cur b { font-size: 16px; }
+  .row { display: flex; gap: 14px; margin-bottom: 12px; }
+  .row label { font-size: 12px; color: #5b6b7d; display: block; margin-bottom: 3px; }
+  .row .sel { border: 1px solid #b8c3d1; border-radius: 4px; padding: 7px 10px; min-width: 240px; background: #fafbfc; }
+  .msg { padding: 10px 14px; border-radius: 4px; margin-bottom: 12px; font-size: 13px; }
+  .msg.none { background: #fdecea; border: 1px solid #f5c2bd; color: #8a1f14; }
+  .msg.later { background: #fff4e0; border: 1px solid #f0d29a; color: #7a4f00; }
+  .msg.open { background: #e7f6ec; border: 1px solid #9fd5b0; color: #146c35; font-weight: 600; }
+  .cals { display: flex; gap: 22px; }
+  .cal { flex: 1; }
+  .cal .m { font-weight: 700; text-align: center; margin-bottom: 6px; }
+  .cal table { width: 100%; border-collapse: collapse; text-align: center; font-size: 13px; }
+  .cal th { color: #5b6b7d; font-weight: 600; padding: 4px 0; font-size: 11px; }
+  .cal td { padding: 6px 0; color: #b4bcc6; }
+  .cal td.av { background: #2e9d57; color: #fff; font-weight: 700; border-radius: 4px; }
+  .actions { margin-top: 14px; display: flex; gap: 10px; }
+  .actions button { border: 0; border-radius: 4px; padding: 9px 18px; font-weight: 600; font-size: 13px; background: #c7ced8; color: #fff; }
+  .actions button.go { background: #1c3557; }
+  .login { max-width: 420px; margin: 70px auto; background: #fff; border: 1px solid #d5dce5; border-radius: 6px; padding: 26px 28px; }
+  .login h1 { font-size: 20px; }
+  .login input { width: 100%; padding: 9px 10px; margin: 4px 0 12px; border: 1px solid #b8c3d1; border-radius: 4px; font: inherit; }
+  .login button { width: 100%; padding: 10px; border: 0; border-radius: 4px; background: #1c3557; color: #fff; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+  // still_full and slot_opens look the same until the end; logged_out ends on the sign-in page.
+  let state = 'full'; // full | later | open | expired
+  let sessionLeft = 15 * 60;
+
+  const MONTHS = [['November 2026', 2026, 10], ['December 2026', 2026, 11]];
+  const OPEN_DAYS = { '2026-10-20': true, '2026-10-23': true };
+  const month = ([name, y, m]) => {
+    const first = new Date(y, m, 1).getDay(), days = new Date(y, m + 1, 0).getDate();
+    let cells = Array(first).fill('<td></td>');
+    for (let d = 1; d <= days; d++) cells.push(`<td class="${state === 'open' && OPEN_DAYS[`${y}-${m}-${d}`] ? 'av' : ''}">${d}</td>`);
+    let rows = '';
+    for (let i = 0; i < cells.length; i += 7) rows += `<tr>${cells.slice(i, i + 7).join('')}</tr>`;
+    return `<div class="cal"><div class="m">${name}</div><table><tr><th>Su</th><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th></tr>${rows}</table></div>`;
+  };
+
+  const render = () => {
+    const app = document.getElementById('app');
+    if (state === 'expired') {
+      app.innerHTML = `<header><div class="brand"><i>VAS</i>Visa Appointment Service</div></header>
+        <div class="login">
+          <h1>Your session has expired</h1>
+          <div class="sub">For your security you were signed out after 15 minutes. Sign in again to continue scheduling.</div>
+          <label>Email</label><input value="">
+          <label>Password</label><input type="password" value="">
+          <button>Sign in</button>
+        </div>`;
+      return;
+    }
+    sessionLeft = 15 * 60;
+    const msg = {
+      full: `<div class="msg none">There are no available appointments at the selected location. Please try again later.</div>`,
+      later: `<div class="msg later">First available appointment: <b>Tuesday, June 8, 2027</b>. This is later than your current appointment.</div>`,
+      open: `<div class="msg open">Earlier appointments available: Friday, November 20, 2026 and Monday, November 23, 2026.</div>`,
+    }[state];
+    app.innerHTML = `<header><div class="brand"><i>VAS</i>Visa Appointment Service</div>
+        <div class="user">Welcome, <b>ROY MEDINA</b> · Applicant ID 4471-0293<a>Sign out</a></div></header>
+      <div class="session">Your session will expire in <b id="left"></b>. Unsaved changes will be lost.</div>
+      <div class="wrap">
+        <aside><a>Dashboard</a><a>Application (DS-160)</a><a>Payments</a><a class="on">Reschedule appointment</a><a>Documents</a><a>Help</a></aside>
+        <main>
+          <h1>Reschedule appointment</h1>
+          <div class="sub">Appointments open up when other applicants cancel. Availability changes throughout the day.</div>
+          <div class="card cur"><div><h2>Current appointment</h2><b>Thursday, March 18, 2027 · 8:15 AM</b><div class="sub" style="margin:2px 0 0">Consular Section, Mexico City · B1/B2 visitor visa</div></div></div>
+          <div class="card">
+            <h2>Find an earlier date</h2>
+            <div class="row"><div><label>Consular post</label><div class="sel">Mexico City ▾</div></div><div><label>Visa class</label><div class="sel">B1/B2 · Business / Tourism ▾</div></div></div>
+            ${msg}
+            <div class="cals">${MONTHS.map(month).join('')}</div>
+            <div class="actions"><button class="${state === 'open' ? 'go' : ''}">Reschedule</button><span class="sub" style="margin:8px 0 0">Last checked <span data-checked></span></span></div>
+          </div>
+        </main>
+      </div>`;
+    tickSession();
+  };
+  const tickSession = () => {
+    const el = document.getElementById('left');
+    if (el) el.textContent = `${Math.floor(sessionLeft / 60)}:${String(sessionLeft % 60).padStart(2, '0')}`;
+  };
+  setInterval(() => { if (sessionLeft > 0) sessionLeft--; tickSession(); }, 1000);
+
+  const page = selfReload({ everyMs: 20000, render });
+
+  demo.onStart = durationMs => {
+    // A slot opens partway through, but after the current appointment: not an earlier one.
+    setTimeout(() => { if (state === 'full') { state = 'later'; demo.mark('later_slot', { date: '2027-06-08' }); } }, durationMs * 0.5);
+    setTimeout(() => {
+      if (demo.outcome === 'success') state = 'open';
+      else if (demo.outcome === 'expired') state = 'expired';
+      page.now(() => demo.trigger());
+    }, durationMs);
+  };
+</script>
+</body>
+</html>

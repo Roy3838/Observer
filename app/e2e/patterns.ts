@@ -560,6 +560,107 @@ const CHAT: PatternScenario[] = [
   })),
 ];
 
+// Experiments: not use cases yet, so not in the ground truth.
+
+/** camera_phone.html: one alert per notification banner, saying what it says, and no repeats
+ *  while the same banner stays up. An alert counts for the banner whose words it quotes, else
+ *  for the one on screen when it fired (or just before). */
+function scorePhoneNotifications(run: Run): Score {
+  const list: { keys: string[]; ms: number; title: string }[] = run.truth?.notifications ?? [];
+  const shown = marks(run, 'notification').map(m => m.t);
+  const hidden = marks(run, 'notification_hidden').map(m => m.t);
+  if (shown.length < list.length) return { verdict: 'FAIL', metrics: {}, notes: ['not every notification was shown'] };
+  const alerts = run.events.filter((e): e is Extract<SuiteEvent, { type: 'notification' }> => e.type === 'notification' && e.t >= run.startT);
+  const per = list.map(() => 0);
+  let stray = 0, quoted = 0, withImage = 0;
+  for (const a of alerts) {
+    const text = String(a.params?.message ?? a.params?.body ?? JSON.stringify(a.params ?? ''));
+    let i = list.findIndex(n => mentions(text, n.keys));
+    if (i >= 0) quoted++;
+    // Not quoted: the banner up at the time, allowing for an iteration that started while it was.
+    else i = shown.findIndex((s, k) => a.t >= s && a.t <= (hidden[k] ?? s + list[k].ms) + 15_000);
+    if (a.params?.imageCount) withImage++;
+    if (i < 0) stray++; else per[i]++;
+  }
+  const caught = per.filter(c => c > 0).length;
+  const duplicates = per.reduce((s, c) => s + Math.max(0, c - 1), 0);
+  const metrics = {
+    notifications: list.length, caught, missed: list.filter((_, i) => !per[i]).map(n => n.title),
+    duplicates, perNotification: per, stray, alerts: alerts.length, quoted, withImage,
+    texts: alerts.map(a => String(a.params?.message ?? '').slice(0, 100)),
+  };
+  const notes: string[] = [];
+  if (quoted < caught) notes.push(`${caught - quoted} alerts don't quote the notification`);
+  if (caught >= list.length - 1 && duplicates <= 1 && stray <= 1) return { verdict: 'PASS', metrics, notes };
+  if (caught >= list.length / 2) return { verdict: 'PARTIAL', metrics, notes };
+  return { verdict: 'FAIL', metrics, notes };
+}
+
+const PHONE_PROMPT = [
+  "Watch continuously through my phone's rear camera, pointed at the screen of another phone.",
+  'This is a test to detect incoming pop-up notifications on the other phone.',
+  'Whenever a new notification appears on the screen, immediately capture it, read all visible text, '
+    + 'and send me a Telegram message containing the notification text and a photo of the screen. My Telegram chat_id is 123456789.',
+  'Detect all notifications, regardless of their content or language.',
+  'Do not send duplicate alerts for the same notification.',
+  'Keep monitoring continuously, including when notifications appear for only a few seconds.',
+].join('\n\n');
+
+// The $MEMORY dedupe pattern, written by hand: the model reads the banner and compares it with the
+// last one it reported, which the code saves only when it's new.
+const PHONE_AGENT = {
+  id: 'phone_notifications',
+  model_name: 'gemma-3-12b-it',
+  loop_interval_seconds: 5,
+  system_prompt: [
+    'You are watching the screen of a phone through a camera.',
+    '$CAMERA',
+    'The last notification already reported:',
+    '$MEMORY',
+    'If a notification banner is on the phone screen, write out all of its text exactly as shown.',
+    'Then, on the last line, answer with exactly one word:',
+    'NO_NOTIFICATION if there is no notification banner,',
+    'SAME_NOTIFICATION if it is the notification already reported above,',
+    'NEW_NOTIFICATION if it is a different notification.',
+  ].join('\n'),
+  code: [
+    'if (response.includes("NEW_NOTIFICATION")) {',
+    '  setMemory(response);',
+    '  notify("New notification", response.replace("NEW_NOTIFICATION", "").trim());',
+    '}',
+  ].join('\n'),
+};
+
+const EXPERIMENTS: PatternScenario[] = [
+  {
+    // The hand-written agent above, built verbatim by the MCP (the suite has no other way to start
+    // an agent with the user's token).
+    id: 'phone_notifications_memory #1',
+    demo: 'camera_phone.html',
+    prompt: 'Create and start exactly this agent, verbatim: do not change the prompt, code, model or interval, '
+      + 'and do not ask me anything.\n```json\n' + JSON.stringify(PHONE_AGENT, null, 2) + '\n```',
+    runMs: 300_000,
+    graceMs: 30_000,
+    score: run => {
+      const s = scorePhoneNotifications(run);
+      const built = run.agents.find(a => (a.system_prompt ?? '').includes('$MEMORY') && (a.code ?? '').includes('NEW_NOTIFICATION'));
+      s.metrics.verbatim = !!built && run.agents.length === 1;
+      if (!s.metrics.verbatim) s.notes.push('the MCP changed the agent');
+      return s;
+    },
+  },
+  {
+    // The request as a user wrote it: does the MCP come up with dedupe on its own?
+    id: 'phone_notifications #1',
+    demo: 'camera_phone.html',
+    prompt: PHONE_PROMPT,
+    followUp: "I can't set up Telegram right now: send them as browser notifications instead.",
+    runMs: 300_000,
+    graceMs: 30_000,
+    score: scorePhoneNotifications,
+  },
+];
+
 const stray = Object.keys(CHECKS).filter(id => !GROUND_TRUTH.some(u => u.id === id && !u.expect));
 if (stray.length) throw new Error(`checks for no ground truth use case: ${stray.join(', ')}`);
 
@@ -570,4 +671,5 @@ export const PATTERNS: PatternScenario[] = [
     return { id: u.id, demo: u.demo, prompt: prompt(u), requires: u.requires, ...check };
   }),
   ...CHAT,
+  ...EXPERIMENTS,
 ];

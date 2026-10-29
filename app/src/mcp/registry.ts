@@ -154,6 +154,9 @@ async function checkContactCodes(agentCode: string, getToken?: TokenProvider): P
   return problems.length ? `start_agent blocked by pre-flight: ${problems.join(' ')}` : null;
 }
 
+/** The iteration get_iteration last returned per agent (agent_id mode), so a repeat call waits for a newer one. */
+const lastSeenIteration = new Map<string, string>();
+
 const NOTIFY_METHODS: NotifyMethod[] = ['browser', 'system', 'email', 'whatsapp', 'sms', 'voice', 'telegram', 'discord', 'pushover'];
 
 /** How the agent code uses what kind='method' returned, spelled out so the model can't mix codes up. */
@@ -311,7 +314,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'get_iteration',
-    description: 'Get the full detail of one agent iteration, INCLUDING the screenshot/camera images it captured — use it to actually see what an agent saw. Two ways to call it: (1) pass iteration_id (from get_runs) to fetch that specific iteration, plus agent_id so historical iterations can be located; (2) pass ONLY agent_id to get that agent\'s most recent completed iteration. In mode (2), if the agent was just started and has not finished its first pass yet, this BLOCKS (polling) until the first iteration completes, then returns it — so you can call it right after start_agent to verify a crop without racing the first run. It waits up to 2 minutes; if nothing has completed by then it returns an error and you can get_status / stop_agent to investigate a stuck agent.',
+    description: 'Get the full detail of one agent iteration, INCLUDING the screenshot/camera images it captured — use it to actually see what an agent saw. Two ways to call it: (1) pass iteration_id (from get_runs) to fetch that specific iteration, plus agent_id so historical iterations can be located; (2) pass ONLY agent_id to get that agent\'s most recent completed iteration. In mode (2) this BLOCKS (polling) until there is an iteration you have not seen yet: right after start_agent it waits for the first one, and calling it again waits for the NEXT one, so two calls always give you two different moments to compare. It waits up to 2 minutes; if nothing has completed by then it returns an error and you can get_status / stop_agent to investigate a stuck agent.',
     parameters: {
       type: 'object',
       properties: {
@@ -344,7 +347,11 @@ export const TOOLS: ToolDefinition[] = [
           // agent_id only → newest settled iteration of the current session; wait for the first.
           const current = IterationStore.getIterationsForAgent(args.agent_id);
           const settled = [...current].reverse().find(isIterationSettled);
-          if (settled) return iterationToResult(settled);
+          // A repeat call waits for a newer iteration: the second look must be a later moment.
+          if (settled && settled.id !== lastSeenIteration.get(args.agent_id)) {
+            lastSeenIteration.set(args.agent_id, settled.id);
+            return iterationToResult(settled);
+          }
           // Stopped (its code called stopAgent(), or an error stopped it): the session was
           // moved to IndexedDB, so nothing new will appear in memory. Return its last iteration.
           if (!isAgentLoopRunning(args.agent_id)) {
@@ -357,6 +364,7 @@ export const TOOLS: ToolDefinition[] = [
             }
           }
           if (Date.now() >= deadline) {
+            if (settled) return { error: `Agent '${args.agent_id}' finished no new iteration in 2 min after the one you already saw (${settled.id}). Its loop_interval may be longer than that — call get_status, then stop_agent if it's wedged.` };
             return { error: `No completed iteration for agent '${args.agent_id}' after waiting 2 min. The agent may be stuck or its loop_interval may be longer than that — call get_status, then stop_agent if it's wedged.` };
           }
         }
