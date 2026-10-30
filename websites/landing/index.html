@@ -24,7 +24,25 @@
     <link rel="icon" type="image/svg+xml" href="/eye-logo-black.svg" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Static fallback for crawlers / no-JS; React replaces this on mount -->
+      <main style="max-width:720px;margin:0 auto;padding:48px 16px;font-family:system-ui,sans-serif;line-height:1.6">
+        <h1>Observer AI</h1>
+        <p>Local open-source micro-agents that observe, log and react to your digital environment. Privacy-first, running entirely on your device.</p>
+        <p>Observer AI lets you build small AI agents that watch your screen, camera or microphone and take action: send notifications, log events, or trigger automations. Use local models or Observer's hosted models.</p>
+        <ul>
+          <li><a href="https://app.observer-ai.com">Open the Observer web app</a></li>
+          <li><a href="https://github.com/Roy3838/Observer">Source code on GitHub</a></li>
+          <li><a href="/howitworks">How it works</a></li>
+        </ul>
+        <h2>Contact</h2>
+        <p>Observer AI LLC<br />
+          Founder: Roy Medina — <a href="mailto:roy@observer-ai.com">roy@observer-ai.com</a><br />
+          Support: <a href="mailto:help@observer-ai.com">help@observer-ai.com</a></p>
+        <p><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms of Service</a></p>
+        <p>© Observer AI LLC. Open source under the AGPL-3.0 license.</p>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
