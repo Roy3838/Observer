@@ -141,13 +141,13 @@ const ObserverLanding = () => {
   const eyeEdgeCompensation = (eyeSize - eyeSizeMin) / 2;
   const textOpacity = Math.max(0, (scrollProgress - 0.3) / 0.7); // Fade in after 30%
 
-  // Kick off typing once the tagline is essentially visible
+  // Kick off typing on load so product info is visible above the fold
   useEffect(() => {
-    if (hasTypedRef.current || textOpacity < 0.85) return;
+    if (hasTypedRef.current) return;
     hasTypedRef.current = true;
     typingActiveRef.current = true;
     setTypingActive(true);
-  }, [textOpacity]);
+  }, []);
 
   // Advance the typed characters
   useEffect(() => {
