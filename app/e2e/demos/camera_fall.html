@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<!-- A home camera on a living room where an older woman with a cane potters about: walks to the
+     window and back, now and then bends down to pick something up (a near miss while holding).
+     Rendered, not recorded: the room and the person are drawn on a canvas under a camera look.
+     ?outcome=success (falls): she stumbles mid-room and falls, the cane skids away, and she stays on
+     the floor. fail (lies_down): she walks to the couch, lies down on purpose and pulls a blanket
+     over. The demo triggers once she's down and still, either way.
+
+     The suite feeds this tab to Observer as the camera ($CAMERA): see fixtures.ts. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Living room - Camera</title>
+<script src="demo-contract.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas#scene { position: fixed; inset: 0; width: 100%; height: 100%; filter: saturate(.85) contrast(1.05) blur(.4px); }
+  .vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, .55) 100%); }
+  canvas.noise { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: .08; mix-blend-mode: screen; }
+  .osd { position: fixed; left: 0; right: 0; top: 0; display: flex; justify-content: space-between; padding: 18px 22px;
+         font: 600 20px/1 Menlo, "DejaVu Sans Mono", monospace; color: #fff; text-shadow: 0 0 3px #000, 0 0 1px #000; letter-spacing: .5px; }
+  .rec { color: #ff3b30; margin-left: 18px; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="vignette"></div>
+<canvas class="noise" id="noise" width="320" height="200"></canvas>
+<div class="osd"><span>LIVING ROOM</span><span><span id="ts"></span><span class="rec">● REC</span></span></div>
+<script>
+// The scene is drawn at 1280×720 and scaled to cover the window.
+const W = 1280, H = 720, FLOOR = 612, SEAT = 500;
+const cv = document.getElementById('scene'), ctx = cv.getContext('2d');
+const room = document.createElement('canvas');
+
+function fit() {
+  cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio;
+  room.width = W; room.height = H; drawRoom(room.getContext('2d'));
+}
+
+function drawRoom(c) {
+  // Back wall and floor in a slight perspective.
+  c.fillStyle = '#d9cbb3'; c.fillRect(0, 0, W, 420);
+  c.fillStyle = '#c9b89c'; c.fillRect(0, 400, W, 20);
+  c.fillStyle = '#8a6544'; c.beginPath(); c.moveTo(0, 420); c.lineTo(W, 420); c.lineTo(W, H); c.lineTo(0, H); c.fill();
+  c.strokeStyle = 'rgba(0,0,0,.12)'; c.lineWidth = 2;
+  for (let i = -12; i <= 12; i++) { c.beginPath(); c.moveTo(W / 2 + i * 60, 420); c.lineTo(W / 2 + i * 150, H); c.stroke(); }
+  // Window, with daylight.
+  c.fillStyle = '#f4f1ea'; c.fillRect(880, 90, 270, 250);
+  const sky = c.createLinearGradient(0, 100, 0, 330); sky.addColorStop(0, '#bcd8ef'); sky.addColorStop(1, '#e6eef2');
+  c.fillStyle = sky; c.fillRect(895, 105, 240, 220);
+  c.fillStyle = '#7e9a6a'; c.fillRect(895, 270, 240, 55);
+  c.fillStyle = '#f4f1ea'; c.fillRect(1010, 105, 10, 220); c.fillRect(895, 210, 240, 8);
+  c.fillStyle = '#a34e3b'; c.fillRect(860, 80, 28, 290); c.fillRect(1142, 80, 28, 290);
+  // Light on the floor from the window.
+  c.fillStyle = 'rgba(255,240,200,.12)'; c.beginPath(); c.moveTo(895, 420); c.lineTo(1135, 420); c.lineTo(1060, 700); c.lineTo(700, 700); c.fill();
+  // Framed pictures and a clock.
+  c.fillStyle = '#5b4632'; c.fillRect(170, 150, 120, 90); c.fillRect(320, 170, 80, 60);
+  c.fillStyle = '#c2b28f'; c.fillRect(180, 160, 100, 70); c.fillStyle = '#9fb3a0'; c.fillRect(330, 180, 60, 40);
+  c.fillStyle = '#f4f1ea'; c.beginPath(); c.arc(640, 150, 34, 0, 7); c.fill(); c.strokeStyle = '#5b4632'; c.lineWidth = 5; c.stroke();
+  c.lineWidth = 3; c.beginPath(); c.moveTo(640, 150); c.lineTo(640, 128); c.moveTo(640, 150); c.lineTo(656, 158); c.stroke();
+  // Rug.
+  c.fillStyle = '#7a3b3b'; c.beginPath(); c.ellipse(720, 625, 330, 62, 0, 0, 7); c.fill();
+  c.strokeStyle = '#c99a5b'; c.lineWidth = 4; c.beginPath(); c.ellipse(720, 625, 300, 52, 0, 0, 7); c.stroke();
+  // Couch on the left.
+  c.fillStyle = '#4f6b7a'; c.fillRect(90, 380, 360, 120); // back
+  c.fillStyle = '#5b7a8a'; c.fillRect(90, SEAT, 360, 70);  // seat
+  c.fillStyle = '#46606e'; c.fillRect(70, 410, 50, 170); c.fillRect(420, 410, 50, 170); // arms
+  c.fillStyle = '#2b2b2b'; c.fillRect(95, 570, 14, 30); c.fillRect(430, 570, 14, 30);
+  c.fillStyle = '#e3c98f'; c.beginPath(); c.ellipse(165, 478, 42, 26, -.3, 0, 7); c.fill(); // cushion
+  // Side table, lamp.
+  c.fillStyle = '#5b4632'; c.fillRect(500, 470, 70, 12); c.fillRect(530, 482, 10, 120);
+  c.fillStyle = '#c9a66b'; c.fillRect(527, 410, 16, 60);
+  c.fillStyle = '#efe3c4'; c.beginPath(); c.moveTo(505, 410); c.lineTo(565, 410); c.lineTo(552, 370); c.lineTo(518, 370); c.fill();
+  // Armchair on the right, plant in the corner.
+  c.fillStyle = '#8c5a3c'; c.fillRect(1150, 420, 120, 170); c.fillStyle = '#9c6a4a'; c.fillRect(1140, 500, 140, 60);
+  c.fillStyle = '#6b4a2f'; c.fillRect(30, 520, 40, 80);
+  c.fillStyle = '#4f7a46'; for (let i = 0; i < 7; i++) { c.beginPath(); c.ellipse(50 + Math.cos(i) * 18, 480 - i * 9, 14, 30, i - 3, 0, 7); c.fill(); }
+}
+
+// The person. Drawn standing with the feet at (0, 0), facing +x; `rot` tips the whole body about the
+// feet (π/2 = lying flat, head forward), `lean` bends the torso at the hips.
+const P = { x: 620, y: FLOOR, dir: 1, rot: 0, lean: 0, phase: 0, moving: false, cane: true, blanket: 0 };
+let caneOnFloor = null;
+
+function limb(c, x1, y1, x2, y2, w, color) {
+  c.strokeStyle = color; c.lineWidth = w; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+}
+
+function drawPerson(c) {
+  const swing = P.moving ? Math.sin(P.phase) * 0.35 : 0;
+  // Shadow, flattening as she goes down.
+  c.fillStyle = 'rgba(0,0,0,.25)';
+  c.beginPath(); c.ellipse(P.x + P.dir * Math.sin(P.rot) * 110, Math.max(P.y, FLOOR) + 4, 40 + Math.sin(P.rot) * 90, 9, 0, 0, 7); c.fill();
+  c.save(); c.translate(P.x, P.y); c.scale(P.dir, 1); c.rotate(P.rot);
+  const HIP = -108;
+  // Legs.
+  limb(c, -6, HIP, -6 + Math.sin(swing) * 100, 0, 17, '#3d4553');
+  limb(c, 6, HIP, 6 - Math.sin(swing) * 100, 0, 17, '#454e5e');
+  limb(c, -6 + Math.sin(swing) * 100, -2, 6 + Math.sin(swing) * 100, -2, 12, '#222');
+  limb(c, 6 - Math.sin(swing) * 100, -2, 18 - Math.sin(swing) * 100, -2, 12, '#222');
+  // Torso, head and arms lean at the hips.
+  c.translate(0, HIP); c.rotate(P.lean);
+  c.fillStyle = '#8e3a4c'; c.beginPath(); c.roundRect(-23, -96, 46, 104, 14); c.fill();
+  limb(c, -4, -84, -4 - swing * 40, -30, 13, '#7c3243'); // back arm
+  c.fillStyle = '#e8c4a8'; c.beginPath(); c.arc(0, -118, 21, 0, 7); c.fill();
+  c.fillStyle = '#d9d9d9'; c.beginPath(); c.arc(-4, -124, 21, Math.PI * 0.8, Math.PI * 2.05); c.fill();
+  c.beginPath(); c.arc(-16, -114, 10, 0, 7); c.fill(); // bun
+  // Front arm, reaching down with the cane when she has it.
+  const hand = P.cane ? [30, -20] : [10 + swing * 40, -26];
+  limb(c, 6, -84, hand[0], hand[1], 13, '#9c4357');
+  c.fillStyle = '#e8c4a8'; c.beginPath(); c.arc(hand[0], hand[1], 7, 0, 7); c.fill();
+  c.restore();
+  if (P.cane && P.rot < 0.3) {
+    // The cane goes from her hand to the floor, wherever the torso is.
+    const a = P.lean;
+    const handX = P.x + P.dir * (30 * Math.cos(a) + 20 * Math.sin(a));
+    const handY = P.y - 108 - 20 * Math.cos(a) + 30 * Math.sin(a);
+    limb(c, handX, handY, handX + P.dir * 12, FLOOR, 6, '#4a3424');
+  }
+  if (caneOnFloor) limb(c, caneOnFloor[0], caneOnFloor[1], caneOnFloor[0] + 95, caneOnFloor[1] - 6, 6, '#4a3424');
+  if (P.blanket > 0) {
+    // A knitted blanket over her legs on the couch.
+    c.globalAlpha = P.blanket; c.fillStyle = '#c9884a';
+    c.beginPath(); c.roundRect(P.x - 140, P.y - 30, 150, 46, 18); c.fill(); c.globalAlpha = 1;
+  }
+}
+
+// Motion as a queue of steps, each a function of its own progress 0..1.
+const ease = t => t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+let steps = [], cur = null, curT = 0, ending = null;
+const walkTo = x => ({ dur: Math.abs(x - P.x || 1) * 18, init() { this.from = P.x; this.to = x; P.dir = x > P.x ? 1 : -1; P.moving = true; },
+  run(t) { P.x = this.from + (this.to - this.from) * t; P.phase += 0.09; }, done() { P.moving = false; } });
+const wait = ms => ({ dur: ms, run() {} });
+const tween = (dur, fn, done) => ({ dur, init() { this.s = { ...P }; }, run(t) { fn(ease(t), this.s); }, done });
+
+function patrol() {
+  // Pottering about: to the window, a look outside, back, sometimes bending to pick something up.
+  steps.push(walkTo(980 + Math.random() * 40), wait(3000 + Math.random() * 3000), walkTo(600 + Math.random() * 60), wait(1500));
+  if (Math.random() < 0.5) steps.push(
+    { dur: 1, run() {}, done() { demo.mark('bends_down'); } },
+    tween(900, (t, s) => { P.lean = 0.9 * t; }), wait(1500), tween(900, (t) => { P.lean = 0.9 * (1 - t); }));
+}
+
+function fall() {
+  steps.push(walkTo(760),
+    // Catches a foot: a stagger forward, then down.
+    tween(350, (t, s) => { P.lean = 0.45 * t; P.x = s.x + P.dir * 25 * t; }),
+    { dur: 1, run() {}, done() { P.cane = false; caneOnFloor = [P.x + P.dir * 140 - (P.dir < 0 ? 95 : 0), FLOOR + 30]; } },
+    tween(550, (t, s) => { P.rot = (Math.PI / 2) * t; P.lean = 0.45 * (1 - t); P.y = FLOOR - 21 * t; P.x = s.x + P.dir * 20 * t; }),
+    wait(1500), { dur: 1, run() {}, done() { demo.trigger(); } });
+}
+
+function liesDown() {
+  steps.push(walkTo(440), wait(800),
+    // Leans the cane on the couch arm and lies down slowly, head on the cushion.
+    { dur: 1, run() {}, done() { P.cane = false; caneOnFloor = [455, 520]; } },
+    tween(2600, (t, s) => { P.rot = (Math.PI / 2) * t; P.x = s.x - 20 * t; P.y = FLOOR + (SEAT - 22 - FLOOR) * t; }),
+    tween(1200, t => { P.blanket = t; }),
+    wait(2000), { dur: 1, run() {}, done() { demo.trigger(); } });
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(100, now - last); last = now;
+  if (!cur) {
+    // Once started, the ending runs after the current round of pottering; after it, she stays put.
+    if (!steps.length && ending !== 'done') { if (ending) { ending(); ending = 'done'; } else patrol(); }
+    cur = steps.shift(); curT = 0; cur?.init?.call(cur);
+  }
+  if (cur) {
+    curT += dt; const t = Math.min(1, curT / cur.dur); cur.run.call(cur, t);
+    if (t >= 1) { cur.done?.call(cur); cur = null; }
+  }
+  const s = Math.max(cv.width / W, cv.height / H);
+  ctx.setTransform(s, 0, 0, s, (cv.width - W * s) / 2, (cv.height - H * s) / 2);
+  ctx.drawImage(room, 0, 0);
+  drawPerson(ctx);
+  requestAnimationFrame(frame);
+}
+
+demo.onStart = durationMs => {
+  // She finishes what she's doing, then it ends the way ?outcome= says.
+  setTimeout(() => { ending = demo.outcome === 'success' ? fall : liesDown; }, durationMs);
+};
+
+addEventListener('resize', fit); fit(); requestAnimationFrame(frame);
+
+// Timestamp and sensor noise, as on the recorded cameras.
+const tick = () => { document.getElementById('ts').textContent = new Date().toISOString().slice(0, 19).replace('T', ' '); };
+tick(); setInterval(tick, 1000);
+const nv = document.getElementById('noise'), nx = nv.getContext('2d'), img = nx.createImageData(nv.width, nv.height);
+(function noise() {
+  for (let i = 0; i < img.data.length; i += 4) { const v = Math.random() * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+  nx.putImageData(img, 0, 0); setTimeout(noise, 80);
+})();
+</script>
+</body>
+</html>

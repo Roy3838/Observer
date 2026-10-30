@@ -74,7 +74,7 @@ export const GROUND_TRUTH: UseCase[] = [
 
   // "No appointments available" at every office, reloaded every ~15 s.
   // still_full: nothing opens during the run.
-  { id: 'dmv_slot', demo: 'dmv_appointments.html', when: 'an appointment opens up at the DMV', then: NOTIFY,
+  { id: 'dmv_slot', demo: 'dmv_appointments.html', when: 'an appointment is available', then: NOTIFY,
     outcomes: { slot_opens: 'success', still_full: 'fail' }, expect: { slot_opens: 'notify', still_full: 'silent' },
     show: { title: 'DMV', channel: 'whatsapp', alert: 'A DMV appointment just opened up. Book it now!' } },
 
@@ -88,6 +88,14 @@ export const GROUND_TRUTH: UseCase[] = [
     outcomes: { my_turn: 'success', sold_out: 'fail' }, expect: { my_turn: 'either', sold_out: 'notify' } },
   // Two alerts from one request: out of the queue, then 2 minutes left on the ticket hold.
   { id: 'ticketmaster_two_alerts', demo: 'ticketmaster_queue.html?outcome=success&timer=200', when: "I'm out of the Ticketmaster queue, and again when I have 2 minutes left to pick my tickets", then: NOTIFY },
+
+  // Rendered, not recorded: she potters about and bends down to pick things up while holding.
+  // lies_down: she lies down on the couch on purpose and pulls a blanket over.
+  { id: 'fall', demo: 'camera_fall.html', when: 'someone falls in my living room', then: NOTIFY,
+    outcomes: { falls: 'success', lies_down: 'fail' }, expect: { falls: 'notify', lies_down: 'silent' },
+    show: { title: 'Home camera', channel: 'call', alert: "Grandma fell in the living room and hasn't gotten up." } },
+  { id: 'fall_grandma', demo: 'camera_fall.html', when: 'my grandma falls', then: NOTIFY,
+    outcomes: { falls: 'success', lies_down: 'fail' }, expect: { falls: 'notify', lies_down: 'silent' } },
 
   // Premiere Pro exporting a sequence.
   { id: 'render_fails', demo: 'fake_render.html', when: 'my overnight render fails', then: NOTIFY, expect: IF_FAILS,
@@ -109,6 +117,14 @@ export const GROUND_TRUTH: UseCase[] = [
     outcomes: GMAIL, expect: { dana_replies: 'either', bounced: 'notify', invoice_overdue: 'silent', lead: 'silent' } },
   { id: 'gmail_invoice', demo: 'gmail_inbox.html', when: 'I get an email about an overdue invoice', then: NOTIFY,
     outcomes: GMAIL, expect: { dana_replies: 'silent', bounced: 'silent', invoice_overdue: 'notify', lead: 'silent' } },
+
+  // Behind a login, reloaded every ~20 s. Partway through, a slot LATER than the current appointment
+  // opens: not an earlier one. logged_out: the session expires and the page asks to sign in again.
+  { id: 'visa_slot', demo: 'visa_portal.html', when: 'an earlier appointment opens up', then: NOTIFY,
+    outcomes: { slot_opens: 'success', still_full: 'fail', logged_out: 'expired' }, expect: { slot_opens: 'notify', still_full: 'silent', logged_out: 'either' },
+    show: { title: 'Visa appointment', channel: 'call', alert: 'An earlier visa appointment opened: Nov 20. Reschedule now!' } },
+  { id: 'visa_logged_out', demo: 'visa_portal.html', when: 'I get logged out of the visa portal', then: NOTIFY,
+    outcomes: { slot_opens: 'success', still_full: 'fail', logged_out: 'expired' }, expect: { slot_opens: 'silent', still_full: 'silent', logged_out: 'notify' } },
 
   // Airbnb's own messages (payouts, review reminders) keep arriving and aren't guests.
   { id: 'airbnb_guest', demo: 'airbnb_inbox.html', when: 'a guest messages me on Airbnb', then: NOTIFY,
@@ -201,8 +217,9 @@ export const GROUND_TRUTH: UseCase[] = [
   { id: 'distracted', demo: 'focus_session.html', when: 'I get distracted', then: NOTIFY,
     outcomes: { social: 'success', work_video: 'video', focused: 'fail' }, expect: { social: 'notify', work_video: 'either', focused: 'silent' },
     show: { title: 'Focus', channel: 'whatsapp', alert: 'You drifted to X. Back to work?' } },
+  // No work_video ending: YouTube is arguably social media, so neither answer would be wrong.
   { id: 'social_media', demo: 'focus_session.html', when: 'I go on social media', then: NOTIFY,
-    outcomes: { social: 'success', work_video: 'video', focused: 'fail' }, expect: { social: 'notify', work_video: 'silent', focused: 'silent' } },
+    outcomes: { social: 'success', focused: 'fail' }, expect: { social: 'notify', focused: 'silent' } },
   { id: 'opens_youtube', demo: 'focus_session.html', when: 'I open YouTube', then: NOTIFY,
     outcomes: { social: 'success', work_video: 'video', focused: 'fail' }, expect: { social: 'silent', work_video: 'notify', focused: 'silent' } },
 
@@ -247,6 +264,13 @@ export const GROUND_TRUTH: UseCase[] = [
   { id: 'tyrogue_or_disconnect', demo: 'pokemon_battle.html', when: 'Cloned Tyrogue spawns or I get disconnected', then: NOTIFY,
     outcomes: { cloned: 'success', disconnected: 'fail' }, expect: { cloned: 'notify', disconnected: 'notify' } },
 
+  // A party invite and a "queue times are longer than usual" notice pop up first; neither is the match.
+  { id: 'valorant_match', demo: 'valorant_queue.html', when: 'my Valorant match is found', then: NOTIFY,
+    outcomes: { match_found: 'success', queue_error: 'fail' }, expect: { match_found: 'notify', queue_error: 'either' },
+    show: { title: 'Valorant', channel: 'call', alert: 'Match found! Agent select is starting.' } },
+  { id: 'valorant_kicked', demo: 'valorant_queue.html', when: 'I get kicked out of the Valorant queue', then: NOTIFY,
+    outcomes: { match_found: 'success', queue_error: 'fail' }, expect: { match_found: 'silent', queue_error: 'notify' } },
+
   // Waiting for an event rather than a job. Group messages keep arriving the whole time.
   // carlos_messages: Carlos messages instead of Maria.
   { id: 'whatsapp_maria', demo: 'whatsapp_web.html', when: 'Maria replies to me on WhatsApp', then: NOTIFY,
@@ -271,6 +295,14 @@ export const GROUND_TRUTH: UseCase[] = [
   // Each error stays on screen for several iterations: logged once each.
   { id: 'terminal_errors', demo: 'terminal_errors.html', when: "there's an error in my terminal", then: 'log it',
     show: { title: 'Terminal', alert: 'Logged: TypeError in checkout.ts.' } },
+
+  // A news app's banner ad rotates every 10 s while the feed scrolls; the Acme ad gets one slot.
+  // acme_ad_missing: it never shows, so the 5-minute notification is the only thing to do.
+  { id: 'acme_ad', demo: 'ad_banner.html', when: 'the Acme ad shows up in my app',
+    then: "save an image of it to memory, and if it hasn't shown up after 5 minutes, send me a browser notification",
+    show: { title: 'Ad check', alert: 'Saved: the Acme banner ad, seen at 9:43.' } },
+  { id: 'acme_ad_missing', demo: 'ad_banner.html?outcome=fail', when: 'the Acme ad shows up in my app',
+    then: "save an image of it to memory, and if it hasn't shown up after 5 minutes, send me a browser notification" },
 
   // The new orders, not today's total.
   { id: 'shopify_count', demo: 'shopify_orders.html', when: 'a new Shopify order comes in', then: 'keep count of it',

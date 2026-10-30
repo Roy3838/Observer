@@ -9,9 +9,11 @@ Each alert scenario is a demo page, a When / Then pair, one of the demo's outcom
 | Phase | What happens | Verdict |
 |---|---|---|
 | SETUP | The demo holds in progress; the MCP gets the prompt once | `NO_AGENT` if no agent is running when the MCP's turn ends (it asked a question, errored…); `ASKED_USER_INFO`; `SETUP_TIMEOUT` (15 min) |
-| PRE | The job keeps going for a random 2–6 min | any notification → `FALSE_POSITIVE` |
+| PRE | The job keeps going for a random 2–6 min | every notification is recorded; none ends the test |
 | TRIGGER | The demo ends and reports the instant the end state is on screen | |
-| WINDOW | notify: within 60 s → `PASS`, else `MISSED`; silent: quiet for 3 min → `PASS`, else `FALSE_POSITIVE`; either: `PASS` after 60 s | |
+| WINDOW | notify: within 60 s → right, else `MISSED`; silent: quiet for 3 min → right, else `FALSE_POSITIVE`; either: right after 60 s. Ends at the first notification after the trigger | |
+
+"Right" is `PASS` if nothing fired before the trigger (one shot) and `PARTIAL` if the agent fired early but behaved correctly from the trigger on. `PARTIAL` still passes the Playwright test; the summary counts one-shot and partial separately.
 
 A notification is any user-facing agent-code tool (`notify`, `sendTelegram`, `call`, `sound`, …), caught by the app's logger in `src/mcp/e2e.ts`. Failed sends count too.
 
@@ -28,6 +30,7 @@ caffeinate -dimsu pnpm e2e # unattended on a Mac: no sleep (keep it on power, li
 - The browser runs headed: Chrome only lets the focused Observer tab share a screen, and the demo is captured in a background tab, selected by its title.
 - The profile in `e2e/.profile` keeps the login and the on-device model cache (OneJev downloads once).
 - Results: `e2e/results/<run>/results.jsonl` (one line per scenario) and a transcript of each MCP conversation. HTML report in `e2e/report/`.
+- `E2E_MODEL_CHOICE` answers the MCP's local-vs-cloud question (`ask_user_info` kind `model`): `cloud` (default), `local` (downloads the model, which can take 10+ minutes), or `ask` (leave it unanswered, so the scenario ends as `ASKED_USER_INFO`).
 - Timing knobs (ms): `E2E_SETUP_MS`, `E2E_PRE_MIN_MS`, `E2E_PRE_MAX_MS`, `E2E_WINDOW_MS`, `E2E_QUIET_MS`. For a quick try: `E2E_PRE_MIN_MS=30000 E2E_PRE_MAX_MS=60000 E2E_QUIET_MS=60000 pnpm e2e`.
 
 ## Adding a demo

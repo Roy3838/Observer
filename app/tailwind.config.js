@@ -26,10 +26,20 @@ export default {
           '0%, 100%': { transform: 'scale(1)' },
           '50%': { transform: 'scale(1.25)' },
         },
+        // The ask_user_info sheet: backdrop fade, card rise, drawn check mark.
+        'sheet-fade': { from: { opacity: '0' }, to: { opacity: '1' } },
+        'sheet-in': {
+          from: { opacity: '0', transform: 'translateY(12px) scale(0.98)' },
+          to: { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
+        'check-draw': { to: { strokeDashoffset: '0' } },
       },
       animation: {
         nudge: 'nudge 1.1s ease-in-out infinite',
         'nudge-soft': 'nudge-soft 1.1s ease-in-out infinite',
+        'sheet-fade': 'sheet-fade 200ms ease-out',
+        'sheet-in': 'sheet-in 260ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'check-draw': 'check-draw 450ms 150ms ease-out forwards',
       },
       colors: {
         // Observer teal-blue (#327e9c @ 500) replaces Tailwind's purple app-wide

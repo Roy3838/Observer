@@ -47,6 +47,17 @@ import type { Decision } from '../localLlm/systemOne';
 import { getAgentImageMemory } from '../agent_database';
 import { recordingManager } from '../recordingManager';
 
+/**
+ * The send* tools take `screen`, `camera`, `images` (already arrays) or any mix of them:
+ * `[screen]`, `[screen, camera]`, `[images, camera]`, a bare string. The APIs only accept a
+ * flat string list, so flatten, and dedupe so `[images, camera]` doesn't send the camera twice.
+ */
+const flattenMedia = (media: unknown): string[] | undefined => {
+  if (media == null) return undefined;
+  const list = [media].flat(Infinity).filter((m): m is string => typeof m === 'string' && m.length > 0);
+  return list.length ? [...new Set(list)] : undefined;
+};
+
 // Helper function to extract error messages properly
 function extractErrorMessage(error: any): string {
   if (typeof error === 'string') return error;
@@ -308,6 +319,8 @@ export async function executeJavaScript(
       // --- UPDATED FUNCTIONS ---
 
       sendSms: async (number: string, message: string, images?: string[], videos?: string[]) => {
+        images = flattenMedia(images);
+        videos = flattenMedia(videos);
         try {
           if (!getToken) throw new Error("Authentication context not available for sendSms.");
 
@@ -331,6 +344,8 @@ export async function executeJavaScript(
       },
 
       sendWhatsapp: async (number: string, message: string, images?: string[], videos?: string[]) => {
+        images = flattenMedia(images);
+        videos = flattenMedia(videos);
         try {
           if (!getToken) throw new Error("Authentication context not available for sendWhatsapp.");
 
@@ -354,6 +369,8 @@ export async function executeJavaScript(
       },
 
       sendEmail: async (emailAddress: string, message: string, images?: string[], videos?: string[]) => {
+        images = flattenMedia(images);
+        videos = flattenMedia(videos);
         try {
           if (!getToken) throw new Error("Authentication context not available for sendEmail.");
 
@@ -377,6 +394,8 @@ export async function executeJavaScript(
       },
 
       sendPushover: async (userKey: string, message: string, images?: string[], title?: string, videos?: string[]) => {
+        images = flattenMedia(images);
+        videos = flattenMedia(videos);
         try {
           if (!getToken) {
               throw new Error("Authentication context not available for sendPushover.");
@@ -404,6 +423,8 @@ export async function executeJavaScript(
       },
 
       sendDiscord: async (webhookUrl: string, message: string, images?: string[], videos?: string[]) => {
+        images = flattenMedia(images);
+        videos = flattenMedia(videos);
         try {
           await utils.sendDiscord(message, webhookUrl, images, videos);
           Logger.info(agentId, `Discord notification sent${images && images.length > 0 ? ` with ${images.length} images` : ''}${videos && videos.length > 0 ? ` and ${videos.length} videos` : ''}`, {
@@ -422,6 +443,8 @@ export async function executeJavaScript(
       },
 
       sendTelegram: async (chatId: string, message: string, images?: string[], videos?: string[]) => {
+        images = flattenMedia(images);
+        videos = flattenMedia(videos);
         try {
           await utils.sendTelegram(message, chatId, images, videos);
           Logger.info(agentId, `Telegram message sent to ${chatId}${images && images.length > 0 ? ` with ${images.length} images` : ''}${videos && videos.length > 0 ? ` and ${videos.length} videos` : ''}`, {

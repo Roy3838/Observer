@@ -108,7 +108,7 @@ EPOCHS = <span class="n">20</span>
 torch.<span class="f">save</span>(model.<span class="f">state_dict</span>(), <span class="s">'/content/drive/MyDrive/checkpoints/resnet50_cifar100.pt'</span>)
 <span class="b">print</span>(<span class="s">"Training complete."</span>)</div>
         <div class="out" id="epochs"></div>
-        <div class="tqdm" id="tqdm"><span id="tq-l">Epoch 7/20:  12%</span><span class="bar"><b id="tq-bar"></b></span><span id="tq-r"></span></div>
+        <div class="tqdm" id="tqdm"><span id="tq-l">Epoch 10/20:  12%</span><span class="bar"><b id="tq-bar"></b></span><span id="tq-r"></span></div>
         <div id="end"></div>
       </div>
     </div>
@@ -130,7 +130,7 @@ torch.<span class="f">save</span>(model.<span class="f">state_dict</span>(), <sp
   const fmt = s => { s = Math.max(0, Math.round(s)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
   const fmtLong = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}m ${s % 60}s`; };
 
-  let p = 6.12; // epochs done, fractional
+  let p = 9.12; // epochs done, fractional; past 9 so the output is full and the bar never moves
   let run = null; // { from, at, durationMs, to }
   let shownDone = -1;
 
@@ -151,8 +151,8 @@ torch.<span class="f">save</span>(model.<span class="f">state_dict</span>(), <sp
 
   const tick = () => {
     if (!run) {
-      // Holding: epochs keep finishing, creeping from 6 toward 12 of 20.
-      p = 12 - 5.88 * Math.exp(-(Date.now() - loadedAt) / 1200_000);
+      // Holding: epochs keep finishing, creeping from 9 toward 14 of 20.
+      p = 14 - 4.88 * Math.exp(-(Date.now() - loadedAt) / 1200_000);
     } else {
       const f = Math.min((Date.now() - run.at) / run.durationMs, 1);
       p = run.from + (run.to - run.from) * f;

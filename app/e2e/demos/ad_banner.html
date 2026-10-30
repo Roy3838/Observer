@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<!-- A news-reader app with a banner ad that rotates every 10 s while the feed scrolls on its own,
+     like the app whose owners argue about whether their ad ever shows. The Acme ad is in the
+     rotation once, for one slot.
+     ?outcome=success: the Acme ad shows durationMs in, for one 10 s slot (?slot= changes it).
+     fail (never_shows): it never shows; the demo still triggers at durationMs so the run ends. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Daily Brief</title>
+<script src="demo-contract.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; display: grid; place-items: center;
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: #e9ebef; color: #1b1d22; }
+  .phone { width: 400px; height: 760px; border-radius: 44px; background: #fff; border: 10px solid #15161a;
+    display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+  .status { display: flex; justify-content: space-between; padding: 10px 24px 4px; font-size: 13px; font-weight: 600; }
+  header { padding: 6px 20px 10px; border-bottom: 1px solid #eee; display: flex; align-items: baseline; gap: 10px; }
+  header b { font: 800 24px/1 Georgia, serif; letter-spacing: -.5px; }
+  header span { color: #888; font-size: 12px; }
+  .tabs { display: flex; gap: 16px; padding: 8px 20px; font-size: 13px; color: #777; border-bottom: 1px solid #eee; }
+  .tabs .on { color: #1b1d22; font-weight: 700; border-bottom: 2px solid #c8102e; }
+  .feed { flex: 1; overflow: hidden; position: relative; }
+  .track { transition: transform 1.2s ease; }
+  .story { display: flex; gap: 12px; padding: 14px 20px; border-bottom: 1px solid #f0f0f0; height: 118px; }
+  .story .thumb { flex: 0 0 86px; height: 86px; border-radius: 10px; }
+  .story .k { font-size: 11px; font-weight: 700; color: #c8102e; text-transform: uppercase; letter-spacing: .4px; }
+  .story h3 { margin: 2px 0 4px; font: 700 15px/1.3 Georgia, serif; }
+  .story p { margin: 0; font-size: 12px; color: #777; }
+  .ad { height: 92px; border-top: 1px solid #ddd; position: relative; }
+  .ad .tag { position: absolute; top: 4px; right: 8px; font-size: 10px; color: rgba(0,0,0,.45); background: rgba(255,255,255,.7);
+    padding: 0 4px; border-radius: 3px; z-index: 1; }
+  .banner { height: 100%; display: flex; align-items: center; gap: 14px; padding: 0 18px; }
+  .banner .logo { flex: 0 0 52px; height: 52px; border-radius: 12px; display: grid; place-items: center; font-weight: 900; font-size: 22px; }
+  .banner .t { font-weight: 800; font-size: 16px; line-height: 1.2; }
+  .banner .s { font-size: 12px; opacity: .85; }
+  .banner .cta { margin-left: auto; padding: 8px 12px; border-radius: 18px; font-weight: 700; font-size: 12px; white-space: nowrap; }
+  nav { display: flex; justify-content: space-around; padding: 10px 0 18px; border-top: 1px solid #eee; font-size: 11px; color: #888; }
+  nav .on { color: #c8102e; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="status"><span id="clock">9:41</span><span>5G ▮▮▮ 82%</span></div>
+  <header><b>Daily Brief</b><span id="date"></span></header>
+  <div class="tabs"><span class="on">Top</span><span>Business</span><span>Tech</span><span>Sports</span><span>Local</span></div>
+  <div class="feed"><div class="track" id="track"></div></div>
+  <div class="ad"><span class="tag">Ad ⓘ</span><div id="banner"></div></div>
+  <nav><span class="on">Home</span><span>Following</span><span>Search</span><span>Saved</span><span>Profile</span></nav>
+</div>
+<script>
+  const params = new URLSearchParams(location.search);
+  const SLOT_MS = Number(params.get('slot')) || 10000;
+
+  const STORIES = [
+    ['World', 'Ceasefire talks resume as envoys meet in Geneva', '2h ago · 4 min read', '#5b7db1'],
+    ['Business', 'Regional banks rally as rate fears ease', '3h ago · 3 min read', '#8c6d46'],
+    ['Tech', 'The quiet return of the headphone jack', '3h ago · 6 min read', '#3d3d4e'],
+    ['Local', 'City council approves new bike lanes downtown', '4h ago · 2 min read', '#5a9a6e'],
+    ['Sports', 'Late goal sends United into the semifinals', '5h ago · 3 min read', '#b44b4b'],
+    ['Science', 'Webb telescope spots water on a distant exoplanet', '5h ago · 5 min read', '#2d3f6b'],
+    ['Food', 'Why everyone is suddenly baking sourdough again', '6h ago · 4 min read', '#c9a15b'],
+    ['Markets', 'Oil slips as inventories rise for a third week', '6h ago · 2 min read', '#6b6b6b'],
+    ['Health', 'Short walks after meals may help blood sugar', '7h ago · 3 min read', '#4f9aa8'],
+    ['Travel', 'The best off-season islands in Europe', '8h ago · 7 min read', '#3f8fc4'],
+  ];
+
+  const ADS = [
+    { name: 'Northwind Coffee', bg: '#2f1d14', fg: '#f6e7d4', logo: ['N', '#f6e7d4', '#2f1d14'], t: 'Fresh roasts, delivered weekly', s: 'First bag free with any plan', cta: ['Try it', '#f6e7d4', '#2f1d14'] },
+    { name: 'Zephyr Mobile', bg: '#6a2cf5', fg: '#fff', logo: ['Z', '#fff', '#6a2cf5'], t: 'Unlimited 5G for $25/mo', s: 'Bring your number. No contract.', cta: ['Switch', '#fff', '#6a2cf5'] },
+    { name: 'Brightline Insurance', bg: '#e9f3ff', fg: '#0b3a6e', logo: ['B', '#0b3a6e', '#fff'], t: 'Save up to $600 on car insurance', s: 'Get a quote in 2 minutes', cta: ['Get quote', '#0b3a6e', '#fff'] },
+    { name: 'Pinecrest Hotels', bg: '#1f4d3a', fg: '#fff', logo: ['P', '#fff', '#1f4d3a'], t: 'Members save 20% this fall', s: 'Book direct for the best rate', cta: ['Book now', '#f2c14e', '#1f4d3a'] },
+    { name: 'Kettle & Co', bg: '#fff4e5', fg: '#7a3e00', logo: ['K', '#7a3e00', '#fff4e5'], t: 'Small-batch kettle chips', s: 'Now at your local grocer', cta: ['Find a store', '#7a3e00', '#fff'] },
+  ];
+  const ACME = { name: 'Acme', bg: '#d7261e', fg: '#fff', logo: ['A', '#d7261e', '#ffd84a'], t: 'ACME — Anvils, rockets & more', s: 'Fall sale: 30% off everything', cta: ['Shop Acme', '#ffd84a', '#d7261e'] };
+
+  const track = document.getElementById('track');
+  track.innerHTML = [...STORIES, ...STORIES].map(([k, h, p, c]) =>
+    `<div class="story"><div class="thumb" style="background:${c}"></div><div><div class="k">${k}</div><h3>${h}</h3><p>${p}</p></div></div>`).join('');
+
+  const banner = document.getElementById('banner');
+  const showAd = a => {
+    banner.innerHTML = `<div class="banner" style="background:${a.bg};color:${a.fg}">
+      <div class="logo" style="background:${a.logo[2]};color:${a.logo[1]};border:2px solid ${a.logo[1]}">${a.logo[0]}</div>
+      <div><div class="t">${a.t}</div><div class="s">${a.s}</div></div>
+      <div class="cta" style="background:${a.cta[1]};color:${a.cta[2]}">${a.cta[0]}</div></div>`;
+  };
+
+  // The feed scrolls one story and the ad rotates every slot, as in the real app.
+  let ad = 0, scroll = 0, acmeDue = false, acmeShown = false;
+  const tick = () => {
+    scroll = (scroll + 1) % STORIES.length;
+    track.style.transform = `translateY(-${scroll * 118}px)`;
+    if (acmeDue && !acmeShown) {
+      acmeShown = true;
+      showAd(ACME);
+      demo.mark('acme');
+      demo.trigger();
+      setTimeout(() => demo.mark('acme_gone'), SLOT_MS);
+      return;
+    }
+    ad = (ad + 1) % ADS.length;
+    showAd(ADS[ad]);
+  };
+  showAd(ADS[0]);
+  setInterval(tick, SLOT_MS);
+
+  const now = new Date();
+  document.getElementById('date').textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  const clock = () => document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M/, '');
+  clock(); setInterval(clock, 10000);
+
+  demo.truth = { outcome: demo.outcome, slotMs: SLOT_MS, ads: ADS.map(a => a.name) };
+  demo.onStart = durationMs => {
+    setTimeout(() => {
+      if (demo.outcome === 'success') acmeDue = true; // shows on the next rotation
+      else demo.trigger();
+    }, durationMs);
+  };
+</script>
+</body>
+</html>

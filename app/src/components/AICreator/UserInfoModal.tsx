@@ -1,618 +1,548 @@
 // src/components/AICreator/UserInfoModal.tsx
 //
-// The guided prompt the `ask_user_info` MCP tool blocks on. Instead of the builder asking
-// "what's your Discord webhook?" in chat and hoping the user knows how to find one, this
-// walks them through actually obtaining the value, then hands it back to the run.
+// The modal the `ask_user_info` MCP tool blocks on: everything only the user can give, in one
+// sheet with one look.
 //
-// For phones there is nothing to type: the user's 4-word code for the channel is shown as a
-// QR (texted by SMS, or sent on WhatsApp), and the tool only returns once that code is connected, which is what lets `ask_user_info`
-// replace a separate `check_whitelist` call. Observer never sends to raw phone numbers.
+//   screen / camera — a button that opens the share picker / camera permission. That click is
+//                     the user gesture Safari requires (an MCP tool call never is one), and it
+//                     brings the user back to Observer before the picker opens.
+//   method          — how the agent tells the user. A channel the user already has working
+//                     resolves silently with no sheet at all; otherwise the sheet sets it up
+//                     (QR for phone/Telegram, permission for browser, a field for the rest) and
+//                     only returns once it works. The MCP never handles codes itself.
+//   model           — local or cloud.
 //
-// Values are remembered (SensorSettings.getNotificationContact) so a returning user gets a
-// prefilled field and a one-click confirm rather than re-hunting a webhook URL.
+// Observer never sends to raw phone numbers: phone channels resolve to the user's 4-word code.
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import ReactDOM from 'react-dom';
 import {
-  Phone, Mail, Send, Hash, Bell, Check, Pencil, X,
-  CheckCircle2, Loader, RefreshCw, XCircle, KeyRound, MessageSquare,
-  Cpu, Cloud, HardDrive,
+  Bell, Mail, Hash, Phone, MessageSquare, Monitor, MonitorUp, Camera, Cloud, HardDrive,
+  ChevronLeft, Loader2, RefreshCw, X, ArrowRight,
 } from 'lucide-react';
-import { FaWhatsapp } from 'react-icons/fa';
-import Modal from '@components/EditAgent/Modal';
+import { FaWhatsapp, FaTelegramPlane } from 'react-icons/fa';
 import WhitelistQR from '@components/whitelist/WhitelistQR';
 import TelegramQR from '@components/whitelist/TelegramQR';
-import {
-  useWhitelistPolling, useTelegramStatus, checkNumber,
-} from '@components/whitelist/shared';
+import { useWhitelistPolling, useTelegramStatus, checkNumber } from '@components/whitelist/shared';
 import { useAuth } from '@contexts/AuthContext';
 import { SensorSettings } from '@utils/settings';
-import * as toolUtils from '@utils/handlers/utils';
-import type { UserInfoKind, UserInfoRequest, UserInfoResponse } from '../../mcp/types';
+import { isDesktop } from '@utils/platform';
+import { captureScreen, captureCamera } from '../../mcp/capture';
+import { fetchStatus } from '../../mcp/remote';
+import type { NotifyMethod, UserInfoRequest, UserInfoResponse } from '../../mcp/types';
 import type { PhoneChannel } from '@utils/whitelistCode';
-import {
-  CONTACT_LABEL,
-  CONTACT_PLACEHOLDER,
-  contactError,
-  contactValid,
-  normalizeContact,
-} from '@utils/contactInfo';
-
-/** The channel to actually test send through — defaults to WhatsApp when unspecified. */
-const CHANNEL_TEST_LABEL: Record<'sms' | 'voice' | 'whatsapp', string> = {
-  whatsapp: 'Test WhatsApp',
-  sms: 'Test SMS',
-  voice: 'Test call',
-};
+import { CONTACT_LABEL, CONTACT_PLACEHOLDER, contactError, contactValid, normalizeContact } from '@utils/contactInfo';
 
 interface UserInfoModalProps {
   req: UserInfoRequest;
   onResolve: (requestId: string, response: UserInfoResponse) => void;
 }
 
-const KIND_ICON: Record<UserInfoKind, React.ReactNode> = {
-  phone: <Phone className="h-5 w-5" />,
-  email: <Mail className="h-5 w-5" />,
-  telegram: <Send className="h-5 w-5" />,
-  discord: <Hash className="h-5 w-5" />,
-  pushover: <Bell className="h-5 w-5" />,
+type ContactMethod = 'discord' | 'pushover';
+type PhoneMethod = 'whatsapp' | 'sms' | 'voice';
+const isPhone = (m: NotifyMethod): m is PhoneMethod => m === 'whatsapp' || m === 'sms' || m === 'voice';
+
+const METHODS: Record<NotifyMethod, { label: string; hint: string; icon: React.ReactNode }> = {
+  browser: { label: 'Browser', hint: 'Notification in this browser', icon: <Bell className="h-5 w-5" /> },
+  system: { label: 'System', hint: 'Notification on this computer', icon: <Monitor className="h-5 w-5" /> },
+  whatsapp: { label: 'WhatsApp', hint: 'Message to your phone', icon: <FaWhatsapp className="h-5 w-5" /> },
+  sms: { label: 'SMS', hint: 'Text to your phone', icon: <MessageSquare className="h-5 w-5" /> },
+  voice: { label: 'Call', hint: 'Phone call that reads it out', icon: <Phone className="h-5 w-5" /> },
+  telegram: { label: 'Telegram', hint: 'Message from the Observer bot', icon: <FaTelegramPlane className="h-5 w-5" /> },
+  email: { label: 'Email', hint: 'To your inbox', icon: <Mail className="h-5 w-5" /> },
+  discord: { label: 'Discord', hint: 'Post to a channel', icon: <Hash className="h-5 w-5" /> },
+  pushover: { label: 'Pushover', hint: 'Push to the Pushover app', icon: <Bell className="h-5 w-5" /> },
 };
 
-const KIND_TITLE: Record<UserInfoKind, string> = {
-  phone: 'Set up notifications',
-  email: 'Confirm your email',
-  telegram: 'Connect Telegram',
-  discord: 'Connect Discord',
-  pushover: 'Connect Pushover',
-};
+// ---- Shell --------------------------------------------------------------------------------
 
-const CHANNEL_TITLE: Record<string, string> = {
-  sms: 'Set up SMS',
-  voice: 'Set up phone calls',
-  whatsapp: 'Set up WhatsApp',
-};
-
-/** One numbered step in the guided setup lists. */
-const Step: React.FC<{ n: number; children: React.ReactNode }> = ({ n, children }) => (
-  <li className="flex gap-2.5">
-    <span className="flex-shrink-0 flex items-center justify-center h-5 w-5 rounded-full bg-purple-100 text-purple-700 text-xs font-bold">
-      {n}
-    </span>
-    <span className="text-sm text-gray-700 leading-5">{children}</span>
-  </li>
-);
-
-/**
- * Phone setup: one big SMS or WhatsApp QR for the user's code, no typing. Purpose-built for the
- * modal's roomy layout rather than reusing WhitelistInline's compact chat-pill chrome (that
- * component is check_whitelist's inline gate).
- */
-const GoldenPathPanel: React.FC<{
-  code: string;
-  channel?: UserInfoRequest['channel'];
-  getToken: () => Promise<string | undefined>;
-  onWhitelisted: () => void;
-}> = ({ code, channel, getToken, onWhitelisted }) => {
-  const { allWhitelisted } = useWhitelistPolling([{ number: code, isWhitelisted: false }], getToken, channel, true);
-  const [countdown, setCountdown] = useState(3);
-
-  useEffect(() => { if (allWhitelisted) onWhitelisted(); }, [allWhitelisted, onWhitelisted]);
-
-  // Visible 3…2…1… tick matching the parent's 3s auto-close timer.
+/** The one card every kind uses: centered on desktop, a bottom sheet on phones. */
+const Sheet: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+  onBack?: () => void;
+  children: React.ReactNode;
+}> = ({ icon, title, subtitle, onClose, onBack, children }) => {
   useEffect(() => {
-    if (!allWhitelisted) return;
-    setCountdown(3);
-    const interval = setInterval(() => setCountdown(c => Math.max(c - 1, 0)), 1000);
-    return () => clearInterval(interval);
-  }, [allWhitelisted]);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
-  if (allWhitelisted) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-6 text-green-700">
-        <CheckCircle2 className="h-8 w-8" />
-        <p className="text-sm font-medium">You're all set — phone connected.</p>
-        <p className="text-xs text-gray-400 tabular-nums">Continuing in {countdown}…</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col items-center gap-4 py-2">
-      <WhitelistQR code={code} channel={SensorSettings.pairingChannelFor(code, channel)} />
-
-      <div className="flex items-center gap-1.5 text-[11px] text-purple-600">
-        <Loader className="h-3 w-3 animate-spin" />
-        <span>Waiting — this continues automatically.</span>
-      </div>
-    </div>
-  );
-};
-
-/**
- * For a call, which pairing to show: either one covers calls, so the user picks. Each side
- * has its own persisted code (see SensorSettings.ensurePhoneCode).
- */
-const PairingToggle: React.FC<{ value: PhoneChannel; onChange: (c: PhoneChannel) => void }> = ({ value, onChange }) => {
-  const option = (c: PhoneChannel, label: string, icon: React.ReactNode) => (
-    <button
-      onClick={() => onChange(c)}
-      aria-pressed={value === c}
-      className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-medium transition-colors ${
-        value === c ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-      }`}
+  return ReactDOM.createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-zinc-950/30 backdrop-blur-[2px] animate-sheet-fade"
+      onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      {icon}{label}
-    </button>
-  );
-  return (
-    <div className="flex justify-center">
-      <div className="inline-flex p-1 rounded-full bg-gray-100">
-        {option('whatsapp', 'WhatsApp', <FaWhatsapp className="h-3.5 w-3.5" />)}
-        {option('sms', 'SMS', <MessageSquare className="h-3.5 w-3.5" />)}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="relative w-full sm:max-w-md sm:mx-4 max-h-[92vh] overflow-y-auto rounded-t-[28px] sm:rounded-[28px] bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-[0_24px_80px_-16px_rgba(0,0,0,0.35)] ring-1 ring-black/5 dark:ring-white/10 animate-sheet-in"
+        onMouseDown={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 pt-5">
+          {onBack ? (
+            <IconButton label="Back" onClick={onBack}><ChevronLeft className="h-4 w-4" /></IconButton>
+          ) : <span className="h-8 w-8" />}
+          <IconButton label="Close" onClick={onClose}><X className="h-4 w-4" /></IconButton>
+        </div>
+        <div className="px-7 pb-7 -mt-2 flex flex-col items-center text-center">
+          <div className="flex items-center justify-center h-12 w-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100">
+            {icon}
+          </div>
+          <h2 className="mt-4 text-[19px] font-semibold tracking-tight">{title}</h2>
+          {subtitle && <p className="mt-1.5 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400 max-w-xs">{subtitle}</p>}
+          <div className="mt-6 w-full">{children}</div>
+        </div>
       </div>
+    </div>,
+    document.getElementById('modal-root') ?? document.body,
+  );
+};
+
+const IconButton: React.FC<{ label: string; onClick: () => void; children: React.ReactNode }> = ({ label, onClick, children }) => (
+  <button
+    onClick={onClick}
+    aria-label={label}
+    className="flex items-center justify-center h-8 w-8 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+  >
+    {children}
+  </button>
+);
+
+const PrimaryButton: React.FC<{ onClick: () => void; disabled?: boolean; busy?: boolean; children: React.ReactNode }> = ({ onClick, disabled, busy, children }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled || busy}
+    className="w-full inline-flex items-center justify-center gap-2 h-11 rounded-full bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+  >
+    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : children}
+  </button>
+);
+
+const TextButton: React.FC<{ onClick: () => void; children: React.ReactNode }> = ({ onClick, children }) => (
+  <button
+    onClick={onClick}
+    className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+  >
+    {children}
+  </button>
+);
+
+const Waiting: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="flex items-center justify-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+    <span className="relative flex h-2 w-2">
+      <span className="absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-60 animate-ping" />
+      <span className="relative inline-flex h-2 w-2 rounded-full bg-purple-500" />
+    </span>
+    {children}
+  </div>
+);
+
+const Spinner: React.FC<{ label: string }> = ({ label }) => (
+  <div className="flex flex-col items-center gap-3 py-6 text-sm text-zinc-500 dark:text-zinc-400">
+    <Loader2 className="h-5 w-5 animate-spin" />
+    {label}
+  </div>
+);
+
+/** Drawn check mark, then `onFinish` after a beat: nothing is left to decide. */
+const Done: React.FC<{ label: string; onFinish: () => void }> = ({ label, onFinish }) => {
+  const finish = useRef(onFinish);
+  finish.current = onFinish;
+  useEffect(() => {
+    const t = setTimeout(() => finish.current(), 1200);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div className="flex flex-col items-center gap-3 py-4">
+      <svg viewBox="0 0 52 52" className="h-14 w-14">
+        <circle cx="26" cy="26" r="24" className="fill-emerald-500/10 stroke-emerald-500" strokeWidth="2" />
+        <path d="M15 27 l7 7 l15 -16" fill="none" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"
+          className="stroke-emerald-500 animate-check-draw" style={{ strokeDasharray: 40, strokeDashoffset: 40 }} />
+      </svg>
+      <p className="text-sm font-medium">{label}</p>
     </div>
   );
 };
 
+/** A small pill in the corner while a saved connection is checked: usually it's all the user sees. */
+const CheckingPill: React.FC<{ label: string }> = ({ label }) => ReactDOM.createPortal(
+  <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-4 h-9 rounded-full bg-white dark:bg-zinc-900 text-xs font-medium text-zinc-600 dark:text-zinc-300 shadow-lg ring-1 ring-black/5 dark:ring-white/10 animate-sheet-in">
+    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+    {label}
+  </div>,
+  document.getElementById('modal-root') ?? document.body,
+);
+
+// ---- screen / camera ------------------------------------------------------------------------
+
+const CaptureModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
+  const camera = req.kind === 'camera';
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Called straight from the click, before any await, so the browser sees a user gesture.
+  const share = () => {
+    setBusy(true);
+    setError(null);
+    (camera ? captureCamera() : captureScreen()).then(result => {
+      setBusy(false);
+      if (result.error) setError(camera ? 'The camera is blocked. Allow it in the address bar, then try again.' : 'Nothing was shared. Pick a tab, window or screen to continue.');
+      else onResolve(req.requestId, { value: '', capture: result });
+    });
+  };
+
+  return (
+    <Sheet
+      icon={camera ? <Camera className="h-6 w-6" /> : <MonitorUp className="h-6 w-6" />}
+      title={camera ? 'Turn on your camera' : 'Share what I should watch'}
+      subtitle={req.reason ?? (camera
+        ? 'Observer looks at your camera to build the agent. Frames stay on this device unless you pick a cloud model.'
+        : 'Pick the tab, window or screen in the browser picker. I\'ll look at it once to set things up.')}
+      onClose={() => onResolve(req.requestId, { value: '', skipped: true })}
+    >
+      <PrimaryButton onClick={share} busy={busy}>
+        {camera ? 'Turn on camera' : 'Share screen'} <ArrowRight className="h-4 w-4" />
+      </PrimaryButton>
+      {error && <p className="mt-3 text-xs text-red-500">{error}</p>}
+    </Sheet>
+  );
+};
+
+// ---- method ---------------------------------------------------------------------------------
+
 /**
- * Golden path for Telegram, mirroring the phone one: the bot deep link carries the user's
- * Telegram code (`/start <code>`), which pairs the chat with it server-side. The code is then
- * what agent code passes as sendTelegram's chat_id, and the chat can also talk to the MCP.
- * No sign-in needed: the Telegram code is its own credential.
+ * The value for `method` if it already works, without showing anything: a connected phone or
+ * Telegram code, a contact the user confirmed before, granted notification permission.
+ * null means it needs setting up.
  */
-const TelegramCodePanel: React.FC<{ onLinked: (code: string) => void }> = ({ onLinked }) => {
-  const { code, status, linked, rotate } = useTelegramStatus();
-  const [countdown, setCountdown] = useState(3);
+async function silentValue(method: NotifyMethod, getToken: () => Promise<string | undefined>): Promise<string | null> {
+  switch (method) {
+    case 'system':
+      return '';
+    case 'browser':
+      return typeof Notification === 'undefined' || Notification.permission === 'granted' ? '' : null;
+    case 'whatsapp':
+    case 'sms':
+    case 'voice': {
+      const order: PhoneChannel[] = method === 'sms' ? ['sms'] : method === 'voice' ? ['whatsapp', 'sms'] : ['whatsapp'];
+      const codes = order.map(c => SensorSettings.getPhoneCode(c)).filter((c): c is string => !!c);
+      if (codes.length === 0) return null;
+      const token = await getToken();
+      if (!token) return null;
+      for (const code of codes) {
+        if ((await checkNumber(code, token, method)).isWhitelisted) return code;
+      }
+      return null;
+    }
+    case 'telegram': {
+      const code = SensorSettings.getTelegramCode();
+      if (!code) return null;
+      const status = await fetchStatus('telegram', code).catch(() => null);
+      return status?.linked ? code : null;
+    }
+    case 'email':
+      // Always shown: the user sees which address it goes to before agreeing.
+      return null;
+    default:
+      return SensorSettings.getNotificationContact(method) || null;
+  }
+}
 
-  // Same beat as the phone panel: show "all set" with a 3…2…1… tick, then continue.
+const MethodModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
+  const { getAccessToken } = useAuth();
+  const [method, setMethod] = useState<NotifyMethod | null>(req.method ?? null);
+  // 'checking' a saved connection, 'setup' to connect one, 'done' to show the check mark.
+  const [phase, setPhase] = useState<'pick' | 'checking' | 'setup' | 'done'>(req.method ? 'checking' : 'pick');
+  const [value, setValue] = useState('');
+
+  const resolve = useCallback((m: NotifyMethod, v: string) => onResolve(req.requestId, { value: v, method: m }), [onResolve, req.requestId]);
+  const skip = () => onResolve(req.requestId, { value: '', skipped: true });
+
+  // Whenever a method is chosen, try it silently first.
   useEffect(() => {
-    if (!linked) return;
-    setCountdown(3);
-    const interval = setInterval(() => setCountdown(c => Math.max(c - 1, 0)), 1000);
-    const timer = setTimeout(() => onLinked(code), 3000);
-    return () => { clearInterval(interval); clearTimeout(timer); };
-  }, [linked, code, onLinked]);
+    if (phase !== 'checking' || !method) return;
+    let cancelled = false;
+    silentValue(method, getAccessToken).then(v => {
+      if (cancelled) return;
+      if (v !== null) resolve(method, v);
+      else setPhase('setup');
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, method]);
 
-  if (linked) {
+  const pick = (m: NotifyMethod) => {
+    // Ask for notification permission inside the click: browsers only allow it from a gesture.
+    if (m === 'browser' && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission().finally(() => { setMethod(m); setPhase('checking'); });
+      return;
+    }
+    setMethod(m);
+    setPhase('checking');
+  };
+
+  const connected = (v: string) => { setValue(v); setPhase('done'); };
+  const choosePick = () => { setMethod(null); setPhase('pick'); };
+
+  // A channel the user named, being checked: just the pill. Most returning users see nothing else.
+  if (phase === 'checking' && req.method) return <CheckingPill label={`Checking ${METHODS[req.method].label}…`} />;
+
+  const back = !req.method && phase !== 'pick' && phase !== 'done' ? () => { setMethod(null); setPhase('pick'); } : undefined;
+
+  if (phase === 'pick' || !method) {
+    const options = (Object.keys(METHODS) as NotifyMethod[]).filter(m => m !== 'system' || isDesktop());
     return (
-      <div className="flex flex-col items-center gap-2 py-6 text-green-700">
-        <CheckCircle2 className="h-8 w-8" />
-        <p className="text-sm font-medium">
-          You're all set — Telegram connected{status?.name ? ` to ${status.name}` : ''}.
-        </p>
-        <p className="text-xs text-gray-400 tabular-nums">Continuing in {countdown}…</p>
-      </div>
+      <Sheet icon={<Bell className="h-6 w-6" />} title="How should I tell you?" subtitle={req.reason ?? 'Pick where the alert goes. You can change it later.'} onClose={skip}>
+        <div className="grid grid-cols-3 gap-2">
+          {options.map(m => (
+            <button
+              key={m}
+              onClick={() => pick(m)}
+              title={METHODS[m].hint}
+              className="group flex flex-col items-center gap-2 py-4 rounded-2xl ring-1 ring-zinc-200 dark:ring-zinc-800 text-zinc-500 dark:text-zinc-400 hover:ring-zinc-900 dark:hover:ring-zinc-200 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-all"
+            >
+              {METHODS[m].icon}
+              <span className="text-xs font-medium">{METHODS[m].label}</span>
+            </button>
+          ))}
+        </div>
+      </Sheet>
     );
   }
 
+  const meta = METHODS[method];
   return (
-    <div className="flex flex-col items-center gap-4 py-2">
-      <TelegramQR code={code} />
+    <Sheet icon={meta.icon} title={phase === 'done' ? `${meta.label} is ready` : `Get alerts by ${meta.label}`} subtitle={phase === 'setup' ? req.reason : undefined} onClose={skip} onBack={back}>
+      {phase === 'checking' && <Spinner label={`Checking ${meta.label}…`} />}
+      {phase === 'done' && <Done label={`${meta.label} connected`} onFinish={() => resolve(method, value)} />}
+      {phase === 'setup' && (
+        isPhone(method) ? <PhoneSetup method={method} getToken={getAccessToken} onConnected={connected} />
+          : method === 'telegram' ? <TelegramSetup onConnected={connected} />
+            : method === 'browser' ? <BrowserSetup onConnected={() => connected('')} />
+              : method === 'email' ? <EmailSetup onConnected={connected} onOther={choosePick} />
+              : method === 'system' ? null
+                : <ContactSetup kind={method} onConnected={connected} />
+      )}
+    </Sheet>
+  );
+};
 
-      <div className="flex items-center gap-1.5 text-[11px] text-purple-600">
-        <Loader className="h-3 w-3 animate-spin" />
-        <span>Waiting — this continues automatically.</span>
+/** QR for the user's code; texting / messaging it connects the phone. Polls until it does. */
+const PhoneSetup: React.FC<{ method: PhoneMethod; getToken: () => Promise<string | undefined>; onConnected: (code: string) => void }> = ({ method, getToken, onConnected }) => {
+  const [code, setCode] = useState(() => SensorSettings.defaultPhoneCode(method));
+  const pairing = SensorSettings.pairingChannelFor(code, method);
+  const { allWhitelisted } = useWhitelistPolling([{ number: code, isWhitelisted: false }], getToken, method, true);
+
+  useEffect(() => { if (allWhitelisted) onConnected(code); }, [allWhitelisted, code, onConnected]);
+
+  return (
+    <div className="flex flex-col items-center gap-5">
+      {method === 'voice' && (
+        <Segmented
+          value={pairing}
+          onChange={c => setCode(SensorSettings.ensurePhoneCode(c))}
+          options={[['whatsapp', 'WhatsApp', <FaWhatsapp key="w" className="h-3.5 w-3.5" />], ['sms', 'SMS', <MessageSquare key="s" className="h-3.5 w-3.5" />]]}
+        />
+      )}
+      <div className="w-full rounded-3xl bg-zinc-50 dark:bg-zinc-800/50 p-5">
+        <WhitelistQR code={code} channel={pairing} />
       </div>
-      <RotateCodeButton onClick={rotate} />
+      <Waiting>Waiting for your message — this continues on its own</Waiting>
+      <TextButton onClick={() => setCode(SensorSettings.rotatePhoneCode(pairing))}>
+        <RefreshCw className="h-3 w-3" /> Can't connect? Use a new code
+      </TextButton>
     </div>
   );
 };
 
-/** Escape hatch for a code that won't pair: mint a fresh one right here instead of going to Settings. */
-const RotateCodeButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <button
-    onClick={onClick}
-    className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
-  >
-    <RefreshCw className="h-3 w-3" /> Can't connect? Generate a new code
-  </button>
-);
+const TelegramSetup: React.FC<{ onConnected: (code: string) => void }> = ({ onConnected }) => {
+  const { code, linked, rotate } = useTelegramStatus();
+  useEffect(() => { if (linked) onConnected(code); }, [linked, code, onConnected]);
+  return (
+    <div className="flex flex-col items-center gap-5">
+      <div className="w-full rounded-3xl bg-zinc-50 dark:bg-zinc-800/50 p-5">
+        <TelegramQR code={code} />
+      </div>
+      <Waiting>Waiting for Telegram — this continues on its own</Waiting>
+      <TextButton onClick={rotate}><RefreshCw className="h-3 w-3" /> Can't connect? Use a new code</TextButton>
+    </div>
+  );
+};
 
-type TestState = 'idle' | 'testing' | 'success' | 'failure';
+const BrowserSetup: React.FC<{ onConnected: () => void }> = ({ onConnected }) => {
+  const [denied, setDenied] = useState(typeof Notification !== 'undefined' && Notification.permission === 'denied');
+  const allow = () => {
+    Notification.requestPermission().then(p => (p === 'granted' ? onConnected() : setDenied(true)));
+  };
+  return (
+    <div className="flex flex-col items-center gap-4">
+      {denied ? (
+        <>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Notifications are blocked for this site. Click the icon left of the address bar, allow notifications, then continue.
+          </p>
+          <PrimaryButton onClick={allow}>I've allowed them</PrimaryButton>
+        </>
+      ) : (
+        <PrimaryButton onClick={allow}>Allow notifications <ArrowRight className="h-4 w-4" /></PrimaryButton>
+      )}
+    </div>
+  );
+};
 
 /**
- * Shown when the saved code is already connected — instead of silently reusing it, let the
- * user confirm/test it, or rotate to a new phone, before committing.
+ * The backend only sends to the signed-in user's own address, so there is nothing to type:
+ * show it, confirm it, or pick another method.
  */
-const ConfirmExistingCodePanel: React.FC<{
-  code: string;
-  channel?: UserInfoRequest['channel'];
-  getToken: () => Promise<string | undefined>;
-  onUse: () => void;
-  onRotate: () => void;
-}> = ({ code, channel, getToken, onUse, onRotate }) => {
-  const [whitelistTest, setWhitelistTest] = useState<TestState>('idle');
-  const [toolTest, setToolTest] = useState<TestState>('idle');
-  const [toolTestError, setToolTestError] = useState('');
-
-  const testChannel: 'sms' | 'voice' | 'whatsapp' = channel ?? 'whatsapp';
-
-  const testWhitelist = async () => {
-    setWhitelistTest('testing');
-    const token = await getToken();
-    if (!token) { setWhitelistTest('failure'); return; }
-    const result = await checkNumber(code, token, channel);
-    setWhitelistTest(result.isWhitelisted ? 'success' : 'failure');
-  };
-
-  const testTool = async () => {
-    setToolTest('testing');
-    setToolTestError('');
-    try {
-      const token = await getToken();
-      if (!token) throw new Error('Failed to retrieve authentication token');
-      const message = 'This is a test from Observer!';
-      if (testChannel === 'whatsapp') await toolUtils.sendWhatsapp(message, code, token);
-      else if (testChannel === 'sms') await toolUtils.sendSms(message, code, token);
-      else await toolUtils.call(message, code, token);
-      setToolTest('success');
-    } catch (err) {
-      setToolTest('failure');
-      setToolTestError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
+const EmailSetup: React.FC<{ onConnected: (value: string) => void; onOther: () => void }> = ({ onConnected, onOther }) => {
+  const { user } = useAuth();
+  const email = user?.email ?? '';
   return (
-    <div className="flex flex-col items-center gap-4 py-2">
-      <div className="flex items-center justify-center h-12 w-12 rounded-full bg-purple-100 text-purple-700">
-        <KeyRound className="h-6 w-6" />
-      </div>
-
-      <p className="text-sm text-gray-700 text-center">
-        Use the contact info of{' '}
-        <span className="font-mono font-semibold text-gray-900">{code}</span>?
-      </p>
-
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        <TestButton state={whitelistTest} label="Check connection" onClick={testWhitelist} />
-        <TestButton state={toolTest} label={CHANNEL_TEST_LABEL[testChannel]} onClick={testTool} />
-      </div>
-      {toolTest === 'failure' && toolTestError && (
-        <p className="text-xs text-red-600 text-center max-w-xs">{toolTestError}</p>
+    <div className="flex flex-col items-center gap-4">
+      {email ? (
+        <>
+          <div className="w-full flex items-center gap-3 px-4 h-12 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 ring-1 ring-zinc-200 dark:ring-zinc-800">
+            <Mail className="h-4 w-4 flex-shrink-0 text-zinc-400" />
+            <span className="text-sm font-medium truncate">{email}</span>
+          </div>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">Alerts can only go to the email on your Observer account.</p>
+          <PrimaryButton onClick={() => onConnected(email)}>Send alerts here <ArrowRight className="h-4 w-4" /></PrimaryButton>
+        </>
+      ) : (
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">Sign in to get alerts by email: they go to the address on your Observer account.</p>
       )}
-
-      <button
-        onClick={onUse}
-        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-purple-600 text-white font-medium text-sm hover:bg-purple-700 transition-colors"
-      >
-        <Check className="h-4 w-4" /> Use this
-      </button>
-
-      <div className="flex items-center gap-4 text-xs">
-        <button
-          onClick={onRotate}
-          className="inline-flex items-center gap-1 font-medium text-gray-500 hover:text-gray-700 transition-colors"
-        >
-          <RefreshCw className="h-3 w-3" /> Rotate key to a new phone
-        </button>
-      </div>
+      <TextButton onClick={onOther}><ChevronLeft className="h-3 w-3" /> Choose another method</TextButton>
     </div>
   );
 };
 
-const TestButton: React.FC<{ state: TestState; label: string; onClick: () => void }> = ({ state, label, onClick }) => (
-  <button
-    onClick={onClick}
-    disabled={state === 'testing'}
-    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-      state === 'success'
-        ? 'bg-green-100 text-green-700'
-        : state === 'failure'
-          ? 'bg-red-100 text-red-700'
-          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-    }`}
-  >
-    {state === 'testing' ? (
-      <Loader className="h-3 w-3 animate-spin" />
-    ) : state === 'success' ? (
-      <CheckCircle2 className="h-3 w-3" />
-    ) : state === 'failure' ? (
-      <XCircle className="h-3 w-3" />
-    ) : null}
-    {label}
-  </button>
-);
+const CONTACT_STEPS: Partial<Record<ContactMethod, React.ReactNode[]>> = {
+  discord: [
+    <>In Discord, open <b>Server Settings → Integrations</b>.</>,
+    <>Click <b>Webhooks → New Webhook</b>, pick a channel.</>,
+    <>Click <b>Copy Webhook URL</b> and paste it below.</>,
+  ],
+  pushover: [
+    <>Sign in at <a href="https://pushover.net" target="_blank" rel="noreferrer" className="underline">pushover.net</a>.</>,
+    <>Copy the <b>User Key</b> on your dashboard and paste it below.</>,
+  ],
+};
+
+const ContactSetup: React.FC<{ kind: ContactMethod; onConnected: (value: string) => void }> = ({ kind, onConnected }) => {
+  const [value, setValue] = useState('');
+  const [touched, setTouched] = useState(false);
+  const valid = contactValid(kind, value);
+  const error = touched ? contactError(kind, value) : null;
+
+  const confirm = () => {
+    if (!valid) { setTouched(true); return; }
+    const normalized = normalizeContact(kind, value);
+    SensorSettings.setNotificationContact(kind, normalized);
+    onConnected(normalized);
+  };
+
+  return (
+    <div className="flex flex-col gap-4 text-left">
+      {CONTACT_STEPS[kind] && (
+        <ol className="space-y-2.5">
+          {CONTACT_STEPS[kind]!.map((s, i) => (
+            <li key={i} className="flex gap-3 text-sm text-zinc-600 dark:text-zinc-300">
+              <span className="flex-shrink-0 flex items-center justify-center h-5 w-5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-[11px] font-semibold">{i + 1}</span>
+              <span>{s}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      <div>
+        <label className="block text-xs font-medium text-zinc-500 mb-1.5">{CONTACT_LABEL[kind]}</label>
+        <input
+          type="text"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onBlur={() => setTouched(true)}
+          onKeyDown={e => { if (e.key === 'Enter') confirm(); }}
+          placeholder={CONTACT_PLACEHOLDER[kind]}
+          autoFocus
+          className={`w-full h-11 px-4 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm placeholder-zinc-400 outline-none ring-1 transition-shadow ${
+            error ? 'ring-red-400' : 'ring-zinc-200 dark:ring-zinc-700 focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-200'
+          }`}
+        />
+        {error && <p className="text-xs text-red-500 mt-1.5">{error}</p>}
+      </div>
+      <PrimaryButton onClick={confirm} disabled={!value}>Use this <ArrowRight className="h-4 w-4" /></PrimaryButton>
+    </div>
+  );
+};
+
+function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: [T, string, React.ReactNode][] }) {
+  return (
+    <div className="inline-flex p-1 rounded-full bg-zinc-100 dark:bg-zinc-800">
+      {options.map(([v, label, icon]) => (
+        <button
+          key={v}
+          onClick={() => onChange(v)}
+          aria-pressed={value === v}
+          className={`inline-flex items-center gap-1.5 px-4 h-8 rounded-full text-xs font-medium transition-all ${
+            value === v ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+          }`}
+        >
+          {icon}{label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---- model ----------------------------------------------------------------------------------
 
 /** kind='model': download a local model now, or run in the cloud. Dismissing means cloud. */
-const ModelChoiceModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
-  const { requestId } = req;
+const ModelModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
   const isDecision = req.model === 'onejev';
   const localName = isDecision ? 'OneJev' : 'Qwen3.5 0.8B';
   const cloudName = isDecision ? 'clef-flash' : 'gemma-3-12b-it';
-  const choose = (value: 'local' | 'cloud') => onResolve(requestId, { value });
+  const choose = (value: 'local' | 'cloud') => onResolve(req.requestId, { value });
 
-  const option = (value: 'local' | 'cloud', icon: React.ReactNode, title: string, detail: React.ReactNode) => (
+  const option = (value: 'local' | 'cloud', icon: React.ReactNode, title: string, detail: string) => (
     <button
       onClick={() => choose(value)}
-      className="w-full flex items-start gap-3 p-4 rounded-lg border border-gray-200 text-left hover:border-purple-400 hover:bg-purple-50 transition-colors"
+      className="w-full flex items-start gap-4 p-4 rounded-2xl ring-1 ring-zinc-200 dark:ring-zinc-800 text-left hover:ring-zinc-900 dark:hover:ring-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-all"
     >
-      <span className="flex-shrink-0 mt-0.5 text-purple-600">{icon}</span>
+      <span className="flex-shrink-0 flex items-center justify-center h-9 w-9 rounded-xl bg-zinc-100 dark:bg-zinc-800">{icon}</span>
       <span className="min-w-0">
-        <span className="block text-sm font-semibold text-gray-900">{title}</span>
-        <span className="block text-xs text-gray-500 mt-0.5 leading-5">{detail}</span>
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className="block text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-5">{detail}</span>
       </span>
     </button>
   );
 
   return (
-    <Modal open onClose={() => choose('cloud')} className="w-full max-w-xl mx-4">
-      <div className="flex items-start gap-3 px-6 py-4 rounded-t-lg border-b border-gray-100">
-        <div className="flex-shrink-0 mt-0.5 flex items-center justify-center h-9 w-9 rounded-full bg-gray-100 text-gray-700">
-          <Cpu className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold leading-tight text-gray-900">Run this agent on your computer?</h2>
-          {req.reason && <p className="text-sm text-gray-500 mt-0.5">{req.reason}</p>}
-        </div>
+    <Sheet icon={<HardDrive className="h-6 w-6" />} title="Where should it run?" subtitle={req.reason} onClose={() => choose('cloud')}>
+      <div className="flex flex-col gap-2.5">
+        {option('local', <HardDrive className="h-4 w-4" />, `On this computer · ${localName}`,
+          'Private and free. About 1 GB, so the download can take 10+ minutes — you can walk away, the agent starts on its own.')}
+        {option('cloud', <Cloud className="h-4 w-4" />, `In the cloud · ${cloudName}`, 'Starts right away. Frames are sent to the cloud model.')}
       </div>
-
-      <div className="p-6 space-y-3">
-        {option('local', <HardDrive className="h-5 w-5" />, `Download ${localName} (local)`, (
-          <>Private, free, no internet needed once downloaded. About 1 GB: <span className="font-medium text-gray-700">the download may take 10+ minutes</span>. You can leave your computer; the agent starts on its own when it's ready.</>
-        ))}
-        {option('cloud', <Cloud className="h-5 w-5" />, `Use ${cloudName} (cloud)`, 'Starts right away. Screenshots are sent to the cloud model.')}
-      </div>
-    </Modal>
+    </Sheet>
   );
 };
 
-const ContactInfoModal: React.FC<{ req: UserInfoRequest & { kind: UserInfoKind }; onResolve: UserInfoModalProps['onResolve'] }> = ({ req, onResolve }) => {
-  const { user, getAccessToken } = useAuth();
-  const { kind, channel, requestId } = req;
+// ---------------------------------------------------------------------------------------------
 
-  const remembered = useMemo(() => SensorSettings.getNotificationContact(kind), [kind, requestId]);
-  // Email needs no hunting — the signed-in address is almost always the answer.
-  const initial = kind === 'email' ? (remembered || user?.email || '') : remembered;
-
-  const [value, setValue] = useState(initial);
-  // A remembered value collapses the guided steps into a one-click confirm; "Change" expands.
-  const [editing, setEditing] = useState(!initial);
-
-  const valid = contactValid(kind, value);
-  const error = editing ? contactError(kind, value) : null;
-  const needsWhitelist = kind === 'phone';
-
-  // Phone: a persisted code + SMS or WhatsApp QR, no typing. sms and whatsapp each have their
-  // own code (each pairing is its own opt-in); a call takes either, reusing one the user
-  // already has. The code is generated once and only changes when the user rotates it, so
-  // agent code that bakes it in (sendSms("tree-book-shower-golden", ...)) never goes stale:
-  // pairing is permanent, and a closed WhatsApp window is reopened by sending anything.
-  //
-  // Steps for phone: 'checking' (silently test the saved code), 'confirm' (it's connected —
-  // confirm/test/rotate instead of assuming), 'qr' (not connected yet, or just rotated).
-  const savedCodes = useMemo(() => {
-    if (kind !== 'phone') return [];
-    const order: PhoneChannel[] = channel === 'sms' ? ['sms'] : channel === 'voice' ? ['whatsapp', 'sms'] : ['whatsapp'];
-    return order.map(c => SensorSettings.getPhoneCode(c)).filter((c): c is string => !!c);
-  }, [kind, channel]);
-  const hadExistingCode = savedCodes.length > 0;
-  const [code, setCode] = useState(() => (kind === 'phone' ? SensorSettings.defaultPhoneCode(channel) : ''));
-  const [phoneStep, setPhoneStep] = useState<'checking' | 'confirm' | 'qr'>(
-    kind === 'phone' && hadExistingCode ? 'checking' : 'qr',
-  );
-  const [codeVerified, setCodeVerified] = useState(false);
-
-  // Telegram: its own persisted code via the bot's /start deep link. Nothing to type.
-  const useTelegramCode = kind === 'telegram';
-  const useCodePath = needsWhitelist && phoneStep === 'qr';
-
-  const rotateCode = () => {
-    setCode(SensorSettings.rotatePhoneCode(SensorSettings.pairingChannelFor(code, channel)));
-    setCodeVerified(false);
-    setPhoneStep('qr');
-  };
-
-  // On open, silently check the saved code(s) instead of trusting them blindly; for a call,
-  // whichever one is connected wins. If none is ready (never paired, or WhatsApp's 24h window
-  // closed), show the QR for the SAME code: sending it fixes both. Never rotate here — agents
-  // already built with this code would stop reaching the phone.
-  useEffect(() => {
-    if (phoneStep !== 'checking') return;
-    let cancelled = false;
-    (async () => {
-      const token = await getAccessToken();
-      if (!token) { if (!cancelled) setPhoneStep('qr'); return; }
-      for (const saved of savedCodes) {
-        const result = await checkNumber(saved, token, channel);
-        if (cancelled) return;
-        if (result.isWhitelisted) {
-          setCode(saved);
-          setPhoneStep('confirm');
-          return;
-        }
-      }
-      if (!cancelled) setPhoneStep('qr');
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phoneStep]);
-
-  const canConfirm = useCodePath ? codeVerified : valid;
-
-  const confirm = () => {
-    if (!canConfirm) return;
-    if (useCodePath) {
-      onResolve(requestId, { value: code });
-      return;
-    }
-    const normalized = normalizeContact(kind, value);
-    SensorSettings.setNotificationContact(kind, normalized);
-    onResolve(requestId, { value: normalized });
-  };
-
-  // Once the QR path verifies, auto-close after a beat instead of waiting on a click —
-  // there's nothing left to decide, the success state already says "you're all set".
-  useEffect(() => {
-    if (!useCodePath || !codeVerified) return;
-    const timer = setTimeout(() => onResolve(requestId, { value: code }), 3000);
-    return () => clearTimeout(timer);
-  }, [useCodePath, codeVerified, code, requestId]);
-
-  const skip = () => onResolve(requestId, { value: '', skipped: true });
-  const resolveTelegram = useCallback(
-    (telegramCode: string) => onResolve(requestId, { value: telegramCode }),
-    [onResolve, requestId],
-  );
-
-  const title = kind === 'phone' && channel ? CHANNEL_TITLE[channel] ?? KIND_TITLE.phone : KIND_TITLE[kind];
-
-  return (
-    <Modal open onClose={skip} className="w-full max-w-xl mx-4">
-      {/* Header */}
-      <div className="flex items-start gap-3 px-6 py-4 rounded-t-lg border-b border-gray-100">
-        <div className="flex-shrink-0 mt-0.5 flex items-center justify-center h-9 w-9 rounded-full bg-gray-100 text-gray-700">
-          {KIND_ICON[kind]}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold leading-tight text-gray-900">{title}</h2>
-          {req.reason && <p className="text-sm text-gray-500 mt-0.5">{req.reason}</p>}
-        </div>
-        <button
-          onClick={skip}
-          aria-label="Skip"
-          title="Skip — I'll do this later"
-          className="flex-shrink-0 p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-
-      <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-        {/* Silently re-verify a previously-saved code before trusting it. */}
-        {needsWhitelist && phoneStep === 'checking' && (
-          <div className="flex flex-col items-center gap-3 py-8 text-gray-500">
-            <Loader className="h-6 w-6 animate-spin text-purple-600" />
-            <p className="text-sm">Checking existing key…</p>
-          </div>
-        )}
-
-        {/* Returning user: confirm/test/rotate the already-persisted code instead of assuming it. */}
-        {needsWhitelist && phoneStep === 'confirm' && (
-          <ConfirmExistingCodePanel
-            code={code}
-            channel={channel}
-            getToken={getAccessToken}
-            onUse={() => onResolve(requestId, { value: code })}
-            onRotate={rotateCode}
-          />
-        )}
-
-        {useTelegramCode && (
-          <TelegramCodePanel onLinked={resolveTelegram} />
-        )}
-
-        {/* Phone: one big SMS or WhatsApp QR + code, no typing required. */}
-        {/* A call takes either pairing, so let the user pick; sms/whatsapp are fixed. */}
-        {useCodePath && !codeVerified && channel === 'voice' && (
-          <PairingToggle
-            value={SensorSettings.pairingChannelFor(code, channel)}
-            onChange={c => setCode(SensorSettings.ensurePhoneCode(c))}
-          />
-        )}
-
-        {useCodePath && (
-          <GoldenPathPanel
-            code={code}
-            channel={channel}
-            getToken={getAccessToken}
-            onWhitelisted={() => setCodeVerified(true)}
-          />
-        )}
-        {useCodePath && !codeVerified && (
-          <div className="flex justify-center">
-            <RotateCodeButton onClick={rotateCode} />
-          </div>
-        )}
-
-        {!needsWhitelist && !useTelegramCode && (
-        <>
-        {/* Remembered value — one-click confirm instead of retyping. */}
-        {!editing && (
-          <div className="flex items-center gap-3 p-3 rounded-lg border border-purple-200 bg-purple-50">
-            <Check className="h-4 w-4 text-purple-600 flex-shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="text-xs text-gray-500">{CONTACT_LABEL[kind]}</p>
-              <p className="text-sm font-mono text-gray-900 truncate">{value}</p>
-            </div>
-            <button
-              onClick={() => setEditing(true)}
-              className="flex-shrink-0 inline-flex items-center gap-1 text-xs font-medium text-purple-700 hover:text-purple-900 transition-colors"
-            >
-              <Pencil className="h-3 w-3" /> Change
-            </button>
-          </div>
-        )}
-
-        {editing && (
-          <>
-            {/* Guided steps — the part that makes this worth a modal. */}
-            {kind === 'discord' && (
-              <ol className="space-y-2.5">
-                <Step n={1}>In Discord, open <span className="font-medium">Server Settings → Integrations</span>.</Step>
-                <Step n={2}>Click <span className="font-medium">Webhooks → New Webhook</span>.</Step>
-                <Step n={3}>Pick the channel you want alerts in, then <span className="font-medium">Copy Webhook URL</span>.</Step>
-                <Step n={4}>Paste it below.</Step>
-              </ol>
-            )}
-
-            {kind === 'pushover' && (
-              <ol className="space-y-2.5">
-                <Step n={1}>
-                  Open{' '}
-                  <a href="https://pushover.net" target="_blank" rel="noreferrer" className="text-purple-700 underline">
-                    pushover.net
-                  </a>{' '}
-                  and sign in.
-                </Step>
-                <Step n={2}>Copy the <span className="font-medium">User Key</span> shown on your dashboard.</Step>
-              </ol>
-            )}
-
-            {/* Input */}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">{CONTACT_LABEL[kind]}</label>
-              <input
-                type={kind === 'email' ? 'email' : 'text'}
-                value={value}
-                onChange={e => setValue(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && canConfirm) confirm(); }}
-                placeholder={CONTACT_PLACEHOLDER[kind]}
-                autoFocus
-                className={`w-full px-3 py-2.5 border rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none transition-colors ${
-                  error ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-purple-500'
-                }`}
-              />
-              {error && <p className="text-xs text-red-600 mt-1.5">{error}</p>}
-            </div>
-          </>
-        )}
-
-        </>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="flex items-center justify-between gap-3 px-6 py-4 bg-gray-50 rounded-b-lg border-t border-gray-200">
-        <button onClick={skip} className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
-          Skip for now
-        </button>
-        {phoneStep !== 'confirm' && !useTelegramCode && (
-          <button
-            onClick={confirm}
-            disabled={!canConfirm}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-purple-600 text-white font-medium text-sm hover:bg-purple-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {useCodePath && !codeVerified ? 'Waiting for your phone…' : 'Confirm'}
-            {canConfirm && <Check className="h-4 w-4" />}
-          </button>
-        )}
-      </div>
-    </Modal>
-  );
+const UserInfoModal: React.FC<UserInfoModalProps> = props => {
+  switch (props.req.kind) {
+    case 'screen':
+    case 'camera':
+      return <CaptureModal {...props} />;
+    case 'model':
+      return <ModelModal {...props} />;
+    default:
+      return <MethodModal {...props} />;
+  }
 };
-
-const UserInfoModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) =>
-  req.kind === 'model'
-    ? <ModelChoiceModal req={req} onResolve={onResolve} />
-    : <ContactInfoModal req={{ ...req, kind: req.kind }} onResolve={onResolve} />;
 
 export default UserInfoModal;

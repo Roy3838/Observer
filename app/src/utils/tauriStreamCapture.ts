@@ -1,4 +1,5 @@
 import { invoke, Channel } from '@tauri-apps/api/core';
+import { mockCameraStreams } from './browserStreamCapture';
 import { isTauri, isDesktop } from './platform';
 import { Logger } from '@utils/logging';
 import { decodeBase64PCM, PCM_SAMPLE_RATE } from './audio/pcmUtils';
@@ -241,7 +242,9 @@ class TauriStreamCapture {
       requestAnimationFrame(draw);
     };
     requestAnimationFrame(draw);
-    return canvas.captureStream(15);
+    const stream = canvas.captureStream(15);
+    mockCameraStreams.add(stream);
+    return stream;
   }
 
   private async _acquireMasterStreamImpl(type: MasterStreamType): Promise<void> {

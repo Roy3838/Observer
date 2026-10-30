@@ -2,11 +2,16 @@
 //
 //   SETUP    demo holds in progress; the MCP gets the prompt once and must leave an agent
 //            running (no follow-up questions: anything else is NO_AGENT / ASKED_USER_INFO)
-//   PRE      the job keeps going for a random 2–6 min; any notification → FALSE_POSITIVE
+//   PRE      the job keeps going for a random 2–6 min; every notification is recorded, none ends the
+//            test (an agent that fires early may fix itself, and we want to see whether it did)
 //   TRIGGER  the demo ends (one of its outcomes) and reports the instant it's on screen
-//   WINDOW   expect notify: a notification within 60 s → PASS, none → MISSED
-//            expect silent: silent for 3 min → PASS, any → FALSE_POSITIVE
-//            expect either: PASS after 60 s, notified or not
+//   WINDOW   expect notify: a notification within 60 s → right, none → MISSED
+//            expect silent: silent for 3 min → right, any → FALSE_POSITIVE
+//            expect either: right after 60 s, notified or not
+//            The test ends on the first notification at or after the trigger.
+//
+// "Right" is PASS when nothing fired before the trigger (one shot) and PARTIAL when the agent
+// fired early but behaved correctly from the trigger on. PARTIAL still passes the Playwright test.
 //
 // Which model, tools or notification channel the MCP picks is never checked.
 
@@ -25,7 +30,7 @@ const QUIET_MS = env('E2E_QUIET_MS', 3 * 60_000);
 
 const RESULTS_DIR = `${E2E_DIR}results/${process.env.E2E_RUN_ID}`;
 
-type Verdict = 'PASS' | 'MISSED' | 'FALSE_POSITIVE' | 'NO_AGENT' | 'ASKED_USER_INFO' | 'SETUP_TIMEOUT' | 'DEMO_BROKEN';
+type Verdict = 'PASS' | 'PARTIAL' | 'MISSED' | 'FALSE_POSITIVE' | 'NO_AGENT' | 'ASKED_USER_INFO' | 'SETUP_TIMEOUT' | 'DEMO_BROKEN';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -37,14 +42,16 @@ async function waitUntil(cond: () => boolean, timeoutMs: number): Promise<boolea
 
 function judge(s: Scenario, events: SuiteEvent[]): { verdict: Verdict; latencyMs?: number } {
   const trigger = events.find(e => e.type === 'trigger');
-  const notes = events.filter(e => e.type === 'notification');
-  if (notes.some(n => !trigger || n.t < trigger.t)) return { verdict: 'FALSE_POSITIVE' };
   if (!trigger) return { verdict: 'DEMO_BROKEN' };
-  const first = notes[0];
+  const notes = events.filter(e => e.type === 'notification');
+  const early = notes.filter(n => n.t < trigger.t);
+  const first = notes.find(n => n.t >= trigger.t);
   const latencyMs = first ? first.t - trigger.t : undefined;
-  if (s.expect === 'silent') return { verdict: first ? 'FALSE_POSITIVE' : 'PASS' };
-  if (s.expect === 'either') return { verdict: 'PASS', latencyMs };
-  if (first && first.t - trigger.t <= WINDOW_MS) return { verdict: 'PASS', latencyMs };
+  // Right from the trigger on: one shot if nothing fired before it, partial if the agent fired early.
+  const right = early.length ? 'PARTIAL' : 'PASS';
+  if (s.expect === 'silent') return { verdict: first ? 'FALSE_POSITIVE' : right };
+  if (s.expect === 'either') return { verdict: right, latencyMs };
+  if (first && latencyMs! <= WINDOW_MS) return { verdict: right, latencyMs };
   return { verdict: 'MISSED' };
 }
 
@@ -93,17 +100,18 @@ for (const s of SCENARIOS) {
       if (!verdict && agents.length === 0) verdict = 'NO_AGENT';
 
       if (!verdict) {
-        // PRE: the job keeps going, then ends. Bail out early if the agent fires first.
+        // PRE: the job keeps going, then ends. Early notifications are recorded, not acted on.
         preMs = PRE_MIN_MS + Math.round(Math.random() * (PRE_MAX_MS - PRE_MIN_MS));
         await demo.evaluate(ms => (window as any).demo.start(ms), preMs);
-        await waitUntil(() => has('trigger') || has('notification'), preMs + 30_000);
+        await waitUntil(() => has('trigger'), preMs + 30_000);
 
-        // WINDOW: wait out the window (or quiet period) from the trigger, unless already decided.
+        // WINDOW: wait out the window (or quiet period) from the trigger, ending at the first
+        // notification that arrives after it. `either` keeps watching the window, so a late
+        // notification still gets a latency.
         const trigger = events.find(e => e.type === 'trigger');
-        if (trigger && !has('notification')) {
-          // `either` keeps watching the window, so a late notification still gets a latency.
+        if (trigger) {
           const waitMs = s.expect === 'silent' ? QUIET_MS : WINDOW_MS;
-          await waitUntil(() => has('notification'), trigger.t + waitMs - Date.now());
+          await waitUntil(() => events.some(e => e.type === 'notification' && e.t >= trigger.t), trigger.t + waitMs - Date.now());
         }
         ({ verdict, latencyMs } = judge(s, events));
       }
@@ -122,6 +130,8 @@ for (const s of SCENARIOS) {
         latencyMs,
         setupMs: Date.now() - setupStart,
         preMs,
+        // Notifications before the trigger: what makes a right ending PARTIAL instead of PASS.
+        early: trigger ? events.filter(e => e.type === 'notification' && e.t < trigger.t).length : null,
         agents,
         mcpReply,
         // Times relative to the trigger (negative = before the job ended).
@@ -148,9 +158,9 @@ for (const s of SCENARIOS) {
       });
       fs.writeFileSync(`${base}.agents.json`, JSON.stringify(agentReport.map(a => ({ ...a, lastImage: a.lastImage ? '(saved as png)' : undefined, iterations: a.iterations.map(it => ({ ...it, image: it.image ? '(saved as png)' : undefined })) })), null, 2));
       await testInfo.attach('result.json', { body: JSON.stringify({ ...result, transcript }, null, 2), contentType: 'application/json' });
-      console.log(`${s.id}: ${result.verdict}${latencyMs !== undefined ? ` (${Math.round(latencyMs / 1000)} s after trigger)` : ''}`);
+      console.log(`${s.id}: ${result.verdict}${latencyMs !== undefined ? ` (${Math.round(latencyMs / 1000)} s after trigger)` : ''}${result.early ? ` [${result.early} early]` : ''}`);
     }
 
-    expect(verdict, `MCP replied: ${mcpReply}`).toBe('PASS');
+    expect(verdict ?? 'ERROR', `MCP replied: ${mcpReply}`).toMatch(/^(PASS|PARTIAL)$/);
   });
 }

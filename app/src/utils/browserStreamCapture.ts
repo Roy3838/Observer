@@ -5,6 +5,9 @@
 
 import { Logger } from './logging';
 
+/** Placeholder streams used when camera access is denied, so capture_camera can tell the user. */
+export const mockCameraStreams = new WeakSet<MediaStream>();
+
 export type MasterStreamType = 'display' | 'camera' | 'microphone' | 'screenAudio';
 
 export interface BrowserCaptureStreams {
@@ -130,7 +133,9 @@ class BrowserStreamCapture {
     };
 
     this.mockCameraAnimationId = requestAnimationFrame(draw);
-    return canvas.captureStream(15);
+    const stream = canvas.captureStream(15);
+    mockCameraStreams.add(stream);
+    return stream;
   }
 
   /**

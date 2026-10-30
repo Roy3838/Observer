@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- A phone's rear camera pointed at another phone's screen: heads-up notifications pop in and
+     out. Simulated, not recorded: the phone is HTML under a camera look
+     (blur, noise, vignette, a hand that isn't quite still).
+
+     Each banner is marked when it shows (`notification`, {index}) and when it hides
+     (`notification_hidden`); demo.truth.notifications lists them with the words that identify
+     each in an alert. What it tests is dedupe: some stay up for several agent loops, two come
+     from the same app back to back, one is up for only ~4 s. -->
+<script src="demo-contract.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1b1712; }
+  body { display: grid; place-items: center; font-family: Roboto, 'Segoe UI', Arial, sans-serif; }
+
+  /* The desk and the room light the camera sees around the phone. */
+  .scene { position: absolute; inset: 0; background:
+      radial-gradient(ellipse at 30% 20%, rgba(255, 214, 160, 0.18), transparent 60%),
+      repeating-linear-gradient(95deg, #3b2c1f 0 14px, #34271b 14px 31px, #3f2f21 31px 40px);
+    filter: blur(2px) brightness(0.8); }
+
+  .rig { position: relative; animation: handheld 7s ease-in-out infinite; filter: blur(0.6px) saturate(0.9) contrast(0.95); }
+  @keyframes handheld {
+    0%, 100% { transform: perspective(1400px) rotateX(9deg) rotateZ(-3deg) translate(0, 0); }
+    30% { transform: perspective(1400px) rotateX(8deg) rotateZ(-2.4deg) translate(4px, -3px); }
+    65% { transform: perspective(1400px) rotateX(10deg) rotateZ(-3.5deg) translate(-3px, 2px); }
+  }
+
+  .phone { width: 360px; height: 740px; border-radius: 46px; background: #0b0b0d; padding: 12px;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6), inset 0 0 0 2px #2a2a2e; }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 36px; overflow: hidden;
+    background: linear-gradient(160deg, #234e70 0%, #3d2f6b 55%, #6b3b5c 100%); color: #fff; }
+  .punch { position: absolute; top: 12px; left: 50%; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: #000; z-index: 5; }
+  .status { position: absolute; top: 8px; left: 22px; right: 22px; display: flex; justify-content: space-between; font-size: 13px; font-weight: 500; z-index: 4; }
+  .clock { position: absolute; top: 90px; width: 100%; text-align: center; font-size: 84px; font-weight: 300; letter-spacing: -2px; }
+  .date { position: absolute; top: 196px; width: 100%; text-align: center; font-size: 16px; opacity: 0.85; }
+  .dock { position: absolute; bottom: 36px; left: 0; right: 0; display: flex; justify-content: space-around; padding: 0 30px; }
+  .dock i { width: 52px; height: 52px; border-radius: 50%; display: block; }
+
+  /* The heads-up banner. */
+  .heads { position: absolute; top: 34px; left: 10px; right: 10px; padding: 12px 14px; border-radius: 22px;
+    background: #f3eff7; color: #1d1b20; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); z-index: 6;
+    transform: translateY(-140%); transition: transform 0.35s cubic-bezier(.2, .8, .2, 1); }
+  .heads.show { transform: translateY(0); }
+  .heads .top { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #49454f; }
+  .heads .icon { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; color: #fff; font-weight: 700; }
+  .heads .title { margin-top: 6px; font-size: 15px; font-weight: 600; }
+  .heads .body { margin-top: 2px; font-size: 14px; line-height: 1.35; color: #322f37; }
+
+  /* What makes it a camera: moiré from the screen's pixels, glare, vignette, sensor noise, a REC tag. */
+  .moire { position: absolute; inset: 0; pointer-events: none; z-index: 8; opacity: 0.07; mix-blend-mode: overlay;
+    background: repeating-linear-gradient(33deg, #fff 0 1px, transparent 1px 3px), repeating-linear-gradient(-28deg, #000 0 1px, transparent 1px 4px); }
+  .glare { position: absolute; inset: 0; z-index: 8; pointer-events: none; border-radius: 36px;
+    background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.13) 45%, transparent 58%); }
+  .vignette { position: fixed; inset: 0; pointer-events: none; z-index: 20; background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.6) 100%); }
+  canvas.noise { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 21; opacity: 0.09; mix-blend-mode: screen; }
+  .hud { position: fixed; top: 18px; left: 22px; z-index: 22; font: 600 14px/1 ui-monospace, Menlo, monospace; color: #fff; text-shadow: 0 1px 2px #000; }
+  .hud b { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #e53935; margin-right: 6px; animation: blink 1.2s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .hud.right { left: auto; right: 22px; }
+</style>
+</head>
+<body>
+<div class="scene"></div>
+<div class="rig">
+  <div class="phone"><div class="screen">
+    <div class="punch"></div>
+    <div class="status"><span id="sbClock">9:41</span><span>5G ▮▮▮ 78%</span></div>
+    <div class="clock" id="clock">9:41</div>
+    <div class="date" id="date">Thursday, 29 October</div>
+    <div class="dock"><i style="background:#25d366"></i><i style="background:#1a73e8"></i><i style="background:#ea4335"></i><i style="background:#fbbc04"></i></div>
+    <div class="heads" id="heads">
+      <div class="top"><span class="icon" id="hIcon"></span><span id="hApp"></span><span>• now</span></div>
+      <div class="title" id="hTitle"></div>
+      <div class="body" id="hBody"></div>
+    </div>
+    <div class="moire"></div>
+    <div class="glare"></div>
+  </div></div>
+</div>
+<div class="vignette"></div>
+<canvas class="noise" id="noise" width="320" height="200"></canvas>
+<div class="hud"><b></b>REAR CAM · 1080p</div>
+<div class="hud right" id="hudTime"></div>
+
+<script>
+// What pops up, in order. `ms` is how long the banner stays; `keys` are what identify it in an
+// alert's text (any one is enough).
+const NOTIFICATIONS = [
+  { app: 'Messages', color: '#1a73e8', title: 'Alex', body: 'Are you coming to dinner tonight? Running 10 min late', ms: 7000,
+    keys: ['dinner', 'alex', '10 min late'] },
+  { app: 'Messages', color: '#1a73e8', title: 'Acme Bank', body: 'Your verification code is 482913. Do not share it with anyone.', ms: 6000,
+    keys: ['482913', 'verification code', 'acme'] },
+  // Up for a long time: several loops see the same banner.
+  { app: 'Gmail', color: '#ea4335', title: 'Jordan Lee', body: 'Q3 report — final numbers attached, please review before Friday', ms: 22000,
+    keys: ['q3 report', 'jordan', 'final numbers'] },
+  // Two from the same app, back to back: the second is new, not a duplicate.
+  { app: 'WhatsApp', color: '#25d366', title: 'Sam', body: 'The game starts at 8, see you there', ms: 6000,
+    keys: ['game', 'starts at 8', 'see you there'] },
+  { app: 'WhatsApp', color: '#25d366', title: 'Sam', body: "Don't forget the tickets!", ms: 6000,
+    keys: ['tickets', 'forget'] },
+  // Only ~4 s: easy to miss between loops.
+  { app: 'Food Delivery', color: '#00c2e8', title: 'Your order is on its way 🛵', body: 'Your courier will arrive in 12 minutes', ms: 4000,
+    keys: ['on its way', 'courier', '12 min'] },
+  { app: 'Weather', color: '#f57c00', title: 'Rain expected', body: 'Light rain starting around 6 PM. Bring an umbrella.', ms: 9000,
+    keys: ['rain', 'umbrella', '6 pm'] },
+  { app: 'Calendar', color: '#fbbc04', title: 'Dentist appointment', body: 'Tomorrow at 10:30 · Main St Clinic', ms: 15000,
+    keys: ['dentist', 'main st', '10:30'] },
+];
+
+demo.truth = { notifications: NOTIFICATIONS.map(({ app, title, body, ms, keys }) => ({ app, title, body, ms, keys })) };
+
+const $ = id => document.getElementById(id);
+const heads = $('heads');
+
+function tick() {
+  const d = new Date();
+  const hm = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  $('clock').textContent = hm; $('sbClock').textContent = hm;
+  $('date').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  $('hudTime').textContent = d.toLocaleTimeString('en-GB');
+}
+tick(); setInterval(tick, 1000);
+
+// Sensor noise.
+const cv = $('noise'), cx = cv.getContext('2d'), img = cx.createImageData(cv.width, cv.height);
+(function noise() {
+  for (let i = 0; i < img.data.length; i += 4) { const v = Math.random() * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+  cx.putImageData(img, 0, 0);
+  setTimeout(noise, 80);
+})();
+
+function show(n, i) {
+  $('hIcon').style.background = n.color; $('hIcon').textContent = n.app[0];
+  $('hApp').textContent = n.app; $('hTitle').textContent = n.title; $('hBody').textContent = n.body;
+  heads.classList.add('show');
+  demo.mark('notification', { index: i, app: n.app, title: n.title });
+  setTimeout(() => { heads.classList.remove('show'); demo.mark('notification_hidden', { index: i }); }, n.ms);
+}
+
+// Holding: the lock screen, nothing new. On start the banners come spread over durationMs, each
+// in its own slot with a quiet gap after it, and the demo ends after the last one is gone.
+demo.onStart = durationMs => {
+  const slot = durationMs / NOTIFICATIONS.length;
+  let t = 3000;
+  NOTIFICATIONS.forEach((n, i) => {
+    const at = Math.max(t, i * slot + Math.random() * Math.max(0, slot - n.ms - 8000));
+    setTimeout(() => show(n, i), at);
+    t = at + n.ms + 2500;
+  });
+  setTimeout(() => demo.trigger(), Math.max(t + 2000, durationMs));
+};
+</script>
+</body>
+</html>

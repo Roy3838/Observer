@@ -16,7 +16,8 @@ export type SuiteEvent =
   | { type: 'ask_user_info'; t: number; message: string }
   | { type: 'mark'; t: number; name: string; data?: any }
   | { type: 'memory'; t: number; agentId: string; tool: string; ok: boolean; targetId: string; memory: string }
-  | { type: 'clip'; t: number; agentId: string; tool: string; ok: boolean; params: any };
+  | { type: 'clip'; t: number; agentId: string; tool: string; ok: boolean; params: any }
+  | { type: 'image_memory'; t: number; agentId: string; tool: string; ok: boolean; targetId: string; imageCount: number; total: number };
 
 export interface Observer {
   context: BrowserContext;

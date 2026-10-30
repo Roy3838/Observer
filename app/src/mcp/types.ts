@@ -99,16 +99,29 @@ export interface ToolDefinition {
 export type UserInfoKind = 'phone' | 'email' | 'telegram' | 'discord' | 'pushover';
 
 /**
- * A request for one piece of contact info, handed from the `ask_user_info` executor up to
- * the React layer, which renders the guided modal.
+ * How an agent tells the user: what `ask_user_info kind='method'` picks. Phone channels map to
+ * sendWhatsapp / sendSms / call, 'browser' to notify(), 'system' to the desktop app's
+ * system_notify(); the rest to their send* tool.
+ */
+export type NotifyMethod =
+  | 'browser' | 'system' | 'email' | 'whatsapp' | 'sms' | 'voice'
+  | 'telegram' | 'discord' | 'pushover';
+
+/** What `ask_user_info` can ask for: a sensor permission, a notification method, or local vs cloud. */
+export type UserInfoRequestKind = 'screen' | 'camera' | 'method' | 'model' | UserInfoKind;
+
+/**
+ * A request handed from the `ask_user_info` executor up to the React layer, which renders
+ * the guided modal.
  */
 export interface UserInfoRequest {
   requestId: string;
-  /** A contact kind, or 'model': whether to download a local model or run in the cloud. */
-  kind: UserInfoKind | 'model';
+  kind: UserInfoRequestKind;
+  /** For `method`: the channel the user already named; skips the picker. */
+  method?: NotifyMethod;
   /** For `model`: which local model the download would fetch. */
   model?: LocalModelChoice;
-  /** For `phone`: which tool the code is for. 'whatsapp' also requires WhatsApp's 24h window. */
+  /** For legacy `phone`: which tool the code is for. 'whatsapp' also requires WhatsApp's 24h window. */
   channel?: 'sms' | 'voice' | 'whatsapp';
   /** The model's one-line "why I need this", shown to the user for context. */
   reason?: string;
@@ -121,6 +134,10 @@ export interface UserInfoRequest {
 export interface UserInfoResponse {
   value: string;
   skipped?: boolean;
+  /** For `method`: the channel chosen; `value` is its code / address ('' for browser, system). */
+  method?: NotifyMethod;
+  /** For `screen` / `camera`: the capture result, returned to the MCP as-is. */
+  capture?: ToolResult;
 }
 
 /**

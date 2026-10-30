@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<!-- The Valorant client in a competitive queue: "FINDING MATCH" with the timer counting up. Along the
+     way a friend's party invite and a "queue times are longer than usual" notice pop up; neither is
+     the match. ?outcome=success (match_found): MATCH FOUND fills the screen, then agent select.
+     fail (queue_error): a matchmaking error drops you out of the queue. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VALORANT</title>
+<script src="demo-contract.js"></script>
+<link rel="stylesheet" href="fonts/figtree.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { font-family: Figtree, system-ui, sans-serif; color: #ece8e1; background:
+    radial-gradient(ellipse at 70% 40%, rgba(255, 70, 85, .18), transparent 55%),
+    linear-gradient(160deg, #0f1923 0%, #1b2733 60%, #111a22 100%); }
+  .top { display: flex; align-items: center; height: 64px; padding: 0 28px; gap: 34px; background: rgba(15, 25, 35, .85); border-bottom: 1px solid #2a3a48;
+    font-weight: 800; letter-spacing: 2px; font-size: 15px; text-transform: uppercase; }
+  .top .logo { color: #ff4655; font-size: 22px; letter-spacing: 1px; }
+  .top .on { color: #fff; border-bottom: 3px solid #ff4655; padding: 20px 0 17px; }
+  .top span { color: #8b978f; }
+  .top .vp { margin-left: auto; color: #ece8e1; letter-spacing: 1px; font-size: 13px; }
+  .mode { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+  .mode div { white-space: nowrap; padding: 9px 22px; font-weight: 800; letter-spacing: 2px; font-size: 13px; background: rgba(255, 255, 255, .06); color: #8b978f; text-transform: uppercase; }
+  .mode .on { background: #ece8e1; color: #0f1923; }
+  .party { position: absolute; bottom: 150px; left: 50%; transform: translateX(-50%); display: flex; gap: 18px; }
+  .card { width: 150px; height: 260px; background: linear-gradient(180deg, #2b3a47, #18222c); border: 1px solid #364856; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 16px; }
+  .card .av { width: 72px; height: 72px; border-radius: 4px; background: linear-gradient(135deg, #ff4655, #7c1d28); margin-bottom: auto; margin-top: 40px; }
+  .card b { font-size: 15px; letter-spacing: 1px; }
+  .card small { color: #8b978f; font-size: 11px; letter-spacing: 1px; margin-top: 2px; }
+  .card.empty { border-style: dashed; opacity: .45; }
+  .card.empty .av { background: #2a3642; }
+  .queue { position: absolute; bottom: 52px; left: 50%; transform: translateX(-50%); width: 420px; text-align: center; }
+  .queue .bar { background: #ff4655; color: #fff; padding: 16px 0; font-weight: 800; letter-spacing: 4px; font-size: 20px; text-transform: uppercase; position: relative; overflow: hidden; }
+  .queue .bar::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .25), transparent); animation: sweep 1.8s linear infinite; }
+  @keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+  .queue .meta { margin-top: 8px; font-size: 13px; color: #8b978f; letter-spacing: 1px; display: flex; justify-content: space-between; }
+  .queue .meta b { color: #ece8e1; }
+  .toast { position: absolute; right: 24px; top: 84px; width: 320px; background: #1f2b36; border-left: 4px solid #17e5b4; padding: 12px 14px; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; }
+  .toast.show { display: block; }
+  .toast b { display: block; font-size: 14px; margin-bottom: 2px; }
+  .toast .btns { margin-top: 8px; display: flex; gap: 8px; }
+  .toast .btns span { padding: 5px 12px; background: #2f3f4d; font-weight: 700; font-size: 12px; letter-spacing: 1px; }
+  .notice { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); font-size: 12px; color: #f0c674; letter-spacing: .5px; display: none; }
+  .notice.show { display: block; }
+  /* The end states. */
+  .found { position: fixed; inset: 0; display: none; place-items: center; background: rgba(15, 25, 35, .92); }
+  .found.show { display: grid; }
+  .found .band { width: 100%; background: #ff4655; text-align: center; padding: 34px 0; animation: pop .35s ease-out; }
+  .found h1 { margin: 0; font-size: 84px; letter-spacing: 10px; font-weight: 900; color: #fff; }
+  .found p { margin: 6px 0 0; font-size: 18px; letter-spacing: 4px; font-weight: 700; color: #0f1923; text-transform: uppercase; }
+  @keyframes pop { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+  .select { position: fixed; inset: 0; display: none; background: linear-gradient(160deg, #0f1923, #1d2a36); }
+  .select.show { display: block; }
+  .select h2 { text-align: center; margin: 70px 0 6px; font-size: 40px; letter-spacing: 8px; font-weight: 900; }
+  .select .timer { text-align: center; font-size: 56px; font-weight: 900; color: #ff4655; }
+  .select .grid { display: grid; grid-template-columns: repeat(8, 76px); gap: 8px; justify-content: center; margin-top: 40px; }
+  .select .grid i { height: 76px; background: linear-gradient(135deg, #2f4252, #1a2530); border: 1px solid #405463; }
+  .select .info { text-align: center; margin-top: 26px; color: #8b978f; letter-spacing: 2px; font-size: 14px; }
+  .err { position: fixed; inset: 0; display: none; place-items: center; background: rgba(0, 0, 0, .6); }
+  .err.show { display: grid; }
+  .err .box { width: 460px; background: #ece8e1; color: #0f1923; padding: 26px 28px; }
+  .err h3 { margin: 0 0 8px; letter-spacing: 3px; font-size: 20px; }
+  .err .code { color: #6b7680; font-size: 12px; margin-top: 10px; letter-spacing: 1px; }
+  .err .ok { margin-top: 18px; background: #ff4655; color: #fff; text-align: center; padding: 10px; font-weight: 800; letter-spacing: 3px; }
+</style>
+</head>
+<body>
+<div class="top"><span class="logo">V</span><span class="on">Play</span><span>Career</span><span>Collection</span><span>Agents</span><span>Store</span><span class="vp">1,250 VP · 340 RP</span></div>
+<div class="mode"><div>Unrated</div><div class="on">Competitive</div><div>Swiftplay</div><div>Spike Rush</div><div>Deathmatch</div></div>
+<div class="party">
+  <div class="card empty"><div class="av"></div><small>INVITE</small></div>
+  <div class="card"><div class="av"></div><b>ROYM</b><small>#3838 · GOLD 2</small></div>
+  <div class="card empty"><div class="av"></div><small>INVITE</small></div>
+</div>
+<div class="queue">
+  <div class="bar">Finding match</div>
+  <div class="meta"><span>ELAPSED <b id="elapsed">0:00</b></span><span>EST. <b>1:45</b></span><span>✕ CANCEL</span></div>
+</div>
+<div class="toast" id="toast"><b>KAIJU#0420 invited you to a party</b>Unrated · 2/5 · "one more?"<div class="btns"><span>ACCEPT</span><span>DECLINE</span></div></div>
+<div class="notice" id="notice">⚠ Queue times are longer than usual in your region.</div>
+<div class="found" id="found"><div class="band"><h1>MATCH FOUND</h1><p>Competitive · Ascent</p></div></div>
+<div class="select" id="select"><h2>CHOOSE YOUR AGENT</h2><div class="timer" id="lock">80</div>
+  <div class="grid"></div><div class="info">COMPETITIVE · ASCENT · ATTACKING</div></div>
+<div class="err" id="err"><div class="box"><h3>MATCHMAKING ERROR</h3>There was an error entering matchmaking. You have been removed from the queue. Please try again.<div class="code">ERROR CODE: VAL 9</div><div class="ok">OK</div></div></div>
+<script>
+  const $ = id => document.getElementById(id);
+  document.querySelector('.select .grid').innerHTML = '<i></i>'.repeat(24);
+  // Already a few minutes into the queue when the page opens.
+  let elapsed = 137, inQueue = true;
+  setInterval(() => {
+    if (!inQueue) return;
+    elapsed++;
+    $('elapsed').textContent = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`;
+  }, 1000);
+
+  demo.onStart = durationMs => {
+    // Things that pop up and aren't the match.
+    setTimeout(() => { $('toast').classList.add('show'); demo.mark('party_invite'); }, durationMs * 0.3);
+    setTimeout(() => $('toast').classList.remove('show'), durationMs * 0.3 + 12000);
+    setTimeout(() => { $('notice').classList.add('show'); demo.mark('long_queue_notice'); }, durationMs * 0.6);
+    setTimeout(() => {
+      inQueue = false;
+      if (demo.outcome === 'success') {
+        $('found').classList.add('show');
+        demo.trigger();
+        // Valorant moves on to agent select on its own after a few seconds.
+        setTimeout(() => {
+          $('found').classList.remove('show'); $('select').classList.add('show');
+          let t = 80;
+          setInterval(() => { if (t > 0) $('lock').textContent = --t; }, 1000);
+        }, 5000);
+      } else {
+        $('err').classList.add('show');
+        demo.trigger();
+      }
+    }, durationMs);
+  };
+</script>
+</body>
+</html>
