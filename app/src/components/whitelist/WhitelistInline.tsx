@@ -124,7 +124,7 @@ const WhitelistInline: React.FC<WhitelistInlineProps> = ({ code, channel, onCanc
               </div>
             </div>
             <button
-              onClick={sms ? () => openSms(code) : openWhatsApp}
+              onClick={sms ? () => openSms(code) : () => openWhatsApp(code)}
               className="w-full px-2 py-1.5 bg-gray-900 text-white rounded text-xs font-medium hover:bg-black transition-colors flex items-center justify-center gap-1.5"
             >
               <span>{sms ? 'Open Messages' : 'Open WhatsApp'}</span>

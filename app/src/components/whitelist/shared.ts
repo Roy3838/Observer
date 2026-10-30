@@ -23,7 +23,7 @@ export const OBSERVER_WHATSAPP_PLAIN = '15557834727';
 export const whatsappCodeQRValue = (code: string) =>
   `https://wa.me/${OBSERVER_WHATSAPP_PLAIN}?text=${encodeURIComponent(code)}`;
 
-export const openWhatsApp = () => openExternal(`https://wa.me/${OBSERVER_WHATSAPP_PLAIN}`);
+export const openWhatsApp = (code: string) => openExternal(whatsappCodeQRValue(code));
 
 export const OBSERVER_SMS = '+1 (863) 208-5341';
 export const OBSERVER_SMS_PLAIN = '+18632085341';
