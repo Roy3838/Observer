@@ -24,7 +24,7 @@ for (const r of original) {
       ? JSON.parse(fs.readFileSync(`${base}.memories.json`, 'utf8'))
       : agents.map((a: any) => ({ id: a.id, memory: a.memory ?? '' })),
     agents,
-    toolCalls: (transcript?.messages ?? []).flatMap((m: any) => m.toolCalls ?? []), asked: r.asked, replies: r.replies ?? [],
+    toolCalls: (transcript?.messages ?? []).flatMap((m: any) => m.toolCalls ?? []), asked: r.asked, replies: r.replies ?? [], imageMemories: [],
   };
   const score = s.score(run);
   if (score.verdict !== r.verdict) console.log(`${r.id}: ${r.verdict} → ${score.verdict}`);

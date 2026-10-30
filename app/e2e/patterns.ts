@@ -41,6 +41,8 @@ export interface Run {
   asked: boolean | null;
   /** The MCP's final text for each turn, in order: the prompt, the follow-up, the after-run question. */
   replies: (string | null)[];
+  /** Image memory at the end, per agent or memory slot that has any. */
+  imageMemories: { id: string; images: string[] }[];
 }
 
 /** How a use case is run and judged. */
@@ -189,6 +191,40 @@ const WORKDAY_APPS: Record<string, string[]> = {
   figma: ['figma', 'onboarding', 'mockup', 'design'],
   slack: ['slack', '#launch'],
 };
+
+// ad_banner.html: the deadline in the prompt, from when the agents started (the demo's start).
+const AD_DEADLINE_MS = 5 * 60_000;
+
+/** "When the Acme ad shows up, save an image of it; if it hasn't after 5 minutes, notify me."
+ *  Shown: an image saved while the ad is up (or just after), none before, and no 5-minute alert.
+ *  Never shown: no image, and one alert around the 5-minute mark. */
+function scoreAd(run: Run): Score {
+  const saves = run.events.filter(e => e.type === 'image_memory' && e.ok && e.imageCount > 0).map(e => e.t - run.startT);
+  const alerts = alertTimes(run).map(t => t - run.startT);
+  const stored = run.imageMemories.reduce((n, m) => n + m.images.length, 0);
+  const notes: string[] = [];
+  const acme = marks(run, 'acme')[0];
+  if (acme) {
+    const on = acme.t - run.startT, off = on + run.truth.slotMs;
+    const hits = saves.filter(t => t >= on && t <= off + 30_000);
+    const early = saves.filter(t => t < on);
+    const timeoutAlerts = alerts.filter(t => t >= AD_DEADLINE_MS - 60_000);
+    const metrics = { adOnAtS: Math.round(on / 1000), savesS: saves.map(t => Math.round(t / 1000)), alertsS: alerts.map(t => Math.round(t / 1000)), stored };
+    if (!hits.length) return { verdict: 'FAIL', metrics, notes: ['no image saved while the Acme ad was up'] };
+    if (timeoutAlerts.length) return { verdict: 'FAIL', metrics, notes: ["sent the 5-minute alert though the ad had shown"] };
+    if (early.length) notes.push(`${early.length} image(s) saved before the ad showed`);
+    if (alerts.some(t => t < on)) notes.push('notified before the ad showed');
+    return { verdict: notes.length ? 'PARTIAL' : 'PASS', metrics, notes };
+  }
+  const near = alerts.filter(t => t >= AD_DEADLINE_MS - 60_000 && t <= AD_DEADLINE_MS + 90_000);
+  const metrics = { savesS: saves.map(t => Math.round(t / 1000)), alertsS: alerts.map(t => Math.round(t / 1000)), stored };
+  if (alerts.some(t => t < AD_DEADLINE_MS - 60_000)) return { verdict: 'FAIL', metrics, notes: ['notified before the 5 minutes were up'] };
+  if (!alerts.length) return { verdict: 'FAIL', metrics, notes: ['never notified that the ad didn\'t show'] };
+  if (!near.length) notes.push('the alert came more than 90 s after the 5 minutes');
+  if (alerts.length > 1) notes.push(`${alerts.length} alerts`);
+  if (saves.length) notes.push(`${saves.length} image(s) saved though the Acme ad never showed`);
+  return { verdict: notes.length ? 'PARTIAL' : 'PASS', metrics, notes };
+}
 
 // ---- Scenarios ---------------------------------------------------------------
 
@@ -391,6 +427,18 @@ const CHECKS: Record<string, Check> = {
       if (!early.length && (first || second)) return { verdict: 'PARTIAL', metrics, notes: [] };
       return { verdict: 'FAIL', metrics, notes: [] };
     },
+  },
+  acme_ad: {
+    // The ad shows 2 minutes in for one 10 s slot; watch past the 5-minute deadline for a false alert.
+    runMs: 120_000,
+    graceMs: 330_000,
+    score: scoreAd,
+  },
+  acme_ad_missing: {
+    // The ad never shows: the run goes past the deadline, then a little longer for the alert.
+    runMs: 390_000,
+    graceMs: 30_000,
+    score: scoreAd,
   },
   minecraft_clips: {
     // Clips: a clip started or marked right after each death.

@@ -96,6 +96,9 @@ for (const s of PATTERNS) {
       const transcript = await app.evaluate(t => (window as any).__observerE2E.transcript(t), setupStart).catch(() => null);
       const agents: any[] = await app.evaluate(t => (window as any).__observerE2E.agentReport(t), setupStart).catch(() => []);
       const memories = await app.evaluate(() => (window as any).__observerE2E.memories()).catch(() => []);
+      const imageIds = [...new Set(events.flatMap(e => (e.type === 'image_memory' ? [e.targetId] : [])))];
+      const imageMemories: { id: string; images: string[] }[] = (await app.evaluate(ids => (window as any).__observerE2E.imageMemories(ids), imageIds)
+        .catch(() => [])).filter((m: any) => m.images?.length);
       const truth = await demo.evaluate(() => (window as any).demo.truth ?? null).catch(() => null);
       await testInfo.attach('demo-end.png', { body: await demo.screenshot().catch(() => Buffer.alloc(0)), contentType: 'image/png' });
       await demo.close();
@@ -105,7 +108,7 @@ for (const s of PATTERNS) {
       if (!verdict) {
         const run: Run = {
           events: [...events], startT: startT || Date.now(), triggerT: events.find(e => e.type === 'trigger')?.t ?? null,
-          truth, memories, agents, toolCalls, asked, replies,
+          truth, memories, agents, toolCalls, asked, replies, imageMemories,
         };
         try {
           score = s.score(run);
@@ -132,6 +135,8 @@ for (const s of PATTERNS) {
       agents.forEach((a, i) => {
         if (a.lastImage) fs.writeFileSync(`${base}.agent${i + 1}-last.png`, Buffer.from(String(a.lastImage).replace(/^data:[^,]*,/, ''), 'base64'));
       });
+      imageMemories.forEach(m => m.images.forEach((img, i) => fs.writeFileSync(`${base}.image-${m.id.replace(/[^\w-]+/g, '_')}-${i + 1}.png`,
+        Buffer.from(String(img).replace(/^data:[^,]*,/, ''), 'base64'))));
       fs.writeFileSync(`${base}.truth.json`, JSON.stringify(truth, null, 2));
       fs.writeFileSync(`${base}.memories.json`, JSON.stringify(memories, null, 2));
       fs.writeFileSync(`${base}.events.json`, JSON.stringify(events.map(e => ({ ...e, sinceStartMs: startT ? e.t - startT : null })), null, 2));

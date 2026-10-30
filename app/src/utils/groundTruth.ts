@@ -296,6 +296,14 @@ export const GROUND_TRUTH: UseCase[] = [
   { id: 'terminal_errors', demo: 'terminal_errors.html', when: "there's an error in my terminal", then: 'log it',
     show: { title: 'Terminal', alert: 'Logged: TypeError in checkout.ts.' } },
 
+  // A news app's banner ad rotates every 10 s while the feed scrolls; the Acme ad gets one slot.
+  // acme_ad_missing: it never shows, so the 5-minute notification is the only thing to do.
+  { id: 'acme_ad', demo: 'ad_banner.html', when: 'the Acme ad shows up in my app',
+    then: "save an image of it to memory, and if it hasn't shown up after 5 minutes, send me a browser notification",
+    show: { title: 'Ad check', alert: 'Saved: the Acme banner ad, seen at 9:43.' } },
+  { id: 'acme_ad_missing', demo: 'ad_banner.html?outcome=fail', when: 'the Acme ad shows up in my app',
+    then: "save an image of it to memory, and if it hasn't shown up after 5 minutes, send me a browser notification" },
+
   // The new orders, not today's total.
   { id: 'shopify_count', demo: 'shopify_orders.html', when: 'a new Shopify order comes in', then: 'keep count of it',
     show: { title: 'Shopify', alert: 'Logged: 7 new orders so far.' } },

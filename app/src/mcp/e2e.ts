@@ -13,7 +13,7 @@
 
 import { Logger } from '@utils/logging';
 import { getRunningAgentIds, stopAgentLoop, type TokenProvider } from '@utils/main_loop';
-import { listAgents, deleteAgent, getAgentCode, getAgentMemory, getAllMemories, deleteMemory } from '@utils/agent_database';
+import { listAgents, deleteAgent, getAgentCode, getAgentMemory, getAgentImageMemory, getAllMemories, deleteMemory } from '@utils/agent_database';
 import { IterationStore } from '@utils/IterationStore';
 import { ModelManager } from '@utils/ModelManager';
 import { listConversations, loadConversation } from './conversationStore';
@@ -30,6 +30,7 @@ const NOTIFY_TOOLS = new Set([
 // (patterns.spec.ts) score what agents wrote to memory and when they marked clips.
 const MEMORY_TOOLS = new Set(['setMemory', 'appendMemory']);
 const CLIP_TOOLS = new Set(['startClip', 'stopClip', 'markClip', 'getVideo']);
+const IMAGE_MEMORY_TOOLS = new Set(['setImageMemory', 'appendImageMemory']);
 
 // How the suite answers ask_user_info kind='model', set by E2E_MODEL_CHOICE (playwright.config.ts).
 const MODEL_CHOICE: 'cloud' | 'local' | 'ask' =
@@ -42,7 +43,9 @@ export type E2EEvent =
   | { type: 'ask_user_info'; message: string }
   /** A memory write, with the target's whole memory right after it. */
   | { type: 'memory'; agentId: string; tool: string; ok: boolean; targetId: string; memory: string }
-  | { type: 'clip'; agentId: string; tool: string; ok: boolean; params: any };
+  | { type: 'clip'; agentId: string; tool: string; ok: boolean; params: any }
+  /** An image memory write, with how many images the target holds right after it. */
+  | { type: 'image_memory'; agentId: string; tool: string; ok: boolean; targetId: string; imageCount: number; total: number };
 
 export interface E2EHandles {
   mcp: () => UseMCPReturn & { modelName: string };
@@ -144,6 +147,11 @@ function createApi(h: () => E2EHandles) {
     },
     /** Every memory slot, including ones written for an id that isn't an agent. */
     memories: () => getAllMemories(),
+    /** The image memory of every agent, memory slot and `extraIds`, as base64 or data URLs. */
+    imageMemories: async (extraIds: string[] = []) => {
+      const ids = new Set([...extraIds, ...(await listAgents()).map(a => a.id), ...(await getAllMemories()).map(m => m.id)]);
+      return Promise.all([...ids].map(async id => ({ id, images: await getAgentImageMemory(id) })));
+    },
     /** Stop and delete every agent so the next scenario starts from an empty Observer.
      *  The suite reloads the page afterwards for a fresh conversation and stream state. */
     reset: async () => {
@@ -182,6 +190,13 @@ export function installE2EHooks(h: E2EHandles): void {
       window.__e2eReport?.({
         type: 'clip', agentId: entry.source, tool: d.content.tool, ok: d.logType === 'tool-success', params: d.content.params,
       });
+    }
+    if ((d?.logType === 'tool-success' || d?.logType === 'tool-error') && IMAGE_MEMORY_TOOLS.has(d.content?.tool)) {
+      const targetId: string = d.content.params?.targetId ?? entry.source;
+      getAgentImageMemory(targetId).catch(() => []).then(images => window.__e2eReport?.({
+        type: 'image_memory', agentId: entry.source, tool: d.content.tool, ok: d.logType === 'tool-success', targetId,
+        imageCount: d.content.params?.imageCount ?? 0, total: images.length,
+      }));
     }
     // The local-vs-cloud question has a fixed answer (E2E_MODEL_CHOICE, default cloud), so the
     // run goes on. 'ask' leaves it unanswered, like any other modal.
