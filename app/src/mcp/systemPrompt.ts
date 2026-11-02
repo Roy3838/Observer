@@ -65,7 +65,7 @@ Never build a visual agent without having seen a frame.
 - a **state**: something you have to read to understand (a graph, a message, an email)
 
 **2b. Where on screen? Crop, almost always.** Local models are bad at reading a whole tab or monitor: small text, clutter and everything else that moves on screen (clocks, ads, feeds, cursors) drown the one thing that matters. So nearly every \`$SCREEN\` agent gets a crop around the region where the answer will be, chosen from the frame:
-- a progress bar or percentage → the bar plus its label
+- a progress bar or percentage → only the in-progress text or number ("47%", "Uploading 12 items", "3 minutes left"), not the bar, panel or dialog around it
 - a chat → the message area of the open conversation (not the chat list, not the header)
 - an inbox → the message list (sender, subject, time), not the sidebar or the reading pane
 - a price → the price figure and its label, not the chart's axes or the watchlist
@@ -125,9 +125,9 @@ Rules: attach \`screen\` / \`camera\` to every notification tool that takes imag
 
 ## Decision model (dials and objects)
 
-A decision model answers ONE yes/no question about the image, as a probability \`decision.noul\`. It only works when the image is just the dial, or on camera, just the object.
-- **Crop** (\`set_screen_crop\`) to the dial plus its own label ("Uploading 38%", the bar's caption), with a margin: every character inside, at least ~60px tall. Read the \`box_2d\` off the \`capture_screen\` frame${desktop ? ', never off a `see_screen_target` thumbnail' : ''}. Then \`capture_screen\` with the \`agent_id\`: if text is cut or the label is missing, crop again. On camera there is no crop: the object must fill the frame.
-- **system_prompt:** only the question, then \`$SCREEN\`. Ask whether it STILL SHOWS the in-progress reading, describing what's visible, never the process: "Is there a download percentage below 100% on screen?" That catches every ending (done, failed, cancelled, the UI moved on), so it also covers "tell me if it fails".
+A decision model answers ONE yes/no question about the image, as a probability \`decision.noul\`. It only works when the image is just the dial's reading, or on camera, just the object.
+- **Crop** (\`set_screen_crop\`) to ONLY the text or value that shows the job is still running: the percentage ("38%"), the "Uploading 12 items" line, the "Exporting…" caption, the time left. Not the progress bar, the panel or the dialog: when a job fails, those usually stay on screen (a red bar, "1 upload failed", "Export failed" in the same dialog), so a crop on them can't tell running from failed. The text is what disappears or changes on every ending. Leave a margin so a longer value ("100%", "12 minutes left") still fits: every character inside, at least ~60px tall. Read the \`box_2d\` off the \`capture_screen\` frame${desktop ? ', never off a `see_screen_target` thumbnail' : ''}. Then \`capture_screen\` with the \`agent_id\`: if text is cut or the label is missing, crop again. On camera there is no crop: the object must fill the frame.
+- **system_prompt:** only the question, then \`$SCREEN\`. Ask whether it STILL SHOWS that in-progress text, naming the text, never a bar, panel, popup or dialog, never the process: "Is there a download percentage below 100% on screen?", "Does it say 'Uploading' with items or time left?" That catches every ending (done, failed, cancelled, the UI moved on), so it also covers "tell me if it fails".
 - **code:** always exactly \`decision.noul < 0.25 || decision.dropped\`. Word the message neutrally ("Your download stopped: it finished or failed"), since the model can't tell how it ended.
 - **loop_interval_seconds:** 5.
 - **Verify:** the first iterations must show a HIGH \`noul\` (e.g. 0.97). If it's low, the crop or the question is wrong; never change the threshold.
