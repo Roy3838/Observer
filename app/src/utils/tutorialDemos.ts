@@ -13,6 +13,7 @@
 
 import type { TriggerOption } from '@components/AICreator/RecipeSplash';
 import { SHOWN, demoFile, isCameraDemo } from './groundTruth.ts';
+import { isTauri } from './platform';
 
 export interface TutorialDemo extends TriggerOption {
   /** Demo page file name in e2e/demos/. */
@@ -45,6 +46,9 @@ export const demoTabTitle = (d: TutorialDemo): string => `${d.title} · Observer
 
 export const demoUrl = (d: TutorialDemo): string => {
   // No ?outcome=: the demo ends the way its shown pair alerts on (demo-contract.js data-outcome).
-  const q = new URLSearchParams({ tutorial: String(DEMO_RUN_MS), title: d.title });
+  // The desktop app captures the window natively, so the user never leaves the tab and comes back
+  // to start a ?tutorial= hold: there it runs from load with ?autostart= instead.
+  const mode = isTauri() ? 'autostart' : 'tutorial';
+  const q = new URLSearchParams({ [mode]: String(DEMO_RUN_MS), title: d.title });
   return `${DEMO_ORIGIN}${d.file}?${q}`;
 };
