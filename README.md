@@ -6,28 +6,30 @@
 
 Observer is a local-first AI agent that watches your screen, camera and audio, and takes action when something happens. It runs on local models, so your data stays **100% private**.
 
-> *"When my download finishes, call me."*
-
 <img src="./assets/demo.gif" alt="Observer demo: an agent that calls you when a Steam download finishes" />
-
-## Get started
-
-**Web app (no install):** open [app.observer-ai.com](https://app.observer-ai.com/) and download a model from the Model Hub to run it in your browser.
-
-**Desktop app (recommended):** download the [latest release](https://github.com/Roy3838/Observer/releases/latest/) for macOS, Windows or Linux. It ships with llama.cpp, so it runs any GGUF model (load an `mmproj` file for vision).
-
-**Bring your own server:** in the app, set `Custom Model Server URL` to any OpenAI-compatible endpoint (Ollama, llama.cpp, vLLM). The browser app sends requests to `localhost:3838`, and the desktop app proxies them to your server to get around CORS.
-
-Then describe what you want Observer to watch, or build an agent yourself from the **Micro Agents** tab.
 
 ## What you can do
 
-- When I'm distracted, call me.
-- When my download finishes, SMS me.
-- When my render is done, WhatsApp me.
-- When this dashboard changes, email me.
-- When a person is on camera, Telegram me.
-- When my dog finishes their food, log it.
+### When X then Y. 
+
+- When my training crashes, call me.
+- When I'm out of the queue, SMS me. 
+- When I get distracted, WhatsApp me. 
+- When my Steam game downloads, Telegram me. 
+- When my overnight render fails, call me. 
+- When I haven't made progress, WhatsApp me. 
+- When an appointment is available, send me a Whatsapp. 
+- When an item is back in stock, send me a Telegram.
+
+## Get started
+
+**Web app (no install):** open [app.observer-ai.com](https://app.observer-ai.com/) and download a model to run it in your browser.
+
+**Desktop app (recommended):** download the [latest release](https://github.com/Roy3838/Observer/releases/latest/) for macOS, Windows or Linux. It ships with llama.cpp, so it runs any GGUF+mmproj model.
+
+**Bring your own server:** in the app, set `Custom Model Server URL` to any OpenAI-compatible endpoint (Ollama, llama.cpp, vLLM). 
+
+Then describe what you want Observer to watch, or build an agent yourself from the **Micro Agents** tab.
 
 ## How it works
 
