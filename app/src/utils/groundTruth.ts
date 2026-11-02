@@ -79,22 +79,37 @@ export const GROUND_TRUTH: UseCase[] = [
   // sold_out: the event sells out while you're in line.
   { id: 'ticketmaster_out', group: 'alert', demo: 'ticketmaster_queue.html', when: "I'm out of the queue", then: NOTIFY,
     outcomes: { my_turn: 'success', sold_out: 'fail' }, expect: { my_turn: 'notify', sold_out: 'notify' },
-    show: { channel: 'call' } },
+    show: { channel: 'sms' } },
 
   // Quick work detours to Slack and MDN come first. work_video: a coding tutorial on YouTube.
   { id: 'distracted', group: 'on_track', demo: 'focus_session.html', when: 'I get distracted', then: NOTIFY,
     outcomes: { social: 'success', work_video: 'video', focused: 'fail' }, expect: { social: 'notify', work_video: 'either', focused: 'silent' },
     show: { channel: 'whatsapp' } },
 
+  // The download reaches 100% and then Steam installs it: downloaded isn't ready to play.
+  { id: 'steam_ready', group: 'alert', demo: 'steam_download.html', when: 'my Steam game downloads', then: NOTIFY, expect: DONE,
+    show: { channel: 'telegram' } },
+
   // CapCut exporting 4K. stalled: stuck at 62%, spinner still spinning (it hasn't failed, yet).
   { id: 'render_fails', group: 'alert', demo: 'capcut_render.html', when: 'my overnight render fails', then: NOTIFY,
     outcomes: RENDER, expect: { success: 'either', fail: 'notify', stalled: 'either' },
-    show: { channel: 'sms' } },
+    show: { channel: 'call' } },
 
   // Krita on a Cintiq: the artist draws for 5 minutes, then stops (the pen still drifts). Judged
   // on the stop by e2e/patterns.ts; no_progress_drawing is the run where they never stop.
-  { id: 'no_progress', group: 'on_track', demo: 'drawing_progress.html', when: "I haven't made progress on my drawing", then: NOTIFY,
+  { id: 'no_progress', group: 'on_track', demo: 'drawing_progress.html', when: "I haven't made progress", then: NOTIFY,
     show: { channel: 'whatsapp' } },
+
+  // "No appointments available" at every office, reloaded every ~15 s.
+  // still_full: nothing opens during the run.
+  { id: 'dmv_slot', group: 'alert', demo: 'dmv_appointments.html', when: 'an appointment is available', then: NOTIFY,
+    outcomes: { slot_opens: 'success', still_full: 'fail' }, expect: { slot_opens: 'notify', still_full: 'silent' },
+    show: { channel: 'whatsapp' } },
+
+  // Reloads itself. Other cards on the page are in stock the whole time; they aren't the item.
+  { id: 'restock', group: 'alert', demo: 'restock.html', when: 'an item is back in stock', then: NOTIFY,
+    outcomes: { in_stock: 'success', still_out: 'fail' }, expect: { in_stock: 'notify', still_out: 'silent' },
+    show: { channel: 'telegram' } },
 
   { id: 'printer_fails', group: 'alert', demo: 'camera_printer.html', when: 'my 3D print fails', then: NOTIFY,
     outcomes: { spaghetti: 'success', finished: 'fail' }, expect: { spaghetti: 'notify', finished: 'either' },
@@ -109,17 +124,6 @@ export const GROUND_TRUTH: UseCase[] = [
     outcomes: GMAIL, expect: { dana_replies: 'silent', bounced: 'silent', invoice_overdue: 'silent', lead: 'notify' },
     show: { channel: 'call' } },
 
-  // "No appointments available" at every office, reloaded every ~15 s.
-  // still_full: nothing opens during the run.
-  { id: 'dmv_slot', group: 'alert', demo: 'dmv_appointments.html', when: 'an earlier appointment opens up', then: NOTIFY,
-    outcomes: { slot_opens: 'success', still_full: 'fail' }, expect: { slot_opens: 'notify', still_full: 'silent' },
-    show: { channel: 'whatsapp' } },
-
-  // Reloads itself. Other cards on the page are in stock the whole time; they aren't the item.
-  { id: 'restock', group: 'alert', demo: 'restock.html', when: 'the item is back in stock', then: NOTIFY,
-    outcomes: { in_stock: 'success', still_out: 'fail' }, expect: { in_stock: 'notify', still_out: 'silent' },
-    show: { channel: 'telegram' } },
-
   // A release workflow building the desktop app on four platforms.
   { id: 'github_fails', group: 'alert', demo: 'fake_github_workflow.html', when: 'my GitHub release fails', then: NOTIFY, expect: IF_FAILS,
     show: { channel: 'whatsapp' } },
@@ -133,10 +137,6 @@ export const GROUND_TRUTH: UseCase[] = [
   // comes before the end and isn't it. fail: the last run errors out instead.
   { id: 'annotation_done', group: 'alert', demo: 'dataannotation_runs.html', when: 'my tasks finish on DataAnnotation', then: NOTIFY, expect: DONE,
     show: { channel: 'sms' } },
-
-  // The download reaches 100% and then Steam installs it: downloaded isn't ready to play.
-  { id: 'steam_ready', group: 'alert', demo: 'steam_download.html', when: 'my Steam game is ready to play', then: NOTIFY, expect: DONE,
-    show: { channel: 'email' } },
 
   // Other bidders bid twice under your max along the way, so you stay the high bidder.
   { id: 'ebay_outbid', group: 'alert', demo: 'ebay_auction.html', when: "I'm outbid on eBay", then: NOTIFY,
@@ -247,7 +247,7 @@ export const TEST_CASES: UseCase[] = [
   { id: 'social_nag', group: 'on_track', demo: 'focus_session.html?outcome=returns', when: "I'm on social media",
     then: 'send me a browser notification every 2 minutes until I get back to work' },
   // no_progress, where the artist never stops: no alert at all.
-  { id: 'no_progress_drawing', group: 'on_track', demo: 'drawing_progress.html?outcome=drawing', when: "I haven't made progress on my drawing", then: NOTIFY },
+  { id: 'no_progress_drawing', group: 'on_track', demo: 'drawing_progress.html?outcome=drawing', when: "I haven't made progress", then: NOTIFY },
 
   // A deadline, kept in the agent's code or memory. Carlos messages 3 minutes in and Maria never
   // does: an alert around the 5-minute mark. maria_deadline_replied: she replies at 3 minutes, so never.
