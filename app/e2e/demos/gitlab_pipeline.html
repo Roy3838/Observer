@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <!-- A GitLab CI/CD pipeline running on main. Holds "Running" (tests in progress, later stages
      waiting) until the suite starts it; then it ends by ?outcome=: success, every job passes and the
-     pipeline is "Passed"; fail, e2e-firefox fails, later jobs are skipped and the pipeline is "Failed".
+     pipeline is "Passed"; fail, e2e-firefox fails, later jobs are skipped and the pipeline is "Failed";
+     deploy_failed, every test and scan passes, staging deploys, then deploy-production fails.
      GitLab Sans/Mono and GitLab's own icons (gitlab_assets/, from @gitlab/fonts and @gitlab/svgs). -->
 <html lang="en">
 <head>
@@ -158,22 +159,23 @@
     ['sast', 'running'], ['dependency_scanning', 'running'], ['sast', 'success'], ['dependency_scanning', 'success'],
     ['deploy-staging', 'running'], ['deploy-staging', 'success'], ['deploy-production', 'running'], ['deploy-production', 'success'],
   ];
-  const finish = ok => {
+  const finish = (ok, testsOk) => {
     stopped = true;
     setStatus(ok ? 'passed' : 'failed');
     document.getElementById('cancelbtn').textContent = 'Retry';
     document.getElementById('cancelbtn').className = 'btn';
-    document.getElementById('tests').textContent = ok ? '1,284' : '1,279';
+    document.getElementById('tests').textContent = testsOk ? '1,284' : '1,279';
     demo.trigger();
   };
   demo.onStart = durationMs => {
-    const ok = demo.outcome === 'success';
-    const steps = ok ? PLAN : PLAN.slice(0, 2).concat([['e2e-firefox', 'failed']]);
+    const ok = demo.outcome === 'success', deployFails = demo.outcome === 'deploy_failed';
+    const steps = ok ? PLAN : deployFails ? PLAN.slice(0, -1).concat([['deploy-production', 'failed']]) : PLAN.slice(0, 2).concat([['e2e-firefox', 'failed']]);
     steps.forEach(([job, st], i) => setTimeout(() => {
       state[job] = st;
       if (!ok && i === steps.length - 1) for (const j of Object.keys(state)) if (state[j] === 'created') state[j] = 'skipped';
       render();
-      if (i === steps.length - 1) finish(ok);
+      if (st === 'success' && job === 'e2e-firefox') demo.mark('tests_passed');
+      if (i === steps.length - 1) finish(ok, ok || deployFails);
     }, durationMs * (i + 1) / steps.length));
   };
 </script>

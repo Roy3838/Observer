@@ -17,7 +17,7 @@ import { SHOWN, demoFile, isCameraDemo } from './groundTruth.ts';
 export interface TutorialDemo extends TriggerOption {
   /** Demo page file name in e2e/demos/. */
   file: string;
-  /** What it's called on the site and in the tab title: "GitHub Actions". */
+  /** Its tab title, from its When: "My GitHub release fails". */
   title: string;
   /** Full-size screenshot shown above the wheel while this demo is in focus. */
   preview: string;
@@ -32,7 +32,7 @@ export const TUTORIAL_DEMOS: TutorialDemo[] = SHOWN.filter(u => !isCameraDemo(u)
   return {
     id: file.replace(/\.html$/, ''),
     file,
-    title: u.show!.title,
+    title: u.when.charAt(0).toUpperCase() + u.when.slice(1),
     label: u.when,
     promptFragment: u.when,
     sensor: '$SCREEN',

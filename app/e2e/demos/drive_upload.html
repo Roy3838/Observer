@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<!-- Google Drive in the browser, uploading a folder of 48 photos and videos ("Lisbon 2026"). The
+     upload panel sits in the bottom right like Drive's: a header with the count, a time left, and a
+     row per file that turns into a green check when that file is done. Holds uploading (files finish
+     now and then, the time left wobbles) until the suite starts it; files keep finishing one by one
+     (each finished file is not the end), and it ends by ?outcome=:
+       success  every file is done: "48 uploads complete"
+       fail     the connection drops: "1 upload failed" in red, the rest canceled, with Retry
+     Google Sans and Material Symbols are local (fonts/). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lisbon 2026 - Google Drive</title>
+<link rel="stylesheet" href="fonts/google-sans.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; background: #f8fafd; font: 14px 'Google Sans', Roboto, Arial, sans-serif; color: #1f1f1f; overflow: hidden; }
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 22px; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; color: #444746; }
+  .fill { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  header { height: 64px; display: flex; align-items: center; gap: 12px; padding: 0 16px; }
+  .logo { display: flex; align-items: center; gap: 8px; width: 238px; font-size: 22px; color: #444746; }
+  .logo i { width: 40px; height: 36px; display: block; background: conic-gradient(from 210deg, #1fa463 0 120deg, #ffd04b 0 240deg, #4688f4 0); clip-path: polygon(50% 0, 100% 86%, 0 86%); }
+  .search { flex: 1; max-width: 720px; height: 48px; border-radius: 24px; background: #e9eef6; display: flex; align-items: center; gap: 14px; padding: 0 16px; color: #444746; font-size: 16px; }
+  .hr { margin-left: auto; display: flex; gap: 18px; align-items: center; }
+  .av { width: 32px; height: 32px; border-radius: 50%; background: #7b5ea7; color: #fff; display: grid; place-items: center; font-size: 14px; }
+  .wrap { display: flex; height: calc(100vh - 64px); }
+  nav { width: 256px; padding: 8px 12px; }
+  .new { display: inline-flex; align-items: center; gap: 12px; height: 56px; padding: 0 20px 0 16px; border-radius: 16px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); font-weight: 500; margin: 4px 0 16px; }
+  nav div.i { height: 32px; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-radius: 16px; color: #1f1f1f; }
+  nav div.i.on { background: #c2e7ff; font-weight: 600; }
+  main { flex: 1; background: #fff; border-radius: 16px 16px 0 0; margin-right: 16px; padding: 16px 24px; overflow: hidden; }
+  h1 { font-size: 22px; font-weight: 400; margin: 4px 0 18px; display: flex; align-items: center; gap: 4px; }
+  h1 span.dim { color: #444746; }
+  .chips { display: flex; gap: 8px; margin-bottom: 20px; }
+  .chips span { border: 1px solid #747775; border-radius: 8px; padding: 6px 12px; font-size: 13px; color: #444746; }
+  .files { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+  .card { background: #f0f4f9; border-radius: 12px; padding: 10px; }
+  .card .t { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 500; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .th { height: 120px; border-radius: 6px; }
+  .up { position: fixed; right: 24px; bottom: 0; width: 360px; background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 4px 16px rgba(0,0,0,.25); overflow: hidden; }
+  .up .h { background: #f0f4f9; height: 56px; display: flex; align-items: center; padding: 0 12px 0 20px; font-size: 16px; font-weight: 500; }
+  .up .h .r { margin-left: auto; display: flex; gap: 12px; }
+  .up .sub { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: #f8fafd; font-size: 13px; color: #444746; border-bottom: 1px solid #e3e3e3; }
+  .up .sub b { color: #0b57d0; font-weight: 500; }
+  .up .list { max-height: 300px; overflow: hidden; }
+  .row { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 20px; font-size: 14px; }
+  .row .n { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ring { width: 22px; height: 22px; border-radius: 50%; background: conic-gradient(#0b57d0 var(--p, 0%), #d3e3fd 0); position: relative; }
+  .ring::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: #fff; }
+  .ok { color: #188038; } .err { color: #b3261e; }
+  .up.failed .h { color: #b3261e; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<header>
+  <div class="logo"><span class="ms">menu</span><i></i>Drive</div>
+  <div class="search"><span class="ms">search</span>Search in Drive<span class="ms" style="margin-left:auto">tune</span></div>
+  <div class="hr"><span class="ms">help</span><span class="ms">settings</span><span class="ms">apps</span><span class="av">R</span></div>
+</header>
+<div class="wrap">
+  <nav>
+    <div class="new"><span class="ms">add</span>New</div>
+    <div class="i"><span class="ms">home</span>Home</div>
+    <div class="i on"><span class="ms fill">folder</span>My Drive</div>
+    <div class="i"><span class="ms">computer</span>Computers</div>
+    <div class="i"><span class="ms">group</span>Shared with me</div>
+    <div class="i"><span class="ms">schedule</span>Recent</div>
+    <div class="i"><span class="ms">star</span>Starred</div>
+    <div class="i"><span class="ms">report</span>Spam</div>
+    <div class="i"><span class="ms">delete</span>Trash</div>
+    <div class="i"><span class="ms">cloud</span>Storage (61% full)</div>
+  </nav>
+  <main>
+    <h1><span class="dim">My Drive</span><span class="ms">chevron_right</span>Lisbon 2026<span class="ms">arrow_drop_down</span></h1>
+    <div class="chips"><span>Type ▾</span><span>People ▾</span><span>Modified ▾</span><span>Source ▾</span></div>
+    <div class="files" id="files"></div>
+  </main>
+</div>
+<div class="up" id="up">
+  <div class="h"><span id="head">Uploading 48 items</span><span class="r"><span class="ms">expand_more</span><span class="ms">close</span></span></div>
+  <div class="sub"><span id="left">18 minutes left…</span><b id="cancel">Cancel</b></div>
+  <div class="list" id="list"></div>
+</div>
+<script>
+  const $ = id => document.getElementById(id);
+  const N = 48;
+  const COLORS = ['#f6b26b', '#6fa8dc', '#93c47d', '#ffd966', '#c27ba0', '#76a5af', '#e06666', '#8e7cc3', '#f9cb9c'];
+  const FILES = Array.from({ length: N }, (_, i) => i % 7 === 3 ? `VID_20260712_${String(1830 + i * 3).padStart(4, '0')}.mov` : `IMG_${String(4211 + i * 2).padStart(4, '0')}.HEIC`);
+  // Each file: 0..100.
+  const prog = FILES.map(() => 0);
+  for (let i = 0; i < 9; i++) prog[i] = 100;  // already up when the page opens
+  prog[9] = 40;
+
+  const card = (name, i) => `<div class="card"><div class="t"><span class="ms fill" style="color:${name.endsWith('mov') ? '#d93025' : '#d93025'}">${name.endsWith('mov') ? 'movie' : 'image'}</span>${name}</div><div class="th" style="background:linear-gradient(135deg,${COLORS[i % 9]},#fff)"></div></div>`;
+  const render = () => {
+    const doneN = prog.filter(p => p >= 100).length;
+    $('files').innerHTML = FILES.map((f, i) => [f, i]).filter(([, i]) => prog[i] >= 100).slice(-10).reverse().map(([f, i]) => card(f, i)).join('');
+    // The panel lists what's uploading first, then what's done, like Drive.
+    const order = FILES.map((f, i) => i).sort((a, b) => (prog[a] >= 100) - (prog[b] >= 100) || a - b);
+    $('list').innerHTML = order.slice(0, 6).map(i => {
+      const p = prog[i], icon = p >= 100 ? '<span class="ms fill ok">check_circle</span>' : failed && p > 0 ? '<span class="ms fill err">error</span>' : `<span class="ring" style="--p:${p}%"></span>`;
+      return `<div class="row"><span class="ms fill" style="color:#d93025">${FILES[i].endsWith('mov') ? 'movie' : 'image'}</span><span class="n">${FILES[i]}</span>${icon}</div>`;
+    }).join('');
+    if (!finished) $('head').textContent = `Uploading ${N - doneN} item${N - doneN === 1 ? '' : 's'}`;
+    return doneN;
+  };
+  let failed = false, finished = false;
+  // Advance the file that's uploading by `amount` percent of one file.
+  const advance = amount => {
+    const i = prog.findIndex(p => p < 100);
+    if (i < 0) return;
+    prog[i] = Math.min(100, prog[i] + amount);
+    if (prog[i] >= 100) demo.mark('file_done', { name: FILES[i] });
+  };
+  render();
+
+  // Holding: slow, and never past half the folder.
+  let run = null;
+  setInterval(() => {
+    if (!run && prog.filter(p => p >= 100).length < 22) advance(6);
+    if (!run) $('left').textContent = `${17 + Math.round(Math.random() * 3)} minutes left…`;
+    if (!finished) render();
+  }, 1000);
+
+  demo.onStart = durationMs => {
+    run = { at: Date.now() };
+    const left = () => prog.reduce((s, p) => s + (100 - p), 0);
+    const total = left();
+    const failAt = total * 0.25;  // fail: drops with about a quarter of the bytes still to go
+    const step = setInterval(() => {
+      const k = (Date.now() - run.at) / durationMs;
+      const target = total * (1 - Math.min(1, k));
+      while (left() > target + 0.01 && left() > 0) advance(Math.min(100, left() - target));
+      const mins = Math.max(1, Math.ceil((1 - k) * durationMs / 60000));
+      $('left').textContent = k < 1 ? `${mins} minute${mins === 1 ? '' : 's'} left…` : 'Less than a minute left…';
+      if (demo.outcome === 'fail' && left() <= failAt) {
+        clearInterval(step); failed = finished = true;
+        $('up').classList.add('failed');
+        $('head').textContent = '1 upload failed';
+        $('left').textContent = 'Network error. Remaining uploads canceled.';
+        $('cancel').textContent = 'Retry';
+        render(); demo.trigger();
+      } else if (left() <= 0) {
+        clearInterval(step); finished = true;
+        $('head').textContent = `${N} uploads complete`;
+        $('left').textContent = 'All files uploaded to Lisbon 2026';
+        $('cancel').textContent = '';
+        render(); demo.trigger();
+      }
+    }, 1000);
+  };
+</script>
+</body>
+</html>

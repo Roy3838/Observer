@@ -13,7 +13,7 @@
 // ask_user_info modal for any other destination).
 
 import type { SuiteEvent } from './fixtures';
-import { GROUND_TRUTH, prompt } from '../src/utils/groundTruth';
+import { ALL_CASES, prompt } from '../src/utils/groundTruth';
 
 export type PatternVerdict = 'PASS' | 'PARTIAL' | 'FAIL';
 
@@ -147,11 +147,6 @@ const ACTIONS = [
   { what: 'Ben: Stripe webhook retries', owner: ['ben'], keys: ['webhook'] },
   { what: 'Priya: launch email', owner: ['priya', 'pria', 'preya'], keys: ['launch email'] },
 ];
-// Phrases a transcript of that meeting should contain (any spelling in each group).
-const MEETING_PHRASES = [
-  ['march'], ['fourteenth', '14'], ['stripe'], ['webhook'], ['pricing'], ['fifteen', '15'],
-  ['invite'], ['waitlist', 'wait list'], ['launch email'], ['thursday'], ['friday'], ['wednesday'],
-];
 
 /** The summary of the meeting: what memory-only agents wrote after it ended (or, when the MCP
  *  built a single agent, anything written after the end), scored on decisions and owned actions. */
@@ -226,40 +221,35 @@ function scoreAd(run: Run): Score {
   return { verdict: notes.length ? 'PARTIAL' : 'PASS', metrics, notes };
 }
 
+
+// ---- Agent shapes over time (the e2e matrix) ------------------------------------
+
+/** Alerts in [from, to). */
+const alertsIn = (run: Run, from: number, to = Infinity) => alertTimes(run).filter(t => t >= from && t < to);
+
+/** One alert expected in a window, none before it: a deadline, a stall, a stop. PASS with nothing
+ *  early, PARTIAL when the window was right but something fired too soon. */
+function scoreWindow(run: Run, quietUntil: number, from: number, to: number): Score {
+  const early = alertsIn(run, -Infinity, quietUntil), hit = alertsIn(run, from, to);
+  const base = Math.min(quietUntil, from);
+  const metrics = { early: early.length, inWindow: hit.length, alertsAtS: alertTimes(run).map(t => Math.round((t - base) / 1000)), windowS: [Math.round((from - base) / 1000), Math.round((to - base) / 1000)] };
+  if (hit.length && !early.length) return { verdict: 'PASS', metrics, notes: [] };
+  if (hit.length) return { verdict: 'PARTIAL', metrics, notes: [`${early.length} alert(s) too soon`] };
+  return { verdict: 'FAIL', metrics, notes: early.length ? [`${early.length} alert(s) too soon, none in the window`] : ['no alert in the window'] };
+}
+
+/** Nothing should ever fire. */
+function scoreSilent(run: Run): Score {
+  const alerts = alertTimes(run);
+  const metrics = { alerts: alerts.length, alertsAtS: alerts.map(t => Math.round((t - run.startT) / 1000)) };
+  return alerts.length ? { verdict: 'FAIL', metrics, notes: ['alerted with nothing to alert on'] } : { verdict: 'PASS', metrics, notes: [] };
+}
+
 // ---- Scenarios ---------------------------------------------------------------
 
 // Judges for the ground truth use cases that aren't one alert on time (src/utils/groundTruth.ts),
 // keyed by use case id: what they logged, counted or clipped, and when.
 const CHECKS: Record<string, Check> = {
-  youtube_topic_changes: {
-    // A watcher that appends every occurrence: one note per topic change, with the video's time.
-    runMs: 240_000,
-    graceMs: 45_000,
-    score: run => {
-      const { chapters, duration } = run.truth;
-      const changes: any[] = chapters.slice(1);
-      const markT = new Map(marks(run, 'chapter').map(m => [m.data.index, m.t]));
-      const notes = entries(run).filter(e => e.t >= run.startT);
-      const byTs = new Set<number>(), byAny = new Set<number>();
-      let dups = 0, stray = 0;
-      for (const n of notes) {
-        const times = videoTimes(n.text, duration);
-        const hit = changes.find(c => times.some(s => s >= c.start - 5 && s <= c.start + 40)
-          || (mentions(n.text, CHAPTER_KEYS[c.index]) && n.t >= (markT.get(c.index) ?? Infinity) && n.t <= (markT.get(c.index) ?? 0) + 60_000));
-        if (!hit) { if (!mentions(n.text, CHAPTER_KEYS[0])) stray++; continue; }
-        if (byAny.has(hit.index)) dups++;
-        byAny.add(hit.index);
-        if (times.some(s => s >= hit.start - 5 && s <= hit.start + 40)) byTs.add(hit.index);
-      }
-      const metrics = {
-        changes: changes.length, withTimestamp: byTs.size, noted: byAny.size, duplicates: dups, stray, notes: notes.length,
-        memory: notes.map(n => n.text).join('\n').slice(0, 1500),
-      };
-      if (byTs.size >= changes.length - 1 && dups + stray <= 3) return { verdict: 'PASS', metrics, notes: [] };
-      if (byAny.size >= 3) return { verdict: 'PARTIAL', metrics, notes: [] };
-      return { verdict: 'FAIL', metrics, notes: [] };
-    },
-  },
   terminal_errors: {
     // A watcher that logs each error once, though each stays on screen for several iterations.
     runMs: 240_000,
@@ -303,20 +293,6 @@ const CHECKS: Record<string, Check> = {
       const metrics = { messages: chat.length, captured: found, capturedPct: pct(found, chat.length), duplicates: dups, withUsername: withUser, memory: lines.map(l => l.raw).join('\n').slice(0, 1500) };
       if (found >= 0.8 * chat.length && dups <= 0.25 * found) return { verdict: 'PASS', metrics, notes: [] };
       if (found >= 0.5 * chat.length) return { verdict: 'PARTIAL', metrics, notes: dups > 0.25 * found ? ['many messages saved more than once'] : [] };
-      return { verdict: 'FAIL', metrics, notes: [] };
-    },
-  },
-  meeting_transcript: {
-    // A logger of the call's audio. Nothing to detect: the transcript just has to be in memory.
-    runMs: 240_000,
-    graceMs: 90_000,
-    score: run => {
-      // Everything ever written, in case a later write replaced or cleared part of it.
-      const text = [...entries(run).map(e => e.text), ...run.memories.map(m => m.memory)].join('\n');
-      const hit = MEETING_PHRASES.filter(p => mentions(text, p));
-      const metrics = { phrases: MEETING_PHRASES.length, heard: hit.length, missing: MEETING_PHRASES.filter(p => !hit.includes(p)).map(p => p[0]), memory: text.slice(0, 1500) };
-      if (hit.length >= 8) return { verdict: 'PASS', metrics, notes: [] };
-      if (hit.length >= 4) return { verdict: 'PARTIAL', metrics, notes: [] };
       return { verdict: 'FAIL', metrics, notes: [] };
     },
   },
@@ -454,76 +430,70 @@ const CHECKS: Record<string, Check> = {
       if (covered.length >= deaths.length / 2 && covered.length > 0) return { verdict: 'PARTIAL', metrics, notes: [] };
       return { verdict: 'FAIL', metrics, notes: [] };
     },
+  },  // On track: the artist stops at the trigger and never starts again. An alert any time in the
+  // 8 minutes after, none while they were drawing.
+  no_progress: {
+    runMs: 300_000,
+    graceMs: 480_000,
+    score: run => run.triggerT === null ? { verdict: 'FAIL', metrics: {}, notes: ['never stopped drawing'] }
+      : scoreWindow(run, run.triggerT, run.triggerT, run.triggerT + 480_000),
   },
-  minecraft_deaths: {
-    // Alerts, not clips: one notification right after each death, none in between.
+  no_progress_drawing: {
+    // Ten minutes of steady drawing.
     runMs: 600_000,
-    graceMs: 40_000,
-    score: run => {
-      const deaths = marks(run, 'death').map(m => m.t);
-      const alerts = alertTimes(run);
-      const near = (a: number, d: number) => a >= d - 3000 && a <= d + 40_000;
-      const covered = deaths.filter(d => alerts.some(a => near(a, d)));
-      const stray = alerts.filter(a => !deaths.some(d => near(a, d))).length;
-      const metrics = { deaths: deaths.length, covered: covered.length, alerts: alerts.length, stray };
-      if (deaths.length && covered.length === deaths.length && stray <= 1) return { verdict: 'PASS', metrics, notes: [] };
-      if (covered.length > 0 && covered.length >= deaths.length / 2) return { verdict: 'PARTIAL', metrics, notes: [] };
-      return { verdict: 'FAIL', metrics, notes: [] };
-    },
+    graceMs: 30_000,
+    score: scoreSilent,
   },
-  workday_calls: {
-    // A transcript of the call in the middle of a workday, and nothing from the rest of the day.
-    runMs: 390_000,
-    graceMs: 60_000,
-    score: run => {
-      const text = [...entries(run).map(e => e.text), ...run.memories.map(m => m.memory)].join('\n');
-      const heard = MEETING_PHRASES.filter(p => mentions(text, p));
-      // Logged before the call started: the day, not the call.
-      const callT = marks(run, 'app').find(m => m.data.name === 'meet')?.t ?? Infinity;
-      const early = entries(run).filter(e => e.t < callT).length;
-      const metrics = { heard: heard.length, phrases: MEETING_PHRASES.length, loggedBeforeCall: early, memory: text.slice(0, 1500) };
-      const notes = early ? [`${early} notes logged before the call started`] : [];
-      if (heard.length >= 6 && early <= 1) return { verdict: 'PASS', metrics, notes };
-      if (heard.length >= 3) return { verdict: 'PARTIAL', metrics, notes };
-      return { verdict: 'FAIL', metrics, notes };
-    },
-  },
-  pet_food: {
-    // A camera logger for one moment: the dog walking away mid-bowl isn't it.
-    runMs: 180_000,
-    graceMs: 60_000,
-    score: run => {
-      const finished = marks(run, 'finished')[0]?.t;
-      if (!finished) return { verdict: 'FAIL', metrics: {}, notes: ['the clip never reached the empty bowl'] };
-      // A note that says the bowl is done, sentence by sentence, skipping "not finished yet".
-      const claims = entries(run).filter(e => e.text.split(/[.!?\n]/).some(l =>
-        mentions(l, ['finished', 'empty', 'done eating', 'ate all', 'all gone', 'cleaned the bowl']) && !/\b(not|no longer|yet)\b|n't/i.test(l)));
-      const good = claims.filter(e => e.t >= finished - 5000 && e.t <= finished + 60_000);
-      const early = claims.filter(e => e.t < finished - 5000);
-      const metrics = { notes: entries(run).length, claims: claims.length, early: early.length, onTimeAfterS: good.length ? Math.round((good[0].t - finished) / 1000) : null };
-      if (good.length && !early.length) return { verdict: 'PASS', metrics, notes: [] };
-      if (good.length) return { verdict: 'PARTIAL', metrics, notes: ['said it was finished before it was'] };
-      return { verdict: 'FAIL', metrics, notes: early.length ? ['said it was finished before it was'] : [] };
-    },
-  },
-  people_log: {
-    // A camera log of comings and goings: a note near each one, not one every loop.
+  social_nag: {
+    // Off to X at the trigger, back to VS Code 5 minutes later (marked 'back'). At least two alerts
+    // while away (every 2 minutes), none before, none a minute after getting back.
     runMs: 240_000,
-    graceMs: 45_000,
+    graceMs: 450_000,
     score: run => {
-      const KEYS: Record<string, string[]> = {
-        enter: ['enter', 'arriv', 'came in', 'comes in', 'walked in', 'walks in', 'appear', 'showed up', 'shows up', 'came home'],
-        leave: ['left', 'leav', 'exit', 'walked out', 'walks out', 'went out', 'departed', 'gone'],
-      };
-      const events = [...marks(run, 'enter'), ...marks(run, 'leave')];
-      const near = (t: number, e: { t: number }) => t >= e.t - 5000 && t <= e.t + 30_000;
-      const notes = entries(run);
-      const covered = events.filter(e => notes.some(n => near(n.t, e) && mentions(n.text, KEYS[e.name])));
-      const stray = notes.filter(n => !events.some(e => near(n.t, e))).length;
-      const metrics = { events: events.length, covered: covered.length, notes: notes.length, stray };
-      if (!events.length) return { verdict: 'FAIL', metrics, notes: ['the clip has no comings or goings marked'] };
-      if (covered.length >= 0.8 * events.length && stray <= events.length) return { verdict: 'PASS', metrics, notes: [] };
-      if (covered.length >= 0.5 * events.length) return { verdict: 'PARTIAL', metrics, notes: stray > events.length ? [`${stray} notes with nobody coming or going`] : [] };
+      const back = marks(run, 'back')[0]?.t;
+      if (run.triggerT === null || !back) return { verdict: 'FAIL', metrics: {}, notes: ['the demo never went to X and back'] };
+      const early = alertsIn(run, -Infinity, run.triggerT), away = alertsIn(run, run.triggerT, back + 30_000), after = alertsIn(run, back + 60_000);
+      const metrics = { early: early.length, whileAway: away.length, afterBack: after.length, alertsAtS: alertTimes(run).map(t => Math.round((t - run.triggerT!) / 1000)) };
+      if (away.length >= 2 && !early.length && !after.length) return { verdict: 'PASS', metrics, notes: [] };
+      if (away.length >= 1 && !after.length) return { verdict: 'PARTIAL', metrics, notes: away.length < 2 ? ['alerted once, not again'] : ['alerted before going to X'] };
+      return { verdict: 'FAIL', metrics, notes: after.length ? ['kept alerting after getting back to work'] : ['never alerted while on X'] };
+    },
+  },
+  maria_deadline: {
+    // Maria never replies (Carlos does, 3 minutes in): an alert around 5 minutes after the start,
+    // between 4 and 8 to allow for the agent's loop. Nothing for Carlos.
+    runMs: 180_000,
+    graceMs: 300_000,
+    score: run => scoreWindow(run, run.startT + 240_000, run.startT + 240_000, run.startT + 480_000),
+  },
+  maria_deadline_replied: {
+    // She replies 3 minutes in: the deadline never comes.
+    runMs: 180_000,
+    graceMs: 300_000,
+    score: scoreSilent,
+  },
+  render_stalled: {
+    // Creeps for 3 minutes, sticks at 62% (marked 'stalled'); the trigger is 3 minutes stuck.
+    // Quiet until 2.5 minutes stuck, an alert by 2 minutes after the trigger.
+    runMs: 180_000,
+    graceMs: 120_000,
+    score: run => {
+      const stalled = marks(run, 'stalled')[0]?.t;
+      if (!stalled || run.triggerT === null) return { verdict: 'FAIL', metrics: {}, notes: ['the render never stalled'] };
+      return scoreWindow(run, stalled + 150_000, stalled + 150_000, run.triggerT + 120_000);
+    },
+  },
+  person_clip: {
+    // A clip started (or marked) when the person walks in, not before.
+    runMs: 120_000,
+    graceMs: 60_000,
+    score: run => {
+      if (run.triggerT === null) return { verdict: 'FAIL', metrics: {}, notes: ['nobody walked in'] };
+      const clips = run.events.filter(e => e.type === 'clip' && e.ok && (e.tool === 'startClip' || e.tool === 'markClip')).map(e => e.t);
+      const onTime = clips.filter(c => c >= run.triggerT! - 3000 && c <= run.triggerT! + 40_000), early = clips.filter(c => c < run.triggerT! - 3000);
+      const metrics = { clipCalls: clips.length, onTime: onTime.length, early: early.length };
+      if (onTime.length && !early.length) return { verdict: 'PASS', metrics, notes: [] };
+      if (onTime.length) return { verdict: 'PARTIAL', metrics, notes: ['clipped the empty room too'] };
       return { verdict: 'FAIL', metrics, notes: [] };
     },
   },
@@ -709,11 +679,11 @@ const EXPERIMENTS: PatternScenario[] = [
   },
 ];
 
-const stray = Object.keys(CHECKS).filter(id => !GROUND_TRUTH.some(u => u.id === id && !u.expect));
+const stray = Object.keys(CHECKS).filter(id => !ALL_CASES.some(u => u.id === id && !u.expect));
 if (stray.length) throw new Error(`checks for no ground truth use case: ${stray.join(', ')}`);
 
 export const PATTERNS: PatternScenario[] = [
-  ...GROUND_TRUTH.filter(u => !u.expect).map(u => {
+  ...ALL_CASES.filter(u => !u.expect).map(u => {
     const check = CHECKS[u.id];
     if (!check) throw new Error(`ground truth use case ${u.id} has no expect and no check in patterns.ts`);
     return { id: u.id, demo: u.demo, prompt: prompt(u), requires: u.requires, ...check };

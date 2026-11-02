@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<!-- CapCut for Mac exporting a 4K travel video ("Lisbon trip"): the editor behind, the Export
+     window in front with the frame being encoded and a percentage. Holds exporting (the percentage
+     creeps up from 31% and never passes 40%) until the suite starts it; then it climbs, and it ends
+     by ?outcome=:
+       success  100%, "Exported" with a check, Open folder and Share buttons
+       fail     it fails at 62%: "Export failed" with an error code and Retry
+       stalled  it stops at 62% (marked 'stalled') and stays there, spinner still spinning, as if it
+                were still working. The trigger comes ?stall= ms later (default 3 minutes): the
+                moment "it hasn't moved in 3 minutes" is true.
+     The layout and copy follow CapCut's desktop export; the icons are Material Symbols. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CapCut</title>
+<link rel="stylesheet" href="fonts/inter.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<link rel="stylesheet" href="desktop_assets/macos.css">
+<style>
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 18px; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+  .cc { flex: 1; display: flex; flex-direction: column; background: #121212; color: #e6e6e6; font: 12px Inter, -apple-system, sans-serif; min-height: 0; position: relative; }
+  .cc .top { height: 38px; background: #1b1b1b; display: flex; align-items: center; padding: 0 14px 0 82px; gap: 16px; border-bottom: 1px solid #000; position: relative; }
+  .cc .top .mac-lights { left: 12px; }
+  .cc .top .name { margin: 0 auto; color: #cfcfcf; }
+  .cc .top .exp { background: #00c4cc; color: #001a1b; font-weight: 600; padding: 5px 14px; border-radius: 6px; display: flex; gap: 6px; align-items: center; }
+  .cc .mid { flex: 1; display: grid; grid-template-columns: 330px 1fr 290px; min-height: 0; }
+  .cc .media { background: #1b1b1b; border-right: 1px solid #000; padding: 10px; }
+  .cc .tabs { display: flex; gap: 14px; color: #9a9a9a; margin-bottom: 12px; }
+  .cc .tabs b { color: #fff; font-weight: 600; }
+  .cc .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .cc .grid i { aspect-ratio: 16/10; border-radius: 4px; display: block; }
+  .cc .player { display: flex; flex-direction: column; align-items: center; justify-content: center; background: #101010; }
+  .cc .player .scr { width: 82%; aspect-ratio: 16/9; background: linear-gradient(#f6b26b, #3d85c6); border-radius: 2px; }
+  .cc .props { background: #1b1b1b; border-left: 1px solid #000; padding: 12px; color: #9a9a9a; line-height: 26px; }
+  .cc .props b { color: #e6e6e6; font-weight: 600; display: block; margin-bottom: 6px; }
+  .cc .tl { height: 230px; background: #171717; border-top: 1px solid #000; padding: 26px 12px 12px 120px; position: relative; }
+  .cc .tl .track { height: 46px; margin-bottom: 8px; display: flex; gap: 3px; }
+  .cc .tl .track i { display: block; border-radius: 4px; height: 100%; }
+  .cc .tl .ph { position: absolute; left: 560px; top: 14px; bottom: 6px; width: 2px; background: #fff; }
+  .shade { position: absolute; inset: 0; background: rgba(0,0,0,.55); z-index: 10; }
+  .dlg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 560px; background: #262626; border-radius: 12px; z-index: 11; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; }
+  .dlg .h { padding: 16px 20px; font-size: 15px; font-weight: 600; color: #fff; display: flex; justify-content: space-between; }
+  .dlg .h .ms { color: #8a8a8a; }
+  .dlg .frame { margin: 0 20px; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; position: relative; background: #000; }
+  .dlg canvas { width: 100%; height: 100%; display: block; }
+  .dlg .over { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.35); color: #fff; }
+  .dlg .pct { font-size: 34px; font-weight: 600; letter-spacing: -.5px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .dlg .pct small { font-size: 13px; font-weight: 400; color: #d0d0d0; letter-spacing: 0; }
+  .spin { width: 22px; height: 22px; border: 2.5px solid rgba(255,255,255,.25); border-top-color: #00c4cc; border-radius: 50%; animation: spin 0.9s linear infinite; margin-bottom: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .dlg .bar { margin: 14px 20px 0; height: 4px; background: #3a3a3a; border-radius: 2px; overflow: hidden; }
+  .dlg .bar i { display: block; height: 100%; background: #00c4cc; }
+  .dlg .meta { margin: 12px 20px 0; color: #9a9a9a; display: flex; justify-content: space-between; }
+  .dlg .f { padding: 18px 20px; display: flex; justify-content: flex-end; gap: 10px; }
+  .dlg .f span { padding: 8px 18px; border-radius: 6px; background: #3a3a3a; color: #e6e6e6; font-weight: 500; }
+  .dlg .f span.p { background: #00c4cc; color: #001a1b; }
+  .ok { color: #3ddc97; font-size: 44px; font-variation-settings: 'FILL' 1; }
+  .bad { color: #ff5c5c; font-size: 44px; font-variation-settings: 'FILL' 1; }
+  .msg { text-align: center; font-size: 18px; font-weight: 600; }
+  .msg small { display: block; font-size: 12px; color: #c9c9c9; font-weight: 400; margin-top: 4px; }
+</style>
+<script src="demo-contract.js" data-outcome="fail"></script>
+<script src="desktop_assets/macos.js"></script>
+</head>
+<body>
+<div class="mac-window full">
+  <div class="cc">
+    <div class="top"><div class="mac-lights"><i></i><i></i><i></i></div><span class="ms">menu</span><span class="name">Lisbon trip</span><span class="exp"><span class="ms">upload</span>Export</span></div>
+    <div class="mid">
+      <div class="media"><div class="tabs"><b>Media</b><span>Audio</span><span>Text</span><span>Stickers</span><span>Effects</span><span>Transitions</span></div>
+        <div class="grid">
+          <i style="background:linear-gradient(135deg,#f6b26b,#cc4125)"></i><i style="background:linear-gradient(135deg,#6fa8dc,#0b5394)"></i><i style="background:linear-gradient(135deg,#93c47d,#38761d)"></i>
+          <i style="background:linear-gradient(135deg,#ffd966,#bf9000)"></i><i style="background:linear-gradient(135deg,#c27ba0,#741b47)"></i><i style="background:linear-gradient(135deg,#76a5af,#134f5c)"></i>
+          <i style="background:linear-gradient(135deg,#e06666,#660000)"></i><i style="background:linear-gradient(135deg,#8e7cc3,#20124d)"></i><i style="background:linear-gradient(135deg,#f9cb9c,#b45f06)"></i>
+        </div></div>
+      <div class="player"><div class="scr"></div></div>
+      <div class="props"><b>Video</b>Basic · Animation · Adjust<br>Scale 100%<br>Position X 0 · Y 0<br>Rotate 0°<br>Opacity 100%</div>
+    </div>
+    <div class="tl">
+      <div class="track" style="width:1100px"><i style="flex:3;background:#2f6f73"></i><i style="flex:2;background:#2f6f73"></i><i style="flex:4;background:#2f6f73"></i><i style="flex:2;background:#2f6f73"></i><i style="flex:3;background:#2f6f73"></i></div>
+      <div class="track" style="width:900px;height:26px"><i style="flex:1;background:#7a5a2a"></i></div>
+      <div class="track" style="width:1100px;height:30px"><i style="flex:1;background:#2b4a7a"></i></div>
+      <div class="ph"></div>
+    </div>
+    <div class="shade"></div>
+    <div class="dlg">
+      <div class="h"><span id="title">Exporting</span><span class="ms">close</span></div>
+      <div class="frame"><canvas id="cv" width="512" height="288"></canvas>
+        <div class="over" id="over"><div class="pct"><div class="spin"></div><span id="pct">31%</span><small>Exporting video…</small></div></div></div>
+      <div class="bar"><i id="bar" style="width:31%"></i></div>
+      <div class="meta"><span>Lisbon trip.mp4 · 4K · 30fps · H.264</span><span id="size">1.2 GB</span></div>
+      <div class="f" id="foot"><span>Cancel</span></div>
+    </div>
+  </div>
+</div>
+<script>
+  Mac.mount({ app: 'CapCut', menus: ['File', 'Edit', 'Clip', 'View', 'Window', 'Help'], battery: 64 });
+  const $ = id => document.getElementById(id);
+
+  // The frame being encoded: a street, a tram and a sunset, drawn from the export position.
+  const ctx = $('cv').getContext('2d');
+  const frame = p => {
+    const W = 512, H = 288, t = p * 40;
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, `hsl(${30 - p * 20}, 80%, ${70 - p * 25}%)`); sky.addColorStop(1, `hsl(${210 - p * 40}, 50%, ${55 - p * 20}%)`);
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#ffd27a'; ctx.beginPath(); ctx.arc(380 - p * 120, 70 + p * 90, 26, 0, 7); ctx.fill();
+    for (let i = 0; i < 7; i++) {
+      const x = ((i * 90 - t * 6) % 630 + 630) % 630 - 60;
+      ctx.fillStyle = ['#e8c39e', '#f2a7a0', '#9fc5e8', '#ffe599'][i % 4];
+      ctx.fillRect(x, 120 - (i % 3) * 18, 70, 170);
+      ctx.fillStyle = 'rgba(0,0,0,.25)';
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 2; c++) ctx.fillRect(x + 12 + c * 30, 135 - (i % 3) * 18 + r * 32, 14, 18);
+    }
+    const tx = ((t * 14) % 700) - 150;
+    ctx.fillStyle = '#f1c232'; ctx.fillRect(tx, 205, 150, 52); ctx.fillStyle = '#cfe2f3';
+    for (let w = 0; w < 4; w++) ctx.fillRect(tx + 10 + w * 35, 214, 26, 18);
+    ctx.fillStyle = '#444'; ctx.fillRect(0, 262, W, 26);
+  };
+
+  let pct = 31, done = false, frozen = false;
+  const set = p => {
+    pct = p;
+    $('pct').textContent = `${Math.floor(p)}%`;
+    $('bar').style.width = `${p}%`;
+    $('size').textContent = `${(p / 100 * 3.9).toFixed(1)} GB`;
+    frame(p / 100);
+  };
+  set(pct);
+  // Holding: creeps up, never past 40%.
+  const hold = setInterval(() => { if (pct < 40) set(Math.min(40, pct + 0.08)); }, 1500);
+
+  const end = (ok) => {
+    done = true;
+    $('over').innerHTML = ok
+      ? '<div class="msg"><span class="ms ok">check_circle</span><br>Exported<small>Saved to Movies/CapCut</small></div>'
+      : '<div class="msg"><span class="ms bad">error</span><br>Export failed<small>Couldn\'t encode the video. Try again. (Error code: -2003)</small></div>';
+    $('title').textContent = ok ? 'Export complete' : 'Export failed';
+    $('foot').innerHTML = ok ? '<span>Open folder</span><span>Share to TikTok</span><span class="p">Done</span>' : '<span>Cancel</span><span class="p">Retry</span>';
+    if (!ok) $('bar').style.background = '#ff5c5c';
+    demo.trigger();
+  };
+
+  demo.onStart = durationMs => {
+    clearInterval(hold);
+    const from = pct, at = Date.now();
+    const to = demo.outcome === 'success' ? 100 : 62;
+    const step = setInterval(() => {
+      const k = Math.min(1, (Date.now() - at) / durationMs);
+      set(from + (to - from) * k);
+      if (k < 1) return;
+      clearInterval(step);
+      if (demo.outcome === 'stalled') {
+        frozen = true;
+        demo.mark('stalled', { at: to });
+        setTimeout(() => demo.trigger(), Number(new URLSearchParams(location.search).get('stall')) || 180000);
+      } else end(demo.outcome === 'success');
+    }, 1000);
+  };
+</script>
+</body>
+</html>

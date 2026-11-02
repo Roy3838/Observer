@@ -10,7 +10,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Phone, MessageCircle, MessageSquare, Mail, Hash, Send, NotebookPen, Clapperboard, ChevronLeft, ChevronRight, ExternalLink, type LucideIcon } from 'lucide-react';
 import data from './generated/showcase.json';
 
-interface Pair { id: string; file: string; query: string; title: string; when: string; then: string; channel: { id: string; label: string } | null; alert: string }
+interface Pair { id: string; file: string; query: string; when: string; then: string; channel: { id: string; label: string } | null }
+
+/** What the Then says when it fires: the moment for an alert ("My battery is low"), what got done
+ *  for a log ("Log all the topics"). The demo itself shows the rest. */
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const fired = (p: Pair) => cap(p.channel ? p.when : p.then);
 
 const PAIRS = data.items as Pair[];
 
@@ -193,7 +198,7 @@ const UseCaseShowcase = () => {
                 key={`${src}-${runId}`}
                 ref={frameRef}
                 src={src}
-                title={`${pair.title} demo`}
+                title={`Demo: when ${pair.when}`}
                 allow="autoplay"
                 tabIndex={-1}
                 onLoad={() => setLoaded(true)}
@@ -212,13 +217,13 @@ const UseCaseShowcase = () => {
                 <span className="w-9 h-9 shrink-0 rounded-full bg-white/10 grid place-items-center"><Icon className="w-[18px] h-[18px] text-white" /></span>
                 <div className="min-w-0">
                   <div className="text-[11px] text-gray-400">{pair.channel ? `${pair.channel.label} · Observer` : 'Observer'} · now</div>
-                  <div className="text-sm text-white leading-snug">{pair.alert}</div>
+                  <div className="text-sm text-white leading-snug">{fired(pair)}</div>
                 </div>
               </div>
 
               <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full bg-[#0D1321]/80 backdrop-blur border border-white/10 px-3 py-1.5 text-xs text-gray-300">
                 <span className={`w-1.5 h-1.5 rounded-full ${phase === 'fired' ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`} />
-                {pair.title}
+                {phase === 'fired' ? 'Done' : 'Watching'}
               </div>
               <a
                 href={liveSrc}
