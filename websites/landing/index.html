@@ -22,11 +22,19 @@
     <meta property="twitter:image" content="https://observer-ai.com/bserver.png" />
 
     <link rel="icon" type="image/svg+xml" href="/eye-logo-black.svg" />
+    <script>document.documentElement.classList.add('js')</script>
+    <style>
+      body { margin: 0; }
+      .js #seo-fallback { visibility: hidden; }
+      #seo-fallback { min-height: 100vh; box-sizing: border-box; background: #111827; padding: 48px max(16px, calc((100% - 720px) / 2)); font-family: system-ui, sans-serif; line-height: 1.6; color: #9ca3af; }
+      #seo-fallback h1, #seo-fallback h2 { color: #e5e7eb; font-weight: 600; }
+      #seo-fallback a { color: #93c5fd; text-decoration: none; }
+    </style>
   </head>
   <body>
     <div id="root">
       <!-- Static fallback for crawlers / no-JS; React replaces this on mount -->
-      <main style="max-width:720px;margin:0 auto;padding:48px 16px;font-family:system-ui,sans-serif;line-height:1.6">
+      <main id="seo-fallback">
         <h1>Observer AI</h1>
         <p>Local open-source micro-agents that observe, log and react to your digital environment. Privacy-first, running entirely on your device.</p>
         <p>Observer AI lets you build small AI agents that watch your screen, camera or microphone and take action: send notifications, log events, or trigger automations. Use local models or Observer's hosted models.</p>
