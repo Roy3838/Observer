@@ -51,7 +51,7 @@ const items = GROUND_TRUTH
   .map(u => {
     const [f, query = ''] = u.demo.split('?');
     const channel = u.then === NOTIFY ? { id: u.show.channel, label: CHANNELS[u.show.channel].label } : null;
-    return { id: u.id, file: f, query, title: u.show.title, when: u.when, then: channel ? CHANNELS[u.show.channel].phrase : u.then, channel, alert: u.show.alert };
+    return { id: u.id, file: f, query, when: u.when, then: channel ? CHANNELS[u.show.channel].phrase : u.then, channel };
   });
 mkdirSync(join(landing, 'src/generated'), { recursive: true });
 writeFileSync(join(landing, 'src/generated/showcase.json'), JSON.stringify({ items }, null, 2));

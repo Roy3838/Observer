@@ -2,9 +2,10 @@
 <!-- A Pokémon MMO client (Padventures) grinding wild battles in Mt. Mortar with an Alolan Raichu: wild
      Pokémon (single or hordes of up to five) appear in the Battle List next to Raichu's yellow and pink
      moves, Raichu knocks them out, the next battle starts. Holds grinding commons until the suite
-     starts it; then a plain Tyrogue shows up twice along the way (marked 'decoy': not the one the
-     user wants), and it ends by ?outcome=: success, a Cloned Tyrogue appears and the battle waits for
-     the user; fail, the client loses its connection to the server. Sprites are original pixel art
+     starts it; then other players brag about shinies in chat twice along the way (marked 'decoy': not
+     on this screen), and it ends by ?outcome=: success, a shiny Golbat appears (other colors,
+     sparkling, starred in the Battle List) and the battle waits for the user; fail, the client loses
+     its connection to the server. Sprites are original pixel art
      drawn here, not the games' assets. -->
 <html lang="en">
 <head>
@@ -41,7 +42,12 @@
   .list .row { display: flex; align-items: center; gap: 8px; padding: 3px 4px; font-size: 15px; border-bottom: 1px solid #2f3a50; }
   .list .row canvas { width: 26px; height: 26px; image-rendering: pixelated; }
   .list .row .lv { margin-left: auto; color: #9fb0cc; font-size: 13px; }
-  .list .row.clone { color: #c9a6ff; }
+  .list .row.shiny { color: #ffd76a; }
+  .foe.shiny { position: relative; }
+  .foe.shiny::before, .foe.shiny::after { content: '✦'; position: absolute; color: #fff6b0; text-shadow: 0 0 8px #ffe066; font-size: 26px; animation: sparkle 1.2s ease-in-out infinite; }
+  .foe.shiny::before { left: -6px; top: 4px; }
+  .foe.shiny::after { right: -4px; top: 34px; animation-delay: .6s; font-size: 18px; }
+  @keyframes sparkle { 0%, 100% { opacity: 0; transform: scale(.4) rotate(0); } 50% { opacity: 1; transform: scale(1.2) rotate(45deg); } }
   .chat { position: absolute; left: 10px; top: 10px; width: 330px; background: rgba(0,0,0,.45); border-radius: 6px; padding: 6px 8px; font: 12px/17px Inter, sans-serif; color: #e8e8e8; }
   .chat b { color: #8fd3ff; font-weight: 600; }
   .dc { display: none; position: absolute; inset: 0; background: rgba(0,0,0,.6); z-index: 5; place-items: center; }
@@ -86,14 +92,15 @@
   const SPECIES = {
     Machop: ['#8fa7c4', '#5b7290'], Mankey: ['#e8d3b0', '#a6714a'], Geodude: ['#9a9a8a', '#5d5d52'], Zubat: ['#6c8fd8', '#7a4fa8'],
     Golbat: ['#5f7fd0', '#a24d8a'], Marill: ['#4fa3f0', '#f0f0f0'], Rattata: ['#9b6fb8', '#e8d8b0'], Graveler: ['#8b8b7b', '#4f4f45'],
-    Tyrogue: ['#c9a27a', '#6a4fb0'], 'Cloned Tyrogue': ['#c9a27a', '#6a4fb0'],
   };
+  // Shiny Golbat: the same sprite in other colors.
+  const SHINY = { Golbat: ['#7ec850', '#e86fa8'] };
   const seedOf = s => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-  const drawSprite = (canvas, name, size, glow) => {
-    const [a, b] = SPECIES[name];
+  const drawSprite = (canvas, name, size, shiny) => {
+    const [a, b] = shiny ? SHINY[name] : SPECIES[name];
     const ctx = canvas.getContext('2d');
     canvas.width = canvas.height = size;
-    let s = seedOf(name.replace('Cloned ', ''));
+    let s = seedOf(name);
     const rnd = () => (s = (s * 1103515245 + 12345) >>> 0) / 2 ** 32;
     const half = Math.ceil(size / 2);
     for (let y = 2; y < size - 1; y++) for (let x = 2; x < half; x++) {
@@ -105,7 +112,6 @@
     }
     ctx.fillStyle = '#111';
     ctx.fillRect(half - 3, Math.floor(size * 0.38), 1, 2); ctx.fillRect(size - half + 2, Math.floor(size * 0.38), 1, 2);
-    if (glow) { canvas.style.filter = 'drop-shadow(0 0 6px #b78cff) drop-shadow(0 0 2px #b78cff) hue-rotate(200deg)'; }
   };
   // Raichu from behind: orange, a cream belly edge, a long tail.
   (() => {
@@ -118,24 +124,26 @@
 
   const COMMONS = ['Machop', 'Mankey', 'Geodude', 'Zubat', 'Golbat', 'Marill', 'Rattata', 'Graveler'];
   const pick = () => COMMONS[Math.floor(Math.random() * COMMONS.length)];
-  const CHAT = [['TrainerKai', 'anyone seen a clone today?'], ['mochi_pad', 'LF horde partner mt mortar'], ['Rhydon4ever', 'gg'],
-    ['TrainerKai', 'clones spawn rate feels nerfed'], ['xXDarkraiXx', 'selling PP ups 8k each'], ['mochi_pad', 'nvm found one']];
+  const CHAT = [['TrainerKai', 'how long u been hunting?'], ['mochi_pad', 'LF horde partner mt mortar'], ['Rhydon4ever', 'gg'],
+    ['TrainerKai', 'shiny odds feel nerfed'], ['xXDarkraiXx', 'selling PP ups 8k each'], ['mochi_pad', 'nvm found one']];
+  // Other players' shinies: in chat, not on this screen.
+  const BRAGS = [['mochi_pad', 'SHINY ZUBAT!!! finally lol'], ['xXDarkraiXx', 'just got a shiny geodude at victory road 😎']];
   let ci = 0;
   const chat = () => { const [w, m] = CHAT[ci++ % CHAT.length]; $('chat').insertAdjacentHTML('beforeend', `<div><b>${w}:</b> ${m}</div>`); while ($('chat').children.length > 4) $('chat').firstChild.remove(); };
   for (let i = 0; i < 4; i++) chat();
   setInterval(() => { if (Math.random() < 0.4) chat(); }, 5000);
 
-  const show = (names, clone) => {
+  const show = (names, shiny) => {
     $('foes').innerHTML = ''; $('list').innerHTML = '';
     names.forEach(n => {
       const lv = 20 + Math.floor(Math.random() * 8);
-      const f = document.createElement('div'); f.className = 'foe';
-      const cv = document.createElement('canvas'); drawSprite(cv, n, 20, clone);
+      const f = document.createElement('div'); f.className = `foe${shiny ? ' shiny' : ''}`;
+      const cv = document.createElement('canvas'); drawSprite(cv, n, 20, shiny);
       f.append(cv); f.insertAdjacentHTML('beforeend', '<div class="hp"><i style="width:100%"></i></div>');
       $('foes').append(f);
-      const r = document.createElement('div'); r.className = `row${clone ? ' clone' : ''}`;
-      const sc = document.createElement('canvas'); drawSprite(sc, n, 20, clone);
-      r.append(sc); r.insertAdjacentHTML('beforeend', `<span>${n}</span><span class="lv">Lv. ${lv}</span>`);
+      const r = document.createElement('div'); r.className = `row${shiny ? ' shiny' : ''}`;
+      const sc = document.createElement('canvas'); drawSprite(sc, n, 20, shiny);
+      r.append(sc); r.insertAdjacentHTML('beforeend', `<span>${shiny ? '★ ' : ''}${n}</span><span class="lv">Lv. ${lv}</span>`);
       $('list').append(r);
     });
     $('bcount').textContent = names.length;
@@ -166,9 +174,10 @@
       if (run && t >= run.durationMs) break;
       if (run && decoys.length && t >= decoys[0]) {
         decoys.shift();
-        demo.mark('decoy', { name: 'Tyrogue' });
-        await battle(['Tyrogue']);
-        continue;
+        const [w, m] = BRAGS[decoys.length % BRAGS.length];
+        $('chat').insertAdjacentHTML('beforeend', `<div><b>${w}:</b> ${m}</div>`);
+        while ($('chat').children.length > 4) $('chat').firstChild.remove();
+        demo.mark('decoy', { chat: m });
       }
       const horde = Math.random() < 0.45;
       await battle(horde ? Array.from({ length: 5 }, pick) : [pick()]);
@@ -177,8 +186,8 @@
       $('dc').style.display = 'grid';
       $('text').textContent = 'Connection lost.';
     } else {
-      show(['Cloned Tyrogue'], true);
-      $('text').textContent = 'A wild Cloned Tyrogue appeared!';
+      show(['Golbat'], true);
+      $('text').textContent = 'A wild Golbat appeared!';
       setTimeout(() => { $('text').textContent = 'What will Alolan Raichu do?'; }, 2500);
     }
     demo.trigger();

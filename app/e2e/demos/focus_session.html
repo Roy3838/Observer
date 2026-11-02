@@ -276,9 +276,15 @@ console.log(sumWithInitial); // 10</pre></div>
     await until(0.55); show('chrome', 'mdn');
     await sleep(Math.min(20000, D * 0.08)); show('vscode');
     await until(1);
-    if (demo.outcome === 'success') show('chrome', 'x');
+    if (demo.outcome === 'success' || demo.outcome === 'returns') show('chrome', 'x');
     else if (demo.outcome === 'video') show('chrome', 'yt');
     demo.trigger();
+    // returns: scrolls X for a while (?away=, default 5 min), then goes back to work for good.
+    if (demo.outcome === 'returns') {
+      await sleep(Number(new URLSearchParams(location.search).get('away')) || 300000);
+      show('vscode');
+      demo.mark('back');
+    }
   };
 </script>
 </body>

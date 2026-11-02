@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <!-- TradingView Supercharts: BTCUSD (Bitstamp) on the 1-minute chart, ticking live. The user is
-     waiting on a price level, not a job. Holds drifting between ~80,500 and ~81,600 (floor 80,250).
-     When the suite starts it there are two near misses (down to ~80,120 and ~80,040, each marked
-     'near_miss'), then it ends by ?outcome=: success, the price breaks below 80,000 and stays below;
-     fail, it rallies through 82,500 instead and stays above. The trigger is the first tick past the
-     level. Clamps keep every tick (so every candle's low/high) on the right side until then.
+     watching for a sharp move, not a level: the agent has to compare against where the price was.
+     Holds drifting between ~80,500 and ~81,600 (floor 80,250); when the suite starts it, it keeps
+     drifting and then, over the last 3 minutes of the run, ends by ?outcome=: drop, it falls 2.6%
+     (trigger: 2% under the 5-minute high); dip, it falls 1.4% and holds (trigger: the bottom).
+     Marked 'falling' when the fall starts.
      Layout, icons and symbol logos copied from tradingview.com/chart (tradingview_assets/). -->
 <html lang="en">
 <head>
@@ -79,7 +79,7 @@
   .rbar .ic.on { background: var(--hover); border-radius: 6px; }
   .rbar .sp { flex: 1; }
 </style>
-<script src="demo-contract.js"></script>
+<script src="demo-contract.js" data-outcome="drop"></script>
 <script src="tradingview_assets/icons.js"></script>
 </head>
 <body>
@@ -165,8 +165,7 @@
   const fmt = (v, d = 0) => v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
   const sgn = (v, d = 0) => (v < 0 ? '−' : '+') + fmt(Math.abs(v), d);
 
-  const LOW = 80000, HIGH = 82500, PREV_CLOSE = 83679;  // PREV_CLOSE: yesterday's close, for Chg
-  demo.truth = { below: LOW, above: HIGH };
+  const PREV_CLOSE = 83679;  // yesterday's close, for Chg
 
   // ---- Price: a target-tracking random walk, clamped so no tick reaches a level before its time.
   let price = 81214, target = 81100, floor = 80250, ceil = 82150;
@@ -290,30 +289,38 @@
 
   // ---- Holding: the target wanders between ~80.5k and ~81.6k.
   let run = null;
-  const wander = () => { if (!run) target = 80500 + Math.random() * 1100; };
+  const wander = () => { if (!run || !run.fall) target = 80500 + Math.random() * 1100; };
   setInterval(wander, 18000);
 
-  // ---- Started: two near misses, then the break (or the rally), as fractions of the run.
+  // ---- Started: it keeps wandering, then falls by ?outcome=, the fall ending with the run:
+  //   drop  2.6% in about 3 minutes, then keeps drifting there. The trigger is the first tick
+  //         2% under the highest price of the 5 minutes before it.
+  //   dip   1.4% in about 3 minutes, then holds there: a scare, under the 2%. The trigger is the
+  //         bottom of the dip.
+  // Falls take min(3 min, half the run) and end with it, so the trigger comes right at the run's end.
+  const history = [];  // [t, price] for the 5-minute high
   const plan = () => {
-    const f = (Date.now() - run.at) / run.durationMs, fail = demo.outcome === 'fail';
-    if (run.done) return;
-    if (f < 0.2) target = 80900;
-    else if (f < 0.33) { target = 80060; floor = 80110; }       // near miss #1 (~80,120)
-    else if (f < 0.5) { target = 81050; floor = 80110; }
-    else if (f < 0.63) { target = 79900; floor = 80031; }       // near miss #2 (~80,040)
-    else if (f < 0.75) { target = 80700; floor = 80031; }
-    else if (!fail) { target = 79800; floor = 80004; }         // slides toward the level, held just above
-    else { target = 83100; floor = 80300; ceil = 82485; }       // rallies, held just below 82,500
-    if (!run.mark1 && f >= 0.32) { run.mark1 = true; demo.mark('near_miss', { low: Math.min(...candles.slice(-6).map(c => c.l)) }); }
-    if (!run.mark2 && f >= 0.62) { run.mark2 = true; demo.mark('near_miss', { low: Math.min(...candles.slice(-6).map(c => c.l)) }); }
-    // Past the run's length, it crosses as soon as the price is actually at the level.
-    if (f >= 1 && (fail ? price >= 82380 : price <= 80150)) {
+    const now = Date.now(), fallMs = Math.min(180000, run.durationMs / 2);
+    history.push([now, price]);
+    while (history.length && history[0][0] < now - 300000) history.shift();
+    if (run.done || now < run.at + run.durationMs - fallMs) return;
+    if (!run.fall) {
+      // Measured from the 5-minute high, so the wander before it can't add to the move.
+      const high0 = Math.max(...history.map(h => h[1]));
+      const dip = demo.outcome === 'dip';
+      run.fall = { at: now, from: price, to: Math.round(high0 * (1 - (dip ? 0.014 : 0.026))), ms: fallMs };
+      floor = dip ? Math.round(high0 * 0.984) : 60000; ceil = price + 200;
+      demo.mark('falling', { from: price, to: run.fall.to });
+    }
+    const k = Math.min(1, (now - run.fall.at) / run.fall.ms);
+    target = run.fall.from + (run.fall.to - run.fall.from) * k;
+    const high = Math.max(...history.map(h => h[1]));
+    const hit = demo.outcome === 'dip' ? k >= 1 && price <= run.fall.to + 60 : price <= high * 0.98;
+    if (hit) {
       run.done = true;
-      if (fail) { floor = 82520; ceil = 99999; price = 82500 + 40 + Math.round(Math.random() * 30); target = 82900; }
-      else { ceil = 79960; floor = 70000; price = 80000 - 40 - Math.round(Math.random() * 30); target = 79500; }
-      // Past the level, it keeps drifting on that side for the rest of the session.
-      setInterval(() => { target = fail ? 82650 + Math.random() * 600 : 79250 + Math.random() * 600; }, 15000);
-      tick(); draw(); demo.trigger();
+      const level = run.fall.to;
+      setInterval(() => { target = level + (Math.random() - 0.3) * 250; }, 15000);
+      demo.trigger();
     }
   };
 

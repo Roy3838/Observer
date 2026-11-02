@@ -13,11 +13,12 @@
 
 import type { TriggerOption } from '@components/AICreator/RecipeSplash';
 import { SHOWN, demoFile, isCameraDemo } from './groundTruth.ts';
+import { isTauri } from './platform';
 
 export interface TutorialDemo extends TriggerOption {
   /** Demo page file name in e2e/demos/. */
   file: string;
-  /** What it's called on the site and in the tab title: "GitHub Actions". */
+  /** Its tab title, from its When: "My GitHub release fails". */
   title: string;
   /** Full-size screenshot shown above the wheel while this demo is in focus. */
   preview: string;
@@ -32,7 +33,7 @@ export const TUTORIAL_DEMOS: TutorialDemo[] = SHOWN.filter(u => !isCameraDemo(u)
   return {
     id: file.replace(/\.html$/, ''),
     file,
-    title: u.show!.title,
+    title: u.when.charAt(0).toUpperCase() + u.when.slice(1),
     label: u.when,
     promptFragment: u.when,
     sensor: '$SCREEN',
@@ -45,6 +46,9 @@ export const demoTabTitle = (d: TutorialDemo): string => `${d.title} · Observer
 
 export const demoUrl = (d: TutorialDemo): string => {
   // No ?outcome=: the demo ends the way its shown pair alerts on (demo-contract.js data-outcome).
-  const q = new URLSearchParams({ tutorial: String(DEMO_RUN_MS), title: d.title });
+  // The desktop app captures the window natively, so the user never leaves the tab and comes back
+  // to start a ?tutorial= hold: there it runs from load with ?autostart= instead.
+  const mode = isTauri() ? 'autostart' : 'tutorial';
+  const q = new URLSearchParams({ [mode]: String(DEMO_RUN_MS), title: d.title });
   return `${DEMO_ORIGIN}${d.file}?${q}`;
 };

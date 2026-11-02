@@ -60,7 +60,7 @@ const WhitelistQR: React.FC<{ code: string; channel: PhoneChannel }> = ({ code, 
     )}
 
     <button
-      onClick={sms ? () => openSms(code) : openWhatsApp}
+      onClick={sms ? () => openSms(code) : () => openWhatsApp(code)}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors text-white ${
         sms ? 'bg-purple-600 hover:bg-purple-700' : 'bg-[#25D366] hover:bg-[#1ebe57]'
       }`}

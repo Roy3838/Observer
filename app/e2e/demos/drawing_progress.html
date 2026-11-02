@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<!-- Krita on a Mac, full screen on a pen display (a Cintiq): an illustration of a house on a hill
+     being drawn. The artist works in passes, and each one is visible progress: a blue sketch, then
+     line art, then flat colors, then shading, then details. Each pass adds its layer to the Layers
+     panel. The pen cursor follows each stroke. Holds drawing until the suite starts it; it keeps
+     drawing for the run, then ends by ?outcome=:
+       idle     the artist stops (the trigger): the pen cursor still drifts over the canvas and
+                hovers the toolbar, the clock runs, nothing is added, for as long as it's open.
+       drawing  the artist keeps drawing for as long as the page is open. The trigger is the end of
+                the run (nothing happens there).
+     Every 50 strokes are marked 'strokes' ({ n }). ?speed=20 draws 20× faster, to check by hand. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Krita</title>
+<link rel="stylesheet" href="fonts/inter.css">
+<link rel="stylesheet" href="fonts/material-symbols.css">
+<link rel="stylesheet" href="desktop_assets/macos.css">
+<style>
+  .ms { font-family: 'Material Symbols Outlined'; font-size: 18px; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20; }
+  .kr { flex: 1; display: flex; flex-direction: column; background: #31363b; color: #eff0f1; font: 12px Inter, -apple-system, sans-serif; min-height: 0; }
+  .kr .top { height: 30px; background: #2a2e32; display: flex; align-items: center; padding: 0 12px 0 80px; position: relative; border-bottom: 1px solid #1d2023; color: #bdc3c7; }
+  .kr .top .mac-lights { left: 12px; }
+  .kr .top .t { margin: 0 auto; }
+  .kr .bar { height: 36px; background: #31363b; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-bottom: 1px solid #1d2023; color: #bdc3c7; }
+  .kr .bar .sw { width: 22px; height: 22px; border: 1px solid #111; }
+  .kr .bar .sl { width: 140px; height: 18px; background: #232629; border-radius: 3px; position: relative; padding-left: 6px; line-height: 18px; }
+  .kr .bar .sl i { position: absolute; left: 0; top: 0; bottom: 0; background: #3daee9; opacity: .5; border-radius: 3px; }
+  .kr .mid { flex: 1; display: grid; grid-template-columns: 44px 1fr 270px; min-height: 0; }
+  .tools { background: #2a2e32; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 8px; color: #bdc3c7; }
+  .tools span { width: 32px; height: 30px; display: grid; place-items: center; border-radius: 3px; }
+  .tools span.on, .tools span.hv { background: #3daee9; color: #fff; }
+  .tools span.hv { background: #4d5359; }
+  .stage { background: #1d2023; position: relative; overflow: hidden; display: grid; place-items: center; }
+  .stage canvas { background: #fff; box-shadow: 0 0 0 1px #000, 0 8px 30px rgba(0,0,0,.5); }
+  .pen { position: absolute; width: 18px; height: 18px; border: 1.5px solid rgba(0,0,0,.65); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 0 1px rgba(255,255,255,.6); transition: left .25s linear, top .25s linear; }
+  .pen.draw { transition: none; }
+  .docks { background: #2a2e32; display: flex; flex-direction: column; border-left: 1px solid #1d2023; }
+  .dock { border-bottom: 1px solid #1d2023; }
+  .dock .h { padding: 6px 10px; background: #31363b; font-weight: 600; color: #bdc3c7; }
+  .wheel { height: 200px; display: grid; place-items: center; }
+  .wheel i { width: 160px; height: 160px; border-radius: 50%; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red); position: relative; }
+  .wheel i::after { content: ''; position: absolute; inset: 34px; background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, #3daee9); }
+  .layers .l { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid #262a2e; }
+  .layers .l.on { background: #3daee9; color: #fff; }
+  .layers .l .th { width: 34px; height: 24px; background: #fff; border: 1px solid #111; }
+  .status { height: 24px; background: #2a2e32; border-top: 1px solid #1d2023; display: flex; align-items: center; gap: 18px; padding: 0 10px; color: #bdc3c7; }
+</style>
+<script src="demo-contract.js" data-outcome="idle"></script>
+<script src="desktop_assets/macos.js"></script>
+</head>
+<body>
+<div class="mac-window full">
+  <div class="kr">
+    <div class="top"><div class="mac-lights"><i></i><i></i><i></i></div><span class="t">house_on_the_hill.kra (900 × 640) @ 100%</span></div>
+    <div class="bar"><span class="ms">brush</span>Pencil-2 Soft<span class="sw" id="fg" style="background:#000"></span><span class="sw" style="background:#fff"></span>
+      <span class="sl"><i style="width:70%"></i>Opacity: 70%</span><span class="sl"><i id="szb" style="width:20%"></i><span id="sz">Size: 4.00 px</span></span><span style="margin-left:auto">Normal ▾</span></div>
+    <div class="mid">
+      <div class="tools" id="tools"><span class="ms on">brush</span><span class="ms">ink_eraser</span><span class="ms">format_color_fill</span><span class="ms">colorize</span><span class="ms">select</span><span class="ms">pan_tool</span><span class="ms">zoom_in</span><span class="ms">text_fields</span><span class="ms">open_with</span></div>
+      <div class="stage" id="stage"><canvas id="cv" width="900" height="640"></canvas><div class="pen" id="pen"></div></div>
+      <div class="docks">
+        <div class="dock"><div class="h">Advanced Color Selector</div><div class="wheel"><i></i></div></div>
+        <div class="dock layers"><div class="h">Layers</div><div id="layers"></div></div>
+        <div class="dock" style="flex:1"><div class="h">Brush Presets</div><div style="padding:10px;color:#95a5a6;line-height:22px">Pencil-2 Soft<br>Ink-3 Gpen<br>Basic-5 Size Opacity<br>Airbrush Soft<br>Blender Blur</div></div>
+      </div>
+    </div>
+    <div class="status"><span>RGB/Alpha (8-bit integer/channel) sRGB</span><span id="strokes">0 strokes</span><span style="margin-left:auto">100%</span></div>
+  </div>
+</div>
+<script>
+  Mac.mount({ app: 'Krita', menus: ['File', 'Edit', 'View', 'Image', 'Layer', 'Select', 'Filter', 'Tools', 'Settings', 'Window', 'Help'], battery: 88 });
+  const $ = id => document.getElementById(id);
+  const ctx = $('cv').getContext('2d');
+  ctx.lineCap = ctx.lineJoin = 'round';
+
+  // A seeded random, so every run draws the same picture.
+  let seed = 42;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32;
+  const jit = a => (rnd() - 0.5) * a;
+
+  // The picture: shapes, back to front. Each has an outline (a closed path of points) and a color.
+  const ell = (cx, cy, rx, ry, n = 28) => Array.from({ length: n + 1 }, (_, i) => [cx + rx * Math.cos(i / n * 2 * Math.PI), cy + ry * Math.sin(i / n * 2 * Math.PI)]);
+  const poly = pts => [...pts, pts[0]];
+  const SHAPES = [
+    { name: 'sun', pts: ell(720, 120, 55, 55), col: '#ffd966' },
+    { name: 'cloud', pts: ell(220, 110, 90, 32), col: '#eef3fb' },
+    { name: 'cloud', pts: ell(480, 80, 70, 24), col: '#eef3fb' },
+    { name: 'far hill', pts: poly([[0, 400], [180, 300], [380, 360], [600, 280], [900, 380], [900, 640], [0, 640]]), col: '#9fc5a0' },
+    { name: 'hill', pts: poly([[0, 480], [260, 380], [520, 420], [900, 470], [900, 640], [0, 640]]), col: '#6aa84f' },
+    { name: 'house', pts: poly([[400, 300], [560, 300], [560, 420], [400, 420]]), col: '#f4cccc' },
+    { name: 'roof', pts: poly([[385, 302], [480, 230], [575, 302]]), col: '#a64d3c' },
+    { name: 'door', pts: poly([[465, 350], [495, 350], [495, 420], [465, 420]]), col: '#6d4c41' },
+    { name: 'window', pts: poly([[415, 325], [450, 325], [450, 360], [415, 360]]), col: '#9fc5e8' },
+    { name: 'window', pts: poly([[510, 325], [545, 325], [545, 360], [510, 360]]), col: '#9fc5e8' },
+    { name: 'trunk', pts: poly([[228, 330], [248, 330], [252, 450], [224, 450]]), col: '#7f6000' },
+    { name: 'tree', pts: ell(238, 300, 70, 62), col: '#38761d' },
+    { name: 'path', pts: poly([[470, 420], [490, 420], [560, 640], [400, 640]]), col: '#e6d2a8' },
+    { name: 'bush', pts: ell(640, 440, 50, 26), col: '#4e8f3a' },
+    { name: 'bush', pts: ell(330, 470, 40, 22), col: '#4e8f3a' },
+  ];
+  const pathOf = pts => { const p = new Path2D(); p.moveTo(...pts[0]); pts.slice(1).forEach(q => p.lineTo(...q)); p.closePath(); return p; };
+  const bbox = pts => { const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; };
+
+  // Strokes, in the order the artist draws them: { pts, color, width, clip?, layer }.
+  const STROKES = [];
+  const split = (pts, k) => { const out = []; const n = Math.ceil(pts.length / k); for (let i = 0; i < pts.length - 1; i += n) out.push(pts.slice(i, i + n + 1)); return out; };
+  // Sketch: loose blue lines, two passes per shape, in short pieces.
+  for (const s of SHAPES) for (let r = 0; r < 2; r++) for (const seg of split(s.pts.map(([x, y]) => [x + jit(8), y + jit(8)]), 3))
+    STROKES.push({ pts: seg, color: 'rgba(61,133,198,.45)', width: 2, layer: 'Sketch' });
+  // Line art: clean black, one piece per side.
+  for (const s of SHAPES) for (const seg of split(s.pts, 3)) STROKES.push({ pts: seg, color: '#1b1b1b', width: 3, layer: 'Lineart' });
+  // Flats: zigzag hatching inside each shape, band by band.
+  const hatch = (s, color, width, step, layer, from = 0, to = 1) => {
+    const [x0, y0, x1, y1] = bbox(s.pts);
+    for (let y = y0 + (y1 - y0) * from; y < y0 + (y1 - y0) * to; y += step) {
+      const pts = [];
+      for (let x = x0 - 10; x <= x1 + 10; x += 24) pts.push([x, y + (pts.length % 2 ? step * 0.8 : 0)]);
+      STROKES.push({ pts, color, width, clip: pathOf(s.pts), layer });
+    }
+  };
+  for (const s of SHAPES) hatch(s, s.col, 26, 18, 'Flats');
+  // Shading: a darker band on the lower part of each shape.
+  const shade = c => { const n = parseInt(c.slice(1), 16); const d = v => Math.round(v * 0.78); return `rgb(${d(n >> 16)},${d((n >> 8) & 255)},${d(n & 255)})`; };
+  for (const s of SHAPES) hatch(s, shade(s.col), 12, 10, 'Shading', 0.65, 1);
+  // Details: grass blades, then flowers, then texture on the walls, and so on as long as it's open.
+  const detail = () => {
+    const kind = rnd();
+    if (kind < 0.5) { const x = rnd() * 900, y = 470 + rnd() * 160; return { pts: [[x, y], [x + jit(6), y - 10 - rnd() * 12]], color: '#274e13', width: 2, layer: 'Details' }; }
+    if (kind < 0.75) { const x = rnd() * 900, y = 480 + rnd() * 150; return { pts: ell(x, y, 4, 4, 8), color: ['#e06666', '#ffd966', '#ffffff', '#c27ba0'][Math.floor(rnd() * 4)], width: 4, layer: 'Details' }; }
+    const x = 405 + rnd() * 150, y = 305 + rnd() * 110; return { pts: [[x, y], [x + 14, y]], color: 'rgba(120,63,4,.35)', width: 2, layer: 'Details' };
+  };
+
+  // ---- Drawing one stroke, the pen cursor on its tip.
+  const stage = $('stage'), cv = $('cv'), pen = $('pen');
+  const toStage = ([x, y]) => { const r = cv.getBoundingClientRect(), s = stage.getBoundingClientRect(); return [r.left - s.left + x * r.width / 900, r.top - s.top + y * r.height / 640]; };
+  const movePen = p => { const [x, y] = toStage(p); pen.style.left = `${x}px`; pen.style.top = `${y}px`; };
+  const LAYERS = [];
+  const addLayer = name => {
+    if (LAYERS.includes(name)) return;
+    LAYERS.push(name);
+    $('layers').innerHTML = [...LAYERS].reverse().map(l => `<div class="l${l === name ? ' on' : ''}"><span class="ms">visibility</span><span class="th"></span>${l}</div>`).join('') + '<div class="l"><span class="ms">visibility</span><span class="th"></span>Background</div>';
+  };
+  addLayer('Sketch');
+  // ?speed=20 draws 20× faster, to check the picture by hand.
+  const SPEED = Number(new URLSearchParams(location.search).get('speed')) || 1;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const pause = ms => sleep(ms / SPEED);
+  let count = 0;
+  const draw = async st => {
+    addLayer(st.layer);
+    $('fg').style.background = st.color;
+    $('sz').textContent = `Size: ${st.width.toFixed(2)} px`; $('szb').style.width = `${Math.min(100, st.width * 4)}%`;
+    pen.classList.add('draw');
+    for (let i = 1; i < st.pts.length; i++) {
+      ctx.save();
+      if (st.clip) ctx.clip(st.clip);
+      ctx.strokeStyle = st.color; ctx.lineWidth = st.width;
+      ctx.beginPath(); ctx.moveTo(...st.pts[i - 1]); ctx.lineTo(...st.pts[i]); ctx.stroke();
+      ctx.restore();
+      movePen(st.pts[i]);
+      await pause(40);
+    }
+    pen.classList.remove('draw');
+    count++;
+    $('strokes').textContent = `${count} strokes`;
+    if (count % 50 === 0) demo.mark('strokes', { n: count });
+  };
+
+  // ---- The artist: draws until told to stop, a stroke every ~1.5 s.
+  let drawing = true, k = 0;
+  (async () => {
+    for (;;) {
+      if (!drawing) { await sleep(500); continue; }
+      await draw(k < STROKES.length ? STROKES[k] : detail());
+      k++;
+      await pause(900 + rnd() * 1200);
+    }
+  })();
+
+  // ---- Idle: the pen drifts, hovers a tool now and then, adds nothing.
+  const tools = [...$('tools').children];
+  const idle = () => {
+    setInterval(() => {
+      movePen([100 + Math.random() * 700, 80 + Math.random() * 480]);
+      tools.forEach(t => t.classList.remove('hv'));
+      if (Math.random() < 0.3) tools[1 + Math.floor(Math.random() * (tools.length - 1))].classList.add('hv');
+    }, 2500);
+  };
+
+  demo.onStart = async durationMs => {
+    await sleep(durationMs);
+    if (demo.outcome !== 'idle') { demo.trigger(); return; }
+    drawing = false;
+    idle();
+    demo.trigger();
+  };
+</script>
+</body>
+</html>
