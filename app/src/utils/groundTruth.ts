@@ -73,11 +73,11 @@ const GMAIL = { dana_replies: 'success', bounced: 'fail', invoice_overdue: 'invo
 // In the order the wheels show them.
 export const GROUND_TRUTH: UseCase[] = [
   // Loss falls epoch by epoch; a crash ("Your session crashed") comes partway through the rest.
-  { id: 'colab_crashes', group: 'alert', demo: 'colab_training.html', when: 'my GPU training crashes', then: NOTIFY, expect: IF_FAILS,
+  { id: 'colab_crashes', group: 'alert', demo: 'colab_training.html', when: 'my training crashes', then: NOTIFY, expect: IF_FAILS,
     show: { channel: 'call' } },
 
   // sold_out: the event sells out while you're in line.
-  { id: 'ticketmaster_out', group: 'alert', demo: 'ticketmaster_queue.html', when: "I'm out of the Ticketmaster queue", then: NOTIFY,
+  { id: 'ticketmaster_out', group: 'alert', demo: 'ticketmaster_queue.html', when: "I'm out of the queue", then: NOTIFY,
     outcomes: { my_turn: 'success', sold_out: 'fail' }, expect: { my_turn: 'notify', sold_out: 'notify' },
     show: { channel: 'call' } },
 
