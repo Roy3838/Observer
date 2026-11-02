@@ -1,257 +1,142 @@
-<div align="center">
-
 # Observer AI
 
-[![Observer App Online](https://img.shields.io/badge/🌐_Try_Out-Web_App-blue?style=for-the-badge&color=4CAF50)](https://app.observer-ai.com/)
-[![Download App](https://img.shields.io/badge/⬇️_Download-Latest_Release-blue?style=for-the-badge&color=2196F3)](https://github.com/Roy3838/Observer/releases/latest/)
+[![Release](https://img.shields.io/github/v/release/Roy3838/Observer?style=flat-square)](https://github.com/Roy3838/Observer/releases/latest/)
+[![License](https://img.shields.io/badge/License-AGPLv3-blue.svg?style=flat-square)](LICENSE)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.com/invite/wnBb7ZQDUC)
 
-[YouTube](https://www.youtube.com/@Observer-AI) | [Tiktok](https://www.tiktok.com/@observerai) | [Instagram](https://www.instagram.com/observer_ai.tech/) | [Twitter](https://x.com/AppObserverAI) | [Discord](https://discord.com/invite/wnBb7ZQDUC) | [Reddit](https://www.reddit.com/r/ObserverAI/)
+Observer is a local-first AI agent that watches your screen, camera and audio, and takes action when something happens. It runs on local models, so your data stays **100% private**.
 
-### *_The Agent that monitors your screen, so you don't have to._*
+> *"When my download finishes, call me."*
 
-Using local models, keeping your data **100% private and secure**.
+<img src="./assets/demo.gif" alt="Observer demo: an agent that calls you when a Steam download finishes" />
 
-[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Deployed-success)](https://roy3838.github.io/observer-ai)
-[![License](https://img.shields.io/badge/License-AGPLv3-blue.svg)](LICENSE)
+## Get started
 
+**Web app (no install):** open [app.observer-ai.com](https://app.observer-ai.com/) and download a model from the Model Hub to run it in your browser.
 
-## What Observer Does Best
+**Desktop app (recommended):** download the [latest release](https://github.com/Roy3838/Observer/releases/latest/) for macOS, Windows or Linux. It ships with llama.cpp, so it runs any GGUF model (load an `mmproj` file for vision).
 
-### When X then Y
+**Bring your own server:** in the app, set `Custom Model Server URL` to any OpenAI-compatible endpoint (Ollama, llama.cpp, vLLM). The browser app sends requests to `localhost:3838`, and the desktop app proxies them to your server to get around CORS.
 
+Then describe what you want Observer to watch, or build an agent yourself from the **Micro Agents** tab.
 
-• When I'm distracted, call me.       
-• When my download finishes, SMS me.      
-• When my render is done, Whatsapp me.        
-• When this dashboard changes, email me.      
-• When a person is on camera, telegram me.       
-• When my dog finishes their food, log it.        
+## What you can do
 
-<!--### Integrations-->
-<!--<table>-->
-<!--<tr>-->
-<!--<td width="50%" valign="top">-->
-<!---->
-<!--### **Intelligent Logging**-->
-<!---->
-<!--**Text & Visual Memory**-->
-<!---->
-<!--**Smart Screen Recording**-->
-<!---->
-<!--</td>-->
-<!--<td width="50%" valign="top">-->
-<!---->
-<!--### **Powerful Notifications**-->
-<!---->
-<!--**Calling** • **SMS** • **WhatsApp**   -->
-<!--**Email** • **Discord** • **Telegram** -->
-<!--</td>-->
-<!--</tr>-->
-<!--</table>-->
+- When I'm distracted, call me.
+- When my download finishes, SMS me.
+- When my render is done, WhatsApp me.
+- When this dashboard changes, email me.
+- When a person is on camera, Telegram me.
+- When my dog finishes their food, log it.
 
+## How it works
 
-## How Observer Micro-Agents Work
+Each micro-agent runs in a loop: **Sensors → Model → Code**.
 
-<div align="center">
-
-<table>
-<tr>
-<td align="center" valign="top" width="33%">
-
-### Sensors →
-
-</td>
-<td align="center" valign="top" width="33%">
-
-### Models →
-
-</td>
-<td align="center" valign="top" width="33%">
-
-### Tools
-
-</td>
-</tr>
-<tr>
-<td align="center" valign="middle" width="33%">
-
-<img src="https://img.icons8.com/fluency/96/monitor.png" width="48" height="48" alt="Screen"/>
-<img src="https://img.icons8.com/fluency/96/camera.png" width="48" height="48" alt="Camera"/>
-<img src="https://img.icons8.com/fluency/96/microphone.png" width="48" height="48" alt="Mic"/>
-<img src="https://img.icons8.com/fluency/96/speaker.png" width="48" height="48" alt="Audio"/>
-
-<br><sub>Screen • Camera • Mic • Audio</sub>
-
-</td>
-<td align="center" valign="middle" width="33%">
-
-<img src="https://img.icons8.com/fluency/96/brain.png" width="64" height="64" alt="AI Brain"/>
-
-<br><sub>Local LLMs</sub>
-
-</td>
-<td align="center" valign="middle" width="33%">
-
-<img src="https://cdn.simpleicons.org/whatsapp/25D366" width="40" height="40" alt="WhatsApp"/>
-<img src="https://cdn.simpleicons.org/discord/5865F2" width="40" height="40" alt="Discord"/>
-<img src="https://cdn.simpleicons.org/telegram/26A5E4" width="40" height="40" alt="Telegram"/>
-<img src="https://cdn.simpleicons.org/iMessage/0084FF" width="40" height="40" alt="SMS"/>
-<img src="https://img.icons8.com/fluency/96/note.png" width="40" height="40" alt="Memory"/>
-<img src="https://img.icons8.com/fluency/96/code.png" width="40" height="40" alt="Code"/>
-
-<br><sub>Messaging • Notifications • Recording • Memory • Code</sub>
-
-</td>
-</tr>
-</table>
-
-<br>
-
-</div>
-
-</div>
-
----
-
-## Base Micro-Agent Example 
-Sends an email when the Observer logo is on screen
-
-System Prompt (uses $SCREEN for multimodal screen input)
 ```
-You are an Observer agent, watch the screen and if you see the Observer logo say OBSERVER, if you don't, say CONTINUE. 
+You are an Observer agent. If you see the Observer logo say OBSERVER, otherwise say CONTINUE.
 $SCREEN
 ```
 
-Code using Email Tool if model identified an Observer logo
 ```javascript
-if(response.includes("OBSERVER")){
-  sendEmail("your@email.com", response, screen); //sends the screen as an attached image
+if (response.includes("OBSERVER")) {
+  sendEmail("your@email.com", response, screen); // attaches the screenshot
 }
 ```
 
----
+<details>
+<summary><b>Sensors</b></summary>
 
+| Sensor | Description |
+| --- | --- |
+| `$SCREEN` | Screenshot for multimodal models |
+| `$CAMERA` | Camera frame for multimodal models |
+| `$MEMORY` / `$MEMORY@agent_id` | An agent's stored text (defaults to the current agent) |
+| `$IMEMORY` / `$IMEMORY@agent_id` | An agent's stored images |
+| `$CLIPBOARD` | Clipboard contents |
+| `$MICROPHONE`\* | Microphone transcription |
+| `$SCREEN_AUDIO`\* | Transcription of a shared tab's audio |
+| `$ALL_AUDIO`\* | Mic and screen audio mixed (good for meetings) |
 
-# Building Your Own Micro-Agent
+\* Transcribed with Whisper via transformers.js.
 
-Creating your own Observer AI consist of three things:
+</details>
 
-* SENSORS - input that your model will have
-* MODELS - Small LLMs
-* TOOLS - functions for your model to use
+<details>
+<summary><b>Tools</b></summary>
 
-## Quick Start
+**Memory and agents** (`agentId` is optional and defaults to the running agent)
+- `getMemory(agentId?)`, `setMemory(agentId?, content)`, `appendMemory(agentId?, content)`
+- `getImageMemory(agentId?)`, `setImageMemory(agentId?, images)`, `appendImageMemory(agentId?, images)`
+- `startAgent(agentId?)`, `stopAgent(agentId?)`
+- `time()`, `sleep(ms)`
 
-1. Navigate to the Agent Dashboard and click "Create New Agent"
-2. Fill in the "Configuration" tab with basic details (name, description, model, loop interval)
-3. Give your model a system prompt and Sensors! The current Sensors that exist are:
-   * **Screenshot** ($SCREEN) Captures screen as an image for multimodal models.
-   * **Screen OCR** ($SCREEN_OCR) Captures screen content as text via OCR.
-   * **CAMERA** ($CAMERA) Captures the camera for multimodal models.
-   * **CAMERA OCR** ($CAMERA_OCR) Captures the camera text via OCR.
-   * **Agent Memory** ($MEMORY or $MEMORY@agent_id) Accesses agents' stored information (defaults to current agent)
-   * **Agent Image Memory** ($IMEMORY or $IMEMORY@agent_id) Accesses agents' stored images (defaults to current agent)
-   * **Agent Image Memory OCR** ($IMEMORY_OCR) Captures text on an image's memory via OCR.
-   * **Clipboard** ($CLIPBOARD) It pastes the clipboard contents 
-   * **Microphone**\* ($MICROPHONE) Captures the microphone and adds a transcription
-   * **Screen Audio**\* ($SCREEN_AUDIO) Captures the audio transcription of screen sharing a tab.
-   * **All audio**\* ($ALL_AUDIO) Mixes the microphone and screen audio and provides a complete transcription of both (used for meetings).
+**Notifications**
+- `sendDiscord(webhook, message, images?, videos?)`
+- `sendTelegram(chat_id, message, images?, videos?)`: get your chat_id by messaging @observer_notification_bot
+- `sendEmail(email, message, images?, videos?)`: must be your signed-in email
+- `sendPushover(user_token, message, images?, title?)`
+- `call(phone_number, message)`†
+- `sendWhatsapp(phone_number, message, images?, videos?)`†
+- `sendSms(phone_number, message, images?, videos?)`†: blocked for US/Canada (A2P policy)
+- `notify(title, options)`: browser notification (some browsers block these)
+- `sound(name?, volume?)`: local sound, no account needed
 
-\* Uses a whisper model with transformers.js
+† Needs whitelisting: SMS or call +1 (863) 208-5341, or WhatsApp +1 (555) 783-4727.
 
-Agent Tools:
-  * `getMemory(agentId?)*` – Retrieve stored memory 
-  * `setMemory(agentId?, content)*` – Replace stored memory  
-  * `appendMemory(agentId?, content)*` – Add to existing memory  
-  * `getImageMemory(agentId?)*` - Retrieve images stored in memory 
-  * `setImageMemory(agentId?, images)*` - Set images to memory
-  * `appendImageMemory(agentId?, images)*` - Add images to memory
-  * `startAgent(agentId?)*` – Starts an agent  
-  * `stopAgent(agentId?)*` – Stops an agent
-  * `time()` - Gets current time
-  * `sleep(ms)` - Waits that ammount of miliseconds
+**Video recording**
+- `startClip()`, `stopClip()`, `markClip(label)`, `getVideo()`
 
-`*` `agentId` is optional, deaults to agent running code
+**Desktop app**
+- `ask(question, title?)`, `message(message, title?)`, `system_notify(body, title?)`
+- `overlay(body)`, `click('left' | 'right')`, `celebrate()`
 
-Notification Tools:
-  * `sendDiscord(discord_webhook, message, images?, videos?)` - Directly sends a discord message to a server. 
-  * `sendTelegram(chat_id, message, images?, videos?)` Sends a telegram message with the Observer bot. Get the chat_id messaging the bot @observer_notification_bot.
-  * `sendEmail(email, message, images?, videos?)` - Sends an email. Email must be the signed in email.
-  * `sendPushover(user_token, message, images?, title?)` - Sends a pushover notification.
-  * `call(phone_number, message)*` - Makes an automated phone call with text-to-speech message. Needs whitelisting.
-  * `sendWhatsapp(phone_number, message, images?, videos?)*` - Sends a whatsapp message with the Observer bot. Needs whitelisting. 
-  * `sendSms(phone_number, message, images?, videos?)*` - Sends an SMS to a phone number. Due to A2P policy, blocked for US/Canada. Needs whitelisting.
-  * `notify(title, options)` – Send browser notification ⚠️IMPORTANT: Some browsers block notifications
-  * `sound(name?, volume?)` - Plays a notification sound locally. No account needed, works on web and app.
+</details>
 
-`*` To whitelist, SMS or call +1 (863)208-5341 or whatsapp +1 (555)783-4727
+<details>
+<summary><b>Code tab variables</b></summary>
 
-Video Recording Tools: 
-  * `startClip()` - Starts a recording of any video media and saves it to the recording Tab.
-  * `stopClip()` - Stops an active recording
-  * `markClip(label)` - Adds a label to any active recording that will be displayed in the recording Tab.
-  * `getVideo()` - Returns array of videos on buffer.
-
-App Tools:
-  * `ask(question, title="Confirmation")` - Pops up a system confirmation dialog
-  * `message(message, title="Agent Message")` - Pops up a system message
-  * `system_notify(body, title="Observer AI")` - Sends a system notification
-  * `overlay(body)` - Pushes a message to the overlay
-  * `click('left'|'right')` - Triggers a mouse click at the current cursor position accepts either 'left' or 'right', defaults to left.
-  * `celebrate()` - Triggers a celebration animation in the Observer UI.
-## Code Tab
-
-The "Code" tab receives the following variables as context before running: 
-* `response` - The model's response (`null` when using a decision model)
-* `decision` - The decision model's answer (`null` for text models, see [Decision Models](#decision-models))
-* `agentId` - The id of the agent running the code
-* `screen` - The screen if captured 
-* `camera` - The camera if captured 
-* `imemory` - The agent's current image in memory
-* `images` - All images sent to the model 
-* `prompt` - The model's prompt
-* `microphone` - Trascription from the microphone in this loop
-* `screenAudio` - Transcription from screen audio in this loop
-* `allAudio` - Transcription from microphone and screen audio mixed in this loop
-
-JavaScript agents run in the browser sandbox, making them ideal for passive monitoring and notifications:
+| Variable | Description |
+| --- | --- |
+| `response` | The model's response (`null` with a decision model) |
+| `decision` | The decision model's answer (`null` with text models) |
+| `agentId` | ID of the running agent |
+| `screen`, `camera` | Captured images |
+| `imemory` | The agent's current image memory |
+| `images` | All images sent to the model |
+| `prompt` | The model's prompt |
+| `microphone`, `screenAudio`, `allAudio` | Transcriptions from this loop |
 
 ```javascript
-// Remove Think tags for deepseek model
-const cleanedResponse = response.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-
-// Get time
-const time = time();
-
-// Update memory with timestamp
-appendMemory(`[${time}] ${cleanedResponse}`);
-
-// Send to Telegram if the model mentions a word
-if(response.includes("word")){
-  sendTelegram(cleanedResponse, "12345678") // Example chat_id
+const cleaned = response.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+appendMemory(`[${time()}] ${cleaned}`);
+if (response.includes("word")) {
+  sendTelegram("12345678", cleaned);
 }
 ```
 
-### Decision Models
+</details>
 
-Decision models don't write text, they answer typed questions with probabilities. `response` is `null` and the result is in `decision` instead.
+<details>
+<summary><b>Decision models</b></summary>
 
-**Plain-text prompt** – a single yes/no (`noul`) question, the sensor images are the state:
+Decision models don't write text. They answer typed questions with probabilities, so `response` is `null` and the result is in `decision`.
+
+**Plain-text prompt:** a single yes/no (`noul`) question.
 ```
 Is there a person in the room? $CAMERA
 ```
-`decision` is one answer:
 ```javascript
 // { type: 'noul', noul: 0.94, start: 0.12, dropped: false }
 if (decision.noul > 0.8) {
   sendTelegram("12345678", "Someone is in the room", camera);
 }
 ```
-* `noul` - Probability of "yes" (0 to 1)
-* `start` - Average `noul` over the run's first 3 iterations
-* `dropped` - `true` once `noul` has stayed well below `start` for 3 iterations in a row (useful for "tell me when this finishes")
+- `noul`: probability of "yes" (0 to 1)
+- `start`: average `noul` over the first 3 iterations
+- `dropped`: `true` once `noul` has stayed well below `start` for 3 iterations (useful for "tell me when this finishes")
 
-**JSON prompt** – several questions at once. `decision` is an object keyed by question id:
+**JSON prompt:** several questions at once, keyed by id.
 ```json
 {
   "state": "<image:1>",
@@ -262,7 +147,7 @@ if (decision.noul > 0.8) {
   }
 }
 ```
-Add an image sensor (`$SCREEN`, `$CAMERA` or `$IMEMORY`) after the JSON to capture the image. `<image:N>` marks where each captured image goes in the state; if the state has no markers, the images are placed at the top.
+Add an image sensor (`$SCREEN`, `$CAMERA` or `$IMEMORY`) after the JSON. `<image:N>` marks where each image goes in the state; without markers, images go at the top.
 ```javascript
 // decision.person → { type: 'noul', noul }
 // decision.pet    → { type: 'choice', choice, probabilities, confidence }
@@ -272,79 +157,29 @@ if (decision.pet.choice === "dog" && decision.pet.confidence > 0.7) {
 }
 ```
 
+</details>
 
-# Getting Started with Local Inference for Micro-Agents
+## CLI
 
+The desktop app bundles an `observe` CLI. Run `observe sleep 5` and Observer calls you when the command exits. To build it from source: `cd app && cargo build`.
 
-There are a few ways to get Observer up and running with local inference. I recommend the Observer App. 
+## Self-hosting (deprecated)
 
-## Option 1 (Easiest): Pull models using Transformers.js on WebApp
+- [Docker setup](docker/DOCKER.md)
+- [Jupyter server](app/JUPYTER.md)
 
-If you go to the ModelHub you can download Gemma 4 e2b and Gemma4 e4b directly on the browser with no install. This is a bit unstable and crashes mobile devices, but no install is required at all! 
+## Connect with us
 
-## Option 2 (Easy and Stable): Download the Observer App and use bundled llama.cpp models 
+Join the [Discord](https://discord.com/invite/wnBb7ZQDUC) or [r/ObserverAI](https://www.reddit.com/r/ObserverAI/) to share agents, ask questions and report bugs. You can also follow along on [YouTube](https://www.youtube.com/@Observer-AI), [X](https://x.com/AppObserverAI), [TikTok](https://www.tiktok.com/@observerai) and [Instagram](https://www.instagram.com/observer_ai.tech/).
 
-Download the Official App:
-
-[![Download App](https://img.shields.io/badge/⬇️_Download-Latest_Release-blue?style=for-the-badge&color=2196F3)](https://github.com/Roy3838/Observer/releases/latest/)
-
-The Observer App comes bundled with llama.cpp under the hood, so you can run any GGUF model! Be sure to load an mmproj file if using multimodality.
-
-## Option 3 (Most stable): Use Desktop App with any OpenAI compatible endpoint (Ollama, llama.cpp, vLLM)
-
-Download Ollama for the best compatibility. Observer can connect directly to any server that provides a `v1/chat/completions` endpoint.
-
-Set the `Custom Model Server URL` on the App to any OpenAI compatible endpoint.
-
-NOTE: Your browser app sends the request to `localhost:3838` which the ObserverApp proxies to your `Custom Model Server URL`, this is because of CORS. 
-
-
-## Option 4: Full Docker Setup (Deprecated)
-
-For Docker setup instructions, see [docker/DOCKER.md](docker/DOCKER.md).
-
-
-### Setting Up Python (Jupyter Server) (Deprecated)
-
-For Jupyter server setup instructions, see [app/JUPYTER.md](app/JUPYTER.md).
-
-
-## Deploy & Share
-
-Save your agent, test it from the dashboard, and upload to community to share with others!
-
-## CLI tool 
-
-Cool easter egg, the app comes bundled with the CLI binary. You can use it doing
-
-`observe sleep 5` and the bash wrapper will call you when the command exits. Enjoy!
-
-Or built it from source:
-
-`cd app && cargo build`
-
-## Contributing
-
-We welcome contributions from the community! Here's how you can help:
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Contributions are welcome: fork the repo, create a feature branch and open a pull request.
 
 ## Sponsors
 
 [<img src="https://signpath.org/assets/logo.svg" width="150" alt="SignPath"/>](https://signpath.org/)
 
-Free Open Source Software code signing on Windows provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/)
+Free code signing on Windows provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
 
 ## License
 
-This project is licensed under the AGPLv3 License - see the [LICENSE](LICENSE) file for details.
-
-
----
-
-Built with ❤️  by Roy Medina for the Observer AI Community
-Special thanks to the Ollama team for being an awesome backbone to this project!
+[AGPLv3](LICENSE). Built by Roy Medina for the Observer AI community.
