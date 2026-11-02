@@ -1,6 +1,6 @@
 <div align="center">
 
-# 👁️ Observer AI
+# Observer AI
 
 [![Observer App Online](https://img.shields.io/badge/🌐_Try_Out-Web_App-blue?style=for-the-badge&color=4CAF50)](https://app.observer-ai.com/)
 [![Download App](https://img.shields.io/badge/⬇️_Download-Latest_Release-blue?style=for-the-badge&color=2196F3)](https://github.com/Roy3838/Observer/releases/latest/)
