@@ -226,6 +226,12 @@ export const GROUND_TRUTH: UseCase[] = [
   { id: 'site_down', group: 'alert', demo: 'site_down.html', when: 'my website goes down', then: NOTIFY,
     outcomes: { down: 'success', up: 'fail' }, expect: { down: 'notify', up: 'silent' },
     show: { channel: 'sms' } },
+
+  // A change in pictures: a pin on a map that moves or doesn't. stays: GPS jitter of a few pixels
+  // and ticking "min. ago" labels, nothing else.
+  { id: 'findmy_moves', group: 'change', demo: 'findmy_map.html', when: 'my mom moves on Find My', then: NOTIFY,
+    outcomes: { moves: 'moves', stays: 'stays' }, expect: { moves: 'notify', stays: 'silent' },
+    show: { channel: 'whatsapp' } },
 ];
 
 // What the suite runs besides GROUND_TRUTH: agent shapes the wheels don't show. Not rewordings of a

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<!-- Find My on a Mac, People tab: a neighborhood map with family members' pins. Mom's pin sits
+     still (her card says "Now"); the sidebar's "min. ago" labels tick and her pin jitters a few
+     pixels now and then, like a real GPS fix. Ends by ?outcome=:
+       moves  Mom's location updates: her pin jumps ~260px down Infinite Loop (the trigger), then
+              keeps going in further jumps every 20 s.
+       stays  she never moves; only the jitter and the labels. The trigger is the end of the run. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Find My</title>
+<link rel="stylesheet" href="fonts/inter.css">
+<link rel="stylesheet" href="desktop_assets/macos.css">
+<style>
+  .fm { flex: 1; position: relative; overflow: hidden; background: #f2efe9; font: 13px Inter, -apple-system, sans-serif; }
+  .fm svg.map { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .side { position: absolute; left: 12px; top: 12px; bottom: 12px; width: 280px; background: rgba(246,246,246,.92); border-radius: 14px; box-shadow: 0 2px 14px rgba(0,0,0,.18); padding: 10px; }
+  .tabs { display: flex; background: #e3e3e3; border-radius: 9px; padding: 2px; margin: 32px 0 10px; }
+  .tabs span { flex: 1; text-align: center; padding: 5px; border-radius: 7px; }
+  .tabs span.on { background: #fff; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+  .p { display: flex; gap: 10px; align-items: center; padding: 8px; border-radius: 9px; }
+  .p.on { background: #dcdcdc; }
+  .av { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 600; flex: none; border: 2px solid #fff; }
+  .p b { display: block; font-weight: 600; }
+  .p small { color: #777; font-size: 11.5px; }
+  .pin { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 6px; transition: left 1.2s ease, top 1.2s ease; }
+  .pin .av { width: 44px; height: 44px; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); font-size: 15px; }
+  .pin .card { background: rgba(255,255,255,.95); border-radius: 8px; padding: 5px 10px; box-shadow: 0 1px 4px rgba(0,0,0,.2); font-size: 12px; }
+  .pin .card small { display: block; color: #777; font-size: 10.5px; }
+  .ctl { position: absolute; right: 12px; top: 12px; background: rgba(255,255,255,.9); border-radius: 8px; padding: 6px 10px; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+</style>
+<script src="demo-contract.js" data-outcome="moves"></script>
+<script src="desktop_assets/macos.js"></script>
+</head>
+<body>
+<div class="mac-window full">
+  <div class="fm" id="fm">
+    <svg class="map" viewBox="0 0 1200 760" preserveAspectRatio="xMidYMid slice">
+      <rect x="380" y="0" width="260" height="120" fill="#cfe8c4"/>
+      <rect x="560" y="300" width="170" height="160" fill="#cfe8c4"/>
+      <rect x="980" y="160" width="220" height="200" fill="#cfe8c4"/>
+      <rect x="840" y="440" width="140" height="120" fill="#f6dfc2"/>
+      <g stroke="#fff" stroke-linecap="round" fill="none">
+        <path d="M300 250 L1200 300" stroke-width="16"/>
+        <path d="M860 0 L760 360 L740 760" stroke-width="20"/>
+        <path d="M300 520 L760 460" stroke-width="10"/>
+        <path d="M300 140 L860 110" stroke-width="10"/>
+        <path d="M760 360 L1200 340" stroke-width="18"/>
+        <path d="M450 250 L430 760" stroke-width="8"/>
+        <path d="M600 260 L590 760" stroke-width="8"/>
+        <path d="M900 560 L1200 620" stroke-width="10"/>
+        <path d="M300 650 L740 640" stroke-width="8"/>
+        <path d="M1000 380 L1060 760" stroke-width="8"/>
+      </g>
+      <g fill="#7a7a7a" font-family="Inter, sans-serif" font-size="11" font-weight="600" letter-spacing="1">
+        <text x="560" y="240" transform="rotate(3 560 240)">HACKER WAY</text>
+        <text x="500" y="410" font-size="17" fill="#666">MENLO PARK</text>
+        <text x="610" y="70" font-size="17" fill="#666">PALO ALTO</text>
+        <text x="770" y="600" transform="rotate(-88 770 600)">INFINITE LOOP</text>
+        <text x="420" y="510" transform="rotate(-7 420 510)">SAND HILL ROAD</text>
+        <text x="1000" y="470" font-size="17" fill="#666">CUPERTINO</text>
+        <text x="850" y="500" fill="#c56a00">The Garage</text>
+        <text x="460" y="590" fill="#c56a00">Blue Box Café</text>
+        <text x="920" y="700" fill="#c56a00">Byte Burgers</text>
+      </g>
+    </svg>
+    <div class="side">
+      <div class="tabs"><span class="on">People</span><span>Devices</span><span>Items</span></div>
+      <div id="people"></div>
+    </div>
+    <div class="ctl">Map · 3D</div>
+    <div class="pin" id="mom"><span class="av" style="background:#b65f8a">M</span><span class="card">Mom<small>Now</small></span></div>
+    <div class="pin" style="left:62%;top:73%"><span class="av" style="background:#5b7fb5">W</span></div>
+  </div>
+</div>
+<script>
+  Mac.mount({ app: 'Find My', menus: ['File', 'Edit', 'View', 'Window', 'Help'] });
+  const $ = id => document.getElementById(id);
+  const PEOPLE = [['Me', 'Locating…', '#888'], ['Mom', 'Hacker Way · Now', '#b65f8a'],
+    ['Ada', 'Palo Alto', '#6a9c5a', 17], ['Linus', 'Cupertino', '#c08a3e', 13],
+    ['Grace', 'Mountain View', '#5b7fb5', 16], ['Alan', 'Sunnyvale', '#8a6ab5', 15],
+    ['Woz', 'Home · Now', '#5b7fb5']];
+  const loaded = Date.now();
+  const renderPeople = () => {
+    const m = Math.floor((Date.now() - loaded) / 60000);
+    $('people').innerHTML = PEOPLE.map(([n, s, c, ago], i) =>
+      `<div class="p${i === 1 ? ' on' : ''}"><span class="av" style="background:${c}">${n[0]}</span><div><b>${n}</b><small>${s}${ago ? ` · ${ago + m} min. ago` : ''}</small></div></div>`).join('');
+  };
+  renderPeople(); setInterval(renderPeople, 10000);
+
+  // Mom's pin, in % of the map. Jitter: a few pixels every ~30 s, as GPS fixes do.
+  let x = 58, y = 49;
+  const place = () => { $('mom').style.left = `${x}%`; $('mom').style.top = `${y}%`; };
+  place();
+  const BASE = [x, y];
+  setInterval(() => { if (x === BASE[0] || Math.abs(x - BASE[0]) < 0.5) { const j = () => (Math.random() - 0.5) * 0.5; $('mom').style.left = `${x + j()}%`; $('mom').style.top = `${y + j()}%`; } }, 30000);
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const ROUTE = [[59, 66], [60, 80], [64, 88], [72, 92]];
+  demo.onStart = async durationMs => {
+    await sleep(durationMs);
+    if (demo.outcome !== 'moves') { demo.trigger(); return; }
+    for (let i = 0; i < ROUTE.length; i++) {
+      [x, y] = ROUTE[i]; place();
+      if (i === 0) { await sleep(1300); demo.trigger(); }
+      await sleep(20000);
+    }
+  };
+</script>
+</body>
+</html>

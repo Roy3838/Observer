@@ -81,7 +81,7 @@ Then name the trigger's **shape**. Most are an **event** (something appears, end
 - **nag**: "pester me / keep reminding me every N minutes until …": alert repeatedly while it holds, stop alerting when it clears.
 - **sequence**: "when A happens and THEN B": only B after A counts; B without A (or A failing) is not it.
 
-**4. Strategy: decision model or LLM?** For an event: a dial → **decision model**. An object → **decision model**. A state → **LLM**. A deadline, change, nag or sequence → always **LLM**, with the state in the code, LLMs never zero-shot a decision (the decision model's code is fixed and can't remember anything). (Details below.)
+**4. Strategy: decision model or LLM?** For an event: a dial → **decision model**. An object → **decision model**. A state → **LLM**. A change in pictures (a drawing progressing, a pin moving) → **decision model** comparing \`$SCREEN\` with \`$IMEMORY\`. A deadline, a change in a number, a nag or a sequence → **LLM**, with the state in the code, LLMs never zero-shot a decision. (Details below.)
 
 **5. Once or every time?** "Tell me when / let me know when" → once: act, then \`await stopAgent()\`. A nag never stops itself. "Whenever / every time / log each" → every time: act on each new occurrence, keep running, and note what you already reported with \`appendMemory\` so it isn't reported twice.
 
@@ -128,7 +128,7 @@ Rules: attach \`screen\` / \`camera\` to every notification tool that takes imag
 A decision model answers ONE yes/no question about the image, as a probability \`decision.noul\`. It only works when the image is just the dial's reading, or on camera, just the object.
 - **Crop** (\`set_screen_crop\`) to ONLY the text or value that shows the job is still running: the percentage ("38%"), the "Uploading 12 items" line, the "Exporting…" caption, the time left. Not the progress bar, the panel or the dialog: when a job fails, those usually stay on screen (a red bar, "1 upload failed", "Export failed" in the same dialog), so a crop on them can't tell running from failed. The text is what disappears or changes on every ending. Leave a margin so a longer value ("100%", "12 minutes left") still fits: every character inside, at least ~60px tall. Read the \`box_2d\` off the \`capture_screen\` frame${desktop ? ', never off a `see_screen_target` thumbnail' : ''}. Then \`capture_screen\` with the \`agent_id\`: if text is cut or the label is missing, crop again. On camera there is no crop: the object must fill the frame.
 - **system_prompt:** only the question, then \`$SCREEN\`. Ask whether it STILL SHOWS that in-progress text, naming the text, never a bar, panel, popup or dialog, never the process: "Is there a download percentage below 100% on screen?", "Does it say 'Uploading' with items or time left?" That catches every ending (done, failed, cancelled, the UI moved on), so it also covers "tell me if it fails".
-- **code:** always exactly \`decision.noul < 0.25 || decision.dropped\`. Word the message neutrally ("Your download stopped: it finished or failed"), since the model can't tell how it ended.
+- **code:** always exactly \`decision.noul < 0.25 || decision.dropped\` (comparing two pictures is the one exception: see "Change in pictures"). Word the message neutrally ("Your download stopped: it finished or failed"), since the model can't tell how it ended.
 - **loop_interval_seconds:** 5.
 - **Verify:** the first iterations must show a HIGH \`noul\` (e.g. 0.97). If it's low, the crop or the question is wrong; never change the threshold.
 
@@ -195,19 +195,20 @@ if (response.includes("REPLIED")) {
 }
 \`\`\`
 
-**Change against an earlier moment (pictures).** "Am I making progress", "has anything changed": keep the earlier frame in image memory and show the model both. \`loop_interval_seconds\` is the user's window (5 minutes → 300). The first iteration has nothing to compare against: it only saves.
+**Change in pictures** ("am I making progress", "tell me when her pin moves", "has anything changed"). A decision model (\`clef-flash\`), shown the frame now and the earlier frame from image memory, answers ONE scoped yes/no question: "Are these two images the same drawing, without a single new stroke?", "Are these two images of the same location?". Ask whether they're the SAME, naming the thing compared; never ask about "progress" or intent: the code decides what "not the same" means. A high \`noul\` = same, a low one = changed.
+- **Crop** to only the thing compared (the canvas without toolbars, the map around the pin) so cursors, clocks and labels can't read as changed.
+- **loop_interval_seconds** is the comparison window: "no progress in 5 minutes" → 300; "tell me when it moves" → 10. The first iteration has nothing to compare against: it only saves.
+- **code:** "no progress / hasn't changed" acts on \`decision.noul > 0.75\` (and keeps alerting every window while it holds); "when it moves / changes" acts on \`decision.noul < 0.25\`, then stops. Never change the thresholds. Save the frame with \`setImageMemory(screen)\` every iteration.
 \`\`\`
+model_name: clef-flash
 loop_interval_seconds: 300
 system_prompt:
-The first image is the screen now; the second is the same screen 5 minutes ago. The user is drawing.
-1. **Description**: Describe the drawing in the first image.
-2. **Description**: Describe the drawing in the second image.
-3. **Decision**: Was anything added to the drawing itself (ignore the cursor, the clock and menus)? Say PROGRESS or SAME.
+Are these two images the same drawing, without a single new stroke?
 $SCREEN
 $IMEMORY
 code:
 const before = await getImageMemory();
-if (before.length && response.includes("SAME")) {
+if (before.length && decision.noul > 0.75) {
   await sendWhatsapp("tree-book-shower-golden", "No progress on your drawing in 5 minutes. Get back to it!", screen);
 }
 await setImageMemory(screen);
