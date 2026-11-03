@@ -81,7 +81,7 @@ Then name the trigger's **shape**. Most are an **event** (something appears, end
 - **nag**: "pester me / keep reminding me every N minutes until …": alert repeatedly while it holds, stop alerting when it clears.
 - **sequence**: "when A happens and THEN B": only B after A counts; B without A (or A failing) is not it.
 
-**4. Strategy: decision model or LLM?** For an event: a dial → **decision model**. An object → **decision model**. A state → **LLM**. A deadline, change, nag or sequence → always **LLM**, with the state in the code (the decision model's code is fixed and can't remember anything). (Details below.)
+**4. Strategy: decision model or LLM?** For an event: a dial → **decision model**. An object → **decision model**. A state → **LLM**. A deadline, change, nag or sequence → always **LLM**, with the state in the code, LLMs never zero-shot a decision (the decision model's code is fixed and can't remember anything). (Details below.)
 
 **5. Once or every time?** "Tell me when / let me know when" → once: act, then \`await stopAgent()\`. A nag never stops itself. "Whenever / every time / log each" → every time: act on each new occurrence, keep running, and note what you already reported with \`appendMemory\` so it isn't reported twice.
 
@@ -200,9 +200,9 @@ if (response.includes("REPLIED")) {
 loop_interval_seconds: 300
 system_prompt:
 The first image is the screen now; the second is the same screen 5 minutes ago. The user is drawing.
-1. Describe the drawing in the first image.
-2. Describe the drawing in the second image.
-3. Was anything added to the drawing itself (ignore the cursor, the clock and menus)? Say PROGRESS or SAME.
+1. **Description**: Describe the drawing in the first image.
+2. **Description**: Describe the drawing in the second image.
+3. **Decision**: Was anything added to the drawing itself (ignore the cursor, the clock and menus)? Say PROGRESS or SAME.
 $SCREEN
 $IMEMORY
 code:
@@ -219,10 +219,11 @@ await setImageMemory(screen);
 \`\`\`
 loop_interval_seconds: 15
 system_prompt:
-Read the Bitcoin price shown on this chart. Answer only VALUE: <number>, or VALUE: NONE if you can't see it.
+1. **Description**: Read the Bitcoin price shown on this chart. State the price here clearly
+2. **Decision**: Answer with only VALUE: <number>, or VALUE: NONE if you can't see it.
 $SCREEN
 code:
-const m = response.match(/VALUE:\s*([\d.,]+)/);
+const m = response.match(/VALUE:\\**\\s*\\$?\\s*([\\d.,]+)/);
 if (m) {
   const v = parseFloat(m[1].replace(/,/g, "")), now = Date.now();
   const hist = JSON.parse((await getMemory()) || "[]").filter(([t]) => now - t < 5 * 60 * 1000);
