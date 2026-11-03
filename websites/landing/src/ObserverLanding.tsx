@@ -258,7 +258,7 @@ const ObserverLanding = () => {
         </div>
 
         {/* CTA - visible from start */}
-        <div className="mt-8 flex gap-4">
+        <div className="relative mt-8 flex gap-4">
           <a
             href="https://app.observer-ai.com"
             className="inline-block px-8 py-4 rounded-full font-semibold text-white border border-white/20 hover:bg-white/10 transition-all duration-200 pointer-events-auto"
@@ -271,6 +271,14 @@ const ObserverLanding = () => {
           >
             Download
           </a>
+          {/* Next section's heading: shows as soon as scrolling starts, below the CTAs */}
+          <h2
+            id="use-cases-heading"
+            className="absolute top-full left-1/2 -translate-x-1/2 mt-16 md:mt-24 font-golos font-bold text-3xl md:text-5xl text-white tracking-tight text-center whitespace-nowrap transition-opacity duration-300"
+            style={{ opacity: scrollProgress > 0.02 ? 1 : 0 }}
+          >
+            What do you need monitored?
+          </h2>
         </div>
 
         {/* Scroll indicator - only visible when not scrolled */}

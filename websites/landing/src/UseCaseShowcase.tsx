@@ -15,7 +15,7 @@ interface Pair { id: string; file: string; query: string; when: string; then: st
 /** What the Then says when it fires: the moment for an alert ("My battery is low"), what got done
  *  for a log ("Log all the topics"). The demo itself shows the rest. */
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const fired = (p: Pair) => cap(p.channel ? p.when : p.then);
+const fired = (p: Pair) => (p.channel ? `${p.channel.id === "call" ? "Call" : p.channel.label} from Observer` : cap(p.then));
 
 const PAIRS = data.items as Pair[];
 
@@ -114,6 +114,32 @@ const UseCaseShowcase = () => {
     return () => ro.disconnect();
   }, []);
 
+  // The heading lives at the bottom of the hero, which is taller than its content; pull this
+  // section up so the wheels sit right under the heading instead of after the hero's empty tail.
+  const [pullUp, setPullUp] = useState(0);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const h = document.getElementById('use-cases-heading');
+      const sec = sectionRef.current;
+      if (!h || !sec) return;
+      const vh = window.innerHeight;
+      const y = window.scrollY;
+      const eye = document.getElementById('eye-container')?.offsetHeight ?? 80;
+      // The hero sticks to the screen while the eye shrinks (280px -> 80px), then rests centred on
+      // 100vh. Work out where the heading ends up once it rests, in page coordinates.
+      const fixed = getComputedStyle(h.offsetParent ?? h).position === 'fixed'
+        || getComputedStyle(h.closest('.pointer-events-none') ?? h).position === 'fixed';
+      const r = h.getBoundingClientRect();
+      const headingBottom = fixed ? vh + (r.bottom - vh / 2) - (eye - 80) / 2 : r.bottom + y;
+      const prev = parseFloat(sec.style.marginTop) || 0;
+      const sectionTop = sec.getBoundingClientRect().top + y - prev;
+      setPullUp(Math.max(0, sectionTop - headingBottom - 48));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
   // Only run demos while the section is on screen.
   useEffect(() => {
     const el = sectionRef.current;
@@ -159,26 +185,21 @@ const UseCaseShowcase = () => {
     <section
       id="use-cases"
       ref={sectionRef}
+      style={{ marginTop: -pullUp }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      className="relative py-24 md:py-36 bg-[#0D1321] overflow-hidden"
+      className="relative pt-4 pb-24 md:pb-36 bg-[#0D1321] overflow-hidden"
     >
-      {/* A soft light behind the sentence. */}
-      <div className="pointer-events-none absolute left-1/2 top-24 -translate-x-1/2 w-[70rem] h-[34rem] rounded-full bg-[radial-gradient(closest-side,rgba(129,140,248,0.13),transparent)]" />
-
       <div className="relative container mx-auto px-6 max-w-6xl">
-        <h2 className="font-golos font-bold text-4xl md:text-6xl text-white tracking-tight text-center">
-          What do you need monitored?
-        </h2>
-
+        {/* The heading lives in the hero (ObserverLanding) so it shows as soon as scrolling starts. */}
         {/* When … then … */}
-        <div className="mt-12 md:mt-20 mx-auto max-w-5xl font-golos font-semibold tracking-tight text-[clamp(1.05rem,3.6vw,3rem)] leading-none">
+        <div className="mx-auto max-w-5xl font-golos font-medium tracking-tight text-[clamp(1.05rem,3.6vw,3rem)] leading-none">
           <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-[0.4em] gap-y-[0.1em]">
-            <span className="self-center leading-[1.15] text-gray-500 text-right">When</span>
+            <span className="self-center leading-[1.15] text-gray-600 text-right">When</span>
             <div className="min-w-0 text-white"><Wheel items={whens} index={index} /></div>
-            <span className="self-center leading-[1.15] text-gray-500 text-right">then</span>
+            <span className="self-center leading-[1.15] text-gray-600 text-right">then</span>
             <div className="min-w-0">
-              <Wheel items={thens} index={index} delay={140} className="bg-gradient-to-r from-indigo-200 via-white to-sky-200 bg-clip-text text-transparent" />
+              <Wheel items={thens} index={index} delay={140} className="text-gray-300" />
             </div>
           </div>
         </div>
@@ -192,7 +213,7 @@ const UseCaseShowcase = () => {
 
         {/* The demo, live. */}
         <div className="mt-8 mx-auto max-w-5xl">
-          <div className="rounded-[22px] p-[1px] bg-gradient-to-b from-white/20 via-white/5 to-white/5 shadow-[0_40px_120px_-30px_rgba(99,102,241,0.35)]">
+          <div className="rounded-[22px] p-[1px] bg-white/10">
             <div ref={stageRef} className="relative w-full overflow-hidden rounded-[21px] bg-[#0b0f1a]" style={{ height: STAGE_H * scale }}>
               <iframe
                 key={`${src}-${runId}`}
@@ -216,7 +237,6 @@ const UseCaseShowcase = () => {
               >
                 <span className="w-9 h-9 shrink-0 rounded-full bg-white/10 grid place-items-center"><Icon className="w-[18px] h-[18px] text-white" /></span>
                 <div className="min-w-0">
-                  <div className="text-[11px] text-gray-400">{pair.channel ? `${pair.channel.label} · Observer` : 'Observer'} · now</div>
                   <div className="text-sm text-white leading-snug">{fired(pair)}</div>
                 </div>
               </div>
