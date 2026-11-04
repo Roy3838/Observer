@@ -173,6 +173,9 @@ class Manager {
    */
   public holdScreen(holderId: string): void {
     this.userSets.get('screenVideo')?.add(holderId);
+    // Browser screen audio lives on the display stream, and dropping it can't be undone without
+    // a new picker: a later $SCREEN_AUDIO agent would fail to start. Tauri's is independent.
+    if (isWeb()) this.userSets.get('screenAudio')?.add(holderId);
   }
 
   /** Releases all streams used by a specific agent. */
@@ -615,7 +618,9 @@ class Manager {
   private checkForTeardown(): void {
     const isUsed = (type: PseudoStreamType) => (this.userSets.get(type)?.size || 0) > 0;
     // This logic is now robust because it correctly reflects the lifecycle based on user sets.
-    if (!isUsed('screenVideo')) this.teardownDisplayStream();
+    // Browser screen audio lives on the display stream, so its users keep that stream open too.
+    const audioNeedsDisplay = isWeb() && (isUsed('screenAudio') || isUsed('allAudio'));
+    if (!isUsed('screenVideo') && !audioNeedsDisplay) this.teardownDisplayStream();
     if (!isUsed('screenAudio') && !isUsed('allAudio')) this.teardownScreenAudioStream();
     if (!isUsed('microphone') && !isUsed('allAudio')) this.teardownMicrophoneStream();
     if (!isUsed('camera')) this.teardownCameraStream();

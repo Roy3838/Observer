@@ -137,6 +137,15 @@ class TauriStreamCapture {
     this.preselectedTargetId = targetId;
   }
 
+  /** The target the live video stream is capturing, or null when there is no stream. */
+  private liveTargetId: string | null = null;
+  getLiveTargetId(): string | null {
+    return this.liveTargetId;
+  }
+
+  /** Settles once the last stopped video stream is really gone; the next start waits for it. */
+  private videoStopped: Promise<void> | null = null;
+
   /**
    * Push the persisted capture quality (max width / JPEG quality / FPS) to the Rust
    * backend. Called right before each desktop capture starts so the stream is built with
@@ -252,6 +261,9 @@ class TauriStreamCapture {
       case 'display':
         if (this.streams.screenVideoStream) return;
 
+        // A stop that lands after this start would kill the new stream.
+        await this.videoStopped;
+
         Logger.info("TauriCapture", "Starting video capture");
         const videoResult = await this.startVideoStream();
         this.streams.screenVideoStream = videoResult.cleanStream;
@@ -327,8 +339,14 @@ class TauriStreamCapture {
       case 'display':
         if (this.videoStreamResult) {
           Logger.info("TauriCapture", "Tearing down video stream");
-          this.videoStreamResult.stop();
+          // On Windows/Linux the capture thread only checks the stop signal once per frame, and
+          // a start resets that signal: wait two frames so the old thread can't miss it.
+          const frameWaitMs = 2000 / Math.max(SensorSettings.getCaptureQuality().fps, 1);
+          this.videoStopped = this.videoStreamResult.stop()
+            .catch(e => Logger.warn("TauriCapture", `Error stopping video stream: ${e}`))
+            .then(() => new Promise<void>(resolve => setTimeout(resolve, frameWaitMs)));
           this.videoStreamResult = null;
+          this.liveTargetId = null;
           this.streams.screenVideoStream = null;
           this.streams.screenVideoStreamWithPip = null;
         }
@@ -481,6 +499,7 @@ class TauriStreamCapture {
       }
       selectedTargetId = selected;
     }
+    this.liveTargetId = selectedTargetId ?? null;
 
     Logger.info("TAURI_STREAM", `Starting video capture with target: ${selectedTargetId || 'iOS broadcast'}`);
 

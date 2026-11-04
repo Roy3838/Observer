@@ -12,10 +12,55 @@ import type { ToolResult } from './types';
 import { browserStreamCapture, mockCameraStreams } from '@utils/browserStreamCapture';
 import { tauriStreamCapture } from '@utils/tauriStreamCapture';
 import { isWeb } from '@utils/platform';
-import { StreamManager } from '@utils/streamManager';
+import { StreamManager, type PseudoStreamType } from '@utils/streamManager';
 
 /** Thrown by getDisplayMedia outside a click; the cue to fall back to ask_user_info kind='screen'. */
 const NEEDS_GESTURE = /user gesture/i;
+
+/** Holds the screen stream during a turn, so stopping and restarting an agent there reuses it. */
+export const TURN_HOLDER = '__mcp_turn__';
+
+// The MCP subscribes to a stream the way an agent does, so the agent card can show it and it
+// survives between turns ("How should I tell you?" sits between capture and start_agent).
+// One subscriber per stream, so letting go of one leaves the other open.
+const HELD = ['screenVideo', 'camera'] as const;
+type HeldStream = typeof HELD[number];
+const holderFor = (type: HeldStream) => `__mcp_capture__:${type}`;
+const HOLD_TTL_MS = 10 * 60 * 1000;
+const expiry = new Map<HeldStream, ReturnType<typeof setTimeout>>();
+
+/** Unsubscribe the MCP once an agent owns these streams or the build is abandoned. */
+export function releaseCaptureHolds(types: readonly PseudoStreamType[] = HELD): void {
+  for (const type of HELD) {
+    if (!types.includes(type)) continue;
+    clearTimeout(expiry.get(type));
+    StreamManager.releaseStreamsForAgent(holderFor(type));
+  }
+}
+
+/**
+ * Subscribe the MCP to a stream, opening it if needed. Each call restarts the expiry, so a
+ * walked-away build can't leave a stream open. If it fires mid-turn nothing breaks: the turn's
+ * own hold keeps the screen alive, and the camera reopens without a gesture.
+ */
+async function holdCapture(type: HeldStream): Promise<void> {
+  await StreamManager.requestStreamsForAgent(holderFor(type), [type]);
+  if (type === 'screenVideo') StreamManager.holdScreen(holderFor(type));
+  clearTimeout(expiry.get(type));
+  expiry.set(type, setTimeout(() => releaseCaptureHolds([type]), HOLD_TTL_MS));
+}
+
+/**
+ * Drop the MCP's subscriptions to the screen, so the next capture can open on a new target.
+ * Returns false if the stream stayed open, which means someone else is still using it.
+ */
+export function letGoOfScreen(): boolean {
+  releaseCaptureHolds(['screenVideo']);
+  StreamManager.releaseStreamsForAgent(TURN_HOLDER);
+  const closed = !tauriStreamCapture.isStreamAvailable('screenVideo');
+  StreamManager.holdScreen(TURN_HOLDER);
+  return closed;
+}
 
 /** Draw the current frame of a live video stream to a JPEG data URL via a hidden <video>. */
 async function grabVideoFrame(stream: MediaStream): Promise<{ dataUrl: string; width: number; height: number }> {
@@ -47,7 +92,7 @@ async function captureScreenWeb(): Promise<ToolResult> {
   }
   try {
     // getDisplayMedia is the first await inside, so a click handler calling this keeps its gesture.
-    await browserStreamCapture.acquireMasterStream('display');
+    await holdCapture('screenVideo');
     const videoTrack = browserStreamCapture.getStreams().screenVideoStream?.getVideoTracks()[0];
     if (!videoTrack) return { error: 'No video track acquired from screen share.' };
 
@@ -96,7 +141,7 @@ export const captureScreen = (): Promise<ToolResult> => (isWeb() ? captureScreen
  */
 export async function grabTauriFrame(data: Record<string, unknown>, noFrameError: string): Promise<ToolResult> {
   try {
-    await tauriStreamCapture.acquireMasterStream('display');
+    await holdCapture('screenVideo');
   } catch (e) {
     // Android surfaces a real rejection on denial; iOS dismissal just yields no frames.
     const msg = e instanceof Error ? e.message : String(e);
@@ -105,7 +150,11 @@ export async function grabTauriFrame(data: Record<string, unknown>, noFrameError
     }
     return { error: msg };
   }
+  return waitForTauriFrame(data, noFrameError);
+}
 
+/** The newest frame of the live Tauri display stream, without taking a hold on it. */
+export async function waitForTauriFrame(data: Record<string, unknown>, noFrameError: string): Promise<ToolResult> {
   const FRAME_TIMEOUT_MS = 15000;
   const POLL_MS = 200;
   const deadline = Date.now() + FRAME_TIMEOUT_MS;
@@ -148,14 +197,14 @@ export async function captureCamera(cameraId?: string): Promise<ToolResult> {
       const live = impl.getStreams().cameraStream?.getVideoTracks()[0]?.getSettings().deviceId;
       if (live !== cameraId) await StreamManager.switchCameraDevice(cameraId);
     }
-    await impl.acquireMasterStream('camera');
+    await holdCapture('camera');
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
 
   const stream = impl.getStreams().cameraStream;
   if (!stream || mockCameraStreams.has(stream)) {
-    impl.teardownMasterStream('camera');
+    releaseCaptureHolds(['camera']);
     return { error: "Camera access was denied or no camera was found. Call ask_user_info kind='camera' so the user can allow it with one click." };
   }
 
