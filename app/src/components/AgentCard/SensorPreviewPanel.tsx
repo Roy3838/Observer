@@ -467,10 +467,16 @@ const VideoStream: React.FC<{
   const [isPipActive, setIsPipActive] = useState(false);
   const showPipButton = isMobile() && isPipSupported();
 
-  // Load existing crop config
+  // Load the crop config, and follow changes made elsewhere (the MCP's set_screen_crop)
   useEffect(() => {
-    const existingCrop = getAgentCrop(agentId, streamType);
-    setCurrentCrop(existingCrop);
+    const loadCrop = () => setCurrentCrop(getAgentCrop(agentId, streamType));
+    const handleCropUpdate = (event: Event) => {
+      if ((event as CustomEvent).detail.agentId === agentId) loadCrop();
+    };
+
+    loadCrop();
+    window.addEventListener('agent-crop-update', handleCropUpdate);
+    return () => window.removeEventListener('agent-crop-update', handleCropUpdate);
   }, [agentId, streamType]);
 
   // Load available camera devices (only for camera stream type)

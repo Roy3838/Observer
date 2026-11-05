@@ -6,7 +6,8 @@
 // so the same registry can later be served from a real MCP server with the transport swapped.
 
 import type { ToolDefinition, ToolResult, WireToolSpec, NotifyMethod, UserInfoRequestKind } from './types';
-import { captureScreen, captureCamera, listCameras, grabTauriFrame } from './capture';
+import { captureScreen, captureCamera, listCameras, grabTauriFrame, waitForTauriFrame, releaseCaptureHolds, letGoOfScreen } from './capture';
+import { StreamManager } from '@utils/streamManager';
 import {
   listAgents,
   getAgent,
@@ -18,6 +19,7 @@ import {
   startAgentLoop,
   stopAgentLoop,
   getRunningAgentIds,
+  getRequiredStreamsForPrompt,
   isAgentLoopRunning,
 } from '@utils/main_loop';
 import { IterationStore, type IterationData } from '@utils/IterationStore';
@@ -26,7 +28,7 @@ import type { TokenProvider } from '@utils/main_loop';
 import { checkPhoneWhitelist } from '@utils/pre-flight';
 import { downloadLocalModel, LOCAL_MODEL_CHOICES, type LocalModelChoice } from './localModel';
 import { tauriStreamCapture } from '@utils/tauriStreamCapture';
-import { setAgentCrop, getAgentCrop, cropDataUrl } from '@utils/screenCapture';
+import { setAgentCrop, getAgentCrop, cropDataUrl, type CropConfig } from '@utils/screenCapture';
 import { isDesktop } from '@utils/platform';
 import { SensorSettings } from '@utils/settings';
 import { normalizeWhitelistCode } from '@utils/whitelistCode';
@@ -182,42 +184,106 @@ const METHOD_USAGE: Record<NotifyMethod, (v: string) => string> = {
  * window, by seating it as the preselected target before acquiring. The frame comes from
  * the same capture pipeline the agent uses (unlike see_screen_target's small xcap
  * thumbnail), so a box_2d read off it lines up with the agent's crop. There is only one
- * master display stream: if one is already live (e.g. a running agent's), its frame is
- * returned as-is and target_id is not applied.
+ * master display stream: a different target_id restarts it on that target, unless something
+ * running depends on it. Then its frame is returned as-is and target_id is not applied.
  */
 async function captureScreenDesktop(targetId: unknown): Promise<ToolResult> {
+  const live = tauriStreamCapture.isStreamAvailable('screenVideo');
+  const wanted = typeof targetId === 'string' && targetId ? targetId : null;
+  const noFrameYet = 'The screen stream is live but no frame has arrived yet. Call capture_screen again.';
+
   // A live stream is reused as-is, so no target_id is needed to look at it again (agent_id previews).
-  if (tauriStreamCapture.isStreamAvailable('screenVideo')) {
+  if (live && (!wanted || wanted === tauriStreamCapture.getLiveTargetId())) {
     return grabTauriFrame(
-      {
-        captured: true,
-        note: `A screen stream was already live (only one can run at a time), so this frame is from that stream${targetId ? ` and target '${targetId}' was NOT applied` : ''}. Check the image is what you expected; to switch targets, stop the agents using the screen first.`,
-      },
-      'The screen stream is live but no frame has arrived yet. Call capture_screen again.',
+      { captured: true, note: 'This frame is from the screen stream that was already live. Check the image is what you expected; to switch, pass a different target_id.' },
+      noFrameYet,
     );
   }
 
-  if (typeof targetId !== 'string' || !targetId) {
+  if (!wanted) {
     return { error: 'On desktop, capture_screen needs a target_id from list_screen_targets.' };
   }
 
   let target: Record<string, unknown>;
   try {
     const targets = await tauriStreamCapture.getTargets(false);
-    const match = targets.find(t => t.id === targetId);
+    const match = targets.find(t => t.id === wanted);
     if (!match) {
-      return { error: `Target '${targetId}' is no longer available (window may have closed). Re-run list_screen_targets.` };
+      return { error: `Target '${wanted}' is no longer available (window may have closed). Re-run list_screen_targets.` };
     }
     target = { id: match.id, kind: match.kind, name: match.name, width: match.width, height: match.height };
-    tauriStreamCapture.setPreselectedTarget(match.id);
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
+
+  // Switching would silently point a running agent at another window, so if the stream outlives
+  // the MCP letting go of it, it stays. On macOS system audio shares the capture session, which
+  // would stay on its current target even with no video stream live.
+  const audioPinsTarget = /mac/i.test(navigator.platform) && !!StreamManager.getCurrentState().screenAudioStream;
+  if (audioPinsTarget || (live && !letGoOfScreen())) {
+    const notApplied = `Target '${wanted}' was NOT applied: the screen or system audio is in use, usually by a running agent, and only one screen stream can run at a time. To switch targets, stop_agent those agents, then call capture_screen again. If none are running, tell the user another part of the app is holding the screen.`;
+    return live ? waitForTauriFrame({ captured: true, note: notApplied }, noFrameYet) : { error: notApplied };
+  }
+
+  tauriStreamCapture.setPreselectedTarget(wanted);
 
   return grabTauriFrame(
     { captured: true, ...target, note: 'Stream is live on this target and will be reused by start_agent — no selector, no select_screen_target needed.' },
     'Screen capture started but no frame has arrived yet. Call capture_screen again.',
   );
+}
+
+/** Set an agent's crop and let an open agent card redraw it. */
+function setCropAndNotify(agentId: string, stream: 'screen' | 'camera', crop: CropConfig | null): void {
+  setAgentCrop(agentId, stream, crop);
+  window.dispatchEvent(new CustomEvent('agent-crop-update', { detail: { agentId } }));
+}
+
+/** set_screen_crop / set_camera_crop: validate box_2d and store it on the agent. */
+function applyCropArgs(stream: 'screen' | 'camera', args: Record<string, any>): ToolResult {
+  if (args.clear) {
+    setCropAndNotify(args.agent_id, stream, null);
+    return { data: { agent_id: args.agent_id, cropped: false } };
+  }
+
+  const box = args.box_2d;
+  if (!Array.isArray(box) || box.length !== 4 || box.some((v: unknown) => typeof v !== 'number')) {
+    return { error: 'Provide box_2d as four numbers [ymin, xmin, ymax, xmax] normalized 0–1000 (or clear:true to remove the crop).' };
+  }
+  const [ymin, xmin, ymax, xmax] = box as number[];
+  if ([ymin, xmin, ymax, xmax].some(v => v < 0 || v > 1000)) {
+    return { error: 'box_2d values must be normalized to 0–1000.' };
+  }
+  if (xmax <= xmin || ymax <= ymin) {
+    return { error: 'box_2d must satisfy xmax > xmin and ymax > ymin (it is [ymin, xmin, ymax, xmax]).' };
+  }
+
+  // Store the crop as fractions of the frame (0–1) — resolution-independent.
+  // It is resolved to pixels against the real capture frame at capture time, so it
+  // stays correct regardless of the target's resolution or the capture pipeline's
+  // scaling (the previous descale-to-target-pixels step mismatched the actual frame).
+  const crop = {
+    x: xmin / 1000,
+    y: ymin / 1000,
+    width: (xmax - xmin) / 1000,
+    height: (ymax - ymin) / 1000,
+  };
+
+  setCropAndNotify(args.agent_id, stream, crop);
+  return { data: { agent_id: args.agent_id, cropped: true, box_2d: [ymin, xmin, ymax, xmax], crop } };
+}
+
+/** capture_screen / capture_camera with agent_id: the same fractions and resolveCrop its loop applies. */
+async function previewAgentCrop(result: ToolResult, stream: 'screen' | 'camera', agentId: unknown): Promise<ToolResult> {
+  if (typeof agentId !== 'string' || !agentId || result.error || !result.images?.[0]) return result;
+
+  const crop = getAgentCrop(agentId, stream);
+  if (!crop) return { ...result, data: { ...(result.data as object), note: `Agent '${agentId}' has no crop set: this is the full frame it will receive.` } };
+  const cropped = await cropDataUrl(result.images[0], crop);
+  return {
+    data: { agent_id: agentId, cropped: true, crop_px: [cropped.width, cropped.height], note: 'This is exactly what the model of the agent receives each iteration.' },
+    images: [cropped.dataUrl],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -612,15 +678,19 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'capture_camera',
-    description: "Open the camera a $CAMERA agent will use and return one frame from it, so you can SEE what will be watched before building the agent. The camera stays live and start_agent reuses it. Call it BEFORE create_agent for any agent whose system_prompt uses $CAMERA. Without camera_id it opens the user's last-chosen camera (or the default). If the user has more than one camera, named a specific one, or the frame shows the wrong view, call list_cameras and pass camera_id: there is one camera stream, so switching also moves any running $CAMERA agents to it. If it fails (no permission, no camera), call ask_user_info kind='camera'.",
+    description: "Open the camera a $CAMERA agent will use and return one frame from it, so you can SEE what will be watched before building the agent. The camera stays live and start_agent reuses it. Call it BEFORE create_agent for any agent whose system_prompt uses $CAMERA. Without camera_id it opens the user's last-chosen camera (or the default). If the user has more than one camera, named a specific one, or the frame shows the wrong view, call list_cameras and pass camera_id: there is one camera stream, so switching also moves any running $CAMERA agents to it. If it fails (no permission, no camera), call ask_user_info kind='camera'. Pass agent_id (after set_camera_crop) to see the frame CROPPED exactly as that agent model will receive it on every iteration, with the crop pixel size: do this before start_agent to check the crop.",
     parameters: {
       type: 'object',
       properties: {
         camera_id: { type: 'string', description: 'Optional camera id from list_cameras. Omit to use the current camera.' },
+        agent_id: { type: 'string', description: 'Return the frame cropped by the set_camera_crop of this agent instead of the full frame.' },
       },
     },
     multimodal: true,
-    execute: (args) => captureCamera(typeof args.camera_id === 'string' && args.camera_id ? args.camera_id : undefined),
+    execute: async (args): Promise<ToolResult> => {
+      const result = await captureCamera(typeof args.camera_id === 'string' && args.camera_id ? args.camera_id : undefined);
+      return previewAgentCrop(result, 'camera', args.agent_id);
+    },
   },
   {
     name: 'list_cameras',
@@ -645,6 +715,8 @@ export const TOOLS: ToolDefinition[] = [
         const blocked = await checkContactCodes((await getAgentCode(args.id)) ?? '', ctx.getToken);
         if (blocked) return { error: blocked };
         await startAgentLoop(args.id, ctx.getToken);
+        // The agent owns its streams now, so the share ends when it stops.
+        releaseCaptureHolds(getRequiredStreamsForPrompt(agent.system_prompt));
         return { data: { started: true, id: args.id } };
       } catch (e) {
         return { error: e instanceof Error ? e.message : String(e) };
@@ -662,6 +734,9 @@ export const TOOLS: ToolDefinition[] = [
     multimodal: false,
     execute: async (args): Promise<ToolResult> => {
       await stopAgentLoop(args.id);
+      // A capture_screen / capture_camera while it ran subscribed the MCP; don't outlive the agent.
+      const agent = await getAgent(args.id);
+      if (agent) releaseCaptureHolds(getRequiredStreamsForPrompt(agent.system_prompt));
       return { data: { stopped: true, id: args.id } };
     },
   },
@@ -788,42 +863,32 @@ export const TOOLS: ToolDefinition[] = [
       required: ['agent_id'],
     },
     multimodal: false,
-    execute: async (args): Promise<ToolResult> => {
-      if (args.clear) {
-        setAgentCrop(args.agent_id, 'screen', null);
-        return { data: { agent_id: args.agent_id, cropped: false } };
-      }
-
-      const box = args.box_2d;
-      if (!Array.isArray(box) || box.length !== 4 || box.some((v: unknown) => typeof v !== 'number')) {
-        return { error: 'Provide box_2d as four numbers [ymin, xmin, ymax, xmax] normalized 0–1000 (or clear:true to remove the crop).' };
-      }
-      const [ymin, xmin, ymax, xmax] = box as number[];
-      if ([ymin, xmin, ymax, xmax].some(v => v < 0 || v > 1000)) {
-        return { error: 'box_2d values must be normalized to 0–1000.' };
-      }
-      if (xmax <= xmin || ymax <= ymin) {
-        return { error: 'box_2d must satisfy xmax > xmin and ymax > ymin (it is [ymin, xmin, ymax, xmax]).' };
-      }
-
-      // Store the crop as fractions of the frame (0–1) — resolution-independent.
-      // It is resolved to pixels against the real capture frame at capture time, so it
-      // stays correct regardless of the target's resolution or the capture pipeline's
-      // scaling (the previous descale-to-target-pixels step mismatched the actual frame).
-      const crop = {
-        x: xmin / 1000,
-        y: ymin / 1000,
-        width: (xmax - xmin) / 1000,
-        height: (ymax - ymin) / 1000,
-      };
-
-      setAgentCrop(args.agent_id, 'screen', crop);
-      return { data: { agent_id: args.agent_id, cropped: true, box_2d: [ymin, xmin, ymax, xmax], crop } };
+    execute: async (args): Promise<ToolResult> => applyCropArgs('screen', args),
+  },
+  {
+    name: 'set_camera_crop',
+    description: 'OPTIONAL. Crop a $CAMERA agent\'s capture to a rectangular sub-region of the camera view, so the model only sees (and only spends tokens on) the part that matters — e.g. a doorway or a printer bed. Skip this entirely to watch the whole view (the default). Give the region as box_2d = [ymin, xmin, ymax, xmax] in the SAME normalized 0–1000 coordinate space you use for object detection: top-left origin, y first, every value 0–1000 regardless of the camera\'s real resolution. Read box_2d straight off the frame capture_camera returned (or an iteration image from get_iteration), and do NOT convert to pixels yourself; the crop is stored normalized and resolved against the live frame at capture time. Pass clear:true to remove an existing crop and capture the full view.',
+    parameters: {
+      type: 'object',
+      properties: {
+        agent_id: { type: 'string', description: 'The agent whose camera capture to crop.' },
+        box_2d: {
+          type: 'array',
+          items: { type: 'number' },
+          minItems: 4,
+          maxItems: 4,
+          description: 'The crop region as [ymin, xmin, ymax, xmax], normalized to 0–1000 (top-left origin, y first) — the same format you emit for bounding boxes.',
+        },
+        clear: { type: 'boolean', description: 'If true, remove any existing crop and capture the full view. Ignores box_2d.' },
+      },
+      required: ['agent_id'],
     },
+    multimodal: false,
+    execute: async (args): Promise<ToolResult> => applyCropArgs('camera', args),
   },
   {
     name: 'capture_screen',
-    description: 'Start the live screen stream a $SCREEN agent will use and return one frame from it, so you can SEE exactly what will be monitored before building the agent. The frame comes from the real capture pipeline, so it is the image to read a set_screen_crop box_2d from. On the desktop app pass target_id (from list_screen_targets): the stream starts on that screen/window with NO selector popping up; only one screen stream runs at a time, so if one is already live (e.g. a running agent\'s) you get its frame and target_id is not applied. On web / mobile web (no target_id) this opens the browser screen-share picker (pick a screen, window, or tab). On the mobile app (no target_id) it triggers the OS screen-capture picker and captures the WHOLE screen (iOS broadcast / Android screen-record permission): the user must approve the system prompt, and on iOS there can be a few seconds of delay before the first frame — if this returns a "no frame yet" message, just call it again. The stream stays live — start_agent reuses it without prompting again. Call it BEFORE create_agent for any agent whose system_prompt uses $SCREEN. Pass agent_id (after set_screen_crop) to see the frame CROPPED exactly as that agent model will receive it on every iteration, with the crop pixel size: do this before every start_agent to check the crop (the whole status text inside it with a margin, the label included, nothing misleading). The stream must already be live from an earlier capture_screen.',
+    description: 'Start the live screen stream a $SCREEN agent will use and return one frame from it, so you can SEE exactly what will be monitored before building the agent. The frame comes from the real capture pipeline, so it is the image to read a set_screen_crop box_2d from. On the desktop app pass target_id (from list_screen_targets): the stream starts on that screen/window with NO selector popping up; only one screen stream runs at a time, so a different target_id restarts it on that target, unless a running agent is using the screen or system audio (then you get its frame and target_id is not applied: stop_agent first). On web / mobile web (no target_id) this opens the browser screen-share picker (pick a screen, window, or tab). On the mobile app (no target_id) it triggers the OS screen-capture picker and captures the WHOLE screen (iOS broadcast / Android screen-record permission): the user must approve the system prompt, and on iOS there can be a few seconds of delay before the first frame — if this returns a "no frame yet" message, just call it again. The stream stays live — start_agent reuses it without prompting again. Call it BEFORE create_agent for any agent whose system_prompt uses $SCREEN. Pass agent_id (after set_screen_crop) to see the frame CROPPED exactly as that agent model will receive it on every iteration, with the crop pixel size: do this before every start_agent to check the crop (the whole status text inside it with a margin, the label included, nothing misleading). The stream must already be live from an earlier capture_screen.',
     parameters: {
       type: 'object',
       properties: {
@@ -836,16 +901,7 @@ export const TOOLS: ToolDefinition[] = [
     // (desktop seats the target up front so no selector opens).
     execute: async (args): Promise<ToolResult> => {
       const result = isDesktop() ? await captureScreenDesktop(args.target_id) : await captureScreen();
-      if (!args.agent_id || result.error || !result.images?.[0]) return result;
-
-      // Preview the agent's crop: the same fractions and resolveCrop its loop applies.
-      const crop = getAgentCrop(args.agent_id, 'screen');
-      if (!crop) return { ...result, data: { ...(result.data as object), note: `Agent '${args.agent_id}' has no crop set: this is the full frame it will receive.` } };
-      const cropped = await cropDataUrl(result.images[0], crop);
-      return {
-        data: { agent_id: args.agent_id, cropped: true, crop_px: [cropped.width, cropped.height], note: 'This is exactly what the model of the agent receives each iteration.' },
-        images: [cropped.dataUrl],
-      };
+      return previewAgentCrop(result, 'screen', args.agent_id);
     },
   },
   {
