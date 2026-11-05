@@ -233,10 +233,57 @@ async function captureScreenDesktop(targetId: unknown): Promise<ToolResult> {
   );
 }
 
-/** Set an agent's screen crop and let an open agent card redraw it. */
-function setCropAndNotify(agentId: string, crop: CropConfig | null): void {
-  setAgentCrop(agentId, 'screen', crop);
+/** Set an agent's crop and let an open agent card redraw it. */
+function setCropAndNotify(agentId: string, stream: 'screen' | 'camera', crop: CropConfig | null): void {
+  setAgentCrop(agentId, stream, crop);
   window.dispatchEvent(new CustomEvent('agent-crop-update', { detail: { agentId } }));
+}
+
+/** set_screen_crop / set_camera_crop: validate box_2d and store it on the agent. */
+function applyCropArgs(stream: 'screen' | 'camera', args: Record<string, any>): ToolResult {
+  if (args.clear) {
+    setCropAndNotify(args.agent_id, stream, null);
+    return { data: { agent_id: args.agent_id, cropped: false } };
+  }
+
+  const box = args.box_2d;
+  if (!Array.isArray(box) || box.length !== 4 || box.some((v: unknown) => typeof v !== 'number')) {
+    return { error: 'Provide box_2d as four numbers [ymin, xmin, ymax, xmax] normalized 0–1000 (or clear:true to remove the crop).' };
+  }
+  const [ymin, xmin, ymax, xmax] = box as number[];
+  if ([ymin, xmin, ymax, xmax].some(v => v < 0 || v > 1000)) {
+    return { error: 'box_2d values must be normalized to 0–1000.' };
+  }
+  if (xmax <= xmin || ymax <= ymin) {
+    return { error: 'box_2d must satisfy xmax > xmin and ymax > ymin (it is [ymin, xmin, ymax, xmax]).' };
+  }
+
+  // Store the crop as fractions of the frame (0–1) — resolution-independent.
+  // It is resolved to pixels against the real capture frame at capture time, so it
+  // stays correct regardless of the target's resolution or the capture pipeline's
+  // scaling (the previous descale-to-target-pixels step mismatched the actual frame).
+  const crop = {
+    x: xmin / 1000,
+    y: ymin / 1000,
+    width: (xmax - xmin) / 1000,
+    height: (ymax - ymin) / 1000,
+  };
+
+  setCropAndNotify(args.agent_id, stream, crop);
+  return { data: { agent_id: args.agent_id, cropped: true, box_2d: [ymin, xmin, ymax, xmax], crop } };
+}
+
+/** capture_screen / capture_camera with agent_id: the same fractions and resolveCrop its loop applies. */
+async function previewAgentCrop(result: ToolResult, stream: 'screen' | 'camera', agentId: unknown): Promise<ToolResult> {
+  if (typeof agentId !== 'string' || !agentId || result.error || !result.images?.[0]) return result;
+
+  const crop = getAgentCrop(agentId, stream);
+  if (!crop) return { ...result, data: { ...(result.data as object), note: `Agent '${agentId}' has no crop set: this is the full frame it will receive.` } };
+  const cropped = await cropDataUrl(result.images[0], crop);
+  return {
+    data: { agent_id: agentId, cropped: true, crop_px: [cropped.width, cropped.height], note: 'This is exactly what the model of the agent receives each iteration.' },
+    images: [cropped.dataUrl],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -631,15 +678,19 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'capture_camera',
-    description: "Open the camera a $CAMERA agent will use and return one frame from it, so you can SEE what will be watched before building the agent. The camera stays live and start_agent reuses it. Call it BEFORE create_agent for any agent whose system_prompt uses $CAMERA. Without camera_id it opens the user's last-chosen camera (or the default). If the user has more than one camera, named a specific one, or the frame shows the wrong view, call list_cameras and pass camera_id: there is one camera stream, so switching also moves any running $CAMERA agents to it. If it fails (no permission, no camera), call ask_user_info kind='camera'.",
+    description: "Open the camera a $CAMERA agent will use and return one frame from it, so you can SEE what will be watched before building the agent. The camera stays live and start_agent reuses it. Call it BEFORE create_agent for any agent whose system_prompt uses $CAMERA. Without camera_id it opens the user's last-chosen camera (or the default). If the user has more than one camera, named a specific one, or the frame shows the wrong view, call list_cameras and pass camera_id: there is one camera stream, so switching also moves any running $CAMERA agents to it. If it fails (no permission, no camera), call ask_user_info kind='camera'. Pass agent_id (after set_camera_crop) to see the frame CROPPED exactly as that agent model will receive it on every iteration, with the crop pixel size: do this before start_agent to check the crop.",
     parameters: {
       type: 'object',
       properties: {
         camera_id: { type: 'string', description: 'Optional camera id from list_cameras. Omit to use the current camera.' },
+        agent_id: { type: 'string', description: 'Return the frame cropped by the set_camera_crop of this agent instead of the full frame.' },
       },
     },
     multimodal: true,
-    execute: (args) => captureCamera(typeof args.camera_id === 'string' && args.camera_id ? args.camera_id : undefined),
+    execute: async (args): Promise<ToolResult> => {
+      const result = await captureCamera(typeof args.camera_id === 'string' && args.camera_id ? args.camera_id : undefined);
+      return previewAgentCrop(result, 'camera', args.agent_id);
+    },
   },
   {
     name: 'list_cameras',
@@ -812,38 +863,28 @@ export const TOOLS: ToolDefinition[] = [
       required: ['agent_id'],
     },
     multimodal: false,
-    execute: async (args): Promise<ToolResult> => {
-      if (args.clear) {
-        setCropAndNotify(args.agent_id, null);
-        return { data: { agent_id: args.agent_id, cropped: false } };
-      }
-
-      const box = args.box_2d;
-      if (!Array.isArray(box) || box.length !== 4 || box.some((v: unknown) => typeof v !== 'number')) {
-        return { error: 'Provide box_2d as four numbers [ymin, xmin, ymax, xmax] normalized 0–1000 (or clear:true to remove the crop).' };
-      }
-      const [ymin, xmin, ymax, xmax] = box as number[];
-      if ([ymin, xmin, ymax, xmax].some(v => v < 0 || v > 1000)) {
-        return { error: 'box_2d values must be normalized to 0–1000.' };
-      }
-      if (xmax <= xmin || ymax <= ymin) {
-        return { error: 'box_2d must satisfy xmax > xmin and ymax > ymin (it is [ymin, xmin, ymax, xmax]).' };
-      }
-
-      // Store the crop as fractions of the frame (0–1) — resolution-independent.
-      // It is resolved to pixels against the real capture frame at capture time, so it
-      // stays correct regardless of the target's resolution or the capture pipeline's
-      // scaling (the previous descale-to-target-pixels step mismatched the actual frame).
-      const crop = {
-        x: xmin / 1000,
-        y: ymin / 1000,
-        width: (xmax - xmin) / 1000,
-        height: (ymax - ymin) / 1000,
-      };
-
-      setCropAndNotify(args.agent_id, crop);
-      return { data: { agent_id: args.agent_id, cropped: true, box_2d: [ymin, xmin, ymax, xmax], crop } };
+    execute: async (args): Promise<ToolResult> => applyCropArgs('screen', args),
+  },
+  {
+    name: 'set_camera_crop',
+    description: 'OPTIONAL. Crop a $CAMERA agent\'s capture to a rectangular sub-region of the camera view, so the model only sees (and only spends tokens on) the part that matters — e.g. a doorway or a printer bed. Skip this entirely to watch the whole view (the default). Give the region as box_2d = [ymin, xmin, ymax, xmax] in the SAME normalized 0–1000 coordinate space you use for object detection: top-left origin, y first, every value 0–1000 regardless of the camera\'s real resolution. Read box_2d straight off the frame capture_camera returned (or an iteration image from get_iteration), and do NOT convert to pixels yourself; the crop is stored normalized and resolved against the live frame at capture time. Pass clear:true to remove an existing crop and capture the full view.',
+    parameters: {
+      type: 'object',
+      properties: {
+        agent_id: { type: 'string', description: 'The agent whose camera capture to crop.' },
+        box_2d: {
+          type: 'array',
+          items: { type: 'number' },
+          minItems: 4,
+          maxItems: 4,
+          description: 'The crop region as [ymin, xmin, ymax, xmax], normalized to 0–1000 (top-left origin, y first) — the same format you emit for bounding boxes.',
+        },
+        clear: { type: 'boolean', description: 'If true, remove any existing crop and capture the full view. Ignores box_2d.' },
+      },
+      required: ['agent_id'],
     },
+    multimodal: false,
+    execute: async (args): Promise<ToolResult> => applyCropArgs('camera', args),
   },
   {
     name: 'capture_screen',
@@ -860,16 +901,7 @@ export const TOOLS: ToolDefinition[] = [
     // (desktop seats the target up front so no selector opens).
     execute: async (args): Promise<ToolResult> => {
       const result = isDesktop() ? await captureScreenDesktop(args.target_id) : await captureScreen();
-      if (!args.agent_id || result.error || !result.images?.[0]) return result;
-
-      // Preview the agent's crop: the same fractions and resolveCrop its loop applies.
-      const crop = getAgentCrop(args.agent_id, 'screen');
-      if (!crop) return { ...result, data: { ...(result.data as object), note: `Agent '${args.agent_id}' has no crop set: this is the full frame it will receive.` } };
-      const cropped = await cropDataUrl(result.images[0], crop);
-      return {
-        data: { agent_id: args.agent_id, cropped: true, crop_px: [cropped.width, cropped.height], note: 'This is exactly what the model of the agent receives each iteration.' },
-        images: [cropped.dataUrl],
-      };
+      return previewAgentCrop(result, 'screen', args.agent_id);
     },
   },
   {
