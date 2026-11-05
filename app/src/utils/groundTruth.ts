@@ -56,8 +56,9 @@ export interface UseCase {
   /** Recordings under e2e/demos/ the demo needs: skipped everywhere until they exist. */
   requires?: string[];
   /** On GROUND_TRUTH rows: on the wheels. `channel` is how an alert is delivered on the landing page;
-   *  the demo shows the rest. */
-  show?: { channel?: ChannelId };
+   *  the demo shows the rest. `then` is shorter copy for the landing page's wheel when the tested
+   *  `then` is too long to read there. */
+  show?: { channel?: ChannelId; then?: string };
 }
 
 export const prompt = (u: Pick<UseCase, 'when' | 'then'>): string => `When ${u.when}, then ${u.then}.`;
@@ -192,7 +193,7 @@ export const GROUND_TRUTH: UseCase[] = [
   // A news app's banner ad rotates every 10 s while the feed scrolls; the Acme ad gets one slot.
   { id: 'acme_ad', group: 'change', demo: 'ad_banner.html', when: 'the Acme ad shows up in my app',
     then: "save an image of it to memory, and if it hasn't shown up after 5 minutes, send me a browser notification",
-    show: {} },
+    show: { then: 'save an image of it to memory' } },
 
   // The new orders, not today's total.
   { id: 'shopify_count', group: 'record', demo: 'shopify_orders.html', when: 'a new Shopify order comes in', then: 'keep count of it',
