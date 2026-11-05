@@ -1,33 +1,71 @@
 <!DOCTYPE html>
-<!-- Find My on a Mac, People tab: a neighborhood map with family members' pins. Mom's pin sits
-     still (her card says "Now"); the sidebar's "min. ago" labels tick and her pin jitters a few
-     pixels now and then, like a real GPS fix. Ends by ?outcome=:
-       moves  Mom's location updates: her pin jumps ~260px down Infinite Loop (the trigger), then
-              keeps going in further jumps every 20 s.
-       stays  she never moves; only the jitter and the labels. The trigger is the end of the run. -->
+<!-- Find My on a Mac, People tab: a neighborhood map with family members' pins. Click a person in
+     the sidebar and the map pans to them. On a phone the sidebar is a bottom sheet that stays
+     minimized to the selected person until tapped. Mom starts selected and her pin sits still (her
+     card says "Now"); the sidebar's "min. ago" labels tick and her pin jitters a few pixels now
+     and then, like a real GPS fix. The map only pans on a click, or to keep the selected person in
+     view: it doesn't follow them, so a move shows as the pin moving. Ends by ?outcome=:
+       moves  Mom's location updates: her pin jumps ~130px down Infinite Loop (the trigger), then
+              keeps going in further jumps every 20 s. Ada, Linus and Alan move at the same moment,
+              so 4 of the 7 people are on the move; Me, Grace and Woz stay put.
+       stays  nobody moves; only the jitter and the labels. The trigger is the end of the run. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Find My</title>
 <link rel="stylesheet" href="fonts/inter.css">
 <link rel="stylesheet" href="desktop_assets/macos.css">
 <style>
-  .fm { flex: 1; position: relative; overflow: hidden; background: #f2efe9; font: 13px Inter, -apple-system, sans-serif; }
-  .fm svg.map { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .side { position: absolute; left: 12px; top: 12px; bottom: 12px; width: 280px; background: rgba(246,246,246,.92); border-radius: 14px; box-shadow: 0 2px 14px rgba(0,0,0,.18); padding: 10px; }
+  .fm { flex: 1; position: relative; overflow: hidden; background: #f2efe9; font: 13px Inter, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+  /* The world: a zero-size element at map coordinate (0, 0), so a pin's left/top are map units.
+     The camera moves it; pins scale back by --inv to stay the same size on any screen. */
+  .world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+  .world.pan { transition: transform 1s cubic-bezier(.3, .7, .2, 1); }
+  .world svg.map { position: absolute; left: -700px; top: -700px; width: 2600px; height: 2100px; }
+  .side { position: absolute; left: 12px; top: 12px; bottom: 12px; width: 280px; background: rgba(246,246,246,.92); border-radius: 14px; box-shadow: 0 2px 14px rgba(0,0,0,.18); padding: 10px; display: flex; flex-direction: column; z-index: 2; }
+  .grab, .peek { display: none; }
+  .list { flex: 1; min-height: 0; overflow: auto; }
   .tabs { display: flex; background: #e3e3e3; border-radius: 9px; padding: 2px; margin: 32px 0 10px; }
   .tabs span { flex: 1; text-align: center; padding: 5px; border-radius: 7px; }
   .tabs span.on { background: #fff; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
-  .p { display: flex; gap: 10px; align-items: center; padding: 8px; border-radius: 9px; }
-  .p.on { background: #dcdcdc; }
+  .p { display: flex; gap: 10px; align-items: center; padding: 8px; border-radius: 9px; width: 100%; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+  @media (hover: hover) { .p:hover { background: #ebebeb; } }
+  .p.on, .p.on:hover { background: #dcdcdc; }
+  .p:focus-visible, .grab:focus-visible { outline: 2px solid #0a84ff; outline-offset: -2px; }
   .av { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 600; flex: none; border: 2px solid #fff; }
+  .p .who { min-width: 0; }
   .p b { display: block; font-weight: 600; }
   .p small { color: #777; font-size: 11.5px; }
-  .pin { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 6px; transition: left 1.2s ease, top 1.2s ease; }
+  .pin { position: absolute; transform: translate(-50%, -50%) scale(var(--inv, 1)); transition: left 1.2s ease, top 1.2s ease; }
+  .pin.on { z-index: 1; }
   .pin .av { width: 44px; height: 44px; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); font-size: 15px; }
-  .pin .card { background: rgba(255,255,255,.95); border-radius: 8px; padding: 5px 10px; box-shadow: 0 1px 4px rgba(0,0,0,.2); font-size: 12px; }
+  .pin .card { display: none; position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); white-space: nowrap; background: rgba(255,255,255,.95); border-radius: 8px; padding: 5px 10px; box-shadow: 0 1px 4px rgba(0,0,0,.2); font-size: 12px; }
+  .pin.on .card { display: block; }
   .pin .card small { display: block; color: #777; font-size: 10.5px; }
   .ctl { position: absolute; right: 12px; top: 12px; background: rgba(255,255,255,.9); border-radius: 8px; padding: 6px 10px; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+
+  /* Phones: the sidebar becomes a bottom sheet. Minimized it's just the selected person. The two
+     folds trade places, each animating its grid row between nothing and its content. Keep the
+     query in step with SHEET in the script. */
+  @media (max-width: 640px), (max-height: 480px) {
+    body.mac { height: 100dvh; }
+    .mac-menubar { gap: 12px; }
+    .mac-menubar .menus, .mac-battery .pct, .mac-menubar .status > svg:not(:first-of-type) { display: none; }
+    .side { top: auto; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); width: auto; max-width: 420px; margin-inline: auto; padding: 0 8px 8px; }
+    .grab { display: block; width: 100%; height: 22px; border: 0; background: none; padding: 0; cursor: pointer; border-radius: 9px; }
+    .grab i { display: block; width: 36px; height: 4px; margin: 0 auto; border-radius: 2px; background: #bbb; }
+    .peek, .list { display: grid; flex: none; overflow: visible; grid-template-rows: 0fr; transition: grid-template-rows .28s ease; }
+    .peek > div, .list > div { min-height: 0; overflow: hidden; visibility: hidden; transition: visibility .28s; }
+    .side:not(.open) .peek, .side.open .list { grid-template-rows: 1fr; }
+    .side:not(.open) .peek > div, .side.open .list > div { visibility: visible; }
+    .side.open .list > div { overflow: auto; max-height: 62dvh; }
+    .tabs { margin: 0 0 8px; }
+    .peek .p:hover { background: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .world.pan, .peek, .list, .peek > div, .list > div { transition: none; }
+  }
 </style>
 <script src="demo-contract.js" data-outcome="moves"></script>
 <script src="desktop_assets/macos.js"></script>
@@ -35,73 +73,183 @@
 <body>
 <div class="mac-window full">
   <div class="fm" id="fm">
-    <svg class="map" viewBox="0 0 1200 760" preserveAspectRatio="xMidYMid slice">
-      <rect x="380" y="0" width="260" height="120" fill="#cfe8c4"/>
-      <rect x="560" y="300" width="170" height="160" fill="#cfe8c4"/>
-      <rect x="980" y="160" width="220" height="200" fill="#cfe8c4"/>
-      <rect x="840" y="440" width="140" height="120" fill="#f6dfc2"/>
-      <g stroke="#fff" stroke-linecap="round" fill="none">
-        <path d="M300 250 L1200 300" stroke-width="16"/>
-        <path d="M860 0 L760 360 L740 760" stroke-width="20"/>
-        <path d="M300 520 L760 460" stroke-width="10"/>
-        <path d="M300 140 L860 110" stroke-width="10"/>
-        <path d="M760 360 L1200 340" stroke-width="18"/>
-        <path d="M450 250 L430 760" stroke-width="8"/>
-        <path d="M600 260 L590 760" stroke-width="8"/>
-        <path d="M900 560 L1200 620" stroke-width="10"/>
-        <path d="M300 650 L740 640" stroke-width="8"/>
-        <path d="M1000 380 L1060 760" stroke-width="8"/>
-      </g>
-      <g fill="#7a7a7a" font-family="Inter, sans-serif" font-size="11" font-weight="600" letter-spacing="1">
-        <text x="560" y="240" transform="rotate(3 560 240)">HACKER WAY</text>
-        <text x="500" y="410" font-size="17" fill="#666">MENLO PARK</text>
-        <text x="610" y="70" font-size="17" fill="#666">PALO ALTO</text>
-        <text x="770" y="600" transform="rotate(-88 770 600)">INFINITE LOOP</text>
-        <text x="420" y="510" transform="rotate(-7 420 510)">SAND HILL ROAD</text>
-        <text x="1000" y="470" font-size="17" fill="#666">CUPERTINO</text>
-        <text x="850" y="500" fill="#c56a00">The Garage</text>
-        <text x="460" y="590" fill="#c56a00">Blue Box Café</text>
-        <text x="920" y="700" fill="#c56a00">Byte Burgers</text>
-      </g>
-    </svg>
-    <div class="side">
-      <div class="tabs"><span class="on">People</span><span>Devices</span><span>Items</span></div>
-      <div id="people"></div>
+    <div class="world" id="world">
+      <svg class="map" viewBox="-700 -700 2600 2100">
+        <rect x="380" y="-140" width="260" height="260" fill="#cfe8c4"/>
+        <rect x="560" y="300" width="170" height="160" fill="#cfe8c4"/>
+        <rect x="980" y="160" width="220" height="200" fill="#cfe8c4"/>
+        <rect x="840" y="440" width="140" height="120" fill="#f6dfc2"/>
+        <rect x="1560" y="-60" width="220" height="180" fill="#cfe8c4"/>
+        <rect x="1180" y="960" width="260" height="180" fill="#cfe8c4"/>
+        <rect x="120" y="-420" width="260" height="160" fill="#cfe8c4"/>
+        <rect x="-300" y="320" width="240" height="200" fill="#cfe8c4"/>
+        <rect x="1560" y="480" width="150" height="120" fill="#f6dfc2"/>
+        <g stroke="#fff" stroke-linecap="round" fill="none">
+          <path d="M-700 194 L1900 339" stroke-width="16"/>
+          <path d="M930 -700 L860 0 L760 360 L740 760 L715 1400" stroke-width="20"/>
+          <path d="M-700 651 L760 460" stroke-width="10"/>
+          <path d="M-700 194 L860 110" stroke-width="10"/>
+          <path d="M760 360 L1900 308" stroke-width="18"/>
+          <path d="M450 250 L405 1400" stroke-width="8"/>
+          <path d="M600 260 L577 1400" stroke-width="8"/>
+          <path d="M745 529 L1900 760" stroke-width="10"/>
+          <path d="M-700 673 L740 640" stroke-width="8"/>
+          <path d="M995 349 L1165 1400" stroke-width="8"/>
+          <path d="M-700 -220 L1900 -160" stroke-width="14"/>
+          <path d="M-700 860 L1900 920" stroke-width="16"/>
+          <path d="M1500 -700 L1440 1400" stroke-width="14"/>
+          <path d="M240 -700 L190 1400" stroke-width="10"/>
+          <path d="M-240 -700 L-290 1400" stroke-width="8"/>
+          <path d="M1700 -700 L1725 1400" stroke-width="8"/>
+          <path d="M1240 -700 L1290 300" stroke-width="8"/>
+        </g>
+        <g fill="#7a7a7a" font-family="Inter, sans-serif" font-size="11" font-weight="600" letter-spacing="1">
+          <text x="560" y="240" transform="rotate(3 560 240)">HACKER WAY</text>
+          <text x="500" y="410" font-size="17" fill="#666">MENLO PARK</text>
+          <text x="610" y="70" font-size="17" fill="#666">PALO ALTO</text>
+          <text x="770" y="600" transform="rotate(-88 770 600)">INFINITE LOOP</text>
+          <text x="420" y="510" transform="rotate(-7 420 510)">SAND HILL ROAD</text>
+          <text x="1000" y="470" font-size="17" fill="#666">CUPERTINO</text>
+          <text x="850" y="500" fill="#c56a00">The Garage</text>
+          <text x="460" y="590" fill="#c56a00">Blue Box Café</text>
+          <text x="920" y="700" fill="#c56a00">Byte Burgers</text>
+          <text x="1360" y="40" font-size="17" fill="#666">MOUNTAIN VIEW</text>
+          <text x="1290" y="770" font-size="17" fill="#666">SUNNYVALE</text>
+          <text x="250" y="-222" transform="rotate(1.3 250 -222)">UNIVERSITY AVE</text>
+          <text x="1400" y="648" transform="rotate(11.3 1400 648)">STEVENS CREEK BLVD</text>
+          <text x="700" y="880" transform="rotate(1.3 700 880)">EL CAMINO REAL</text>
+          <text x="1590" y="540" fill="#c56a00">Kernel Coffee</text>
+        </g>
+      </svg>
+      <div id="pins"></div>
+    </div>
+    <div class="side" id="side">
+      <button class="grab" id="grab" aria-label="Show people" aria-expanded="false"><i></i></button>
+      <div class="peek"><div><button class="p" id="peek"></button></div></div>
+      <div class="list"><div>
+        <div class="tabs"><span class="on">People</span><span>Devices</span><span>Items</span></div>
+        <div id="people"></div>
+      </div></div>
     </div>
     <div class="ctl">Map · 3D</div>
-    <div class="pin" id="mom"><span class="av" style="background:#b65f8a">M</span><span class="card">Mom<small>Now</small></span></div>
-    <div class="pin" style="left:62%;top:73%"><span class="av" style="background:#5b7fb5">W</span></div>
   </div>
 </div>
 <script>
   Mac.mount({ app: 'Find My', menus: ['File', 'Edit', 'View', 'Window', 'Help'] });
   const $ = id => document.getElementById(id);
-  const PEOPLE = [['Me', 'Locating…', '#888'], ['Mom', 'Hacker Way · Now', '#b65f8a'],
-    ['Ada', 'Palo Alto', '#6a9c5a', 17], ['Linus', 'Cupertino', '#c08a3e', 13],
-    ['Grace', 'Mountain View', '#5b7fb5', 16], ['Alan', 'Sunnyvale', '#8a6ab5', 15],
-    ['Woz', 'Home · Now', '#5b7fb5']];
-  const loaded = Date.now();
-  const renderPeople = () => {
-    const m = Math.floor((Date.now() - loaded) / 60000);
-    $('people').innerHTML = PEOPLE.map(([n, s, c, ago], i) =>
-      `<div class="p${i === 1 ? ' on' : ''}"><span class="av" style="background:${c}">${n[0]}</span><div><b>${n}</b><small>${s}${ago ? ` · ${ago + m} min. ago` : ''}</small></div></div>`).join('');
-  };
-  renderPeople(); setInterval(renderPeople, 10000);
 
-  // Mom's pin, in % of the map. Jitter: a few pixels every ~30 s, as GPS fixes do.
-  let x = 58, y = 49;
-  const place = () => { $('mom').style.left = `${x}%`; $('mom').style.top = `${y}%`; };
-  place();
-  const BASE = [x, y];
-  setInterval(() => { if (x === BASE[0] || Math.abs(x - BASE[0]) < 0.5) { const j = () => (Math.random() - 0.5) * 0.5; $('mom').style.left = `${x + j()}%`; $('mom').style.top = `${y + j()}%`; } }, 30000);
+  // Where everyone is, in map units. ago: minutes since the last fix (0 is "Now", null is yourself).
+  // route: the stops they move through once the job ends, one per hop, if they move at all.
+  const PEOPLE = [
+    { name: 'Me', color: '#888', at: [470, 180], place: 'My Location', ago: null },
+    { name: 'Mom', color: '#b65f8a', at: [696, 372], place: 'Hacker Way', ago: 0,
+      route: [[708, 502, 'Infinite Loop'], [720, 608, 'Infinite Loop'], [768, 669, 'Infinite Loop'], [864, 699, 'Byte Burgers']] },
+    { name: 'Ada', color: '#6a9c5a', at: [700, -60], place: 'Palo Alto', ago: 17,
+      route: [[640, -189, 'University Ave'], [470, -193, 'University Ave']] },
+    { name: 'Linus', color: '#c08a3e', at: [1040, 520], place: 'Cupertino', ago: 13,
+      route: [[1180, 616, 'Stevens Creek Blvd'], [1320, 644, 'Stevens Creek Blvd']] },
+    { name: 'Grace', color: '#5b7fb5', at: [1420, 120], place: 'Mountain View', ago: 16 },
+    { name: 'Alan', color: '#8a6ab5', at: [1320, 820], place: 'Sunnyvale', ago: 15,
+      route: [[1240, 905, 'El Camino Real'], [1060, 900, 'El Camino Real']] },
+    { name: 'Woz', color: '#5b7fb5', at: [744, 555], place: 'Home', ago: 0 },
+  ];
+  const mom = PEOPLE[1];
+  let selected = mom;
+
+  const face = p => `<span class="av" style="background:${p.color}">${p.name[0]}</span>`;
+  const row = p => `${face(p)}<span class="who"><b>${p.name}</b><small></small></span>`;
+  $('people').innerHTML = PEOPLE.map((p, i) => `<button class="p" data-i="${i}">${row(p)}</button>`).join('');
+  $('pins').innerHTML = PEOPLE.map(p => `<div class="pin">${face(p)}<span class="card">${p.name}<small></small></span></div>`).join('');
+  const rows = [...$('people').children], pins = [...$('pins').children];
+
+  const loaded = Date.now();
+  const render = () => {
+    const m = Math.floor((Date.now() - loaded) / 60000);
+    const when = p => (p.ago === null ? '' : p.ago ? `${p.ago + m} min. ago` : 'Now');
+    PEOPLE.forEach((p, i) => {
+      const on = p === selected;
+      rows[i].classList.toggle('on', on);
+      rows[i].setAttribute('aria-pressed', on);
+      rows[i].querySelector('small').textContent = [p.place, when(p)].filter(Boolean).join(' · ');
+      pins[i].classList.toggle('on', on);
+      pins[i].querySelector('small').textContent = when(p) || p.place;
+    });
+    $('peek').innerHTML = row(selected);
+    $('peek').querySelector('small').textContent = rows[PEOPLE.indexOf(selected)].querySelector('small').textContent;
+  };
+  render(); setInterval(render, 10000);
+
+  const put = (p, x = p.at[0], y = p.at[1]) => { const el = pins[PEOPLE.indexOf(p)]; el.style.left = `${x}px`; el.style.top = `${y}px`; };
+  PEOPLE.forEach(p => put(p));
+
+  // The camera. Zoomed so a 1200x760 piece of the map fills the window, like the map always was,
+  // with the selected person centered in what the sidebar or the minimized sheet leaves visible.
+  const SHEET = matchMedia('(max-width: 640px), (max-height: 480px)');
+  const BOUNDS = { left: -700, top: -700, right: 1900, bottom: 1400 };
+  const SIDEBAR_W = 292, SHEET_H = 100;
+  let cam = { tx: 0, ty: 0 };
+  const view = () => {
+    const W = $('fm').clientWidth, H = $('fm').clientHeight;
+    return { W, H, s: Math.max(W / 1200, H / 760), left: SHEET.matches ? 0 : SIDEBAR_W, bottom: SHEET.matches ? SHEET_H : 0 };
+  };
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+  const frame = p => {
+    const { W, H, s, left, bottom } = view();
+    cam = {
+      tx: clamp(left + (W - left) / 2 - s * p.at[0], W - BOUNDS.right * s, -BOUNDS.left * s),
+      ty: clamp((H - bottom) / 2 - s * p.at[1], H - BOUNDS.bottom * s, -BOUNDS.top * s),
+    };
+    $('world').style.transform = `translate(${cam.tx}px, ${cam.ty}px) scale(${s})`;
+    $('world').style.setProperty('--inv', 1 / s);
+  };
+  // Re-center only if the selected person has moved out of view.
+  const keepInView = () => {
+    const { W, H, s, left, bottom } = view(), MARGIN = 48;
+    const x = cam.tx + s * selected.at[0], y = cam.ty + s * selected.at[1];
+    if (x < left + MARGIN || x > W - MARGIN || y < MARGIN || y > H - bottom - MARGIN) frame(selected);
+  };
+  frame(selected);
+  addEventListener('resize', () => frame(selected));
+  requestAnimationFrame(() => requestAnimationFrame(() => $('world').classList.add('pan')));
+
+  const setOpen = open => {
+    $('side').classList.toggle('open', open);
+    $('grab').setAttribute('aria-expanded', open);
+    $('grab').setAttribute('aria-label', open ? 'Minimize people' : 'Show people');
+  };
+  $('grab').addEventListener('click', () => setOpen(!$('side').classList.contains('open')));
+  $('peek').addEventListener('click', () => setOpen(true));
+  $('fm').addEventListener('click', e => { if (!$('side').contains(e.target)) setOpen(false); });
+  $('people').addEventListener('click', e => {
+    const b = e.target.closest('.p');
+    if (!b) return;
+    selected = PEOPLE[b.dataset.i];
+    render(); frame(selected); setOpen(false);
+  });
+
+  // Jitter: Mom, a few pixels every ~30 s, as GPS fixes do, until she really moves.
+  const HOME = mom.at;
+  setInterval(() => {
+    if (mom.at !== HOME) return;
+    const j = range => (Math.random() - 0.5) * range;
+    put(mom, HOME[0] + j(6), HOME[1] + j(4));
+  }, 30000);
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  const ROUTE = [[59, 66], [60, 80], [64, 88], [72, 92]];
+  const hop = i => {
+    for (const p of PEOPLE) {
+      const stop = p.route?.[i];
+      if (!stop) continue;
+      p.at = stop.slice(0, 2); p.place = stop[2]; p.ago = 0;
+      put(p);
+    }
+    render(); keepInView();
+  };
   demo.onStart = async durationMs => {
     await sleep(durationMs);
     if (demo.outcome !== 'moves') { demo.trigger(); return; }
-    for (let i = 0; i < ROUTE.length; i++) {
-      [x, y] = ROUTE[i]; place();
+    for (let i = 0; i < mom.route.length; i++) {
+      hop(i);
       if (i === 0) { await sleep(1300); demo.trigger(); }
       await sleep(20000);
     }
