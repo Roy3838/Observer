@@ -74,8 +74,8 @@ const EyeLogo = ({
   );
 };
 
-const TAGLINE_LINE_1 = 'The agent that monitors your screen,';
-const TAGLINE_LINE_2 = "so you don't have to.";
+const TAGLINE_LINE_1 = 'The agent that monitors anything';
+const TAGLINE_LINE_2 = "for you.";
 const TAGLINE_FULL = TAGLINE_LINE_1 + '\n' + TAGLINE_LINE_2;
 
 const ObserverLanding = () => {
