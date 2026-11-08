@@ -133,6 +133,42 @@ export function notify(title: string, message: string): void {
   }
 }
 
+// --- Test notifications (granted from a click, before the agent ever runs) ---
+//
+// An agent fires notify() / system_notify() from its background loop, where the permission
+// prompt either can't show or shows at the worst moment. So the user allows them up front,
+// from a tap: the `ask_user_info` modal (and the Tools tests) push one test notification,
+// which is what makes the browser / OS ask.
+
+export const TEST_NOTIFICATION = {
+  title: 'Observer',
+  body: 'Notifications are on. Your agent will alert you like this.',
+};
+
+/** True once notify() can show something: permission granted (or no Notification API to ask). */
+export function browserNotifyReady(): boolean {
+  return typeof Notification === 'undefined' || Notification.permission === 'granted';
+}
+
+/**
+ * Asks for permission if needed and pushes a test notification. Call it straight from a click,
+ * before any await: browsers only show the permission prompt from a user gesture.
+ * Resolves 'sent', or 'denied' when the browser blocks notifications for this site.
+ */
+export async function sendTestNotification(method: 'browser' | 'system'): Promise<'sent' | 'denied'> {
+  if (method === 'system') {
+    await system_notify('http://localhost:3838', TEST_NOTIFICATION.title, TEST_NOTIFICATION.body);
+    return 'sent';
+  }
+  if (typeof Notification === 'undefined') throw new Error('This browser does not support notifications.');
+  const permission = Notification.permission === 'default'
+    ? await Notification.requestPermission()
+    : Notification.permission;
+  if (permission !== 'granted') return 'denied';
+  new Notification(TEST_NOTIFICATION.title, { body: TEST_NOTIFICATION.body });
+  return 'sent';
+}
+
 // Bundled sounds. Adding a file to ./sounds/ is all it takes to add a new name:
 // './sounds/airplane.mp3' becomes sound('airplane'). Vite emits each file as a
 // separate hashed asset, so they cost nothing until one is actually played.

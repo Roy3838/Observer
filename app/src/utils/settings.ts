@@ -237,6 +237,20 @@ class SettingsManager {
         localStorage.removeItem(this.NOTIFICATION_CONTACTS_KEY);
     }
 
+    // --- SYSTEM NOTIFICATIONS ---
+    // The OS gives no reliable way to read whether Observer may post notifications, so the
+    // user confirms it once: the `ask_user_info` modal pushes a test and they say they saw it.
+    private readonly SYSTEM_NOTIFY_CONFIRMED_KEY = 'observer-ai:settings:systemNotifyConfirmed';
+
+    public getSystemNotifyConfirmed(): boolean {
+        return localStorage.getItem(this.SYSTEM_NOTIFY_CONFIRMED_KEY) === 'true';
+    }
+
+    public setSystemNotifyConfirmed(value: boolean): void {
+        if (value) localStorage.setItem(this.SYSTEM_NOTIFY_CONFIRMED_KEY, 'true');
+        else localStorage.removeItem(this.SYSTEM_NOTIFY_CONFIRMED_KEY);
+    }
+
     // --- CONTACT CODES ---
     // Stable codes (e.g. "tree-book-shower-golden") shown in the golden-path QRs, one per
     // channel, because pairing each one is its own opt-in. The SMS code (texted to our number)

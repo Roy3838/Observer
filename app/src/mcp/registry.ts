@@ -30,7 +30,7 @@ import { downloadLocalModel, LOCAL_MODEL_CHOICES, type LocalModelChoice } from '
 import { tauriStreamCapture } from '@utils/tauriStreamCapture';
 import { setAgentCrop, getAgentCrop, cropDataUrl, type CropConfig } from '@utils/screenCapture';
 import { isDesktop, isMobile } from '@utils/platform';
-import { getPhoneLockStatus, phoneLockPermissionName } from '@utils/handlers/utils';
+import { getPhoneLockStatus, phoneLockPermissionName, browserNotifyReady } from '@utils/handlers/utils';
 import { SensorSettings } from '@utils/settings';
 import { normalizeWhitelistCode } from '@utils/whitelistCode';
 import { fetchStatus } from './remote';
@@ -168,6 +168,21 @@ async function checkPhoneLock(agentCode: string): Promise<string | null> {
   if (!status.supported) return 'start_agent blocked by pre-flight: lockPhone() needs iOS 16 or later. Tell the user, and remove lockPhone() with edit_agent.';
   if (status.authorized) return null;
   return `start_agent blocked by pre-flight: lockPhone() needs ${phoneLockPermissionName()}. Call ask_user_info kind='lock_phone' so the user can allow it, then start_agent again.`;
+}
+
+/**
+ * start_agent pre-flight for notify() / system_notify(): the user allows notifications from a
+ * tap, by accepting a test one in ask_user_info, so the browser / OS prompt never pops up the
+ * first time the agent fires (or gets silently dropped because no gesture was behind it).
+ */
+function checkNotifications(agentCode: string): string | null {
+  if (/\bnotify\s*\(/.test(agentCode) && !browserNotifyReady()) {
+    return "start_agent blocked by pre-flight: notify() needs notification permission. Call ask_user_info kind='method' channel='browser' so the user accepts a test notification, then start_agent again.";
+  }
+  if (isDesktop() && /\bsystem_notify\s*\(/.test(agentCode) && !SensorSettings.getSystemNotifyConfirmed()) {
+    return "start_agent blocked by pre-flight: system_notify() hasn't been tested on this computer. Call ask_user_info kind='method' channel='system' so the user accepts a test notification, then start_agent again.";
+  }
+  return null;
 }
 
 /** The iteration get_iteration last returned per agent (agent_id mode), so a repeat call waits for a newer one. */
@@ -599,7 +614,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'ask_user_info',
-    description: "Ask the user for something only they can give, via a modal. This BLOCKS until they answer. Never ask for these in chat, and never narrate the modal: they can see it. kind='screen' / kind='camera': ONLY after capture_screen / capture_camera failed; the modal's button opens the share picker / camera permission (a click is what browsers like Safari require) and returns the same frame those tools return. kind='method': how the agent tells the user; pass `channel` when the user already named one (e.g. 'send me a WhatsApp' → channel='whatsapp'), omit it to let them pick. It returns {channel, value}: value is what the agent code passes to that channel's tool, already connected and verified (the user's 4-word code for whatsapp/sms/voice/telegram, their email, webhook or Pushover key; '' for browser and system). A returning user with a working connection is not shown anything. kind='model' (`model`: 'onejev' for a decision model, 'default' for an LLM): local or cloud; returns {choice:'local'} (call download_model with that `model` next) or {choice:'cloud'}. Ask it LAST, right before download_model. kind='lock_phone' (mobile app only): the permission lockPhone() needs; call it before start_agent for any agent that uses lockPhone(). Its button opens the Screen Time / \"Display over other apps\" prompt and it returns {authorized:true}; if the permission is already granted the user sees nothing. If the result is {skipped:true}, the user declined: ask them about it in chat instead of calling this again.",
+    description: "Ask the user for something only they can give, via a modal. This BLOCKS until they answer. Never ask for these in chat, and never narrate the modal: they can see it. kind='screen' / kind='camera': ONLY after capture_screen / capture_camera failed; the modal's button opens the share picker / camera permission (a click is what browsers like Safari require) and returns the same frame those tools return. kind='method': how the agent tells the user; pass `channel` when the user already named one (e.g. 'send me a WhatsApp' → channel='whatsapp'), omit it to let them pick. It returns {channel, value}: value is what the agent code passes to that channel's tool, already connected and verified (the user's 4-word code for whatsapp/sms/voice/telegram, their email, webhook or Pushover key; '' for browser and system). For browser and system the modal pushes a test notification so the browser / OS asks for permission now and the user confirms they saw it; call it before start_agent for any agent that uses notify() or system_notify(). A returning user with a working connection is not shown anything. kind='model' (`model`: 'onejev' for a decision model, 'default' for an LLM): local or cloud; returns {choice:'local'} (call download_model with that `model` next) or {choice:'cloud'}. Ask it LAST, right before download_model. kind='lock_phone' (mobile app only): the permission lockPhone() needs; call it before start_agent for any agent that uses lockPhone(). Its button opens the Screen Time / \"Display over other apps\" prompt and it returns {authorized:true}; if the permission is already granted the user sees nothing. If the result is {skipped:true}, the user declined: ask them about it in chat instead of calling this again.",
     parameters: {
       type: 'object',
       properties: {
@@ -659,8 +674,8 @@ export const TOOLS: ToolDefinition[] = [
       }
 
       // Nothing to ask: no modal at all (the e2e suite, which can't answer one, relies on this).
-      if (kind === 'method' && (method === 'system'
-        || (method === 'browser' && (typeof Notification === 'undefined' || Notification.permission === 'granted')))) {
+      if (kind === 'method' && ((method === 'system' && SensorSettings.getSystemNotifyConfirmed())
+        || (method === 'browser' && browserNotifyReady()))) {
         return { data: { kind, channel: method, value: '', use: METHOD_USAGE[method]('') } };
       }
 
@@ -740,7 +755,7 @@ export const TOOLS: ToolDefinition[] = [
       if (!agent) return { error: `Agent '${args.id}' not found.` };
       try {
         const code = (await getAgentCode(args.id)) ?? '';
-        const blocked = await checkContactCodes(code, ctx.getToken) ?? await checkPhoneLock(code);
+        const blocked = await checkContactCodes(code, ctx.getToken) ?? await checkPhoneLock(code) ?? checkNotifications(code);
         if (blocked) return { error: blocked };
         await startAgentLoop(args.id, ctx.getToken);
         // The agent owns its streams now, so the share ends when it stops.
