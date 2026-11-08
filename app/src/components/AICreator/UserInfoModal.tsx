@@ -11,6 +11,9 @@
 //                     (QR for phone/Telegram, permission for browser, a field for the rest) and
 //                     only returns once it works. The MCP never handles codes itself.
 //   model           — local or cloud.
+//   lock_phone      — a button that asks for the permission lockPhone() needs (Screen Time on
+//                     iOS, "Display over other apps" on Android). The agent runs in the
+//                     background where that prompt can't show, so it's granted here, from a tap.
 //
 // Observer never sends to raw phone numbers: phone channels resolve to the user's 4-word code.
 
@@ -18,7 +21,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import {
   Bell, Mail, Hash, Phone, MessageSquare, Monitor, MonitorUp, Camera, Cloud, HardDrive,
-  ChevronLeft, Loader2, RefreshCw, X, ArrowRight,
+  ChevronLeft, Loader2, RefreshCw, X, ArrowRight, Lock,
 } from 'lucide-react';
 import { FaWhatsapp, FaTelegramPlane } from 'react-icons/fa';
 import WhitelistQR from '@components/whitelist/WhitelistQR';
@@ -26,7 +29,8 @@ import TelegramQR from '@components/whitelist/TelegramQR';
 import { useWhitelistPolling, useTelegramStatus, checkNumber } from '@components/whitelist/shared';
 import { useAuth } from '@contexts/AuthContext';
 import { SensorSettings } from '@utils/settings';
-import { isDesktop } from '@utils/platform';
+import { isDesktop, isIOS } from '@utils/platform';
+import { requestPhoneLockPermission } from '@utils/handlers/utils';
 import { captureScreen, captureCamera } from '../../mcp/capture';
 import { fetchStatus } from '../../mcp/remote';
 import type { NotifyMethod, UserInfoRequest, UserInfoResponse } from '../../mcp/types';
@@ -207,6 +211,43 @@ const CaptureModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
     >
       <PrimaryButton onClick={share} busy={busy}>
         {camera ? 'Turn on camera' : 'Share screen'} <ArrowRight className="h-4 w-4" />
+      </PrimaryButton>
+      {error && <p className="mt-3 text-xs text-red-500">{error}</p>}
+    </Sheet>
+  );
+};
+
+// ---- lock_phone -----------------------------------------------------------------------------
+
+const LockPhoneModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
+  const ios = isIOS();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // iOS shows the Screen Time sheet; Android opens Settings and resolves when the user comes back.
+  const allow = () => {
+    setBusy(true);
+    setError(null);
+    requestPhoneLockPermission()
+      .then(status => {
+        if (status.authorized) onResolve(req.requestId, { value: 'authorized' });
+        else setError(ios ? 'Screen Time access was not allowed. Try again.' : 'Turn on "Allow display over other apps" for Observer, then come back.');
+      })
+      .catch(() => setError(ios ? 'Screen Time access was not allowed. Try again.' : 'Could not open the permission settings. Try again.'))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <Sheet
+      icon={<Lock className="h-6 w-6" />}
+      title="Let Observer lock your phone"
+      subtitle={req.reason ?? (ios
+        ? 'Your agent can block other apps until it unlocks them or the timer ends. iOS asks once for Screen Time access.'
+        : 'Your agent can block other apps until it unlocks them or the timer ends. Turn on "Display over other apps" for Observer on the next screen.')}
+      onClose={() => onResolve(req.requestId, { value: '', skipped: true })}
+    >
+      <PrimaryButton onClick={allow} busy={busy}>
+        Allow <ArrowRight className="h-4 w-4" />
       </PrimaryButton>
       {error && <p className="mt-3 text-xs text-red-500">{error}</p>}
     </Sheet>
@@ -540,6 +581,8 @@ const UserInfoModal: React.FC<UserInfoModalProps> = props => {
       return <CaptureModal {...props} />;
     case 'model':
       return <ModelModal {...props} />;
+    case 'lock_phone':
+      return <LockPhoneModal {...props} />;
     default:
       return <MethodModal {...props} />;
   }

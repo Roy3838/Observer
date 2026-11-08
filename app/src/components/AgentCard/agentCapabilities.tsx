@@ -2,6 +2,7 @@
 
 import React from 'react';
 import * as customIcons from './icons';
+import { isMobile } from '@utils/platform';
 
 // --- Type Definitions ---
 export interface DetectedSensor {
@@ -83,6 +84,8 @@ export const TOOL_CONFIG: Record<string, ToolConfigEntry> = {
     call: { label: 'Phone Call', iconName: 'Phone', iconType: 'lucide', regex: /\bcall\s*\(/g },
     celebrate: { label: 'Celebrate', iconName: 'PartyPopper', iconType: 'lucide', regex: /\bcelebrate\s*\(/g },
     sound: { label: 'Play Sound', iconName: 'Volume2', iconType: 'lucide', regex: /\bsound\s*\(/g },
+    lockPhone: { label: 'Lock Phone', iconName: 'Lock', iconType: 'lucide', regex: /\blockPhone\s*\(/g, warning: 'Blocks every other app until unlockPhone() or the timeout' },
+    unlockPhone: { label: 'Unlock Phone', iconName: 'LockOpen', iconType: 'lucide', regex: /\bunlockPhone\s*\(/g },
 };
 
 // --- Icon Loading Helpers ---
@@ -146,6 +149,8 @@ export async function detectAgentTools(code: string, hostingContext?: 'official-
 
     // Tools that don't work in official web environment
     const webIncompatibleTools = ['overlay', 'message', 'ask', 'system_notify', 'click'];
+    // Tools that only work in the iOS/Android app
+    const mobileOnlyTools = ['lockPhone', 'unlockPhone'];
 
     for (const [key, tool] of Object.entries(TOOL_CONFIG)) {
         if (code.match(tool.regex)) {
@@ -157,6 +162,9 @@ export async function detectAgentTools(code: string, hostingContext?: 'official-
             if (hostingContext === 'official-web' && webIncompatibleTools.includes(key)) {
                 warning = 'These tools are only available when using the Observer App';
                 isBlocking = true;
+            }
+            if (mobileOnlyTools.includes(key) && !isMobile()) {
+                warning = 'Only works in the Observer mobile app (iOS 16+ / Android)';
             }
 
             foundTools.push({

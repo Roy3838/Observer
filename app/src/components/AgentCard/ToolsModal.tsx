@@ -3,7 +3,7 @@ import Modal from '@components/EditAgent/Modal';
 import {
   X, Mail, MessageSquare, MessageSquareQuote, Bell, Monitor, MessageCircle,
   MessageSquarePlus, CheckCircle, XCircle, Loader2, Save, SquarePen, PlayCircle,
-  StopCircle, Hourglass, Video, VideoOff, Tag, Info, MousePointer, Phone, Zap, Brain, PartyPopper, Volume2
+  StopCircle, Hourglass, Video, VideoOff, Tag, Info, MousePointer, Phone, Zap, Brain, PartyPopper, Volume2, Lock, LockOpen
 } from 'lucide-react';
 import { WhatsAppIcon, DiscordIcon } from './icons';
 import type { TokenProvider } from '@utils/main_loop';
@@ -257,6 +257,30 @@ function getAllTools(channel?: WhitelistChannel): ToolConfig[] {
       ],
       testMessage: 'ping',
       warning: '⚠️ Repeat calls within 3s are skipped by the anti-spam cooldown.'
+    },
+    {
+      id: 'lockPhone',
+      name: 'lockPhone()',
+      functionName: 'lockPhone',
+      icon: Lock,
+      description: 'Block every other app on this phone until unlockPhone() or the timeout',
+      isTestable: true,
+      parameters: [
+        { name: 'reason', description: 'Shown on the lock screen' },
+        { name: 'minutes', description: 'Auto-unlock after this many minutes (default 30, max 720)' }
+      ],
+      testMessage: 'Testing lockPhone()',
+      warning: '⚠️ Mobile app only (iOS 16+ / Android). The test locks for 1 minute unless you set minutes. Emergency unlock: tap twice on iOS, hold 5s on Android.'
+    },
+    {
+      id: 'unlockPhone',
+      name: 'unlockPhone()',
+      functionName: 'unlockPhone',
+      icon: LockOpen,
+      description: 'Remove a lock set by lockPhone()',
+      isTestable: true,
+      parameters: [],
+      testMessage: ''
     },
 
     // Non-testable tools (info only)
@@ -1297,6 +1321,23 @@ const ToolsModal: React.FC<ToolsModalProps> = ({ isOpen, onClose, code, agentNam
           const name = testInputs[0] || selectedToolConfig.testMessage || 'ping';
           const volume = testInputs[1] ? parseFloat(testInputs[1]) : 0.5;
           await utils.sound(name, volume);
+          break;
+        }
+
+        case 'lockPhone': {
+          // The test runs with the user in the app, so it can ask for permission first
+          const status = await utils.getPhoneLockStatus();
+          if (status.supported && !status.authorized) {
+            await utils.requestPhoneLockPermission();
+          }
+          const reason = testInputs[0] || selectedToolConfig.testMessage || 'Testing lockPhone()';
+          const minutes = testInputs[1] ? parseInt(testInputs[1], 10) : 1;
+          await utils.lockPhone(reason, minutes);
+          break;
+        }
+
+        case 'unlockPhone': {
+          await utils.unlockPhone();
           break;
         }
 

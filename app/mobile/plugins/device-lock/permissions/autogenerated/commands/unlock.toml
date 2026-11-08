@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-unlock"
+description = "Enables the unlock command without any pre-configured scope."
+commands.allow = ["unlock"]
+
+[[permission]]
+identifier = "deny-unlock"
+description = "Denies the unlock command without any pre-configured scope."
+commands.deny = ["unlock"]

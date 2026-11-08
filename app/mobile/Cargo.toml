@@ -23,6 +23,7 @@ log = "0.4"
 # Tauri plugins
 tauri-plugin-screen-capture = { path = "../plugins/screen-capture" }
 tauri-plugin-pip = { path = "./plugins/pip" }
+tauri-plugin-device-lock = { path = "./plugins/device-lock" }
 tauri-plugin-notification = "2.3"
 tauri-plugin-dialog = "2.6"
 tauri-plugin-shell = "2.3"

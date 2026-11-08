@@ -1094,6 +1094,7 @@ pub fn run() {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_screen_capture::init())
         .plugin(tauri_plugin_pip::init())
+        .plugin(tauri_plugin_device_lock::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())

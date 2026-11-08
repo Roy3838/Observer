@@ -107,8 +107,11 @@ export type NotifyMethod =
   | 'browser' | 'system' | 'email' | 'whatsapp' | 'sms' | 'voice'
   | 'telegram' | 'discord' | 'pushover';
 
-/** What `ask_user_info` can ask for: a sensor permission, a notification method, or local vs cloud. */
-export type UserInfoRequestKind = 'screen' | 'camera' | 'method' | 'model' | UserInfoKind;
+/**
+ * What `ask_user_info` can ask for: a sensor permission, a notification method, local vs cloud,
+ * or the phone-lock permission lockPhone() needs (mobile app only).
+ */
+export type UserInfoRequestKind = 'screen' | 'camera' | 'method' | 'model' | 'lock_phone' | UserInfoKind;
 
 /**
  * A request handed from the `ask_user_info` executor up to the React layer, which renders

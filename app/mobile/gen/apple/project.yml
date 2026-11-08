@@ -85,6 +85,13 @@ targets:
         embed: true
       - target: broadcastSetupUI
         embed: true
+      # device-lock plugin (Screen Time) extensions
+      - target: DeviceLockMonitor
+        embed: true
+      - target: DeviceLockShieldConfiguration
+        embed: true
+      - target: DeviceLockShieldAction
+        embed: true
     preBuildScripts:
       - script: cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
         name: Build Rust Code
@@ -133,3 +140,76 @@ targets:
         CODE_SIGN_ENTITLEMENTS: broadcastSetupUI/broadcastSetupUI.entitlements
     dependencies:
       - sdk: ReplayKit.framework
+
+  # ---- device-lock plugin: Screen Time extensions ----
+  # Sources live in app/mobile/plugins/device-lock; each extension also
+  # compiles the shared DeviceLockCore.swift.
+  DeviceLockMonitor:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: ../../plugins/device-lock/ios-extensions/DeviceLockMonitor
+      - path: ../../plugins/device-lock/ios/Sources/DeviceLockCore/DeviceLockCore.swift
+    info:
+      path: ../../plugins/device-lock/ios-extensions/DeviceLockMonitor/Info.plist
+    entitlements:
+      path: ../../plugins/device-lock/ios-extensions/DeviceLockMonitor/DeviceLockMonitor.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.observer.ai.DeviceLockMonitor
+        PRODUCT_NAME: DeviceLockMonitor
+        DEVELOPMENT_TEAM: 55RWNTY4PH
+        SKIP_INSTALL: true
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_ENTITLEMENTS: ../../plugins/device-lock/ios-extensions/DeviceLockMonitor/DeviceLockMonitor.entitlements
+    dependencies:
+      - sdk: DeviceActivity.framework
+      - sdk: ManagedSettings.framework
+
+  DeviceLockShieldConfiguration:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: ../../plugins/device-lock/ios-extensions/DeviceLockShieldConfiguration
+      - path: ../../plugins/device-lock/ios/Sources/DeviceLockCore/DeviceLockCore.swift
+    info:
+      path: ../../plugins/device-lock/ios-extensions/DeviceLockShieldConfiguration/Info.plist
+    entitlements:
+      path: ../../plugins/device-lock/ios-extensions/DeviceLockShieldConfiguration/DeviceLockShieldConfiguration.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.observer.ai.DeviceLockShieldConfiguration
+        PRODUCT_NAME: DeviceLockShieldConfiguration
+        DEVELOPMENT_TEAM: 55RWNTY4PH
+        SKIP_INSTALL: true
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_ENTITLEMENTS: ../../plugins/device-lock/ios-extensions/DeviceLockShieldConfiguration/DeviceLockShieldConfiguration.entitlements
+    dependencies:
+      - sdk: DeviceActivity.framework
+      - sdk: ManagedSettings.framework
+      - sdk: ManagedSettingsUI.framework
+
+  DeviceLockShieldAction:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: ../../plugins/device-lock/ios-extensions/DeviceLockShieldAction
+      - path: ../../plugins/device-lock/ios/Sources/DeviceLockCore/DeviceLockCore.swift
+    info:
+      path: ../../plugins/device-lock/ios-extensions/DeviceLockShieldAction/Info.plist
+    entitlements:
+      path: ../../plugins/device-lock/ios-extensions/DeviceLockShieldAction/DeviceLockShieldAction.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.observer.ai.DeviceLockShieldAction
+        PRODUCT_NAME: DeviceLockShieldAction
+        DEVELOPMENT_TEAM: 55RWNTY4PH
+        SKIP_INSTALL: true
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_ENTITLEMENTS: ../../plugins/device-lock/ios-extensions/DeviceLockShieldAction/DeviceLockShieldAction.entitlements
+    dependencies:
+      - sdk: DeviceActivity.framework
+      - sdk: ManagedSettings.framework

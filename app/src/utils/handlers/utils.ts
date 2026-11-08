@@ -4,7 +4,8 @@ import { Logger } from '../logging';
 import { getAgentMemory as fetchAgentMemory, updateAgentMemory as saveAgentMemory, getAgentImageMemory as fetchAgentImageMemory, updateAgentImageMemory as saveAgentImageMemory, appendAgentImageMemory as addAgentImageMemory } from '../agent_database';
 import { recordingManager } from '../recordingManager';
 import { pauseAgentLoop } from '../main_loop';
-import { platformFetch } from '../platform';
+import { platformFetch, isMobile, isIOS } from '../platform';
+import { invoke } from '@tauri-apps/api/core';
 
 /**
  * Utility functions for handlers
@@ -879,4 +880,64 @@ export async function call(message: string, number: string, authToken: string): 
   } catch (error) {
     throw error;
   }
+}
+
+// --- Phone lock (mobile app only, via the device-lock Tauri plugin) ---
+
+export interface PhoneLockStatus {
+  /** false on web/desktop and on iOS < 16 */
+  supported: boolean;
+  /** Screen Time (iOS) or "Display over other apps" (Android) permission granted */
+  authorized: boolean;
+  locked: boolean;
+  /** ms since epoch; present while locked */
+  lockedUntil?: number;
+  /** How the last lock ended */
+  lastUnlock?: 'manual' | 'timeout' | 'emergency';
+}
+
+const PHONE_LOCK_UNSUPPORTED =
+  'lockPhone() and unlockPhone() only work in the Observer mobile app (iOS 16+ or Android).';
+
+export async function getPhoneLockStatus(): Promise<PhoneLockStatus> {
+  if (!isMobile()) return { supported: false, authorized: false, locked: false };
+  return invoke<PhoneLockStatus>('plugin:device-lock|get_status');
+}
+
+/** iOS: Screen Time sheet (Face ID). Android: opens the overlay-permission settings page. */
+export async function requestPhoneLockPermission(): Promise<PhoneLockStatus> {
+  if (!isMobile()) throw new Error(PHONE_LOCK_UNSUPPORTED);
+  return invoke<PhoneLockStatus>('plugin:device-lock|request_permission');
+}
+
+/** The permission lockPhone() needs on this platform, for user-facing messages. */
+export function phoneLockPermissionName(): string {
+  return isIOS() ? 'Screen Time access' : 'the "Display over other apps" permission';
+}
+
+/**
+ * Blocks every other app until unlockPhone() or the timeout (default 30, max 720 minutes).
+ * Calling it while locked replaces the reason and restarts the timer.
+ *
+ * Never asks for permission itself: agents run in the background, where the prompt can't
+ * be shown. The user grants it from a tap instead (ask_user_info kind='lock_phone' in the AI
+ * builder, the Lock Phone tile in the simple creator, or the lockPhone() test in Tools).
+ */
+export async function lockPhone(reason?: string, minutes?: number): Promise<PhoneLockStatus> {
+  if (!isMobile()) throw new Error(PHONE_LOCK_UNSUPPORTED);
+  const status = await getPhoneLockStatus();
+  if (!status.supported) throw new Error('lockPhone() needs iOS 16 or later.');
+  if (!status.authorized) {
+    throw new Error(`lockPhone() needs ${phoneLockPermissionName()}. Open this agent's Tools, pick lockPhone() and press Test to allow it.`);
+  }
+  const maxMinutes = typeof minutes === 'number' && Number.isFinite(minutes) ? Math.round(minutes) : undefined;
+  return invoke<PhoneLockStatus>('plugin:device-lock|lock', {
+    reason: reason == null ? undefined : String(reason),
+    maxMinutes,
+  });
+}
+
+export async function unlockPhone(): Promise<PhoneLockStatus> {
+  if (!isMobile()) throw new Error(PHONE_LOCK_UNSUPPORTED);
+  return invoke<PhoneLockStatus>('plugin:device-lock|unlock');
 }

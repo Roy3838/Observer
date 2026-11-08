@@ -50,6 +50,9 @@ App Tools (only available with Observer App installed)
   * \`overlay(body)\` 
   * \`click()\`
   * \`celebrate()\`
+Mobile App Tools (only in the Observer iOS/Android app)
+  * \`lockPhone(reason?, minutes?)\` Blocks every other app on the phone until unlockPhone() or the timeout (default 30, max 720 minutes).
+  * \`unlockPhone()\` 
 
 **Your Philosophy:**
 

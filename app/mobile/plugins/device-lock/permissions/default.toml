@@ -1,0 +1,12 @@
+# Device Lock Plugin Permissions
+
+"$schema" = "schemas/schema.json"
+
+[default]
+description = "Default permissions for the device-lock plugin"
+permissions = [
+  "allow-get-status",
+  "allow-request-permission",
+  "allow-lock",
+  "allow-unlock",
+]

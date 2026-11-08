@@ -709,6 +709,44 @@ export async function executeJavaScript(
         Logger.info(agentId, 'celebrate() called', { logType: 'tool-success', iterationId });
       },
 
+      lockPhone: async (reason?: string, minutes?: number): Promise<void> => {
+        const params = { reason: reason == null ? undefined : String(reason).slice(0, 100), minutes };
+        try {
+          const status = await utils.lockPhone(reason, minutes);
+          const until = status.lockedUntil ? new Date(status.lockedUntil).toLocaleTimeString() : 'unknown';
+          Logger.info(agentId, `Phone locked until ${until}`, {
+            logType: 'tool-success',
+            iterationId,
+            content: { tool: 'lockPhone', params, success: true }
+          });
+        } catch (error) {
+          Logger.error(agentId, `Failed to lock phone`, {
+            logType: 'tool-error',
+            iterationId,
+            content: { tool: 'lockPhone', params, error: extractErrorMessage(error) }
+          });
+          throw error;
+        }
+      },
+
+      unlockPhone: async (): Promise<void> => {
+        try {
+          await utils.unlockPhone();
+          Logger.info(agentId, `Phone unlocked`, {
+            logType: 'tool-success',
+            iterationId,
+            content: { tool: 'unlockPhone', params: {}, success: true }
+          });
+        } catch (error) {
+          Logger.error(agentId, `Failed to unlock phone`, {
+            logType: 'tool-error',
+            iterationId,
+            content: { tool: 'unlockPhone', params: {}, error: extractErrorMessage(error) }
+          });
+          throw error;
+        }
+      },
+
       sound: async (name: string = 'ping', volume: number = 0.5): Promise<void> => {
         try {
           await utils.sound(name, volume);

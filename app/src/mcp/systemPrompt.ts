@@ -10,10 +10,11 @@
 //      the agent you build, inside its `code` / `system_prompt` strings. These are NEVER
 //      function tools and must never be "called" here.
 
-import { isDesktop } from '@utils/platform';
+import { isDesktop, isMobile } from '@utils/platform';
 
 export default function getMcpSystemPrompt(): string {
   const desktop = isDesktop();
+  const mobile = isMobile();
 
   // ---- Platform-specific pieces ---------------------------------------------
 
@@ -30,6 +31,9 @@ export default function getMcpSystemPrompt(): string {
   const appTools = desktop
     ? `
 Desktop only: \`system_notify(body, title?)\` (system notification), \`overlay(body)\`, \`message(message, title?)\` (pop-up), \`ask(question, title?)\` (confirmation dialog), \`click('left'|'right')\`.`
+    : mobile
+    ? `
+Mobile app only: \`lockPhone(reason?, minutes?)\` (blocks every other app on this phone until \`unlockPhone()\` or the timeout; minutes default 30, max 720; calling it again restarts the timer), \`unlockPhone()\`. Before start_agent for an agent that uses lockPhone(), call \`ask_user_info kind='lock_phone'\` so the user grants the permission.`
     : '';
 
   // ---- Full prompt ----------------------------------------------------------

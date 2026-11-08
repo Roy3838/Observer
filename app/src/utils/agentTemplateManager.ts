@@ -2,7 +2,7 @@
 
 import { CompleteAgent } from './agent_database';
 
-export type SimpleTool = 'notification' | 'memory' | 'sms' | 'email' | 'whatsapp' | 'call' | 'start_clip' | 'mark_clip' | 'pushover' | 'discord' | 'telegram' | 'ask' | 'system_notify' | 'message' | 'overlay' | 'click' | 'celebrate' | 'sound';
+export type SimpleTool = 'notification' | 'memory' | 'sms' | 'email' | 'whatsapp' | 'call' | 'start_clip' | 'mark_clip' | 'pushover' | 'discord' | 'telegram' | 'ask' | 'system_notify' | 'message' | 'overlay' | 'click' | 'celebrate' | 'sound' | 'lock_phone';
 
 export interface ToolData {
   smsPhoneNumber?: string;
@@ -149,6 +149,12 @@ celebrate();
 // --- SOUND TOOL ---
 // Plays a notification sound. Works on web and in the app.
 sound();
+`,
+  lock_phone: () => `
+// --- LOCK PHONE TOOL ---
+// Blocks every other app on this phone for 30 minutes (Observer mobile app only).
+// Call unlockPhone() to lift the lock early.
+lockPhone("Locked by your Observer agent", 30);
 `,
   call: (data: ToolData) => {
     const phoneNumber = data.phoneNumber ? JSON.stringify(data.phoneNumber) : '""';

@@ -3,11 +3,12 @@ import Modal from '@components/EditAgent/Modal';
 import SensorInputText from '@components/EditAgent/SensorInputText';
 import { SimpleTool, ToolData } from '@utils/agentTemplateManager';
 import { Model, fetchModels, SKIP_MODEL_SENTINEL } from '@utils/inferenceServer';
-import { isIOS } from '@utils/platform';
+import { isIOS, isMobile } from '@utils/platform';
+import { getPhoneLockStatus, requestPhoneLockPermission, phoneLockPermissionName } from '@utils/handlers/utils';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { listAgents, CompleteAgent } from '@utils/agent_database';
 import {
-  Bell, Save, Monitor, ScanText, Eye, Camera, Clipboard, Mic, ArrowRight, ArrowLeft, ChevronDown, AlertTriangle, Info, Loader2, CheckCircle2, MessageSquare, Smartphone, Mail, Volume2, Blend, Clapperboard, Tag, HelpCircle, MessageCircle, Images, Server, MousePointer, Phone, PartyPopper, MinusCircle
+  Bell, Save, Monitor, ScanText, Eye, Camera, Clipboard, Mic, ArrowRight, ArrowLeft, ChevronDown, AlertTriangle, Info, Loader2, CheckCircle2, MessageSquare, Smartphone, Mail, Volume2, Blend, Clapperboard, Tag, HelpCircle, MessageCircle, Images, Server, MousePointer, Phone, PartyPopper, MinusCircle, Lock
 } from 'lucide-react';
 import SimpleCreatorTutorial from '@components/EditAgent/SimpleCreatorTutorial';
 
@@ -391,6 +392,23 @@ const SimpleCreatorModal: React.FC<SimpleCreatorModalProps> = ({ isOpen, onClose
     }, 0);
   };
   
+  // lockPhone() can't ask for its permission once the agent runs in the background, so the
+  // tile asks for it here, from the tap. The tile only turns on once it's granted.
+  const [lockPhoneError, setLockPhoneError] = useState<string | null>(null);
+  const toggleLockPhone = async () => {
+    setLockPhoneError(null);
+    if (selectedTools.has('lock_phone')) { toggleTool('lock_phone'); return; }
+    try {
+      let status = await getPhoneLockStatus();
+      if (!status.supported) { setLockPhoneError('Needs iOS 16 or later.'); return; }
+      if (!status.authorized) status = await requestPhoneLockPermission();
+      if (status.authorized) toggleTool('lock_phone');
+      else setLockPhoneError(`Needs ${phoneLockPermissionName()}. Tap again to allow it.`);
+    } catch {
+      setLockPhoneError(`Needs ${phoneLockPermissionName()}. Tap again to allow it.`);
+    }
+  };
+
   // --- MODIFIED: toggleTool now handles showing/hiding warnings ---
   const toggleTool = (tool: SimpleTool) => {
     // Show warnings on selection
@@ -617,6 +635,16 @@ const SimpleCreatorModal: React.FC<SimpleCreatorModalProps> = ({ isOpen, onClose
                       <button type="button" onClick={() => toggleTool('overlay')} className={`group flex items-center space-x-4 p-4 border-2 rounded-lg text-left transition-all ${selectedTools.has('overlay') ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}><Monitor className={`h-8 w-8 transition-colors ${selectedTools.has('overlay') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-600'}`} /><div><h3 className="font-semibold text-gray-900">Show Overlay</h3><p className="text-sm text-gray-500">Displays message in translucent overlay.</p></div></button>
                       {/* Click Tool */}
                       <button type="button" onClick={() => toggleTool('click')} className={`group flex items-center space-x-4 p-4 border-2 rounded-lg text-left transition-all ${selectedTools.has('click') ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}><MousePointer className={`h-8 w-8 transition-colors ${selectedTools.has('click') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-600'}`} /><div><h3 className="font-semibold text-gray-900">Mouse Click</h3><p className="text-sm text-gray-500">Clicks at current cursor position.</p></div></button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Phone: mobile app only */}
+                {isMobile() && (
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-semibold text-gray-700">Phone</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <button type="button" onClick={toggleLockPhone} className={`group flex items-center space-x-4 p-4 border-2 rounded-lg text-left transition-all ${selectedTools.has('lock_phone') ? 'border-red-500 bg-red-50' : 'border-gray-300 hover:border-gray-400'}`}><Lock className={`h-8 w-8 transition-colors ${selectedTools.has('lock_phone') ? 'text-red-500' : 'text-gray-400 group-hover:text-gray-600'}`} /><div><h3 className="font-semibold text-gray-900">Lock Phone</h3><p className="text-sm text-gray-500">Blocks every other app for 30 minutes.</p>{lockPhoneError && <p className="text-xs text-red-500 mt-1">{lockPhoneError}</p>}</div></button>
                     </div>
                   </div>
                 )}

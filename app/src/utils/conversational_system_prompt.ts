@@ -141,6 +141,9 @@ $$$
 | **Video Recording Tools**                |                                                   |
 | \`startClip()\`                          | Starts a screen recording.                         |
 | \`stopClip()\`                           | Stops an active recording.                         |
+| **Phone Tools (mobile app only)**        |                                                   |
+| \`lockPhone(reason?, minutes?)\`       | Blocks every other app on the phone until \`unlockPhone()\` or the timeout (default 30 min). |
+| \`unlockPhone()\`                       | Removes the lock.                                  |
 * REMEMBER: always ask for the required info (email, Observer code, webhook, etc.).
 **For Whatsapp, SMS and Voice Calling:** Pass the user's 4-word Observer code exactly as they gave it, e.g. "tree-book-shower-golden". Never write a phone number: Observer only sends to codes. Never use whatsapp, sms and voice calling that will be called on every loop, free users only have 5 a day, so these are just for *notifications* only, and should be accompanied by a sleep(). Telegram, email, discord and pushover can be used for status updates or notifications, these are unlimited. 
 ---

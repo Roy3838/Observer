@@ -2577,6 +2577,60 @@
           "markdownDescription": "Denies the unregister command without any pre-configured scope."
         },
         {
+          "description": "Default permissions for the device-lock plugin\n#### This default permission set includes:\n\n- `allow-get-status`\n- `allow-request-permission`\n- `allow-lock`\n- `allow-unlock`",
+          "type": "string",
+          "const": "device-lock:default",
+          "markdownDescription": "Default permissions for the device-lock plugin\n#### This default permission set includes:\n\n- `allow-get-status`\n- `allow-request-permission`\n- `allow-lock`\n- `allow-unlock`"
+        },
+        {
+          "description": "Enables the get_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "device-lock:allow-get-status",
+          "markdownDescription": "Enables the get_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the lock command without any pre-configured scope.",
+          "type": "string",
+          "const": "device-lock:allow-lock",
+          "markdownDescription": "Enables the lock command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the request_permission command without any pre-configured scope.",
+          "type": "string",
+          "const": "device-lock:allow-request-permission",
+          "markdownDescription": "Enables the request_permission command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the unlock command without any pre-configured scope.",
+          "type": "string",
+          "const": "device-lock:allow-unlock",
+          "markdownDescription": "Enables the unlock command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "device-lock:deny-get-status",
+          "markdownDescription": "Denies the get_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the lock command without any pre-configured scope.",
+          "type": "string",
+          "const": "device-lock:deny-lock",
+          "markdownDescription": "Denies the lock command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the request_permission command without any pre-configured scope.",
+          "type": "string",
+          "const": "device-lock:deny-request-permission",
+          "markdownDescription": "Denies the request_permission command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the unlock command without any pre-configured scope.",
+          "type": "string",
+          "const": "device-lock:deny-unlock",
+          "markdownDescription": "Denies the unlock command without any pre-configured scope."
+        },
+        {
           "description": "This permission set configures the types of dialogs\navailable from the dialog plugin.\n\n#### Granted Permissions\n\nAll dialog types are enabled.\n\n\n\n#### This default permission set includes:\n\n- `allow-ask`\n- `allow-confirm`\n- `allow-message`\n- `allow-save`\n- `allow-open`",
           "type": "string",
           "const": "dialog:default",

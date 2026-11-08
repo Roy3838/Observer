@@ -21,6 +21,7 @@
     "os:default",
     "screen-capture:default",
     "pip:default",
+    "device-lock:default",
     "deep-link:default",
     "web-auth:default",
     "web-auth:allow-authenticate",

@@ -93,6 +93,10 @@ if (response.includes("OBSERVER")) {
 - `ask(question, title?)`, `message(message, title?)`, `system_notify(body, title?)`
 - `overlay(body)`, `click('left' | 'right')`, `celebrate()`
 
+**Mobile app** (iOS 16+ and Android)
+- `lockPhone(reason?, minutes?)`: blocks every other app on the phone until `unlockPhone()` or the timeout (default 30, max 720 minutes). Calling it again restarts the timer.
+- `unlockPhone()`
+
 </details>
 
 <details>

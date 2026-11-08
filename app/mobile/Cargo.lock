@@ -3241,6 +3241,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-deep-link",
+ "tauri-plugin-device-lock",
  "tauri-plugin-dialog",
  "tauri-plugin-edge-to-edge",
  "tauri-plugin-iap",
@@ -5244,6 +5245,16 @@ dependencies = [
  "url",
  "windows-registry",
  "windows-result 0.3.4",
+]
+
+[[package]]
+name = "tauri-plugin-device-lock"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "serde",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]
