@@ -6,6 +6,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Plus, CheckCircle2, XCircle, Loader, Square, Cpu, Mic, ChevronDown, Check, FileDown } from 'lucide-react';
+import ObserverEye from '@components/Observer/ObserverEye';
 import ReactMarkdown from 'react-markdown';
 import type { TokenProvider } from '@utils/main_loop';
 import { type ToolStatusEntry } from '../../mcp/useMCP';
@@ -786,7 +787,7 @@ const MCP: React.FC<MCPProps> = ({
         {isRunning && !streamingText && (
           <div className="flex justify-start">
             <div className={`text-gray-800 p-2 md:p-3 inline-flex items-center ${boxed ? 'bg-gray-100 rounded-lg shadow-sm' : 'bg-gray-100 rounded-2xl'}`}>
-              <Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin" />
+              <ObserverEye className="h-5 w-5 md:h-6 md:w-6" />
             </div>
           </div>
         )}

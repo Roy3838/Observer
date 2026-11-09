@@ -32,6 +32,96 @@
   animation: fade-in 0.15s ease-out;
 }
 
+/* ObserverEye — thinking indicator built from the Observer logo. The component swaps in one
+   .observer-eye--<move> class per 2.4s cycle (keep in sync with MOVE_MS in ObserverEye.tsx);
+   the opacity "breath" runs continuously underneath to signal loading. */
+@keyframes observer-eye-breathe {
+  from { opacity: 1; }
+  to   { opacity: 0.7; }
+}
+.observer-eye {
+  animation: observer-eye-breathe 1.2s ease-in-out infinite alternate;
+}
+.observer-eye-lid,
+.observer-eye-pupil {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* peek — pupil glances up-left, then up-right */
+@keyframes observer-eye-peek-pupil {
+  0%, 8%    { transform: translate(0, 0); }
+  18%, 38%  { transform: translate(-14px, -5px); }
+  50%, 70%  { transform: translate(14px, -5px); }
+  84%, 100% { transform: translate(0, 0); }
+}
+.observer-eye--peek .observer-eye-pupil {
+  animation: observer-eye-peek-pupil 2.4s cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+
+/* blink — squishy double blink: squash flat, bounce back open */
+@keyframes observer-eye-blink-lid {
+  0%, 20%   { transform: scale(1, 1); }
+  28%       { transform: scale(1.1, 0.06); }
+  36%       { transform: scale(0.95, 1.07); }
+  43%, 48%  { transform: scale(1, 1); }
+  56%       { transform: scale(1.1, 0.06); }
+  64%       { transform: scale(0.95, 1.07); }
+  72%, 100% { transform: scale(1, 1); }
+}
+.observer-eye--blink {
+  animation: observer-eye-blink-lid 2.4s cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+
+/* sleepy — eyelid droops shut… then snaps wide awake */
+@keyframes observer-eye-sleepy-lid {
+  0%        { transform: scale(1, 1); }
+  28%       { transform: scale(1.03, 0.45); }
+  42%       { transform: scale(1.02, 0.55); }
+  58%, 68%  { transform: scale(1.06, 0.14); }
+  76%       { transform: scale(0.92, 1.12); }
+  86%       { transform: scale(1.02, 0.97); }
+  94%, 100% { transform: scale(1, 1); }
+}
+@keyframes observer-eye-sleepy-pupil {
+  0%        { transform: translate(0, 0); }
+  28%, 68%  { transform: translate(0, 6px); }
+  76%, 100% { transform: translate(0, 0); }
+}
+.observer-eye--sleepy {
+  animation: observer-eye-sleepy-lid 2.4s cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+.observer-eye--sleepy .observer-eye-pupil {
+  animation: observer-eye-sleepy-pupil 2.4s cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+
+/* hop — crouch, jump looking up, squash on landing */
+@keyframes observer-eye-hop-lid {
+  0%, 10%   { transform: translateY(0) scale(1, 1); }
+  20%       { transform: translateY(0) scale(1.12, 0.84); }
+  38%       { transform: translateY(-16px) scale(0.92, 1.1); }
+  54%       { transform: translateY(0) scale(1.14, 0.84); }
+  66%       { transform: translateY(0) scale(0.97, 1.04); }
+  76%, 100% { transform: translateY(0) scale(1, 1); }
+}
+@keyframes observer-eye-hop-pupil {
+  0%, 18%   { transform: translate(0, 0); }
+  30%, 46%  { transform: translate(0, -15px); }
+  62%, 100% { transform: translate(0, 0); }
+}
+.observer-eye--hop {
+  animation: observer-eye-hop-lid 2.4s cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+.observer-eye--hop .observer-eye-pupil {
+  animation: observer-eye-hop-pupil 2.4s cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+
+/* Reduced motion: drop the moves, keep the gentle opacity breath as the loading cue. */
+@media (prefers-reduced-motion: reduce) {
+  .observer-eye-lid,
+  .observer-eye-pupil { animation: none !important; }
+}
+
 /* One-shot "selected" confirmation flash — soft blue ring expands and fades */
 @keyframes tutorial-select-flash {
   0%   { box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05), 0 0 0 0   rgba(59,130,246,0.55); }

@@ -12,6 +12,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Send, Loader2, Info, Mic, Cpu } from 'lucide-react';
+import ObserverEye from './ObserverEye';
 import { useMCPContext } from '../../mcp/MCPContext';
 import { useAuth } from '@contexts/AuthContext';
 import { StreamManager } from '@utils/streamManager';
@@ -212,7 +213,7 @@ const ObserverHero: React.FC<ObserverHeroProps> = ({ onShowTutorial }) => {
           className="p-4 md:p-5 bg-gray-700 text-white rounded-full hover:bg-gray-800 disabled:bg-gray-300 transition-colors flex items-center flex-shrink-0"
           title="Send"
         >
-          {isRunning ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+          {isRunning ? <ObserverEye className="h-6 w-6" /> : <Send className="h-5 w-5" />}
         </button>
       </form>
 
