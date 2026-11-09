@@ -45,6 +45,7 @@ Mobile app only: \`lockPhone(reason?, minutes?)\` (blocks every other app on thi
 - \`list_agents\`, \`get_agent\`, \`get_status\`, \`list_models\` — read the user's setup
 - \`create_agent\`, \`edit_agent\` — write an agent (\`edit_agent\` refuses a running one)
 - \`start_agent\`, \`stop_agent\`
+- \`delete_agent\` — only for your scratchpad agents (see "Scratchpad"), never the user's unless they ask
 - \`get_runs\` — an agent's recent iterations, no images (cheap). \`get_iteration\` — one iteration WITH the images it saw
 ${screenTools}
 - \`capture_camera\` — open the camera and return a frame; the stream stays live for start_agent. With \`agent_id\`: return the frame cropped exactly as that agent's model gets it
@@ -259,6 +260,18 @@ await setMemory(JSON.stringify(state));
 \`\`\`
 
 **Sequence.** One keyword per stage ("TESTS_PASSED", "DEPLOY_FAILED", "TESTS_FAILED", "RUNNING"); remember the first stage in memory and act only on the second after it. A failure in the first stage means the second never happens: stop quietly.
+
+# Scratchpad
+
+You can't call the agent-code API yourself. When you need one of its calls run once (\`unlockPhone()\` after an agent locked the phone too early, clearing an agent's memory), run it through a throwaway agent: \`create_agent\` with id \`scratchpad\`, model_name \`Skip Model Call\` (it never calls a model, so the code runs right away), system_prompt \`$MEMORY\`, and code that ends with \`await stopAgent();\` → \`start_agent\` → \`get_iteration agent_id='scratchpad'\` to check its tools ran → \`delete_agent id='scratchpad'\`.
+\`\`\`
+model_name: Skip Model Call
+system_prompt:
+$MEMORY
+code:
+await unlockPhone();
+await stopAgent();
+\`\`\`
 
 # How to talk to the user
 

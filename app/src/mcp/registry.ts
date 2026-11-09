@@ -13,6 +13,7 @@ import {
   getAgent,
   getAgentCode,
   saveAgent,
+  deleteAgent,
   type CompleteAgent,
 } from '@utils/agent_database';
 import {
@@ -781,6 +782,26 @@ export const TOOLS: ToolDefinition[] = [
       const agent = await getAgent(args.id);
       if (agent) releaseCaptureHolds(getRequiredStreamsForPrompt(agent.system_prompt));
       return { data: { stopped: true, id: args.id } };
+    },
+  },
+  {
+    name: 'delete_agent',
+    description: "Delete an agent with its code and memory. Refuses a running one: stop_agent first. Use it to clean up your scratchpad agents; never delete the user's agents unless they ask.",
+    parameters: {
+      type: 'object',
+      properties: { id: { type: 'string', description: 'The agent id to delete.' } },
+      required: ['id'],
+    },
+    multimodal: false,
+    execute: async (args): Promise<ToolResult> => {
+      if (!(await getAgent(args.id))) return { error: `Agent '${args.id}' not found.` };
+      if (isAgentLoopRunning(args.id)) return { error: `Agent '${args.id}' is running: stop_agent first, then delete_agent.` };
+      try {
+        await deleteAgent(args.id);
+        return { data: { deleted: true, id: args.id } };
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : String(e) };
+      }
     },
   },
   {
