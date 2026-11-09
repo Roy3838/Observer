@@ -27,7 +27,7 @@ export const Analytics = {
   attributionShown: () => track('attribution_shown'),
   attributionSelected: (source: AttributionSource, detail?: string) => track('attribution_selected', { source, detail }),
 
-  // ── Upsell (WelcomeModal — 'welcome' after ToS, 'activation' after first agent starts)
+  // ── Upsell (WelcomeModal — 'welcome' after ToS, 'activation' after first agent starts, 'quota' on a limit hit)
   upsellShown: (source: UpsellSource) => track('upsell_shown', { source }),
   upsellFreeTrial: (source: UpsellSource) => track('upsell_free_trial_clicked', { source }),
   upsellGithub: (source: UpsellSource) => track('upsell_github_clicked', { source }),
@@ -35,6 +35,6 @@ export const Analytics = {
   upsellViewTiers: (source: UpsellSource) => track('upsell_view_tiers_clicked', { source }),
 };
 
-type UpsellSource = 'welcome' | 'activation';
+type UpsellSource = 'welcome' | 'activation' | 'quota';
 
 export type AttributionSource = 'reddit' | 'youtube' | 'tiktok' | 'instagram' | 'github' | 'google' | 'friend' | 'other';

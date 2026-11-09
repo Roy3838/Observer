@@ -15,12 +15,17 @@ interface WelcomeModalProps {
   onViewAllTiers: () => void;
   mode: 'local' | 'upsell';
   onContinueLocal?: () => void; // local mode only: called when user confirms they know what they're doing
-  /** Upsell framing: 'onboarding' (right after ToS) or 'activation' (celebratory, after first agent starts). */
-  variant?: 'onboarding' | 'activation';
+  /**
+   * Upsell framing: 'onboarding' (right after ToS), 'activation' (celebratory, after first
+   * agent starts) or 'quota' (a usage limit was hit — same Pro trial card, plus "See all tiers").
+   */
+  variant?: 'onboarding' | 'activation' | 'quota';
+  /** Quota variant only: the headline naming which limit was hit. */
+  quotaTitle?: string;
 }
 
-export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, mode, variant = 'onboarding' }) => {
-  const upsellSource = variant === 'activation' ? 'activation' : 'welcome';
+export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, onViewAllTiers, mode, variant = 'onboarding', quotaTitle }) => {
+  const upsellSource = variant === 'activation' ? 'activation' : variant === 'quota' ? 'quota' : 'welcome';
   const [error, setError] = useState<string | null>(null);
   const [isButtonLoading, setIsButtonLoading] = useState(false);
 
@@ -175,9 +180,12 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, mod
   }
 
   /* ============ MODE: Upsell — same sheet language as the ask_user_info modals ============ */
-  const title = variant === 'activation' ? 'You did it! 🎉' : 'Welcome to Observer';
+  const title = variant === 'activation' ? 'You did it! 🎉'
+    : variant === 'quota' ? (quotaTitle || "You've reached your daily limit")
+    : 'Welcome to Observer';
   const subtitle = variant === 'activation'
     ? 'You have a running agent. Help Observer grow — or continue free.'
+    : variant === 'quota' ? null
     : 'The agent that monitors anything for you.';
   const busy = isButtonLoading || isAppleLoading;
 
@@ -237,7 +245,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, mod
             <img src="/eye-logo-black.svg" alt="Observer" className="h-7 w-7 dark:invert" />
           </div>
           <h2 className="mt-4 text-[19px] font-semibold tracking-tight">{title}</h2>
-          <p className="mt-1.5 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400 max-w-xs">{subtitle}</p>
+          {subtitle && <p className="mt-1.5 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400 max-w-xs">{subtitle}</p>}
 
           <div className="mt-6 w-full">
             {variant === 'activation' ? (
@@ -320,8 +328,21 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, mod
                 </p>
 
                 <div className="w-full flex items-center justify-between pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                  {starButton(false)}
-                  {continueFree}
+                  {variant === 'quota' ? (
+                    <>
+                      <button onClick={() => { Analytics.upsellViewTiers(upsellSource); onViewAllTiers(); }} className={textBtn}>
+                        See all tiers <ArrowRight className="h-3 w-3" />
+                      </button>
+                      <button onClick={() => { Analytics.upsellContinueFree(upsellSource); handleClose(); }} className={textBtn}>
+                        Not now
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {starButton(false)}
+                      {continueFree}
+                    </>
+                  )}
                 </div>
               </div>
             )}

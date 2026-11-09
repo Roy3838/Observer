@@ -6,6 +6,7 @@ import { useApplePayments } from '@hooks/useApplePayments';
 import { X as CloseIcon, Loader2 } from 'lucide-react';
 import { Logger } from '@utils/logging';
 import { PricingTable } from './PricingTable';
+import { WelcomeModal } from './WelcomeModal';
 import { fetchQuota } from '@/types/quota';
 
 interface UpgradeModalProps {
@@ -13,6 +14,8 @@ interface UpgradeModalProps {
   onClose: () => void;
   isHalfwayWarning?: boolean;
   quotaType?: string;
+  /** "See all tiers" on the trial sheet: close this and open the subscription page in Settings. */
+  onViewAllTiers: () => void;
 }
 
 // Configuration for quota-specific messaging
@@ -24,7 +27,7 @@ const QUOTA_MESSAGES: Record<string, {
 }> = {
   monitor: {
     headline: "You've Reached Your Daily Monitoring Limit!",
-    subheadline: "Upgrade to Observer Pro for 8 hours/day, 100 hours/month of cloud monitoring!",
+    subheadline: "Upgrade to Observer Pro for 12 hours/day, 100 hours/month of cloud monitoring!",
     recommendedTier: 'pro',
     isUrgent: true
   },
@@ -78,7 +81,7 @@ const QUOTA_MESSAGES: Record<string, {
   }
 };
 
-export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, isHalfwayWarning = false, quotaType }) => {
+export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, isHalfwayWarning = false, quotaType, onViewAllTiers }) => {
   const [status, setStatus] = useState<'loading' | 'plus' | 'pro' | 'max' | 'free' | 'error' | 'enterprise'>('loading');
   const [orgTier, setOrgTier] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -153,11 +156,34 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, isH
     : (quotaConfig?.headline || "You've Reached Your Daily Limit!");
 
   const subheadline = (quotaType === 'monitor' && isHalfwayWarning)
-    ? "Upgrade to Observer Pro for 8 hours/day of cloud monitoring!"
+    ? "Upgrade to Observer Pro for 12 hours/day of cloud monitoring!"
     : (quotaConfig?.subheadline || "Upgrade to Observer Pro!");
 
   if (!isOpen) {
     return null;
+  }
+
+  // Free and Plus users get the simple Pro free-trial sheet (same as the welcome upsell),
+  // with "See all tiers" for the full table. Paid/enterprise users keep the full table.
+  if (status === 'free' || status === 'plus') {
+    return (
+      <WelcomeModal
+        isOpen
+        onClose={onClose}
+        onViewAllTiers={onViewAllTiers}
+        mode="upsell"
+        variant="quota"
+        quotaTitle={headline}
+      />
+    );
+  }
+
+  if (status === 'loading') {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] backdrop-blur-sm p-4" onClick={onClose}>
+        <Loader2 className="h-10 w-10 animate-spin text-white" />
+      </div>
+    );
   }
 
   return (
@@ -173,30 +199,24 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, isH
           <CloseIcon className="h-6 w-6" />
         </button>
 
-        {status === 'loading' ? (
-          <div className="flex justify-center items-center p-20">
-            <Loader2 className="h-12 w-12 animate-spin text-gray-500" />
-          </div>
-        ) : (
-          <PricingTable
-            headline={headline}
-            subheadline={subheadline}
-            status={status}
-            orgTier={orgTier}
-            isButtonLoading={isButtonLoading}
-            isAuthenticated={isAuthenticated}
-            error={error}
-            onCheckout={handleCheckout}
-            onCheckoutPlus={handlePlusCheckout}
-            onCheckoutMax={handleMaxCheckout}
-            onManageSubscription={() => handleApiAction('create-customer-portal-session')}
-            onLogin={login}
-            isTriggeredByQuotaError={true}
-            isHalfwayWarning={isHalfwayWarning}
-            applePayments={applePayments}
-            onModalClose={onClose}
-          />
-        )}
+        <PricingTable
+          headline={headline}
+          subheadline={subheadline}
+          status={status}
+          orgTier={orgTier}
+          isButtonLoading={isButtonLoading}
+          isAuthenticated={isAuthenticated}
+          error={error}
+          onCheckout={handleCheckout}
+          onCheckoutPlus={handlePlusCheckout}
+          onCheckoutMax={handleMaxCheckout}
+          onManageSubscription={() => handleApiAction('create-customer-portal-session')}
+          onLogin={login}
+          isTriggeredByQuotaError={true}
+          isHalfwayWarning={isHalfwayWarning}
+          applePayments={applePayments}
+          onModalClose={onClose}
+        />
       </div>
     </div>
   );

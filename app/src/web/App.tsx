@@ -1070,6 +1070,10 @@ function AppContent() {
         onClose={() => setIsUpgradeModalOpen(false)}
         isHalfwayWarning={isHalfwayWarning}
         quotaType={currentQuotaType}
+        onViewAllTiers={() => {
+          setIsUpgradeModalOpen(false);
+          setActiveTab('obServer');
+        }}
       />
 
       <AcceptToS

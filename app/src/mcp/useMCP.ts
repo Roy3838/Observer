@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TokenProvider } from '@utils/main_loop';
-import { ModelManager } from '@utils/ModelManager';
+import { ModelManager, UnauthorizedError } from '@utils/ModelManager';
 import { Logger } from '@utils/logging';
 import { StreamManager } from '@utils/streamManager';
 import { releaseCaptureHolds, TURN_HOLDER } from './capture';
@@ -278,6 +278,14 @@ export function useMCP(options: UseMCPOptions) {
         } else {
           const text = err instanceof Error ? err.message : 'An unknown error occurred.';
           Logger.error(LOG_SOURCE, `Run failed: ${text}`, { error: err });
+          // 429 from the creator's model: the Logger fires 'quotaExceeded', which opens the
+          // upgrade sheet so a dead-end error bubble comes with a CTA.
+          if (err instanceof UnauthorizedError) {
+            Logger.warn(LOG_SOURCE, 'Agent creator stopped due to quota limit', {
+              logType: 'quota-exceeded',
+              quotaType: 'agent_creator',
+            });
+          }
           wireRef.current.push({ role: 'assistant', content: `Sorry, I ran into an error: ${text}` });
           syncMessages();
         }
