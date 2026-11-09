@@ -72,6 +72,7 @@ import { UpgradeModal } from '@components/UpgradeModal';
 import { AcceptToS } from '@components/AcceptToS';
 import { AttributionSplash } from '@components/AttributionSplash';
 import { WelcomeModal } from '@components/WelcomeModal';
+import { TutorialDoneModal } from '@components/TutorialDoneModal';
 import AgentActivityModal from '@components/AgentCard/AgentActivityModal';
 import FeedbackDialog from '@components/FeedbackDialog';
 import { startCommandSSE, updateCommandSSEToken } from '@utils/commandSSE';
@@ -1104,14 +1105,10 @@ function AppContent() {
         }}
       />
 
-      {/* The first-run demo's notification landed: same free-trial pitch as post-ToS. */}
-      <WelcomeModal
+      {/* The first-run demo's notification landed: a short celebration, no upsell. */}
+      <TutorialDoneModal
         isOpen={tutorialPhase === 'notified'}
         onClose={tutorialFlow.reset}
-        onViewAllTiers={() => setActiveTab('obServer')}
-        mode="upsell"
-        variant="tutorial"
-        isProUser={isProUser}
       />
 
       <WelcomeModal

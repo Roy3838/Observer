@@ -15,14 +15,11 @@ interface WelcomeModalProps {
   onViewAllTiers: () => void;
   mode: 'local' | 'upsell';
   onContinueLocal?: () => void; // local mode only: called when user confirms they know what they're doing
-  /** Upsell framing: 'onboarding' (right after ToS), 'activation' (celebratory, after first agent starts),
-   *  or 'tutorial' (the first-run demo's notification landed: same free-trial pitch as onboarding). */
-  variant?: 'onboarding' | 'activation' | 'tutorial';
-  /** Pro/Max users skip the free-trial table; the 'tutorial' variant shows a "continue exploring" pitch instead. */
-  isProUser?: boolean;
+  /** Upsell framing: 'onboarding' (right after ToS) or 'activation' (celebratory, after first agent starts). */
+  variant?: 'onboarding' | 'activation';
 }
 
-export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, mode, variant = 'onboarding', isProUser = false }) => {
+export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, mode, variant = 'onboarding' }) => {
   const upsellSource = variant === 'activation' ? 'activation' : 'welcome';
   const [error, setError] = useState<string | null>(null);
   const [isButtonLoading, setIsButtonLoading] = useState(false);
@@ -178,12 +175,10 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, mod
   }
 
   /* ============ MODE: Upsell — same sheet language as the ask_user_info modals ============ */
-  const title = variant === 'activation' ? 'You did it! 🎉' : variant === 'tutorial' ? 'Notification sent' : 'Welcome to Observer';
+  const title = variant === 'activation' ? 'You did it! 🎉' : 'Welcome to Observer';
   const subtitle = variant === 'activation'
     ? 'You have a running agent. Help Observer grow — or continue free.'
-    : variant === 'tutorial'
-      ? 'Now use a local model, try out Observer Pro and continue exploring!'
-      : 'The agent that monitors anything for you.';
+    : 'The agent that monitors anything for you.';
   const busy = isButtonLoading || isAppleLoading;
 
   const primaryBtn = 'w-full inline-flex items-center justify-center gap-2 h-11 rounded-full bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed';
@@ -254,16 +249,6 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ isOpen, onClose, mod
                 </p>
                 {starButton(true)}
                 {continueFree}
-              </div>
-            ) : variant === 'tutorial' && isProUser ? (
-              /* ============ TUTORIAL, already Pro: no pitch, just send them exploring ============ */
-              <div className="flex flex-col items-center gap-5">
-                <p className="text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
-                  You just taught an agent to watch for you. As a Pro user everything is unlocked: point it at anything on your screen or camera, and have it call, text or email you when it happens.
-                </p>
-                <button onClick={handleClose} className={primaryBtn}>
-                  Continue exploring <ArrowRight className="h-4 w-4" />
-                </button>
               </div>
             ) : (
               /* ============ ONBOARDING: Observer Pro free trial ============ */
