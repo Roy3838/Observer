@@ -103,17 +103,6 @@ const DownloadButton = ({
   </button>
 );
 
-// Tooltip for disabled buttons
-const DisabledTooltip = ({ children }: { children: React.ReactNode }) => (
-  <div className="group relative inline-block">
-    {children}
-    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs text-white bg-gray-800 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-      Coming soon!
-      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
-    </div>
-  </div>
-);
-
 const DownloadsSection = () => {
   const [version, setVersion] = useState<string | null>(null);
   const [activePlatform, setActivePlatform] = useState<Platform>('windows');
@@ -142,7 +131,8 @@ const DownloadsSection = () => {
     deb: `https://github.com/Roy3838/Observer/releases/download/v${version}/Observer_${version}_amd64.deb`,
     rpm: `https://github.com/Roy3838/Observer/releases/download/v${version}/Observer-${version}-1.x86_64.rpm`,
     appImage: `https://github.com/Roy3838/Observer/releases/download/v${version}/Observer_${version}_amd64.AppImage`,
-    ios: 'https://apps.apple.com/mx/app/observer-ai/id6758222050?l=en-GB',
+    ios: 'https://apps.apple.com/us/app/observer-ai/id6758222050',
+    android: 'https://play.google.com/store/apps/details?id=com.observer.ai',
     web: 'https://app.observer-ai.com',
   };
 
@@ -231,11 +221,9 @@ const DownloadsSection = () => {
               <DownloadButton primary onClick={() => openExternal(urls.ios)}>
                 Download for iOS
               </DownloadButton>
-              <DisabledTooltip>
-                <DownloadButton disabled onClick={() => {}}>
-                  Download for Android
-                </DownloadButton>
-              </DisabledTooltip>
+              <DownloadButton onClick={() => openExternal(urls.android)}>
+                Download for Android
+              </DownloadButton>
             </div>
             <p className="text-sm text-gray-500">iOS 15 or later</p>
           </div>
