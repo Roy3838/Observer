@@ -8,6 +8,7 @@ import type { TokenProvider } from '@utils/main_loop';
 import { ModelManager, UnauthorizedError } from '@utils/ModelManager';
 import { Logger } from '@utils/logging';
 import { StreamManager } from '@utils/streamManager';
+import { imageDataUrl } from '@utils/imageDataUrl';
 import { releaseCaptureHolds, TURN_HOLDER } from './capture';
 import type { WireMessage, ToolCallStatus, UserInfoRequest, UserInfoResponse } from './types';
 import { getTool, getToolSpecs } from './registry';
@@ -198,7 +199,7 @@ export function useMCP(options: UseMCPOptions) {
         { type: 'text', text: userText },
         ...images.map(img => ({
           type: 'image_url',
-          image_url: { url: img.startsWith('data:') ? img : `data:image/png;base64,${img}` },
+          image_url: { url: imageDataUrl(img) },
         })),
       ];
     }

@@ -8,6 +8,7 @@
 import type { ToolDefinition, ToolResult, WireToolSpec, NotifyMethod, UserInfoRequestKind } from './types';
 import { captureScreen, captureCamera, listCameras, grabTauriFrame, waitForTauriFrame, releaseCaptureHolds, letGoOfScreen } from './capture';
 import { StreamManager } from '@utils/streamManager';
+import { imageDataUrl } from '@utils/imageDataUrl';
 import {
   listAgents,
   getAgent,
@@ -107,13 +108,12 @@ function isIterationSettled(it: IterationData): boolean {
 function iterationToResult(it: IterationData): ToolResult {
   // Collect images (model images + screenshot/camera sensors) as data-URLs.
   const images: string[] = [];
-  const toDataUrl = (raw: string) => raw.startsWith('data:') ? raw : `data:image/png;base64,${raw}`;
-  if (it.modelImages) images.push(...it.modelImages.map(toDataUrl));
+  if (it.modelImages) images.push(...it.modelImages.map(imageDataUrl));
   for (const sensor of it.sensors) {
     if (sensor.type === 'screenshot' || sensor.type === 'camera') {
       const content: any = sensor.content;
-      if (typeof content === 'string') images.push(toDataUrl(content));
-      else if (content?.data) images.push(toDataUrl(content.data));
+      if (typeof content === 'string') images.push(imageDataUrl(content));
+      else if (content?.data) images.push(imageDataUrl(content.data));
     }
   }
 
@@ -862,7 +862,7 @@ export const TOOLS: ToolDefinition[] = [
           return { error: `Target '${args.target_id}' is no longer available (window may have closed). Re-run list_screen_targets.` };
         }
         const raw = match.thumbnail;
-        const url = !raw ? undefined : raw.startsWith('data:') ? raw : `data:image/png;base64,${raw}`;
+        const url = !raw ? undefined : imageDataUrl(raw);
         return {
           data: {
             id: match.id,

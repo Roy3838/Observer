@@ -9,6 +9,7 @@ import { GemmaModelId, LocalLlmMessage } from './localLlm/types';
 import { prepareDecision, assembleDecision, buildCloudRequest, cloudDecision, Decision } from './localLlm/systemOne';
 import { InferenceParams, DEFAULT_INFERENCE_PARAMS } from '../config/inference-params';
 import { PreProcessorResult } from './pre-processor';
+import { imageDataUrl } from './imageDataUrl';
 import { UnauthorizedError } from './sendApi';
 import type { AssistantResponse, WireToolSpec } from '../mcp/types';
 
@@ -701,7 +702,7 @@ export class ModelManager {
       if (serverAddress.includes('api.observer-ai.com') && token) {
         this.optimisticUpdateQuota(1);  // a decision costs 1 credit, an LLM call 4
       }
-      const images = (preprocessResult.images ?? []).map(img => `data:image/png;base64,${img}`);
+      const images = (preprocessResult.images ?? []).map(imageDataUrl);
       const request = buildCloudRequest(modelName, preprocessResult.modifiedPrompt, images);
       const { fetchDecision } = await import('./sendApi');
       const answers = await fetchDecision(serverAddress, request, token);
@@ -711,7 +712,7 @@ export class ModelManager {
       if (model.status !== 'loaded') {
         throw new Error('Local model not loaded. Please load it from the Add Model panel.');
       }
-      const images = (preprocessResult.images ?? []).map(img => `data:image/png;base64,${img}`);
+      const images = (preprocessResult.images ?? []).map(imageDataUrl);
       const prepared = prepareDecision(preprocessResult.modifiedPrompt, images);
       const logits = serverAddress === ModelManager.LLAMA_CPP_LOCAL
         ? await NativeLlmManager.getInstance().decide(prepared.branches)
@@ -727,7 +728,7 @@ export class ModelManager {
         { type: 'text', text: preprocessResult.modifiedPrompt },
         ...preprocessResult.images!.map(img => ({
           type: 'image',
-          image: `data:image/png;base64,${img}`,
+          image: imageDataUrl(img),
         })),
       ];
     }
