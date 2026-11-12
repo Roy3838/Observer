@@ -28,6 +28,13 @@
     "iap:default",
     "opener:default",
     {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "http://*" },
+        { "url": "http://*:*" }
+      ]
+    },
+    {
       "identifier": "opener:allow-open-url",
       "allow": [
         {
