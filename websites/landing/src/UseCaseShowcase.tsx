@@ -7,7 +7,7 @@
 // learn when each one reaches its moment, exactly like the suite does, and fire the Then there.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Phone, MessageCircle, MessageSquare, Mail, Hash, Send, NotebookPen, Clapperboard, ChevronLeft, ChevronRight, ExternalLink, type LucideIcon } from 'lucide-react';
+import { Phone, MessageCircle, MessageSquare, Mail, Hash, Send, NotebookPen, Clapperboard, ChevronLeft, ChevronRight, ExternalLink, Check, type LucideIcon } from 'lucide-react';
 import data from './generated/showcase.json';
 
 interface Pair { id: string; file: string; query: string; when: string; then: string; channel: { id: string; label: string } | null }
@@ -35,12 +35,15 @@ const iconFor = (p: Pair): LucideIcon => p.channel ? ICONS[p.channel.id] : /clip
 
 const wrap = (i: number) => ((i % PAIRS.length) + PAIRS.length) % PAIRS.length;
 
-/** A reel of words, three rows tall: the current one in the middle, on the sentence's line, with
- *  its neighbours blurred above and below. Items enter and leave through the faded outer edges, so
- *  nothing gets clipped in the space between When and then. */
+const EASE_OUT = 'cubic-bezier(.16,1,.3,1)';
+const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/** One line of text that swaps phrase by phrase. Each word sits in its own clipped slot and rises
+ *  into place a beat after the one before it; the outgoing phrase leaves the same way, upward
+ *  (or downward when going back), so there is only ever one crisp phrase on screen. */
 const Wheel = ({ items, index, delay = 0, className = '' }: { items: string[]; index: number; delay?: number; className?: string }) => {
   const n = items.length;
-  // How much each item has to shrink to fit the reel's width (on a phone, the long ones do).
+  // How much each item has to shrink to fit the line's width (on a phone, the long ones do).
   const ref = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<number[]>(() => items.map(() => 1));
   useLayoutEffect(() => {
@@ -52,31 +55,42 @@ const Wheel = ({ items, index, delay = 0, className = '' }: { items: string[]; i
     ro.observe(el);
     return () => ro.disconnect();
   }, [items]);
+  const still = reducedMotion();
   return (
-    <div
-      ref={ref}
-      className="relative h-[3.45em] overflow-hidden [mask-image:linear-gradient(transparent,black_30%,black_70%,transparent)]"
-      aria-live="polite"
-    >
+    <div ref={ref} className="relative h-[1.3em]" aria-live="polite">
       {items.map((text, i) => {
-        // Shortest way round the reel from the current item.
+        // Which side of the current phrase this one is on: it waits below, or has left above.
         let k = i - index;
         if (k > n / 2) k -= n;
         if (k < -n / 2) k += n;
+        const side = Math.sign(k);
+        const words = text.split(' ');
         return (
           <span
             key={i}
             aria-hidden={k !== 0}
-            className={`absolute left-0 top-[1.15em] whitespace-nowrap leading-[1.15] will-change-transform ${className}`}
-            style={{
-              transform: `translateY(${k * 1.15}em) scale(${(k === 0 ? 1 : 0.9) * fit[i]})`,
-              transformOrigin: 'left center',
-              opacity: k === 0 ? 1 : Math.abs(k) === 1 ? 0.35 : 0,
-              filter: k === 0 ? 'none' : 'blur(1.5px)',
-              transition: `transform 850ms cubic-bezier(.2,.8,.2,1) ${delay}ms, opacity 600ms ease ${delay}ms, filter 600ms ease ${delay}ms`,
-            }}
+            className={`absolute left-0 top-0 whitespace-nowrap leading-[1.3] ${className}`}
+            style={{ transform: `scale(${fit[i]})`, transformOrigin: 'left center', pointerEvents: k === 0 ? 'auto' : 'none' }}
           >
-            {text}
+            {words.map((w, j) => {
+              // Entering words stagger left to right; leaving words go together, a touch faster.
+              const d = k === 0 ? delay + 120 + j * 55 : delay + j * 25;
+              return (
+                <span key={j} className="inline-block overflow-hidden align-top pb-[0.08em] -mb-[0.08em]">
+                  <span
+                    className="inline-block will-change-transform"
+                    style={{
+                      transform: `translateY(${side * 105}%)`,
+                      opacity: k === 0 ? 1 : 0,
+                      transition: still ? 'none' : `transform ${k === 0 ? 900 : 550}ms ${EASE_OUT} ${d}ms, opacity ${k === 0 ? 500 : 350}ms ease ${d}ms`,
+                    }}
+                  >
+                    {w}
+                  </span>
+                  {j < words.length - 1 && ' '}
+                </span>
+              );
+            })}
           </span>
         );
       })}
@@ -193,13 +207,13 @@ const UseCaseShowcase = () => {
       <div className="relative container mx-auto px-6 max-w-6xl">
         {/* The heading lives in the hero (ObserverLanding) so it shows as soon as scrolling starts. */}
         {/* When … then … */}
-        <div className="mx-auto max-w-5xl font-golos font-medium tracking-tight text-[clamp(1.05rem,3.6vw,3rem)] leading-none">
-          <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-[0.4em] gap-y-[0.1em]">
-            <span className="self-center leading-[1.15] text-gray-600 text-right">When</span>
-            <div className="min-w-0 text-white"><Wheel items={whens} index={index} /></div>
-            <span className="self-center leading-[1.15] text-gray-600 text-right">then</span>
+        <div className="mx-auto max-w-5xl font-golos font-semibold tracking-[-0.035em] text-[clamp(1.15rem,4vw,3.4rem)] leading-none">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-[0.35em] gap-y-[0.15em]">
+            <span className="leading-[1.3] text-[#5C6975] text-right">When</span>
+            <div className="min-w-0"><Wheel items={whens} index={index} className="text-white" /></div>
+            <span className="leading-[1.3] text-[#5C6975] text-right">then</span>
             <div className="min-w-0">
-              <Wheel items={thens} index={index} delay={140} className="text-gray-300" />
+              <Wheel items={thens} index={index} delay={180} className="text-[#78b8cf]" />
             </div>
           </div>
         </div>
@@ -231,18 +245,38 @@ const UseCaseShowcase = () => {
 
               {/* The Then, firing. */}
               <div
-                className={`absolute top-4 right-4 w-[min(23rem,calc(100%-2rem))] rounded-2xl border border-white/10 bg-[#0D1321]/85 backdrop-blur-xl shadow-2xl p-3.5 flex gap-3 items-center transition-all duration-500 ${
-                  phase === 'fired' ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
-                }`}
+                className="absolute top-3 right-3 sm:top-4 sm:right-4 w-[min(22rem,calc(100%-1.5rem))] rounded-[18px] bg-white text-[#0D1321] p-2.5 pr-4 flex gap-3 items-center font-golos shadow-[0_0_0_1px_rgba(13,19,33,0.06),0_2px_4px_rgba(13,19,33,0.06),0_24px_48px_-12px_rgba(13,19,33,0.45)]"
+                style={{
+                  opacity: phase === 'fired' ? 1 : 0,
+                  transform: phase === 'fired' ? 'none' : 'translateY(-14px) scale(0.94)',
+                  transformOrigin: 'top center',
+                  transition: phase === 'fired'
+                    ? 'transform 650ms cubic-bezier(.34,1.45,.64,1), opacity 220ms ease'
+                    : 'transform 300ms ease, opacity 200ms ease',
+                  pointerEvents: phase === 'fired' ? 'auto' : 'none',
+                }}
               >
-                <span className="w-9 h-9 shrink-0 rounded-full bg-white/10 grid place-items-center"><Icon className="w-[18px] h-[18px] text-white" /></span>
-                <div className="min-w-0">
-                  <div className="text-sm text-white leading-snug">{fired(pair)}</div>
+                <span className="w-10 h-10 shrink-0 rounded-[12px] bg-[#0D1321] grid place-items-center">
+                  <Icon className="w-5 h-5 text-white" strokeWidth={2.25} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2 text-[11px] leading-4 text-slate-500">
+                    <span className="font-semibold uppercase tracking-[0.08em]">Observer</span>
+                    <span>now</span>
+                  </div>
+                  <div className="text-[15px] font-semibold leading-5 tracking-[-0.01em] truncate">{fired(pair)}</div>
                 </div>
               </div>
 
-              <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full bg-[#0D1321]/80 backdrop-blur border border-white/10 px-3 py-1.5 text-xs text-gray-300">
-                <span className={`w-1.5 h-1.5 rounded-full ${phase === 'fired' ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`} />
+              <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full bg-[#0D1321] pl-2.5 pr-3.5 py-1.5 text-xs font-medium font-golos text-white shadow-[0_8px_20px_-6px_rgba(0,0,0,0.5)]">
+                {phase === 'fired' ? (
+                  <span className="w-4 h-4 rounded-full bg-emerald-400 grid place-items-center"><Check className="w-2.5 h-2.5 text-[#0D1321]" strokeWidth={3.5} /></span>
+                ) : (
+                  <span className="relative w-4 h-4 grid place-items-center">
+                    <span className="absolute inset-[3px] rounded-full bg-red-500 animate-ping opacity-60" />
+                    <span className="relative w-2 h-2 rounded-full bg-red-500" />
+                  </span>
+                )}
                 {phase === 'fired' ? 'Done' : 'Watching'}
               </div>
               <a
@@ -250,7 +284,7 @@ const UseCaseShowcase = () => {
                 target="_blank"
                 rel="noopener"
                 title="Open this demo in a new tab. It ends after 2 minutes."
-                className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-[#0D1321]/80 backdrop-blur border border-white/10 px-3 py-1.5 text-xs text-gray-300 hover:text-white transition"
+                className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-[#0D1321] px-3.5 py-1.5 text-xs font-medium font-golos text-white/80 hover:text-white shadow-[0_8px_20px_-6px_rgba(0,0,0,0.5)] transition-colors"
               >
                 <span className="hidden sm:inline">Open in new tab</span> <ExternalLink className="w-3.5 h-3.5" />
               </a>

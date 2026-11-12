@@ -50,7 +50,7 @@ const LandingPage = () => {
                 href: 'https://app.observer-ai.com', cta: 'Open the web app' },
               { logo: '/logos/llama-cpp.svg', alt: 'llama.cpp', h: 'h-9', title: 'In the desktop app',
                 text: 'Download the app to run AI with Metal acceleration.',
-                facts: [['Runs on', 'Metal, on your Mac'], ['Install', 'Desktop app'], ['Your screen', 'Stays on your machine']],
+                facts: [['Runs on', 'Metal, on your computer'], ['Install', 'Desktop app'], ['Your screen', 'Stays on your machine']],
                 href: '#downloads', cta: 'Download Observer' },
             ].map(c => (
               <div key={c.alt} className="flex flex-col">
