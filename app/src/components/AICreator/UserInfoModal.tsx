@@ -590,9 +590,10 @@ function Segmented<T extends string>({ value, onChange, options }: { value: T; o
 
 /** kind='model': download a local model now, or run in the cloud. Dismissing means cloud. */
 const ModelModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
+  // No model: only "local or cloud", asked before the MCP knows which model fits (a Scout).
   const isDecision = req.model === 'onejev';
-  const localName = isDecision ? 'OneJev' : 'Qwen3.5 0.8B';
-  const cloudName = isDecision ? 'clef-flash' : 'gemma-3-12b-it';
+  const localTitle = req.model ? `On this computer · ${isDecision ? 'OneJev' : 'Qwen3.5 0.8B'}` : 'On this device';
+  const cloudTitle = req.model ? `In the cloud · ${isDecision ? 'clef-flash' : 'gemma-3-12b-it'}` : 'In the cloud';
   const choose = (value: 'local' | 'cloud') => onResolve(req.requestId, { value });
 
   const option = (value: 'local' | 'cloud', icon: React.ReactNode, title: string, detail: string) => (
@@ -611,9 +612,9 @@ const ModelModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
   return (
     <Sheet icon={<HardDrive className="h-6 w-6" />} title="Where should it run?" subtitle={req.reason} onClose={() => choose('cloud')}>
       <div className="flex flex-col gap-2.5">
-        {option('local', <HardDrive className="h-4 w-4" />, `On this computer · ${localName}`,
+        {option('local', <HardDrive className="h-4 w-4" />, localTitle,
           'Private and free. About 1 GB, so the download can take 10+ minutes — you can walk away, the agent starts on its own.')}
-        {option('cloud', <Cloud className="h-4 w-4" />, `In the cloud · ${cloudName}`, 'Starts right away. Frames are sent to the cloud model.')}
+        {option('cloud', <Cloud className="h-4 w-4" />, cloudTitle, 'Starts right away. Frames are sent to the cloud model.')}
       </div>
     </Sheet>
   );

@@ -5,6 +5,7 @@
 
 import type { WireMessage } from './types';
 import { parseRemotePrompt } from './remote';
+import { parseAgentPrompt } from './agentWake';
 
 const STORAGE_KEY = 'observer-mcp-conversations';
 const MAX_CONVERSATIONS = 50;
@@ -64,7 +65,7 @@ function deriveTitle(messages: WireMessage[]): string {
   let text = '';
   if (typeof first?.content === 'string') text = first.content;
   else if (Array.isArray(first?.content)) text = first!.content.find((p: any) => p?.type === 'text')?.text ?? '';
-  text = (parseRemotePrompt(text)?.text ?? text).replace(/\s+/g, ' ').trim();
+  text = (parseRemotePrompt(text)?.text ?? parseAgentPrompt(text)?.text ?? text).replace(/\s+/g, ' ').trim();
   return text ? (text.length > 40 ? `${text.slice(0, 40)}…` : text) : 'New chat';
 }
 

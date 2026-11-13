@@ -13,6 +13,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import type { TokenProvider } from '@utils/main_loop';
 import { useMCP, type UseMCPReturn } from './useMCP';
 import { useRemoteControl, type RemoteControlState } from './useRemoteControl';
+import { useAgentWake } from './agentWake';
 import UserInfoModal from '@components/AICreator/UserInfoModal';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite-free';
@@ -41,6 +42,8 @@ export const MCPProvider: React.FC<MCPProviderProps> = ({ getToken, isUsingObSer
   });
   // Messages from the user's linked WhatsApp/Telegram land in this same conversation.
   const remote = useRemoteControl(mcp, getToken);
+  // So do messages from agents (mcp() in agent code), once the MCP is idle.
+  useAgentWake(mcp);
   // End-to-end suite hooks (app/e2e), only when served with VITE_E2E=1. Refs so the hooks
   // always reach this render's mcp and getToken.
   const e2eRef = useRef({ mcp: { ...mcp, modelName }, getToken });

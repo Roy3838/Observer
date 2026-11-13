@@ -12,6 +12,7 @@ import type { TokenProvider } from '@utils/main_loop';
 import { type ToolStatusEntry } from '../../mcp/useMCP';
 import { useMCPContext } from '../../mcp/MCPContext';
 import { parseRemotePrompt, type RemoteChannel } from '../../mcp/remote';
+import { parseAgentPrompt } from '../../mcp/agentWake';
 import type { ToolCall, WireMessage } from '../../mcp/types';
 import { Logger, type WhitelistChannel } from '@utils/logging';
 import { StreamManager, StreamState } from '@utils/streamManager';
@@ -595,7 +596,7 @@ const MCP: React.FC<MCPProps> = ({
   // any run of consecutive 'tools' blocks into one before rendering. No message-stream state
   // machine — grouping falls out of "these blocks are next to each other in the list."
   type Block =
-    | { type: 'user'; text: string; images: any[]; remote?: RemoteChannel }
+    | { type: 'user'; text: string; images: any[]; remote?: RemoteChannel; agent?: string }
     | { type: 'text'; content: string }
     | { type: 'tools'; calls: ToolCall[] };
 
@@ -613,8 +614,10 @@ const MCP: React.FC<MCPProps> = ({
           : (msg.content.find((p: any) => p.type === 'text')?.text ?? '');
         const images = Array.isArray(msg.content) ? msg.content.filter((p: any) => p.type === 'image_url') : [];
         // Messages sent from the phone carry a model-facing prefix; show an icon instead.
+        // Messages from agents (mcp() in agent code) too: show who sent it.
         const remote = parseRemotePrompt(text);
-        blocks.push({ type: 'user', text: remote?.text ?? text, images, remote: remote?.channel });
+        const fromAgent = remote ? null : parseAgentPrompt(text);
+        blocks.push({ type: 'user', text: remote?.text ?? fromAgent?.text ?? text, images, remote: remote?.channel, agent: fromAgent?.agentName });
         continue;
       }
 
@@ -647,6 +650,9 @@ const MCP: React.FC<MCPProps> = ({
               <span className="text-xs text-gray-400 mb-1 mr-1">
                 {block.remote === 'whatsapp' ? 'WhatsApp' : 'Telegram'}
               </span>
+            )}
+            {block.agent && (
+              <span className="text-xs text-gray-400 mb-1 mr-1">From {block.agent}</span>
             )}
             <div className={userBubbleClass}>
               {block.text && <p className="whitespace-pre-wrap">{block.text}</p>}

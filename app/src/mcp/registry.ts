@@ -615,7 +615,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'ask_user_info',
-    description: "Ask the user for something only they can give, via a modal. This BLOCKS until they answer. Never ask for these in chat, and never narrate the modal: they can see it. kind='screen' / kind='camera': ONLY after capture_screen / capture_camera failed; the modal's button opens the share picker / camera permission (a click is what browsers like Safari require) and returns the same frame those tools return. kind='method': how the agent tells the user; pass `channel` when the user already named one (e.g. 'send me a WhatsApp' → channel='whatsapp'), omit it to let them pick. It returns {channel, value}: value is what the agent code passes to that channel's tool, already connected and verified (the user's 4-word code for whatsapp/sms/voice/telegram, their email, webhook or Pushover key; '' for browser and system). For browser and system the modal pushes a test notification so the browser / OS asks for permission now and the user confirms they saw it; call it before start_agent for any agent that uses notify() or system_notify(). A returning user with a working connection is not shown anything. kind='model' (`model`: 'onejev' for a decision model, 'default' for an LLM): local or cloud; returns {choice:'local'} (call download_model with that `model` next) or {choice:'cloud'}. Ask it LAST, right before download_model. kind='lock_phone' (mobile app only): the permission lockPhone() needs; call it before start_agent for any agent that uses lockPhone(). Its button opens the Screen Time / \"Display over other apps\" prompt and it returns {authorized:true}; if the permission is already granted the user sees nothing. If the result is {skipped:true}, the user declined: ask them about it in chat instead of calling this again.",
+    description: "Ask the user for something only they can give, via a modal. This BLOCKS until they answer. Never ask for these in chat, and never narrate the modal: they can see it. kind='screen' / kind='camera': ONLY after capture_screen / capture_camera failed; the modal's button opens the share picker / camera permission (a click is what browsers like Safari require) and returns the same frame those tools return. kind='method': how the agent tells the user; pass `channel` when the user already named one (e.g. 'send me a WhatsApp' → channel='whatsapp'), omit it to let them pick. It returns {channel, value}: value is what the agent code passes to that channel's tool, already connected and verified (the user's 4-word code for whatsapp/sms/voice/telegram, their email, webhook or Pushover key; '' for browser and system). For browser and system the modal pushes a test notification so the browser / OS asks for permission now and the user confirms they saw it; call it before start_agent for any agent that uses notify() or system_notify(). A returning user with a working connection is not shown anything. kind='model' (`model`: 'onejev' for a decision model, 'default' for an LLM): local or cloud; returns {choice:'local'} (call download_model with that `model` next) or {choice:'cloud'}. Ask it LAST, right before download_model. Omit `model` to ask only local vs cloud before you know which model fits (a Scout on the phone); pick download_model's `model` once you've seen the frame. kind='lock_phone' (mobile app only): the permission lockPhone() needs; call it before start_agent for any agent that uses lockPhone(). Its button opens the Screen Time / \"Display over other apps\" prompt and it returns {authorized:true}; if the permission is already granted the user sees nothing. If the result is {skipped:true}, the user declined: ask them about it in chat instead of calling this again.",
     parameters: {
       type: 'object',
       properties: {
@@ -632,7 +632,7 @@ export const TOOLS: ToolDefinition[] = [
         model: {
           type: 'string',
           enum: LOCAL_MODEL_CHOICES,
-          description: "Only for kind='model': the local model the download would fetch — 'onejev' for a decision model, 'default' for an LLM. Defaults to 'default'.",
+          description: "Only for kind='model': the local model the download would fetch — 'onejev' for a decision model, 'default' for an LLM. Omit it to ask only local vs cloud, before you know which.",
         },
         reason: {
           type: 'string',
@@ -686,7 +686,7 @@ export const TOOLS: ToolDefinition[] = [
           requestId: `info_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           kind,
           method: kind === 'method' ? method : undefined,
-          model: kind === 'model' ? (args.model === 'onejev' ? 'onejev' : 'default') : undefined,
+          model: kind === 'model' && (args.model === 'onejev' || args.model === 'default') ? args.model : undefined,
           reason: typeof args.reason === 'string' ? args.reason : undefined,
         });
       } catch {
@@ -695,9 +695,11 @@ export const TOOLS: ToolDefinition[] = [
 
       // Dismissing the model prompt means "don't download anything": run in the cloud.
       if (kind === 'model') {
-        return response.value === 'local'
-          ? { data: { kind, choice: 'local', note: `Call download_model model='${args.model === 'onejev' ? 'onejev' : 'default'}' now, then create_agent with the model_name it returns.` } }
-          : { data: { kind, choice: 'cloud', note: 'Use the cloud model; do not call download_model.' } };
+        const picked = args.model === 'onejev' || args.model === 'default' ? args.model : null;
+        if (response.value !== 'local') return { data: { kind, choice: 'cloud', note: 'Use the cloud model; do not call download_model.' } };
+        return picked
+          ? { data: { kind, choice: 'local', note: `Call download_model model='${picked}' now, then create_agent with the model_name it returns.` } }
+          : { data: { kind, choice: 'local', note: "Once you've seen the frame, call download_model with 'onejev' (decision model) or 'default' (LLM), then create_agent with the model_name it returns." } };
       }
 
       if (response.skipped) {

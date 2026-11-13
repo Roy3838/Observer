@@ -26,14 +26,44 @@ export default function getMcpSystemPrompt(): string {
 
   const screenStep = desktop
     ? `\`list_screen_targets\`, \`see_screen_target\` the likely candidates, then \`capture_screen\` with the right \`target_id\`. No permission modal is needed on desktop.`
-    : `\`capture_screen\`. If it fails (Safari, picker cancelled, no permission), call \`ask_user_info kind='screen'\`: its button gives the browser the click it needs, and it returns the same frame.`;
+    : `\`capture_screen\`. If it fails (Safari, picker cancelled, no permission), call \`ask_user_info kind='screen'\`: its button gives the browser the click it needs, and it returns the same frame.${mobile ? ' If the frame shows Observer and the thing to watch is in another app, follow "Watching another app" below.' : ''}`;
 
   const appTools = desktop
     ? `
 Desktop only: \`system_notify(body, title?)\` (system notification), \`overlay(body)\`, \`message(message, title?)\` (pop-up), \`ask(question, title?)\` (confirmation dialog), \`click('left'|'right')\`.`
     : mobile
     ? `
-Mobile app only: \`lockPhone(reason?, minutes?)\` (blocks every other app on this phone until \`unlockPhone()\` or the timeout; minutes default 30, max 720; calling it again restarts the timer), \`unlockPhone()\`. Before start_agent for an agent that uses lockPhone(), call \`ask_user_info kind='lock_phone'\` so the user grants the permission.`
+Mobile app only: \`lockPhone(reason?, minutes?)\` (blocks every other app on this phone until \`unlockPhone()\` or the timeout; minutes default 30, max 720; calling it again restarts the timer), \`unlockPhone()\`, \`await mcp(message)\` (wakes YOU with that message, as a new turn in this chat: write everything you'll need into it). Before start_agent for an agent that uses lockPhone(), call \`ask_user_info kind='lock_phone'\` so the user grants the permission.`
+    : '';
+
+  // Mobile app: the whole screen is shared, so while the user talks to the MCP it only sees
+  // Observer. A Scout waits for the thing in the other app and wakes the MCP with mcp().
+  const scoutSection = mobile
+    ? `
+# Watching another app (this phone)
+
+This phone shares its whole screen, so while the user talks to you, every frame shows Observer. When the thing to watch is in another app (YouTube, Instagram, a delivery app, a game), you can't see it yet: a Scout waits for it and wakes you.
+
+**Before the user leaves**, settle everything only they can answer, because no modal can open once they're in the other app: the trigger (with any number or name: "more than 10,000 subscribers"), delivery (step 6), and local or cloud (\`ask_user_info kind='model'\` with NO \`model\`: which model fits depends on a frame you haven't seen yet).
+
+**The Scout** is a decision model, always on \`clef-flash\` whatever the user chose (it's only a scout), uncropped, asking whether the THING is on screen, never the app: its name is in this chat, which is on screen right now. Give it a new id each time (\`scout_youtube\`, \`scout_ubereats\`). It wakes you once with \`mcp()\`, carrying everything you'll need, and never stops itself: if it did, the screen share would end with nobody there to start it again.
+\`\`\`
+name: Scout
+model_name: clef-flash
+loop_interval_seconds: 5
+system_prompt:
+Is a subscriber count on screen?
+$SCREEN
+code:
+if (decision.noul > 0.75 && !(await getMemory())) {
+  await setMemory("woke");
+  await mcp('The subscriber count is on screen. Build the agent: when it passes 10,000, call("tree-book-shower-golden", message). The user chose local models.');
+}
+\`\`\`
+\`start_agent\` → \`get_iteration\` with its \`agent_id\`: the frame shows Observer, so \`noul\` must be LOW; if it isn't, \`stop_agent\`, reword the question, try again. Then tell the user, in two short lines: tap **Run in Background** on the Scout's card (otherwise the phone stops Observer), then open the screen with the thing (their channel's page, the order) and leave it there.
+
+**When the Scout wakes you**: \`capture_screen\` (the share is still live, no prompt) → steps 2–5 from that frame → the model for that strategy (local: \`download_model\` with \`onejev\` or \`default\`; cloud: \`clef-flash\` or \`gemma-3-12b-it\`) → step 8 → step 9 → \`stop_agent\` the Scout. Never delete it: its card holds Run in Background. Never call \`ask_user_info\`: nobody is there to answer. The user isn't looking at this chat, so tell them it's running through the delivery channel with a Scratchpad, unless it's \`call\`.
+`
     : '';
 
   // ---- Full prompt ----------------------------------------------------------
@@ -264,7 +294,7 @@ await setMemory(JSON.stringify(state));
 \`\`\`
 
 **Sequence.** One keyword per stage ("TESTS_PASSED", "DEPLOY_FAILED", "TESTS_FAILED", "RUNNING"); remember the first stage in memory and act only on the second after it. A failure in the first stage means the second never happens: stop quietly.
-
+${scoutSection}
 # Scratchpad
 
 You can't call the agent-code API yourself. When you need one of its calls run once (\`unlockPhone()\` after an agent locked the phone too early, clearing an agent's memory), run it through a throwaway agent: \`create_agent\` with id \`scratchpad\`, model_name \`Skip Model Call\` (it never calls a model, so the code runs right away), system_prompt \`$MEMORY\`, and code that ends with \`await stopAgent();\` → \`start_agent\` → \`get_iteration agent_id='scratchpad'\` to check its tools ran → \`delete_agent id='scratchpad'\`.

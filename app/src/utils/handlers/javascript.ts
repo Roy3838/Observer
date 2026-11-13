@@ -44,7 +44,8 @@ import { startAgentLoop, stopAgentLoop } from '../main_loop';
 import type { TokenProvider } from '../main_loop';
 import type { PreProcessorResult } from '../pre-processor';
 import type { Decision } from '../localLlm/systemOne';
-import { getAgentImageMemory } from '../agent_database';
+import { getAgent, getAgentImageMemory } from '../agent_database';
+import { wakeMCP } from '../../mcp/agentWake';
 import { recordingManager } from '../recordingManager';
 
 /**
@@ -699,6 +700,27 @@ export async function executeJavaScript(
             logType: 'tool-error',
             iterationId,
             content: { tool: 'call', params: { message: message.slice(0, 100), number }, error: extractErrorMessage(error) }
+          });
+          throw error;
+        }
+      },
+
+      // Wakes Observer's MCP with a message, as a new turn in the open conversation.
+      mcp: async (message: string): Promise<void> => {
+        const text = String(message ?? '');
+        try {
+          const agent = await getAgent(agentId);
+          wakeMCP({ agentId, agentName: agent?.name ?? agentId, message: text });
+          Logger.info(agentId, 'MCP woken', {
+            logType: 'tool-success',
+            iterationId,
+            content: { tool: 'mcp', params: { message: text.slice(0, 100) }, success: true }
+          });
+        } catch (error) {
+          Logger.error(agentId, 'Failed to wake the MCP', {
+            logType: 'tool-error',
+            iterationId,
+            content: { tool: 'mcp', params: { message: text.slice(0, 100) }, error: extractErrorMessage(error) }
           });
           throw error;
         }
