@@ -2,7 +2,7 @@ import { Logger } from './logging';
 import { TranscriptionRouter } from './whisper/TranscriptionRouter';
 import { TranscriptionSubscriber, TranscriptionSubscriberImpl } from './whisper/TranscriptionSubscriber';
 import { UnifiedTranscriptionService } from './whisper/UnifiedTranscriptionService';
-import { isWeb, isMobile } from './platform';
+import { isWeb } from './platform';
 import { browserStreamCapture } from './browserStreamCapture';
 import { tauriStreamCapture, PCMCallback } from './tauriStreamCapture';
 import { PCMAudioCapture, createPCMAudioCapture } from './audio/PCMAudioCapture';
@@ -78,12 +78,6 @@ class Manager {
   private browserPCMCaptures = new Map<AudioStreamType, PCMAudioCapture>();
   private tauriPCMCallbackActive = false;
 
-  // PiP overlay status for mobile
-  private pipOverlayStatus: {
-    state: 'STARTING' | 'CAPTURING' | 'THINKING' | 'RESPONDING' | 'WAITING' | 'SLEEPING' | 'SKIPPED' | 'IDLE';
-    progress?: number; // 0-100 for pie chart (WAITING/SLEEPING states)
-    timerSeconds?: number;
-  } | null = null;
 
   constructor() {
     const allStreamTypes: PseudoStreamType[] = ['camera', 'screenVideo', 'screenAudio', 'microphone', 'allAudio'];
@@ -291,13 +285,10 @@ class Manager {
     };
   }
 
-  /** Set the PiP overlay status (for mobile) */
-  public setPipOverlayStatus(status: {
-    state: 'STARTING' | 'CAPTURING' | 'THINKING' | 'RESPONDING' | 'WAITING' | 'SLEEPING' | 'SKIPPED' | 'IDLE';
-    progress?: number;
-    timerSeconds?: number;
-  } | null): void {
-    this.pipOverlayStatus = status;
+  /** The live <video> a feed plays in (null until it's open), for drawing it elsewhere: the
+   *  mobile status PiP draws each agent's crop from it. */
+  public getVideoElement(type: 'screen' | 'camera'): HTMLVideoElement | null {
+    return type === 'camera' ? this.cameraVideoElement : this.screenVideoElement;
   }
 
   // --- Camera Device Management ---
@@ -518,18 +509,6 @@ class Manager {
 
   private async acquireMasterStream(type: MasterStreamType, captureImpl: typeof browserStreamCapture | typeof tauriStreamCapture): Promise<void> {
     try {
-      // Set up PiP overlay only on mobile, where the status/timer indicator is baked into
-      // a separate display stream. On desktop the overlay status is never set (see the
-      // isMobile() guard in ActiveAgentView), so the drawer would be a per-frame no-op and
-      // the desktop capture path skips the PiP canvas entirely.
-      if (isMobile() && type === 'display') {
-        tauriStreamCapture.setPipOverlayDrawer((ctx, width, height) => {
-          if (this.pipOverlayStatus) {
-            this.drawPipOverlay(ctx, width, height);
-          }
-        });
-      }
-
       // Delegate to platform-specific implementation
       await captureImpl.acquireMasterStream(type);
 
@@ -792,262 +771,6 @@ class Manager {
   private notifyListeners(): void {
     const state = this.getCurrentState();
     this.listeners.forEach(listener => listener(state));
-  }
-
-  private drawPipOverlay(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-    if (!this.pipOverlayStatus) return;
-
-    const { state, progress, timerSeconds } = this.pipOverlayStatus;
-
-    // Size: ~50% of video width, positioned bottom-right
-    const boxWidth = Math.round(width * 0.5);
-    const boxHeight = Math.round(boxWidth * 0.6);
-    const padding = Math.round(width * 0.03);
-    const x = width - boxWidth - padding;
-    const y = height - boxHeight - padding;
-    const cornerRadius = Math.round(boxWidth * 0.08);
-
-    // Semi-transparent background with rounded corners
-    ctx.fillStyle = 'rgba(17, 24, 39, 0.85)'; // gray-900 with transparency
-    ctx.beginPath();
-    ctx.moveTo(x + cornerRadius, y);
-    ctx.lineTo(x + boxWidth - cornerRadius, y);
-    ctx.quadraticCurveTo(x + boxWidth, y, x + boxWidth, y + cornerRadius);
-    ctx.lineTo(x + boxWidth, y + boxHeight - cornerRadius);
-    ctx.quadraticCurveTo(x + boxWidth, y + boxHeight, x + boxWidth - cornerRadius, y + boxHeight);
-    ctx.lineTo(x + cornerRadius, y + boxHeight);
-    ctx.quadraticCurveTo(x, y + boxHeight, x, y + boxHeight - cornerRadius);
-    ctx.lineTo(x, y + cornerRadius);
-    ctx.quadraticCurveTo(x, y, x + cornerRadius, y);
-    ctx.closePath();
-    ctx.fill();
-
-    // Subtle border
-    ctx.strokeStyle = 'rgba(75, 85, 99, 0.6)'; // gray-600
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    const centerX = x + boxWidth / 2;
-    const centerY = y + boxHeight * 0.42;
-    const iconSize = Math.round(boxWidth * 0.22);
-
-    // Get color based on state
-    const getStateColor = (): string => {
-      switch (state) {
-        case 'STARTING': return '#facc15'; // yellow-400
-        case 'CAPTURING': return '#22d3ee'; // cyan-400
-        case 'THINKING': return '#327e9c'; // teal blue
-        case 'RESPONDING': return '#3b82f6'; // blue-500
-        case 'WAITING': return '#6b7280'; // gray-500
-        case 'SLEEPING': return '#3b82f6'; // blue-500
-        case 'SKIPPED': return '#f97316'; // orange-500
-        default: return '#6b7280'; // gray-500
-      }
-    };
-
-    const color = getStateColor();
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = Math.max(2, iconSize * 0.12);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    // Draw icon based on state (Lucide-style)
-    this.drawStateIcon(ctx, centerX, centerY, iconSize, state);
-
-    // Draw pie chart for WAITING/SLEEPING states
-    if ((state === 'WAITING' || state === 'SLEEPING') && progress !== undefined) {
-      this.drawPieChart(ctx, centerX, centerY, iconSize * 0.9, progress, color);
-    }
-
-    // Timer text below icon
-    if (timerSeconds !== undefined) {
-      const fontSize = Math.round(boxWidth * 0.14);
-      ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-
-      // Format time
-      const minutes = Math.floor(timerSeconds / 60);
-      const seconds = timerSeconds % 60;
-      const timeText = minutes > 0
-        ? `${minutes}:${seconds.toString().padStart(2, '0')}`
-        : `${seconds}s`;
-
-      ctx.fillText(timeText, centerX, y + boxHeight * 0.78);
-    }
-  }
-
-  private drawStateIcon(
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    cy: number,
-    size: number,
-    state: string
-  ): void {
-    const s = size / 2; // half size for easier math
-
-    ctx.save();
-    ctx.translate(cx, cy);
-
-    switch (state) {
-      case 'STARTING': // Power icon
-        ctx.beginPath();
-        ctx.moveTo(0, -s * 0.8);
-        ctx.lineTo(0, -s * 0.2);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(0, 0, s * 0.7, -Math.PI * 0.7, Math.PI * 1.7, false);
-        ctx.stroke();
-        break;
-
-      case 'CAPTURING': // Eye icon
-        ctx.beginPath();
-        // Eye outline
-        ctx.moveTo(-s, 0);
-        ctx.bezierCurveTo(-s * 0.5, -s * 0.7, s * 0.5, -s * 0.7, s, 0);
-        ctx.bezierCurveTo(s * 0.5, s * 0.7, -s * 0.5, s * 0.7, -s, 0);
-        ctx.stroke();
-        // Pupil
-        ctx.beginPath();
-        ctx.arc(0, 0, s * 0.3, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-
-      case 'THINKING': { // CPU icon
-        const r = s * 0.15; // corner radius
-        // Outer rectangle with rounded corners
-        ctx.beginPath();
-        ctx.moveTo(-s * 0.65 + r, -s * 0.65);
-        ctx.lineTo(s * 0.65 - r, -s * 0.65);
-        ctx.quadraticCurveTo(s * 0.65, -s * 0.65, s * 0.65, -s * 0.65 + r);
-        ctx.lineTo(s * 0.65, s * 0.65 - r);
-        ctx.quadraticCurveTo(s * 0.65, s * 0.65, s * 0.65 - r, s * 0.65);
-        ctx.lineTo(-s * 0.65 + r, s * 0.65);
-        ctx.quadraticCurveTo(-s * 0.65, s * 0.65, -s * 0.65, s * 0.65 - r);
-        ctx.lineTo(-s * 0.65, -s * 0.65 + r);
-        ctx.quadraticCurveTo(-s * 0.65, -s * 0.65, -s * 0.65 + r, -s * 0.65);
-        ctx.stroke();
-        // Inner rectangle (the "chip")
-        ctx.beginPath();
-        ctx.rect(-s * 0.3, -s * 0.3, s * 0.6, s * 0.6);
-        ctx.stroke();
-        // Top pins
-        ctx.beginPath();
-        ctx.moveTo(-s * 0.25, -s * 0.65);
-        ctx.lineTo(-s * 0.25, -s);
-        ctx.moveTo(s * 0.25, -s * 0.65);
-        ctx.lineTo(s * 0.25, -s);
-        ctx.stroke();
-        // Bottom pins
-        ctx.beginPath();
-        ctx.moveTo(-s * 0.25, s * 0.65);
-        ctx.lineTo(-s * 0.25, s);
-        ctx.moveTo(s * 0.25, s * 0.65);
-        ctx.lineTo(s * 0.25, s);
-        ctx.stroke();
-        // Left pins
-        ctx.beginPath();
-        ctx.moveTo(-s * 0.65, -s * 0.25);
-        ctx.lineTo(-s, -s * 0.25);
-        ctx.moveTo(-s * 0.65, s * 0.25);
-        ctx.lineTo(-s, s * 0.25);
-        ctx.stroke();
-        // Right pins
-        ctx.beginPath();
-        ctx.moveTo(s * 0.65, -s * 0.25);
-        ctx.lineTo(s, -s * 0.25);
-        ctx.moveTo(s * 0.65, s * 0.25);
-        ctx.lineTo(s, s * 0.25);
-        ctx.stroke();
-        break;
-      }
-
-      case 'RESPONDING': // Message/chat icon
-        ctx.beginPath();
-        ctx.moveTo(-s * 0.8, -s * 0.5);
-        ctx.lineTo(s * 0.8, -s * 0.5);
-        ctx.quadraticCurveTo(s, -s * 0.5, s, -s * 0.3);
-        ctx.lineTo(s, s * 0.3);
-        ctx.quadraticCurveTo(s, s * 0.5, s * 0.8, s * 0.5);
-        ctx.lineTo(-s * 0.3, s * 0.5);
-        ctx.lineTo(-s * 0.5, s * 0.8);
-        ctx.lineTo(-s * 0.5, s * 0.5);
-        ctx.lineTo(-s * 0.8, s * 0.5);
-        ctx.quadraticCurveTo(-s, s * 0.5, -s, s * 0.3);
-        ctx.lineTo(-s, -s * 0.3);
-        ctx.quadraticCurveTo(-s, -s * 0.5, -s * 0.8, -s * 0.5);
-        ctx.stroke();
-        break;
-
-      case 'SLEEPING': // Moon icon
-        ctx.beginPath();
-        ctx.arc(s * 0.2, 0, s * 0.7, Math.PI * 0.75, Math.PI * 2.25, false);
-        ctx.arc(-s * 0.3, -s * 0.1, s * 0.5, Math.PI * 0.25, Math.PI * 1.25, true);
-        ctx.stroke();
-        break;
-
-      case 'SKIPPED': // Skip forward icon
-        ctx.beginPath();
-        ctx.moveTo(-s * 0.6, -s * 0.6);
-        ctx.lineTo(s * 0.2, 0);
-        ctx.lineTo(-s * 0.6, s * 0.6);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(s * 0.3, -s * 0.6);
-        ctx.lineTo(s * 0.3, s * 0.6);
-        ctx.stroke();
-        break;
-
-      case 'WAITING': // Clock icon (will be overlaid with pie chart)
-      default:
-        // Just draw circle outline - pie chart will be drawn on top
-        ctx.beginPath();
-        ctx.arc(0, 0, s * 0.8, 0, Math.PI * 2);
-        ctx.stroke();
-        // Clock hands
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(0, -s * 0.5);
-        ctx.moveTo(0, 0);
-        ctx.lineTo(s * 0.35, s * 0.1);
-        ctx.stroke();
-        break;
-    }
-
-    ctx.restore();
-  }
-
-  private drawPieChart(
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    cy: number,
-    radius: number,
-    progress: number,
-    color: string
-  ): void {
-    // Progress is 0-100
-    const normalizedProgress = Math.min(100, Math.max(0, progress)) / 100;
-
-    // Draw background track
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(75, 85, 99, 0.4)';
-    ctx.lineWidth = radius * 0.2;
-    ctx.stroke();
-
-    // Draw progress arc
-    const startAngle = -Math.PI / 2; // Start from top
-    const endAngle = startAngle + (normalizedProgress * Math.PI * 2);
-
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, startAngle, endAngle);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = radius * 0.2;
-    ctx.lineCap = 'round';
-    ctx.stroke();
   }
 }
 

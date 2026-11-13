@@ -111,7 +111,7 @@ export type NotifyMethod =
  * What `ask_user_info` can ask for: a sensor permission, a notification method, local vs cloud,
  * or the phone-lock permission lockPhone() needs (mobile app only).
  */
-export type UserInfoRequestKind = 'screen' | 'camera' | 'method' | 'model' | 'lock_phone' | UserInfoKind;
+export type UserInfoRequestKind = 'screen' | 'camera' | 'method' | 'model' | 'lock_phone' | 'background' | UserInfoKind;
 
 /**
  * A request handed from the `ask_user_info` executor up to the React layer, which renders

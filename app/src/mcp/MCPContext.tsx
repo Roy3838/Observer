@@ -15,6 +15,8 @@ import { useMCP, type UseMCPReturn } from './useMCP';
 import { useRemoteControl, type RemoteControlState } from './useRemoteControl';
 import { useAgentWake } from './agentWake';
 import UserInfoModal from '@components/AICreator/UserInfoModal';
+import PipDebugPanel from '@components/debug/PipDebugPanel';
+import { isMobile } from '@utils/platform';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite-free';
 
@@ -60,6 +62,8 @@ export const MCPProvider: React.FC<MCPProviderProps> = ({ getToken, isUsingObSer
       {children}
       {/* Hosted here, not in MCP.tsx: a run survives closing the chat panel, and RecipeSplash
           closes itself right after send() — so the modal must outlive both. */}
+      {/* Dev-only: the two ways to feed the mobile status PiP, side by side. */}
+      {import.meta.env.DEV && isMobile() && <PipDebugPanel />}
       {mcp.pendingUserInfo && (
         <UserInfoModal key={mcp.pendingUserInfo.requestId} req={mcp.pendingUserInfo} onResolve={mcp.resolveUserInfo} />
       )}

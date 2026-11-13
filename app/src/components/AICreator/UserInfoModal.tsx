@@ -23,7 +23,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import {
   Bell, Mail, Hash, Phone, MessageSquare, Monitor, MonitorUp, Camera, Cloud, HardDrive,
-  ChevronLeft, Loader2, RefreshCw, X, ArrowRight, Lock,
+  ChevronLeft, Loader2, RefreshCw, X, ArrowRight, Lock, Smartphone,
 } from 'lucide-react';
 import { FaWhatsapp, FaTelegramPlane } from 'react-icons/fa';
 import WhitelistQR from '@components/whitelist/WhitelistQR';
@@ -34,6 +34,7 @@ import { SensorSettings } from '@utils/settings';
 import { isDesktop, isIOS } from '@utils/platform';
 import { requestPhoneLockPermission, sendTestNotification, browserNotifyReady } from '@utils/handlers/utils';
 import { captureScreen, captureCamera } from '../../mcp/capture';
+import { startStatusPip } from '@utils/statusPip';
 import { fetchStatus } from '../../mcp/remote';
 import type { NotifyMethod, UserInfoRequest, UserInfoResponse } from '../../mcp/types';
 import type { PhoneChannel } from '@utils/whitelistCode';
@@ -250,6 +251,35 @@ const LockPhoneModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
     >
       <PrimaryButton onClick={allow} busy={busy}>
         Allow <ArrowRight className="h-4 w-4" />
+      </PrimaryButton>
+      {error && <p className="mt-3 text-xs text-red-500">{error}</p>}
+    </Sheet>
+  );
+};
+
+// ---- background -----------------------------------------------------------------------------
+
+/** kind='background': opens Observer's status window (PiP), which keeps the app alive in the background. */
+const BackgroundModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
+  const [error, setError] = useState<string | null>(null);
+
+  // No await before startStatusPip(): PiP only opens from the tap itself.
+  const open = () => {
+    setError(null);
+    startStatusPip()
+      .then(() => onResolve(req.requestId, { value: 'active' }))
+      .catch(() => setError("Couldn't open the window. Try again."));
+  };
+
+  return (
+    <Sheet
+      icon={<Smartphone className="h-6 w-6" />}
+      title="Keep Observer running"
+      subtitle={req.reason ?? 'A small window shows what Observer is doing while you use other apps. Without it, your phone pauses Observer.'}
+      onClose={() => onResolve(req.requestId, { value: '', skipped: true })}
+    >
+      <PrimaryButton onClick={open}>
+        Run in background <ArrowRight className="h-4 w-4" />
       </PrimaryButton>
       {error && <p className="mt-3 text-xs text-red-500">{error}</p>}
     </Sheet>
@@ -631,6 +661,8 @@ const UserInfoModal: React.FC<UserInfoModalProps> = props => {
       return <ModelModal {...props} />;
     case 'lock_phone':
       return <LockPhoneModal {...props} />;
+    case 'background':
+      return <BackgroundModal {...props} />;
     default:
       return <MethodModal {...props} />;
   }

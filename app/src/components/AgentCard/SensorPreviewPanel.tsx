@@ -2,7 +2,7 @@
 import React, { useMemo, useRef, useEffect, ReactNode, useState } from 'react';
 import { Mic, Volume2, Crop, RotateCcw, RotateCw, ChevronDown, Save, Images, AlertTriangle, Monitor, Camera, Play, Smartphone } from 'lucide-react';
 import { isMobile } from '@utils/platform';
-import { isPipSupported } from '@utils/pictureInPicture';
+import { isStatusPipSupported, isStatusPipActive, onStatusPipChange, prepareStatusPip, startStatusPip, stopStatusPip } from '@utils/statusPip';
 import FixedDropdown from '@components/ui/FixedDropdown';
 import { StreamState, AudioStreamType, StreamManager } from '@utils/streamManager';
 import { CropConfig, setAgentCrop, getAgentCrop } from '@utils/screenCapture';
@@ -465,7 +465,7 @@ const VideoStream: React.FC<{
 
   // PiP state (mobile only)
   const [isPipActive, setIsPipActive] = useState(false);
-  const showPipButton = isMobile() && isPipSupported();
+  const showPipButton = isMobile() && isStatusPipSupported();
 
   // Load the crop config, and follow changes made elsewhere (the MCP's set_screen_crop)
   useEffect(() => {
@@ -501,51 +501,21 @@ const VideoStream: React.FC<{
   }, [stream]);
 
   // Web PiP event listeners to track PiP state
+  // The window shows Observer's status, not this video (utils/statusPip.ts), so it outlives this card.
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !showPipButton) return;
-
-    const handleEnterPip = () => setIsPipActive(true);
-    const handleLeavePip = () => setIsPipActive(false);
-
-    video.addEventListener('enterpictureinpicture', handleEnterPip);
-    video.addEventListener('leavepictureinpicture', handleLeavePip);
-
-    return () => {
-      video.removeEventListener('enterpictureinpicture', handleEnterPip);
-      video.removeEventListener('leavepictureinpicture', handleLeavePip);
-    };
+    if (!showPipButton) return;
+    setIsPipActive(isStatusPipActive());
+    prepareStatusPip();
+    return onStatusPipChange(setIsPipActive);
   }, [showPipButton]);
 
-  // Handle "Run in Background" button click
-  // Uses web PiP API to show the actual video in PiP and keep app alive
-  const handleRunInBackground = async () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    try {
-      if (video.readyState >= 2) {
-        await video.requestPictureInPicture();
-      } else {
-        // Wait for video to be ready
-        video.addEventListener('loadeddata', async () => {
-          await video.requestPictureInPicture();
-        }, { once: true });
-      }
-    } catch (err) {
-      console.error('Failed to enter PiP:', err);
-    }
+  // "Run in Background": the status PiP keeps the app alive while the user is in another app.
+  const handleRunInBackground = () => {
+    startStatusPip().catch(err => console.error('Failed to enter PiP:', err));
   };
 
-  // Handle stopping background mode
-  const handleStopBackground = async () => {
-    try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-      }
-    } catch (err) {
-      console.error('Failed to stop PiP:', err);
-    }
+  const handleStopBackground = () => {
+    stopStatusPip().catch(err => console.error('Failed to stop PiP:', err));
   };
 
   const handleCropSelect = (crop: CropConfig) => {
@@ -991,7 +961,7 @@ const SensorPreviewPanel: React.FC<SensorPreviewPanelProps> = ({
         streams.screenVideoStream ? (
           // Use PiP stream (with overlay) if available, otherwise use clean stream
           <VideoStream
-            stream={streams.screenVideoStreamWithPip || streams.screenVideoStream}
+            stream={streams.screenVideoStream}
             streamType="screen"
             agentId={agentId}
           />

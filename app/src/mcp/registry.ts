@@ -7,6 +7,7 @@
 
 import type { ToolDefinition, ToolResult, WireToolSpec, NotifyMethod, UserInfoRequestKind } from './types';
 import { captureScreen, captureCamera, listCameras, grabTauriFrame, waitForTauriFrame, releaseCaptureHolds, letGoOfScreen } from './capture';
+import { isStatusPipActive, isStatusPipSupported, prepareStatusPip } from '@utils/statusPip';
 import { StreamManager } from '@utils/streamManager';
 import { imageDataUrl } from '@utils/imageDataUrl';
 import {
@@ -615,14 +616,14 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'ask_user_info',
-    description: "Ask the user for something only they can give, via a modal. This BLOCKS until they answer. Never ask for these in chat, and never narrate the modal: they can see it. kind='screen' / kind='camera': ONLY after capture_screen / capture_camera failed; the modal's button opens the share picker / camera permission (a click is what browsers like Safari require) and returns the same frame those tools return. kind='method': how the agent tells the user; pass `channel` when the user already named one (e.g. 'send me a WhatsApp' → channel='whatsapp'), omit it to let them pick. It returns {channel, value}: value is what the agent code passes to that channel's tool, already connected and verified (the user's 4-word code for whatsapp/sms/voice/telegram, their email, webhook or Pushover key; '' for browser and system). For browser and system the modal pushes a test notification so the browser / OS asks for permission now and the user confirms they saw it; call it before start_agent for any agent that uses notify() or system_notify(). A returning user with a working connection is not shown anything. kind='model' (`model`: 'onejev' for a decision model, 'default' for an LLM): local or cloud; returns {choice:'local'} (call download_model with that `model` next) or {choice:'cloud'}. Ask it LAST, right before download_model. Omit `model` to ask only local vs cloud before you know which model fits (a Scout on the phone); pick download_model's `model` once you've seen the frame. kind='lock_phone' (mobile app only): the permission lockPhone() needs; call it before start_agent for any agent that uses lockPhone(). Its button opens the Screen Time / \"Display over other apps\" prompt and it returns {authorized:true}; if the permission is already granted the user sees nothing. If the result is {skipped:true}, the user declined: ask them about it in chat instead of calling this again.",
+    description: "Ask the user for something only they can give, via a modal. This BLOCKS until they answer. Never ask for these in chat, and never narrate the modal: they can see it. kind='screen' / kind='camera': ONLY after capture_screen / capture_camera failed; the modal's button opens the share picker / camera permission (a click is what browsers like Safari require) and returns the same frame those tools return. kind='method': how the agent tells the user; pass `channel` when the user already named one (e.g. 'send me a WhatsApp' → channel='whatsapp'), omit it to let them pick. It returns {channel, value}: value is what the agent code passes to that channel's tool, already connected and verified (the user's 4-word code for whatsapp/sms/voice/telegram, their email, webhook or Pushover key; '' for browser and system). For browser and system the modal pushes a test notification so the browser / OS asks for permission now and the user confirms they saw it; call it before start_agent for any agent that uses notify() or system_notify(). A returning user with a working connection is not shown anything. kind='model' (`model`: 'onejev' for a decision model, 'default' for an LLM): local or cloud; returns {choice:'local'} (call download_model with that `model` next) or {choice:'cloud'}. Ask it LAST, right before download_model. Omit `model` to ask only local vs cloud before you know which model fits (a Scout on the phone); pick download_model's `model` once you've seen the frame. kind='lock_phone' (mobile app only): the permission lockPhone() needs; call it before start_agent for any agent that uses lockPhone(). Its button opens the Screen Time / \"Display over other apps\" prompt and it returns {authorized:true}; if the permission is already granted the user sees nothing. If the result is {skipped:true}, the user declined: ask them about it in chat instead of calling this again. kind='background' (mobile app only): a button that opens Observer's status window (Picture-in-Picture), which keeps Observer running while the user is in another app; call it before telling the user to leave Observer. Returns {active:true}, at once if the window is already open.",
     parameters: {
       type: 'object',
       properties: {
         kind: {
           type: 'string',
-          enum: ['screen', 'camera', 'method', 'model', 'lock_phone'],
-          description: "'screen' / 'camera' for capture permission, 'method' for how to notify the user, 'model' for local vs cloud, 'lock_phone' for the permission lockPhone() needs.",
+          enum: ['screen', 'camera', 'method', 'model', 'lock_phone', 'background'],
+          description: "'screen' / 'camera' for capture permission, 'method' for how to notify the user, 'model' for local vs cloud, 'lock_phone' for the permission lockPhone() needs, 'background' to keep Observer running while the user is in another app (mobile app).",
         },
         channel: {
           type: 'string',
@@ -660,11 +661,20 @@ export const TOOLS: ToolDefinition[] = [
       if (kind === 'phone') {
         method = args.channel === 'sms' || args.channel === 'voice' ? args.channel : 'whatsapp';
         kind = 'method';
-      } else if (kind !== 'screen' && kind !== 'camera' && kind !== 'method' && kind !== 'model' && kind !== 'lock_phone') {
+      } else if (kind !== 'screen' && kind !== 'camera' && kind !== 'method' && kind !== 'model' && kind !== 'lock_phone' && kind !== 'background') {
         method = kind;
         kind = 'method';
       }
       if (method === 'system' && !isDesktop()) method = 'browser';
+
+      // The status window: only ask when it isn't open yet. The video is set up now so the
+      // modal's tap can open it straight away (PiP needs a user gesture).
+      if (kind === 'background') {
+        if (!isMobile()) return { error: "kind='background' is only for the mobile app: Observer keeps running on its own here." };
+        if (!isStatusPipSupported()) return { error: "This phone can't open Observer's status window. Tell the user to keep Observer open on screen." };
+        if (isStatusPipActive()) return { data: { kind, active: true } };
+        prepareStatusPip();
+      }
 
       // lockPhone() permission: only ask when there's something to grant.
       if (kind === 'lock_phone') {
@@ -705,6 +715,7 @@ export const TOOLS: ToolDefinition[] = [
       if (response.skipped) {
         return { data: { kind, skipped: true, note: 'The user dismissed the prompt. Ask them about it in chat; do not call ask_user_info again for this.' } };
       }
+      if (kind === 'background') return { data: { kind, active: true } };
 
       // The modal asked for the permission itself, from its button click.
       if (kind === 'lock_phone') {

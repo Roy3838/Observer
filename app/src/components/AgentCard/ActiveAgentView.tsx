@@ -2,13 +2,12 @@
 import React, { useMemo, useEffect, useState } from 'react';
 import { Clock, Power, Activity, Eye, Moon, Sun } from 'lucide-react';
 import { wakeAgentLoop } from '@utils/main_loop';
-import { StreamState, StreamManager } from '@utils/streamManager';
+import { StreamState } from '@utils/streamManager';
 import { CompleteAgent } from '@utils/agent_database';
 import { useLastTools, useLastCapture } from '@hooks/useIterations';
 import { useElementWidth } from '@hooks/useElementWidth';
 import { CARD_LAYOUT_BREAKPOINT_PX } from './layoutBreakpoint';
 import { DetectionMode } from '@utils/change_detector';
-import { isMobile } from '@utils/platform';
 import ToolStatus from '@components/AgentCard/ToolStatus';
 import SensorPreviewPanel from './SensorPreviewPanel';
 import ChangeDetectionIndicator from './ChangeDetectionIndicator';
@@ -438,31 +437,6 @@ const ActiveAgentView: React.FC<ActiveAgentViewProps> = ({
             window.removeEventListener('agentThinkingChunk', handleThinkingChunk as EventListener);
         };
     }, [agentId]);
-
-    // Sync PiP overlay status to StreamManager (mobile only)
-    useEffect(() => {
-        if (!isMobile()) return;
-
-        // Calculate remaining seconds and progress for pie chart
-        let timerSeconds: number | undefined;
-        let progress: number | undefined;
-
-        if ((liveStatus === 'WAITING' || isOverrun) && loopProgress !== undefined && loopDurationMs) {
-            timerSeconds = Math.ceil((loopDurationMs * (100 - loopProgress)) / 100 / 1000);
-            progress = loopProgress;
-        } else if (liveStatus === 'SLEEPING' && sleepProgress !== undefined && sleepDurationMs) {
-            timerSeconds = Math.ceil((sleepDurationMs * sleepProgress) / 100 / 1000);
-            progress = sleepProgress;
-        }
-
-        StreamManager.setPipOverlayStatus({
-            state: liveStatus,
-            progress,
-            timerSeconds
-        });
-
-        return () => StreamManager.setPipOverlayStatus(null);
-    }, [liveStatus, loopProgress, sleepProgress, loopDurationMs, sleepDurationMs, isOverrun]);
 
     // Responsive to the card's own rendered width (ResizeObserver), not the
     // viewport — this card lives in a resizable tiling grid, so a "desktop"

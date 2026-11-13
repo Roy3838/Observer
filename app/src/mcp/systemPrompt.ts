@@ -33,7 +33,7 @@ export default function getMcpSystemPrompt(): string {
 Desktop only: \`system_notify(body, title?)\` (system notification), \`overlay(body)\`, \`message(message, title?)\` (pop-up), \`ask(question, title?)\` (confirmation dialog), \`click('left'|'right')\`.`
     : mobile
     ? `
-Mobile app only: \`lockPhone(reason?, minutes?)\` (blocks every other app on this phone until \`unlockPhone()\` or the timeout; minutes default 30, max 720; calling it again restarts the timer), \`unlockPhone()\`, \`await mcp(message)\` (wakes YOU with that message, as a new turn in this chat: write everything you'll need into it). Before start_agent for an agent that uses lockPhone(), call \`ask_user_info kind='lock_phone'\` so the user grants the permission.`
+Mobile app only: \`lockPhone(reason?, minutes?)\` (blocks every other app on this phone until \`unlockPhone()\` or the timeout; minutes default 30, max 720; calling it again restarts the timer), \`unlockPhone()\`, \`await mcp(note)\` (wakes YOU in this chat with a short note, like \`mcp("TikTok detected")\`: the chat already has the rest). Before start_agent for an agent that uses lockPhone(), call \`ask_user_info kind='lock_phone'\` so the user grants the permission.`
     : '';
 
   // Mobile app: the whole screen is shared, so while the user talks to the MCP it only sees
@@ -42,11 +42,11 @@ Mobile app only: \`lockPhone(reason?, minutes?)\` (blocks every other app on thi
     ? `
 # Watching another app (this phone)
 
-This phone shares its whole screen, so while the user talks to you, every frame shows Observer. When the thing to watch is in another app (YouTube, Instagram, a delivery app, a game), you can't see it yet: a Scout waits for it and wakes you.
+This phone shares its whole screen, so while the user talks to you, you only see Observer. When the thing to watch is in another app, a Scout waits for it and wakes you with \`mcp()\`, and you build the real agent then, from what you see.
 
-**Before the user leaves**, settle everything only they can answer, because no modal can open once they're in the other app: the trigger (with any number or name: "more than 10,000 subscribers"), delivery (step 6), and local or cloud (\`ask_user_info kind='model'\` with NO \`model\`: which model fits depends on a frame you haven't seen yet).
+**Before the user leaves**, because no modal can open once they're gone: delivery (step 6), local or cloud (\`ask_user_info kind='model'\` with no \`model\`), and \`ask_user_info kind='background'\` (without it, the phone stops Observer).
 
-**The Scout** is a decision model, always on \`clef-flash\` whatever the user chose (it's only a scout), uncropped, asking whether the THING is on screen, never the app: its name is in this chat, which is on screen right now. Give it a new id each time (\`scout_youtube\`, \`scout_ubereats\`). It wakes you once with \`mcp()\`, carrying everything you'll need, and never stops itself: if it did, the screen share would end with nobody there to start it again.
+**The Scout**: \`clef-flash\`, uncropped, asking whether the thing is on screen, never naming the app (its name is in this chat, which is on screen right now). It never stops itself: the screen share would end with it.
 \`\`\`
 name: Scout
 model_name: clef-flash
@@ -57,12 +57,12 @@ $SCREEN
 code:
 if (decision.noul > 0.75 && !(await getMemory())) {
   await setMemory("woke");
-  await mcp('The subscriber count is on screen. Build the agent: when it passes 10,000, call("tree-book-shower-golden", message). The user chose local models.');
+  await mcp("Subscriber count on screen");
 }
 \`\`\`
-\`start_agent\` → \`get_iteration\` with its \`agent_id\`: the frame shows Observer, so \`noul\` must be LOW; if it isn't, \`stop_agent\`, reword the question, try again. Then tell the user, in two short lines: tap **Run in Background** on the Scout's card (otherwise the phone stops Observer), then open the screen with the thing (their channel's page, the order) and leave it there.
+\`start_agent\` → \`get_iteration\`: it shows Observer, so \`noul\` must be LOW. Then tell the user in one line to open the screen with the thing and leave it there.
 
-**When the Scout wakes you**: \`capture_screen\` (the share is still live, no prompt) → steps 2–5 from that frame → the model for that strategy (local: \`download_model\` with \`onejev\` or \`default\`; cloud: \`clef-flash\` or \`gemma-3-12b-it\`) → step 8 → step 9 → \`stop_agent\` the Scout. Never delete it: its card holds Run in Background. Never call \`ask_user_info\`: nobody is there to answer. The user isn't looking at this chat, so tell them it's running through the delivery channel with a Scratchpad, unless it's \`call\`.
+**When it wakes you**: \`capture_screen\` → build the agent as usual (steps 2–9, from this frame and this chat) → \`stop_agent\` and \`delete_agent\` the Scout. Nobody is looking at this chat and no modal can open: tell the user it's running through their delivery channel with a Scratchpad, unless it's \`call\`.
 `
     : '';
 
