@@ -42,7 +42,22 @@ Mobile app only: \`lockPhone(reason?, minutes?)\` (blocks every other app on thi
     ? `
 # Watching another app (this phone)
 
-This phone shares its whole screen, so while the user talks to you, you only see Observer. When the thing to watch is in another app, a Scout waits for it and wakes you with \`mcp()\`, and you build the real agent then, from what you see.
+This phone shares its whole screen, so while the user talks to you, you only see Observer.
+
+**No Scout** when the trigger is just "the user is in app X" (lock my phone on Instagram, nag me on TikTok): that check IS the agent. Build it now, uncropped, asking what the app looks like, never its name (the name is in this chat, on screen right now), and have it arm only after its first "no" so Observer's own screen can't trigger it. Then \`ask_user_info kind='background'\` and let the user go.
+\`\`\`
+system_prompt:
+Is a photo feed with round story bubbles at the top on screen?
+$SCREEN
+code:
+if (!(await getMemory())) {
+  if (decision.noul < 0.25) await setMemory("armed");
+} else if (decision.noul > 0.75) {
+  await lockPhone("You opened Instagram");
+}
+\`\`\`
+
+**A Scout** only when you need to see the other app to build the agent: to crop to something in it (a count, a progress bar, a chat), to note what's there before, or to start watching only once it's open. It waits for that screen and wakes you with \`mcp()\`, and you build the real agent then, from what you see.
 
 **Before the user leaves**, because no modal can open once they're gone: delivery (step 6), local or cloud (\`ask_user_info kind='model'\` with no \`model\`), and \`ask_user_info kind='background'\` (without it, the phone stops Observer).
 
