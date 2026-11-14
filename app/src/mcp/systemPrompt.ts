@@ -33,7 +33,7 @@ export default function getMcpSystemPrompt(): string {
 Desktop only: \`system_notify(body, title?)\` (system notification), \`overlay(body)\`, \`message(message, title?)\` (pop-up), \`ask(question, title?)\` (confirmation dialog), \`click('left'|'right')\`.`
     : mobile
     ? `
-Mobile app only: \`lockPhone(reason?, minutes?)\` (blocks every other app on this phone until \`unlockPhone()\` or the timeout; minutes default 30, max 720; calling it again restarts the timer), \`unlockPhone()\`, \`await mcp(note)\` (wakes YOU in this chat with a short note, like \`mcp("TikTok detected")\`: the chat already has the rest). Before start_agent for an agent that uses lockPhone(), call \`ask_user_info kind='lock_phone'\` so the user grants the permission.`
+Mobile app only: \`lockPhone(reason?, minutes?)\` (blocks every other app on this phone until \`unlockPhone()\` or the timeout; minutes default 30, max 720; calling it again restarts the timer), \`unlockPhone()\`. Before start_agent for an agent that uses lockPhone(), call \`ask_user_info kind='lock_phone'\` so the user grants the permission.`
     : '';
 
   // Mobile app: the whole screen is shared, so while the user talks to the MCP it only sees
@@ -169,7 +169,7 @@ An agent is a \`system_prompt\` and a \`code\` body, run every \`loop_interval_s
 
 You never call these; you write them into \`code\`:
 Notifications: \`notify(title, message)\` (browser, text only), \`sound(name?, volume?)\`, \`sendEmail(email, message, images?)\`, \`sendTelegram(code, message, images?)\`, \`sendWhatsapp(code, message, images?)\`, \`sendSms(code, message, images?)\`, \`call(code, message)\`, \`sendDiscord(webhook, message, images?)\`, \`sendPushover(user_token, message, images?)\`.${appTools}
-Memory: \`await getMemory()\`, \`await setMemory(content)\`, \`await appendMemory(content)\`. Control: \`await stopAgent()\`, \`time()\`, \`await sleep(ms)\`.
+Memory: \`await getMemory()\`, \`await setMemory(content)\`, \`await appendMemory(content)\`. Control: \`await stopAgent()\`, \`time()\`, \`await sleep(ms)\`, \`await mcp(note)\` (wakes YOU in this chat with a short note, like \`mcp("No new strokes in 5 minutes")\`, when the outcome needs your judgment: feedback, a summary. The agent only watches and records; you read its memory with \`get_agent\` and what it saw with \`get_runs\` / \`get_iteration\`, then stop it when you're done with it).
 Images: \`screen\` and \`camera\` are already arrays of images. "Save / keep / store a screenshot or picture of it" → \`await appendImageMemory(screen)\` (adds to this agent's image memory; \`await setImageMemory(screen)\` replaces it; \`await getImageMemory()\` reads it back). Pass \`screen\` as is, never \`[screen]\`. \`$IMEMORY\` in a system_prompt shows the model the saved images (a reference to compare against).
 Video: the screen and camera are recorded all the time. \`await getVideo('screen' | 'camera')\` returns the video since the last iteration as an array (empty if too short); pass it as the 4th argument, \`videos\`, of \`sendEmail\` / \`sendTelegram\` / \`sendWhatsapp\` / \`sendSms\` / \`sendDiscord\`: \`await sendTelegram(code, "Max is at the door", camera, await getVideo('camera'))\`. "Save a clip / record it" → \`await startClip()\` on the event (the clip starts from the beginning of the current iteration), \`markClip(label)\` to label a moment, \`await stopClip()\` once it's over; clips are saved to Observer's recordings.
 
