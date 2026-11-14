@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import {
   CheckCircle, XCircle, Send, MessageSquare, MessageSquarePlus, MessageSquareQuote,
   MessageCircle, Mail, Bell, Save, SquarePen, PlayCircle, StopCircle, Hourglass,
-  Video, VideoOff, Hammer, Tag, AlertTriangle, HelpCircle, Phone, MousePointerClick, PartyPopper, Volume2, Lock, LockOpen
+  Video, VideoOff, Hammer, Tag, AlertTriangle, HelpCircle, Phone, MousePointerClick, PartyPopper, Volume2, Lock, LockOpen, Bot
 } from 'lucide-react';
 import { ToolCall } from '@utils/IterationStore';
 
@@ -37,6 +37,7 @@ const getToolIcon = (toolName: string) => {
     sound: Volume2,
     lockPhone: Lock,
     unlockPhone: LockOpen,
+    mcp: Bot,
   };
   return iconMap[toolName] || HelpCircle;
 };

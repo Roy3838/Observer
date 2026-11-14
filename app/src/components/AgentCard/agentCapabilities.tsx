@@ -86,6 +86,7 @@ export const TOOL_CONFIG: Record<string, ToolConfigEntry> = {
     sound: { label: 'Play Sound', iconName: 'Volume2', iconType: 'lucide', regex: /\bsound\s*\(/g },
     lockPhone: { label: 'Lock Phone', iconName: 'Lock', iconType: 'lucide', regex: /\blockPhone\s*\(/g, warning: 'Blocks every other app until unlockPhone() or the timeout' },
     unlockPhone: { label: 'Unlock Phone', iconName: 'LockOpen', iconType: 'lucide', regex: /\bunlockPhone\s*\(/g },
+    mcp: { label: 'Wake MCP', iconName: 'Bot', iconType: 'lucide', regex: /\bmcp\s*\(/g, warning: 'Replies appear in the MCP chat' },
 };
 
 // --- Icon Loading Helpers ---

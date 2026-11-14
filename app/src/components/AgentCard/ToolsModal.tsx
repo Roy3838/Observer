@@ -3,12 +3,14 @@ import Modal from '@components/EditAgent/Modal';
 import {
   X, Mail, MessageSquare, MessageSquareQuote, Bell, Monitor, MessageCircle,
   MessageSquarePlus, CheckCircle, XCircle, Loader2, Save, SquarePen, PlayCircle,
-  StopCircle, Hourglass, Video, VideoOff, Tag, Info, MousePointer, Phone, Zap, Brain, PartyPopper, Volume2, Lock, LockOpen
+  StopCircle, Hourglass, Video, VideoOff, Tag, Info, MousePointer, Phone, Zap, Brain, PartyPopper, Volume2, Lock, LockOpen, Bot
 } from 'lucide-react';
 import { WhatsAppIcon, DiscordIcon } from './icons';
 import type { TokenProvider } from '@utils/main_loop';
 import type { WhitelistChannel } from '@utils/logging';
 import * as utils from '@utils/handlers/utils';
+import { getAgent } from '@utils/agent_database';
+import { wakeMCP } from '../../mcp/agentWake';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { EditorView, Decoration, ViewPlugin, DecorationSet, ViewUpdate } from '@codemirror/view';
@@ -243,6 +245,19 @@ function getAllTools(channel?: WhitelistChannel): ToolConfig[] {
       isTestable: true,
       parameters: [],
       testMessage: ''
+    },
+    {
+      id: 'mcp',
+      name: 'mcp()',
+      functionName: 'mcp',
+      icon: Bot,
+      description: "Wake Observer's MCP with a message, as a new turn in the open chat",
+      isTestable: true,
+      parameters: [
+        { name: 'message', description: 'Note for the MCP' }
+      ],
+      testMessage: 'Testing mcp() from the Tools panel',
+      warning: '⚠️ The MCP answers in its chat, after any turn it is running finishes.'
     },
     {
       id: 'sound',
@@ -1314,6 +1329,13 @@ const ToolsModal: React.FC<ToolsModalProps> = ({ isOpen, onClose, code, agentNam
 
         case 'celebrate': {
           window.dispatchEvent(new CustomEvent('celebrateAgent', { detail: { agentId } }));
+          break;
+        }
+
+        case 'mcp': {
+          const message = testInputs[0] || selectedToolConfig.testMessage || '';
+          const agent = await getAgent(agentId);
+          wakeMCP({ agentId, agentName: agent?.name ?? agentId, message });
           break;
         }
 

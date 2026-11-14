@@ -2,14 +2,14 @@
 
 This guide is a checklist for adding a new **framework tool** — a function the agent's
 sandboxed JavaScript can call after every model run (`sendEmail()`, `overlay()`, `click()`,
-`call()`, `celebrate()`, …). It covers wiring the executor and every UI surface that has to
+`call()`, `celebrate()`, `mcp()`, …). It covers wiring the executor and every UI surface that has to
 know about the tool.
 
 > **Not covered here:** the MCP creator tools (`create_agent`, `start_agent`, `get_runs`,
 > `capture_screen`, …) that the AI Creator assistant calls to build and manage agents. Those
 > live entirely in `src/mcp/registry.ts` and are a separate system — if you're adding one of
-> those, this checklist does not apply. The only overlap is the prompt files in step 8,
-> which describe the framework tools *to* that assistant as plain text.
+> those, this checklist does not apply. The only overlap is the MCP system prompt in step 8,
+> which describes the framework tools *to* that assistant as plain text.
 
 > Note on churn: the old version of this guide used `click()` and `type()` as its worked
 > examples. `type()` has since been **removed**. The current reference tools are `click()`
@@ -27,7 +27,7 @@ skip the native-desktop steps; a desktop-only tool like `click()` needs them.
 
 **a) HTTP / implementation function — `src/utils/handlers/utils.ts`**
 
-Every tool ultimately calls a function exported from `utils.ts`. Notification tools POST to
+Tools that do real I/O call a function exported from `utils.ts`. Notification tools POST to
 the Observer API; native desktop tools (`click`, `ask`, `message`, `system_notify`,
 `overlay`) POST to the local app server at `http://localhost:3838`.
 
@@ -42,6 +42,9 @@ export async function click(appUrl: string, button: 'left' | 'right' = 'left'): 
   // ...error handling...
 }
 ```
+
+Pure-UI tools skip this step: `celebrate()` dispatches a window event and `mcp()` calls
+`wakeMCP()` from `src/mcp/agentWake.ts`, both directly from the context entry below.
 
 **b) Sandbox context wrapper — `src/utils/handlers/javascript.ts`**
 
@@ -109,14 +112,21 @@ Fields: `label`, `iconName` (lucide-react name, or a key from `./icons` when
 `iconType: 'custom'`), `iconType`, `regex` (use `\b` to avoid matching substrings), optional
 `warning`. Icons are loaded dynamically by name — no import statement needed in this file.
 
-**b) `webIncompatibleTools`** (around line 147, inside `detectAgentTools`) — add the key
-here if the tool cannot run on `hostingContext === 'official-web'` (i.e. it needs the
-desktop app). Currently: `['overlay', 'message', 'ask', 'system_notify', 'click']`. These
-get an `isBlocking` "only available in the Observer App" warning.
+**b) `webIncompatibleTools` / `mobileOnlyTools`** (around line 150, inside
+`detectAgentTools`) — add the key to `webIncompatibleTools` if the tool cannot run on
+`hostingContext === 'official-web'` (i.e. it needs the desktop app). Currently:
+`['overlay', 'message', 'ask', 'system_notify', 'click']`. These get an `isBlocking`
+"only available in the Observer App" warning. Mobile-app-only tools (`lockPhone`,
+`unlockPhone`) go in `mobileOnlyTools` instead. Tools that work everywhere (`mcp`,
+`celebrate`) go in neither.
 
 ---
 
 ### 3. Simple Creator UI — `src/components/EditAgent/SimpleCreatorModal.tsx`
+
+**Optional.** Only add a tool here if it makes sense as a one-click building block for
+non-technical users. Tools that only make sense in context (e.g. `mcp()`, whose message is
+meant for an open MCP conversation) skip steps 3 and 4.
 
 The wizard where users pick tools as buttons. `hostingContext` here is
 `'official-web' | 'self-hosted'` (no `'tauri'`).
@@ -261,34 +271,35 @@ there too.
 
 ---
 
-### 8. Creator prompts (so the AI knows the tool exists)
+### 8. MCP system prompt (so the AI knows the tool exists)
 
-The framework tools are described to models as **text** in several creator prompts (the AI
-that writes agent code needs to know the tool exists). Update the ones that list tools:
+The framework tools are described to the MCP AI Creator as **text** — the AI that writes
+agent code needs to know the tool exists.
 
 | File | What it is | Where to edit |
 |---|---|---|
-| `src/mcp/systemPrompt.ts` | **Primary.** System prompt for the MCP AI Creator. | The "agent-code API" block (`Agent/memory tools:` … `App tools:` lines, ~118–121). This is the only touchpoint the MCP has with framework tools — you're just adding a name to a text list, not registering anything. |
-| `src/utils/multi_agent_creator.ts` | Legacy text-based multi-agent creator (LocalWarning / MultiAgentCreator fallback) | `Agent Tools:` / `Notification Tools:` / `App Tools` lists, ~22–52 |
-| `src/utils/conversational_system_prompt.ts` | Legacy single-agent text creator (local-model fallback) | `#### 3. TOOLS` table, ~128–145 |
+| `src/mcp/systemPrompt.ts` | System prompt for the MCP AI Creator. | The agent-code API block ("You never call these; you write them into `code`:" — `Notifications:` / `Memory:` / `Control:` / `Images:` / `Video:` lines, ~170–174). Platform-specific tools go in the `appTools` string near the top (`Desktop only:` / `Mobile app only:`). This is the only touchpoint the MCP has with framework tools — you're just adding a name to a text list, not registering anything. |
 | `src/utils/system_prompt.ts` | Deliberately restricted "copy this prompt" generator — only allows `appendMemory`/`setMemory`/`time`/`notify` | **Usually leave alone.** Only touch it if the tool belongs in that minimal safe set. |
 
-The old guide told you to skip `conversational_system_prompt.ts` because it was
-"notifications only" — that's no longer true, it now carries a full tool table. Keep the
-three creator prompts in sync.
+The legacy text creators (`multi_agent_creator.ts`, `conversational_system_prompt.ts`) have
+been deleted; the MCP is the only creator now.
 
 ---
 
 ### 9. README — `README.md`
 
-Update the tool lists (around lines 157–196): `Agent Tools`, `Notification Tools`,
-`Video Recording Tools`, `App Tools`. Include the signature, a one-line description, and a
-⚠️ note if there's a gotcha. Mark auth/whitelist requirements with `*`.
+Update the collapsible **Tools** list (around lines 68–100). Sections: **Memory and
+agents**, **Notifications**, **Video recording**, **Desktop app**, **Mobile app**. Include
+the signature and, if it isn't obvious, a short description after a colon. Mark
+whitelist requirements with `†`.
 
 ```markdown
-App Tools:
-  * `click('left'|'right')` - Triggers a mouse click at the current cursor position. Defaults to left.
-  * `celebrate()` - Triggers a celebration animation in the Observer UI.
+**Memory and agents** (`agentId` is optional and defaults to the running agent)
+- `time()`, `sleep(ms)`
+- `mcp(message)`: wakes Observer's MCP with a message, as a new turn in the open chat
+
+**Desktop app**
+- `overlay(body)`, `click('left' | 'right')`, `celebrate()`
 ```
 
 ---
@@ -297,17 +308,17 @@ App Tools:
 
 - [ ] `utils.ts` fn + `javascript.ts` context entry (with success/error logging)
 - [ ] Rust handler + `lib.rs` route + mobile stub (native tools only)
-- [ ] `TOOL_CONFIG` entry, and `webIncompatibleTools` if desktop-only
-- [ ] Simple Creator button in the right section; `ToolData` field if it needs input
-- [ ] `SimpleTool` union + `TOOL_CODE_SNIPPETS` entry
+- [ ] `TOOL_CONFIG` entry, and `webIncompatibleTools` / `mobileOnlyTools` if platform-specific
+- [ ] (Optional) Simple Creator button in the right section; `ToolData` field if it needs input
+- [ ] (Optional, with the button) `SimpleTool` union + `TOOL_CODE_SNIPPETS` entry
 - [ ] `ToolsModal`: `getAllTools` entry + `handleTest` case
 - [ ] `ToolStatus` `iconMap` entry (keyed by function name)
 - [ ] `code_sanitizer.ts` + `pre-flight.ts` if it takes PII / is a phone tool
-- [ ] `mcp/systemPrompt.ts`, `multi_agent_creator.ts`, `conversational_system_prompt.ts`
+- [ ] `mcp/systemPrompt.ts`
 - [ ] `README.md` tool list
 - [ ] Badge shows on Agent Card when the tool is used in code
 - [ ] Test button fires in Tools Modal
-- [ ] Simple Creator generates correct code
+- [ ] Simple Creator generates correct code (if added)
 - [ ] Web-incompatibility / warnings display correctly
 
 ---
@@ -318,5 +329,6 @@ App Tools:
    confirm an agent can actually call the tool from the Code tab.
 2. Then walk the UI files in order — `click()` / `call()` / `celebrate()` are complete
    worked examples of a native tool, a phone/PII tool, and a pure-UI tool respectively.
+   `mcp()` is a pure-UI tool that skips the Simple Creator.
 3. Grep the codebase for an existing tool name (e.g. `celebrate`) to find every site that
    references it — that's the real checklist.

@@ -72,6 +72,7 @@ if (response.includes("OBSERVER")) {
 - `getImageMemory(agentId?)`, `setImageMemory(agentId?, images)`, `appendImageMemory(agentId?, images)`
 - `startAgent(agentId?)`, `stopAgent(agentId?)`
 - `time()`, `sleep(ms)`
+- `mcp(message)`: wakes Observer's MCP with a message, as a new turn in the open chat
 
 **Notifications**
 - `sendDiscord(webhook, message, images?, videos?)`
