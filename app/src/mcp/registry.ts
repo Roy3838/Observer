@@ -14,6 +14,7 @@ import {
   listAgents,
   getAgent,
   getAgentCode,
+  getAgentMemory,
   saveAgent,
   deleteAgent,
   type CompleteAgent,
@@ -344,7 +345,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: 'get_agent',
-    description: 'Get the full configuration of a single agent by id, including its system prompt and JavaScript code.',
+    description: 'Get the full configuration of a single agent by id, including its system prompt, JavaScript code and memory.',
     parameters: {
       type: 'object',
       properties: { id: { type: 'string', description: 'The agent id.' } },
@@ -355,7 +356,8 @@ export const TOOLS: ToolDefinition[] = [
       const agent = await getAgent(args.id);
       if (!agent) return { error: `Agent '${args.id}' not found.` };
       const code = await getAgentCode(args.id);
-      return { data: { agent, code: code ?? '' } };
+      const memory = await getAgentMemory(args.id);
+      return { data: { agent, code: code ?? '', memory } };
     },
   },
   {
