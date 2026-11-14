@@ -73,28 +73,6 @@
   animation: observer-eye-blink-lid 2.4s cubic-bezier(0.45, 0, 0.55, 1) both;
 }
 
-/* sleepy — eyelid droops shut… then snaps wide awake */
-@keyframes observer-eye-sleepy-lid {
-  0%        { transform: scale(1, 1); }
-  28%       { transform: scale(1.03, 0.45); }
-  42%       { transform: scale(1.02, 0.55); }
-  58%, 68%  { transform: scale(1.06, 0.14); }
-  76%       { transform: scale(0.92, 1.12); }
-  86%       { transform: scale(1.02, 0.97); }
-  94%, 100% { transform: scale(1, 1); }
-}
-@keyframes observer-eye-sleepy-pupil {
-  0%        { transform: translate(0, 0); }
-  28%, 68%  { transform: translate(0, 6px); }
-  76%, 100% { transform: translate(0, 0); }
-}
-.observer-eye--sleepy {
-  animation: observer-eye-sleepy-lid 2.4s cubic-bezier(0.45, 0, 0.55, 1) both;
-}
-.observer-eye--sleepy .observer-eye-pupil {
-  animation: observer-eye-sleepy-pupil 2.4s cubic-bezier(0.45, 0, 0.55, 1) both;
-}
-
 /* hop — crouch, jump looking up, squash on landing */
 @keyframes observer-eye-hop-lid {
   0%, 10%   { transform: translateY(0) scale(1, 1); }

@@ -26,6 +26,8 @@ const H = 720;
 const SCALE = 2;
 const FPS = 4;
 const IDLE_FPS = 1;
+/** While the MCP works the logo animates, and its blink is ~190ms: 4 fps would skip it. */
+const ANIM_FPS = 24;
 
 const PAD = 24;
 const FONT = '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif';
@@ -89,6 +91,7 @@ interface Pip {
   /** video mode: the camera, opened when no screen is shared. */
   camera: HTMLVideoElement | null;
   lastError: string;
+  lastDraw: number;
 }
 
 const pips: Partial<Record<PipMode, Pip>> = {};
@@ -123,10 +126,10 @@ export function prepareStatusPip(mode: PipMode = 'canvas'): HTMLVideoElement {
     position: 'fixed', left: '0', bottom: '0', width: '2px', height: '2px',
     opacity: '0.01', pointerEvents: 'none', zIndex: '-1',
   });
-  video.srcObject = canvas.captureStream(mode === 'video' ? VIDEO_FPS : FPS);
+  video.srcObject = canvas.captureStream(mode === 'video' ? VIDEO_FPS : ANIM_FPS);
   document.body.appendChild(video);
 
-  const pip: Pip = { mode, canvas, ctx, video, timer: null, active: false, camera: null, lastError: '' };
+  const pip: Pip = { mode, canvas, ctx, video, timer: null, active: false, camera: null, lastError: '', lastDraw: 0 };
   pips[mode] = pip;
   video.play().catch(e => report(pip, `play() failed: ${errorText(e)}`));
   video.addEventListener('enterpictureinpicture', () => setActive(pip, true));
@@ -181,8 +184,12 @@ function setActive(pip: Pip, next: boolean): void {
   const changed = pip.active !== next;
   pip.active = next;
   if (pip.timer) clearInterval(pip.timer);
-  const fps = pip.mode === 'video' ? VIDEO_FPS : next ? FPS : IDLE_FPS;
-  pip.timer = setInterval(() => draw(pip), 1000 / fps);
+  const fps = pip.mode === 'video' ? VIDEO_FPS : next ? ANIM_FPS : IDLE_FPS;
+  pip.timer = setInterval(() => {
+    // Full speed only while the logo animates (the MCP is working); FPS is plenty otherwise.
+    if (pip.mode === 'canvas' && next && !statusBoard.mcp.running && Date.now() - pip.lastDraw < 1000 / FPS) return;
+    draw(pip);
+  }, 1000 / fps);
   draw(pip);
   if (changed) listeners.forEach(l => l(isStatusPipActive()));
 }
@@ -222,6 +229,7 @@ function report(pip: Pip, message: string): void {
 function draw(pip: Pip): void {
   const c = pip.ctx;
   const now = Date.now();
+  pip.lastDraw = now;
   c.setTransform(SCALE, 0, 0, SCALE, 0, 0);
   c.textBaseline = 'middle';
   c.textAlign = 'left';
@@ -275,21 +283,107 @@ function icon(c: CanvasRenderingContext2D, name: string, cx: number, cy: number,
   c.restore();
 }
 
-/** Observer's logo (ObserverEye / eye-logo-black.svg: a ring and a pupil). While the MCP works it
- *  breathes like ObserverEye and the pupil peeks side to side. */
+// ---- Observer's logo, animated like ObserverEye ---------------------------------------------
+//
+// The same moves as ObserverEye.tsx / index.css (observer-eye-*), ported keyframe for keyframe:
+// one 2.4s move at a time, a different one each cycle, over a 1.2s opacity breath. Units are the
+// logo's own (viewBox -50..50), like the CSS px on the SVG. Keep in sync with index.css.
+
+const MOVE_MS = 2400;
+const BREATH_MS = 1200;
+
+/** [percent, values]: a CSS keyframe. "0%, 8%" is two keyframes with the same values. */
+type Keyframes = [number, number[]][];
+
+const EYE_MOVES: Record<string, { lid?: Keyframes; pupil?: Keyframes }> = {
+  // peek: pupil glances up-left, then up-right. pupil = [x, y]
+  peek: {
+    pupil: [[0, [0, 0]], [8, [0, 0]], [18, [-14, -5]], [38, [-14, -5]], [50, [14, -5]], [70, [14, -5]], [84, [0, 0]], [100, [0, 0]]],
+  },
+  // blink: squishy double blink. lid = [translateY, scaleX, scaleY]
+  blink: {
+    lid: [[0, [0, 1, 1]], [20, [0, 1, 1]], [28, [0, 1.1, 0.06]], [36, [0, 0.95, 1.07]], [43, [0, 1, 1]], [48, [0, 1, 1]],
+      [56, [0, 1.1, 0.06]], [64, [0, 0.95, 1.07]], [72, [0, 1, 1]], [100, [0, 1, 1]]],
+  },
+  // hop: crouch, jump looking up, squash on landing
+  hop: {
+    lid: [[0, [0, 1, 1]], [10, [0, 1, 1]], [20, [0, 1.12, 0.84]], [38, [-16, 0.92, 1.1]], [54, [0, 1.14, 0.84]],
+      [66, [0, 0.97, 1.04]], [76, [0, 1, 1]], [100, [0, 1, 1]]],
+    pupil: [[0, [0, 0]], [18, [0, 0]], [30, [0, -15]], [46, [0, -15]], [62, [0, 0]], [100, [0, 0]]],
+  },
+};
+const EYE_MOVE_NAMES = Object.keys(EYE_MOVES);
+
+/** CSS cubic-bezier(x1, y1, x2, y2) as a function of progress 0..1. */
+function cubicBezier(x1: number, y1: number, x2: number, y2: number): (t: number) => number {
+  const bx = (t: number) => 3 * x1 * t * (1 - t) ** 2 + 3 * x2 * t * t * (1 - t) + t ** 3;
+  const by = (t: number) => 3 * y1 * t * (1 - t) ** 2 + 3 * y2 * t * t * (1 - t) + t ** 3;
+  return x => {
+    if (x <= 0 || x >= 1) return x <= 0 ? 0 : 1;
+    let lo = 0, hi = 1, t = x;
+    for (let i = 0; i < 24; i++) { // bisection: x(t) is monotonic
+      if (bx(t) < x) lo = t; else hi = t;
+      t = (lo + hi) / 2;
+    }
+    return by(t);
+  };
+}
+const MOVE_EASE = cubicBezier(0.45, 0, 0.55, 1);
+const BREATH_EASE = cubicBezier(0.42, 0, 0.58, 1); // CSS ease-in-out
+
+/** The values at `percent`, eased per segment the way CSS applies a timing function. */
+function sample(frames: Keyframes, percent: number): number[] {
+  for (let i = 0; i < frames.length - 1; i++) {
+    const [a, from] = frames[i];
+    const [b, to] = frames[i + 1];
+    if (percent > b) continue;
+    const t = b === a ? 1 : MOVE_EASE((percent - a) / (b - a));
+    return from.map((v, j) => v + (to[j] - v) * t);
+  }
+  return frames[frames.length - 1][1];
+}
+
+const eye = { move: '', start: 0 };
+
 function drawLogo(c: CanvasRenderingContext2D, cx: number, cy: number, size: number, working: boolean, now: number): void {
-  const k = size / 100;
+  let lid = [0, 1, 1];
+  let pupil = [0, 0];
+  let alpha = 1;
+  if (working) {
+    // Next move on the 2.4s grid, never the same one twice in a row.
+    if (!eye.move || now - eye.start >= MOVE_MS) {
+      const options = EYE_MOVE_NAMES.filter(m => m !== eye.move);
+      eye.move = options[Math.floor(Math.random() * options.length)];
+      eye.start = eye.start && now - eye.start < MOVE_MS * 2 ? eye.start + MOVE_MS : now;
+    }
+    const percent = ((now - eye.start) / MOVE_MS) * 100;
+    const move = EYE_MOVES[eye.move];
+    if (move.lid) lid = sample(move.lid, percent);
+    if (move.pupil) pupil = sample(move.pupil, percent);
+    // Breath: 1 → 0.7 → 1, alternating every 1.2s.
+    let phase = (now % (BREATH_MS * 2)) / BREATH_MS;
+    if (phase > 1) phase = 2 - phase;
+    alpha = 1 - 0.3 * BREATH_EASE(phase);
+  } else {
+    eye.move = '';
+    eye.start = 0;
+  }
+
   c.save();
-  c.globalAlpha = working ? 0.85 + 0.15 * Math.sin(now / 300) : 1;
+  c.globalAlpha = alpha;
+  c.translate(cx, cy);
+  c.scale(size / 100, size / 100);
+  // The lid group: its transform scales the ring and carries the pupil, as in the SVG.
+  c.translate(0, lid[0]);
+  c.scale(lid[1], lid[2]);
   c.strokeStyle = C.strong;
   c.fillStyle = C.strong;
-  c.lineWidth = 10 * k;
+  c.lineWidth = 10;
   c.beginPath();
-  c.arc(cx, cy, 45 * k, 0, Math.PI * 2);
+  c.arc(0, 0, 45, 0, Math.PI * 2);
   c.stroke();
-  const peek = working ? Math.sin(now / 700) * 14 * k : 0;
   c.beginPath();
-  c.arc(cx + peek, cy, 12 * k, 0, Math.PI * 2);
+  c.arc(pupil[0], pupil[1], 12, 0, Math.PI * 2);
   c.fill();
   c.restore();
 }

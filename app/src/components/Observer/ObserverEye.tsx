@@ -1,12 +1,12 @@
 // ObserverEye — the "Observer is thinking" indicator. The Observer logo (ring + pupil, same
 // geometry as /eye-logo-black.svg) brought to life. It plays one short "move" at a time
-// (peek, blink, sleepy, hop), picking a different one each cycle so it never feels
+// (peek, blink, hop), picking a different one each cycle so it never feels
 // looped, while the whole icon breathes between 100% and 70% opacity to read as "loading".
 // Keyframes live in index.css (observer-eye-*) and only use transform/opacity, so they run
 // the same in WebKit and Chromium.
 import React, { useEffect, useState } from 'react';
 
-const MOVES = ['peek', 'blink', 'sleepy', 'hop'] as const;
+const MOVES = ['peek', 'blink', 'hop'] as const;
 type Move = typeof MOVES[number];
 
 // Must match the animation duration of the .observer-eye--<move> rules in index.css.
