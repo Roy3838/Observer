@@ -38,6 +38,11 @@ export function useAgentLiveStateFor(agentId: string): AgentLiveState {
   return map[agentId] ?? DEFAULT_STATE;
 }
 
+/** Every tracked agent's live state at once (the mobile status window shows them all). */
+export function useAgentLiveStates(): Record<string, AgentLiveState> {
+  return useContext(AgentLiveStateContext);
+}
+
 // Mirrors the status/loop/sleep/streaming state machine in AgentCard.tsx. Event-driven — no
 // polling. This is the only place that actually computes the state; everything else reads it
 // back out of the map above.

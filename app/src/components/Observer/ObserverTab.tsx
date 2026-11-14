@@ -18,6 +18,8 @@ import RunningAgentsStrip from './RunningAgentsStrip';
 import TutorialDemoBanner from './TutorialDemoBanner';
 import { FloatingAgentsProvider, useFloatingAgents } from './FloatingAgentsContext';
 import { AgentLiveStateProvider } from './AgentLiveStateContext';
+import StatusPipBridge from './StatusPipBridge';
+import { isMobile } from '@utils/platform';
 
 // Tracks live status/progress/last-word for every agent id that currently needs it —
 // running, starting, or popped out into the floating overlay (a floating card still needs
@@ -87,6 +89,8 @@ const ObserverTab: React.FC<ObserverTabProps> = ({
             onToggle={onToggleAgent}
             onSelectAgent={onOpenMicroAgents}
           />
+          {/* Mobile: the status window (Run in Background) shows these same agents. */}
+          {isMobile() && <StatusPipBridge agents={agents} runningAgents={runningAgents} startingAgents={startingAgents} />}
           <TutorialDemoBanner />
           {isEmpty ? (
             <ObserverHero onShowTutorial={onShowTutorial} />

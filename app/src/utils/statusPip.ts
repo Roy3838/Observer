@@ -14,7 +14,8 @@
 // WebKit's captureStream only emits a frame when the canvas is painted after the stream exists,
 // so a canvas drawn once has no frames, the video never loads, and PiP can't open.
 
-import { statusBoard, type AgentRow, type AgentStatus } from './statusBoard';
+import { IterationStore } from './IterationStore';
+import { imageDataUrl } from './imageDataUrl';
 import { StreamManager } from './streamManager';
 import { isPipSupported } from './pictureInPicture';
 import { Logger } from './logging';
@@ -61,7 +62,73 @@ const STATUS_LABEL: Record<AgentStatus, string> = {
   WAITING: 'Waiting…',
   SKIPPED: 'Skipped (no change)',
   SLEEPING: 'Sleeping',
+  IDLE: 'Idle',
 };
+const OVERRUN_LABEL: Partial<Record<AgentStatus, string>> = {
+  CAPTURING: 'Still capturing…',
+  THINKING: 'Still thinking…',
+  RESPONDING: 'Still responding…',
+};
+
+// ---- What the window shows ------------------------------------------------------------------
+//
+// Not tracked here: StatusPipBridge (components/Observer) hands over the same state the agent
+// cards render (App's agents and running set, AgentLiveStateProvider's live state, the MCP
+// context) with setStatusSnapshot() on every change. The window only draws the latest one.
+
+/** AgentLiveStateContext's AgentLiveStatus. */
+export type AgentStatus = 'STARTING' | 'CAPTURING' | 'THINKING' | 'RESPONDING' | 'WAITING' | 'SKIPPED' | 'SLEEPING' | 'IDLE';
+
+export interface StatusAgent {
+  id: string;
+  name: string;
+  status: AgentStatus;
+  lastWord: string;
+  /** 0–100 through the current loop interval. */
+  progress: number;
+  /** Until the next look (or the end of a sleep); null before the first iteration. */
+  remainingMs: number | null;
+  isSleeping: boolean;
+  isOverrun: boolean;
+}
+
+export interface StatusMcp {
+  running: boolean;
+  /** The step in progress: "Thinking…", "Cropping Finish Line"… */
+  activity: string;
+  /** Set when an agent's mcp() started the turn. */
+  wokenBy: string | null;
+  /** The last answer and when its turn ended, shown for a little while after. */
+  lastReply: string;
+  endedAt: number;
+}
+
+let snapshot: { mcp: StatusMcp; agents: StatusAgent[] } = {
+  mcp: { running: false, activity: '', wokenBy: null, lastReply: '', endedAt: 0 },
+  agents: [],
+};
+
+export function setStatusSnapshot(next: typeof snapshot): void {
+  snapshot = next;
+}
+
+/** What the agent saw on its last iteration, as the model got it: the iteration's first image,
+ *  decoded once per new image so the old one stays up until the new one is ready. */
+const thumbs = new Map<string, { src: string; img: HTMLImageElement | null }>();
+function thumbFor(agentId: string): HTMLImageElement | null {
+  const iterations = IterationStore.getIterationsForAgent(agentId);
+  let src: string | undefined;
+  for (let i = iterations.length - 1; i >= 0 && !src; i--) src = iterations[i].modelImages?.[0];
+  const cached = thumbs.get(agentId);
+  if (src && cached?.src !== src) {
+    const entry = { src, img: cached?.img ?? null };
+    thumbs.set(agentId, entry);
+    const img = new Image();
+    img.src = imageDataUrl(src);
+    img.decode().then(() => { if (thumbs.get(agentId) === entry) entry.img = img; }).catch(() => {});
+  }
+  return thumbs.get(agentId)?.img ?? null;
+}
 
 /** How long the MCP's last answer stays up after a turn. */
 const REPLY_MS = 20_000;
@@ -187,7 +254,7 @@ function setActive(pip: Pip, next: boolean): void {
   const fps = pip.mode === 'video' ? VIDEO_FPS : next ? ANIM_FPS : IDLE_FPS;
   pip.timer = setInterval(() => {
     // Full speed only while the logo animates (the MCP is working); FPS is plenty otherwise.
-    if (pip.mode === 'canvas' && next && !statusBoard.mcp.running && Date.now() - pip.lastDraw < 1000 / FPS) return;
+    if (pip.mode === 'canvas' && next && !snapshot.mcp.running && Date.now() - pip.lastDraw < 1000 / FPS) return;
     draw(pip);
   }, 1000 / fps);
   draw(pip);
@@ -247,10 +314,10 @@ function draw(pip: Pip): void {
   c.fillRect(0, 0, W, H);
 
   let y = PAD;
-  const agents = statusBoard.runningAgents();
+  const agents = snapshot.agents;
   y = drawHeader(c, y, agents.length, now);
   y = drawMcp(c, y, now);
-  drawAgents(c, agents, y, H - PAD, now);
+  drawAgents(c, agents, y, H - PAD);
 }
 
 /** A white card with the app's border and a soft shadow. */
@@ -390,7 +457,7 @@ function drawLogo(c: CanvasRenderingContext2D, cx: number, cy: number, size: num
 
 function drawHeader(c: CanvasRenderingContext2D, y: number, count: number, now: number): number {
   const cy = y + 20;
-  drawLogo(c, PAD + 18, cy, 36, statusBoard.mcp.running, now);
+  drawLogo(c, PAD + 18, cy, 36, snapshot.mcp.running, now);
 
   c.fillStyle = C.strong;
   c.font = `700 28px ${FONT}`;
@@ -406,7 +473,7 @@ function drawHeader(c: CanvasRenderingContext2D, y: number, count: number, now: 
 
 /** The MCP's step while it works, then its answer for a little while. Nothing when idle. */
 function drawMcp(c: CanvasRenderingContext2D, y: number, now: number): number {
-  const mcp = statusBoard.mcp;
+  const mcp = snapshot.mcp;
   const showReply = !mcp.running && mcp.lastReply && now - mcp.endedAt < REPLY_MS;
   if (!mcp.running && !showReply) return y;
 
@@ -457,7 +524,7 @@ function drawMcp(c: CanvasRenderingContext2D, y: number, now: number): number {
 const ROW_H = 76;
 const THUMB = 52;
 
-function drawAgents(c: CanvasRenderingContext2D, rows: AgentRow[], top: number, bottom: number, now: number): void {
+function drawAgents(c: CanvasRenderingContext2D, rows: StatusAgent[], top: number, bottom: number): void {
   if (!rows.length) {
     c.fillStyle = C.muted;
     c.font = `500 22px ${FONT}`;
@@ -479,7 +546,7 @@ function drawAgents(c: CanvasRenderingContext2D, rows: AgentRow[], top: number, 
       c.fillStyle = C.border;
       c.fillRect(PAD + 16, y, W - PAD * 2 - 32, 1);
     }
-    drawAgentRow(c, row, y, rowH, now);
+    drawAgentRow(c, row, y, rowH);
   });
   if (extra) {
     c.fillStyle = C.muted;
@@ -489,7 +556,7 @@ function drawAgents(c: CanvasRenderingContext2D, rows: AgentRow[], top: number, 
 }
 
 /** [thumb] Name / Status · 11s ........ LASTWORD (ring) */
-function drawAgentRow(c: CanvasRenderingContext2D, row: AgentRow, y: number, rowH: number, now: number): void {
+function drawAgentRow(c: CanvasRenderingContext2D, row: StatusAgent, y: number, rowH: number): void {
   const cy = y + rowH / 2;
   const thumb = Math.min(THUMB, rowH - 16);
 
@@ -499,7 +566,8 @@ function drawAgentRow(c: CanvasRenderingContext2D, row: AgentRow, y: number, row
   roundRect(c, tx, ty, thumb, thumb, 10);
   c.fillStyle = C.thumbBg;
   c.fill();
-  if (row.thumb) drawContain(c, row.thumb, tx, ty, thumb);
+  const img = thumbFor(row.id);
+  if (img) drawContain(c, img, tx, ty, thumb);
   roundRect(c, tx, ty, thumb, thumb, 10);
   c.strokeStyle = C.border;
   c.lineWidth = 1.5;
@@ -508,16 +576,16 @@ function drawAgentRow(c: CanvasRenderingContext2D, row: AgentRow, y: number, row
   // Countdown ring, like the card's PieTimer: green, blue while sleeping.
   const ringR = 15;
   const rx = W - PAD - 16 - ringR;
-  const sleeping = row.status === 'SLEEPING';
-  const remaining = statusBoard.remainingMs(row, now);
+  const remaining = row.remainingMs;
   c.lineWidth = 3.5;
   c.strokeStyle = C.track;
   c.beginPath();
   c.arc(rx, cy, ringR, 0, Math.PI * 2);
   c.stroke();
-  if (remaining !== null && row.intervalMs) {
-    const frac = sleeping ? 1 : 1 - remaining / row.intervalMs;
-    c.strokeStyle = sleeping ? C.blue : row.status === 'SKIPPED' ? C.orange : C.green;
+  if (remaining !== null) {
+    // Like the card's PieTimer: fills through the loop, green (orange on overrun), blue asleep.
+    const frac = row.isSleeping ? 1 : row.progress / 100;
+    c.strokeStyle = row.isSleeping ? C.blue : row.isOverrun ? C.orange : C.green;
     c.lineCap = 'round';
     c.beginPath();
     c.arc(rx, cy, ringR, -Math.PI / 2, -Math.PI / 2 + Math.max(0.02, frac) * Math.PI * 2);
@@ -539,9 +607,10 @@ function drawAgentRow(c: CanvasRenderingContext2D, row: AgentRow, y: number, row
   c.font = `600 21px ${FONT}`;
   c.fillText(fit(c, row.name, textW), x, cy - 12);
   const time = remaining !== null ? ` · ${formatSeconds(remaining)}` : '';
-  c.fillStyle = sleeping ? C.blue : C.muted;
+  const label = row.isSleeping ? 'Sleeping' : (row.isOverrun && OVERRUN_LABEL[row.status]) || STATUS_LABEL[row.status];
+  c.fillStyle = row.isSleeping ? C.blue : row.isOverrun ? C.orange : C.muted;
   c.font = `500 16px ${FONT}`;
-  c.fillText(fit(c, STATUS_LABEL[row.status] + time, textW), x, cy + 14);
+  c.fillText(fit(c, label + time, textW), x, cy + 14);
 }
 
 function drawContain(c: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, size: number): void {

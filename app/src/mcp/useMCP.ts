@@ -10,8 +10,6 @@ import { Logger } from '@utils/logging';
 import { StreamManager } from '@utils/streamManager';
 import { imageDataUrl } from '@utils/imageDataUrl';
 import { releaseCaptureHolds, TURN_HOLDER } from './capture';
-import { parseAgentPrompt } from './agentWake';
-import { statusBoard } from '@utils/statusBoard';
 import type { WireMessage, ToolCallStatus, UserInfoRequest, UserInfoResponse } from './types';
 import { getTool, getToolSpecs } from './registry';
 import getMcpSystemPrompt from './systemPrompt';
@@ -213,7 +211,6 @@ export function useMCP(options: UseMCPOptions) {
     abortRef.current = controller;
     const { signal } = controller;
     setIsRunning(true);
-    statusBoard.mcpStart(parseAgentPrompt(userText)?.agentName ?? null);
 
     const sendToModel = async (
       wire: WireMessage[],
@@ -255,15 +252,9 @@ export function useMCP(options: UseMCPOptions) {
           onWireUpdate: syncMessages,
           // Drop stream chunks from an orphaned (aborted) model call so a killed run can't
           // keep repopulating the live bubble.
-          onAssistantDelta: chunk => {
-            if (signal.aborted) return;
-            setStreamingText(prev => prev + chunk);
-            statusBoard.mcpWriting();
-          },
+          onAssistantDelta: chunk => { if (!signal.aborted) setStreamingText(prev => prev + chunk); },
           onStatus: (id, status, meta) => {
             setStatus(id, status, meta);
-            if (status === 'running') statusBoard.mcpToolStart(id, meta?.name ?? '', meta?.args);
-            else statusBoard.mcpToolEnd(id);
             const toolName = meta?.name ?? 'unknown';
             if (status === 'running') {
               Logger.info(LOG_SOURCE, `Running tool: ${toolName}`, { toolCallId: id, args: meta?.args });
@@ -300,8 +291,6 @@ export function useMCP(options: UseMCPOptions) {
           syncMessages();
         }
       } finally {
-        const reply = [...wireRef.current].reverse().find(m => m.role === 'assistant' && typeof m.content === 'string' && m.content.trim());
-        statusBoard.mcpEnd(typeof reply?.content === 'string' && wireRef.current.lastIndexOf(reply) >= turnStart ? reply.content : '');
         StreamManager.releaseStreamsForAgent(TURN_HOLDER);
         if (abortRef.current === controller) abortRef.current = null;
         setIsRunning(false);
