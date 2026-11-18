@@ -30,7 +30,7 @@ from marketplace import marketplace_router
 from compute import compute_router
 from tools_router import tools_router
 from messaging import messaging_router
-from remote import remote_router
+from remote import remote_router, deadman_sweeper
 from payments import payments_router, _list_personal_customers
 from apple_payments import apple_payments_router
 from transcriptions import transcriptions_router
@@ -62,7 +62,10 @@ async def lifespan(app: FastAPI):
         ThreadPoolExecutor(max_workers=IO_THREADS, thread_name_prefix="io")
     )
     await api_handlers.startup_handlers()
+    # One per worker; the sweep claims atomically, so each stopped session is announced once.
+    sweeper = asyncio.create_task(deadman_sweeper())
     yield
+    sweeper.cancel()
     await api_handlers.shutdown_handlers()
     await close_redis()
 
