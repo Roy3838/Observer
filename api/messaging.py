@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from PIL import Image
 import io
 import base64
+import httpx
 
 # Third-party imports
 from better_profanity import profanity
@@ -502,6 +503,21 @@ async def send_whatsapp_text(to_phone: str, body: str, media_urls: list[str] | N
         logger.error(f"WhatsApp text to {to_phone} failed: {e.msg}")
         raise HTTPException(status_code=400, detail=f"Failed to send WhatsApp message: {e.msg}")
 
+TWILIO_TYPING_URL = "https://messaging.twilio.com/v3/Indicators/Typing.json"
+
+
+async def send_whatsapp_typing(message_sid: str) -> None:
+    """Show "typing…" in answer to an inbound WhatsApp message, which also marks it read.
+    Twilio public beta: it clears when our next message lands, or after ~25s."""
+    config = get_twilio_config()
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        response = await client.post(
+            TWILIO_TYPING_URL,
+            auth=(config.account_sid, config.auth_token),
+            json={"messageId": message_sid, "channel": "whatsapp"},
+        )
+    response.raise_for_status()
+
 # API Endpoints
 
 @messaging_router.post("/tools/send-sms", tags=["Tools"])
@@ -788,7 +804,8 @@ async def whatsapp_incoming_webhook(
                 # The pairing/routing already happened; a failed reply shouldn't undo it.
                 logger.error(f"Failed to reply to {from_number}: {str(e)}")
 
-        if await remote.route_inbound("whatsapp", from_number, message_body, reply):
+        if await remote.route_inbound("whatsapp", from_number, message_body, reply,
+                                      msg_id=form_data.get("MessageSid")):
             return FastAPIResponse(status_code=204)
 
         # Not a code, and not a paired phone.

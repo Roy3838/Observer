@@ -407,6 +407,19 @@ async def send_telegram_text(chat_id: str, text: str, parse_mode: str | None = N
         raise HTTPException(status_code=400, detail=f"Telegram API error: {description}")
 
 
+async def send_telegram_typing(chat_id: str) -> None:
+    """Show "typing…" in the chat. Telegram clears it after ~5s, or when the bot's next message lands."""
+    telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if not telegram_bot_token:
+        return
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        response = await client.post(
+            f"https://api.telegram.org/bot{telegram_bot_token}/sendChatAction",
+            json={"chat_id": chat_id, "action": "typing"},
+        )
+    response.raise_for_status()
+
+
 @tools_router.post("/tools/telegram-webhook", tags=["Tools"])
 async def telegram_webhook(request: Request, update: dict):
     """

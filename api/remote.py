@@ -15,10 +15,16 @@ opt-in to SMS (and calls from that same number), sending it on WhatsApp opts in
 to WhatsApp only. So a code pairs on exactly one channel, and nothing pairing on
 one channel enables another channel's messages.
 
-Remote control uses the code as the session id. The server is only a mailbox:
-messages from a paired phone/chat are queued for the browser tab listening on
-that code, which runs them through its MCP and answers through the reply route.
-The conversation itself never leaves the browser.
+Remote control uses the code as the session id. The server is only a mailbox,
+with one route each way:
+
+  IN   phone/chat -> webhook -> inbox -> GET /remote/listen -> the tab's MCP
+  OUT  every message of the tab's MCP conversation -> POST /remote/send -> phone/chat
+
+/remote/send mirrors the whole conversation, whichever side started a turn (the
+phone, the desktop, or an agent waking the MCP), so the phone reads what the
+desktop shows. The conversation itself lives in the browser; the server only
+relays it. While a turn runs, the phone shows "typing…" (see _keep_typing).
 
 The channels trust different things:
   SMS, WhatsApp - the code is owned by the first authenticated user to poll
@@ -53,6 +59,7 @@ which keeps the import graph acyclic.
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -62,7 +69,7 @@ from typing import Awaitable, Callable, Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from auth import AuthUser, get_current_user
+from auth import AuthenticatedUser, AuthUser, get_current_user
 from redis_client import get_redis
 from whitelist_words import WORDS
 
@@ -83,6 +90,13 @@ SEEN_TTL = 3600      # provider retry dedupe
 WA_WINDOW_TTL = 24 * 3600  # Meta's customer-service window: free-form WhatsApp sends only inside it
 MAX_TEXT = 4000
 MAX_NAME = 64
+
+BUSY_TTL = 300       # safety net for a turn whose `done` never comes. Typing only shows while
+                     # the tab polls, so this outlives the longest silent tool call (get_iteration: 2 min)
+TYPING_EVERY = {"telegram": 3, "whatsapp": 20}  # each lasts ~5s (Telegram) / ~25s (Twilio)
+TYPING_QUIET = 3     # no typing right after a message lands, so it can't outlive the turn's last one
+TURN_TTL = 3600      # how long a turn's WhatsApp charge is remembered
+DEPRECATED_LOG_EVERY = 3600
 
 DEADMAN_KEY = "remote:deadman"  # sorted set of "{channel}:{code}", scored by last poll
 DEADMAN_GRACE = 75   # seconds without a poll before an armed session counts as stopped.
@@ -145,6 +159,9 @@ def _alive_key(code: str, channel: str) -> str: return f"remote:alive:{code}:{ch
 def _inbox_key(code: str, channel: str) -> str: return f"remote:inbox:{code}:{channel}"
 def _addr_key(channel: str, address: str) -> str: return f"remote:addr:{channel}:{address}"
 def _wa_window_key(address: str) -> str: return f"remote:wawindow:{address}"
+def _busy_key(code: str, channel: str) -> str: return f"remote:busy:{code}:{channel}"
+def _typed_key(code: str, channel: str) -> str: return f"remote:typed:{code}:{channel}"
+def _last_msg_key(code: str, channel: str) -> str: return f"remote:lastmsg:{code}:{channel}"
 
 
 async def claim(code: str, user_id: str) -> bool:
@@ -199,7 +216,8 @@ async def _revoke(code: str, channel: Channel) -> None:
     r = await get_redis()
     await r.set(_revoked_key(code), "1")
     await r.delete(_bind_key(code, channel), _name_key(code, channel),
-                   _inbox_key(code, channel), _alive_key(code, channel))
+                   _inbox_key(code, channel), _alive_key(code, channel), _busy_key(code, channel),
+                   _last_msg_key(code, channel))
     await r.zrem(DEADMAN_KEY, _deadman_member(code, channel))
 
 
@@ -218,12 +236,16 @@ async def _bound_elsewhere(code: str, channel: Channel) -> bool:
     return bool(await r.exists(*others))
 
 
-async def route_inbound(channel: Channel, address: str, text: str, reply: Reply, name: str | None = None) -> bool:
+async def route_inbound(
+    channel: Channel, address: str, text: str, reply: Reply,
+    name: str | None = None, msg_id: str | None = None,
+) -> bool:
     """
     Handle an inbound message if it is pairing business: a code, "disconnect", or anything
     from an address that is bound to one. Returns False otherwise, and the adapter
     tells the sender how to connect. `name` is the sender's display name, shown in
-    the app once they pair.
+    the app once they pair. `msg_id` is the provider's id for the message (WhatsApp's
+    MessageSid), which Twilio's typing indicator has to answer.
     """
     r = await get_redis()
     current = await r.get(_addr_key(channel, address))
@@ -288,7 +310,7 @@ async def route_inbound(channel: Channel, address: str, text: str, reply: Reply,
         await reply(TEXT_ONLY)
         return True
 
-    item = json.dumps({"text": text[:MAX_TEXT], "ts": time.time()})
+    item = json.dumps({"text": text[:MAX_TEXT], "ts": time.time(), "id": msg_id})
     inbox = _inbox_key(current, channel)
     await r.rpush(inbox, item)
     await r.expire(inbox, INBOX_TTL)
@@ -334,6 +356,8 @@ async def _announce_stopped(member: str) -> None:
         logger.info(f"Dead-man: {member} stopped, but the WhatsApp window is closed; not sent")
         return
     logger.info(f"Dead-man: {member} stopped reporting; notifying")
+    # The tab is gone mid-turn or not: whatever it was running won't finish.
+    await (await get_redis()).delete(_busy_key(code, channel))
     await _deliver(channel, address, INTERRUPTED, [])
 
 
@@ -359,6 +383,46 @@ async def deadman_sweeper() -> None:
         except Exception:
             logger.exception("Dead-man sweep failed")
         await asyncio.sleep(DEADMAN_SWEEP)
+
+
+# --- Typing indicator ---
+#
+# A session is busy from the moment its tab picks up a message (or sends the first item of a
+# turn it started itself) until the turn's `done`. While busy, the tab's own long-poll keeps
+# "typing…" up on the phone, once per slice; so if the tab dies, the typing stops with it.
+
+async def _set_busy(code: str, channel: str, busy: bool) -> None:
+    r = await get_redis()
+    if busy:
+        await r.set(_busy_key(code, channel), "1", ex=BUSY_TTL)
+    else:
+        await r.delete(_busy_key(code, channel))
+
+
+async def _keep_typing(sessions: dict[Channel, str]) -> None:
+    """Show "typing…" on each busy session's phone/chat, at most every TYPING_EVERY seconds."""
+    r = await get_redis()
+    for channel, code in sessions.items():
+        if not await r.exists(_busy_key(code, channel)):
+            continue
+        # Twilio's indicator answers an inbound message: the phone's latest one.
+        msg_id = await r.get(_last_msg_key(code, channel)) if channel == "whatsapp" else None
+        if channel == "whatsapp" and not msg_id:
+            continue
+        if not await r.set(_typed_key(code, channel), "1", nx=True, ex=TYPING_EVERY[channel]):
+            continue
+        address = await bound_address(code, channel)
+        if not address:
+            continue
+        try:
+            if channel == "whatsapp":
+                from messaging import send_whatsapp_typing
+                await send_whatsapp_typing(msg_id)
+            else:
+                from tools_router import send_telegram_typing
+                await send_telegram_typing(address)
+        except Exception as e:
+            logger.info(f"Typing indicator failed on {channel}: {e}")
 
 
 # --- Shared route bodies ---
@@ -401,6 +465,7 @@ async def _poll(sessions: dict[Channel, str], deadman: bool | None = None) -> di
     deadline = time.monotonic() + INBOX_WAIT
     popped = None
     while popped is None and time.monotonic() < deadline:
+        await _keep_typing(sessions)
         popped = await r.blpop(list(inboxes), timeout=BLPOP_SLICE)
     if not popped:
         return {"messages": []}
@@ -414,6 +479,12 @@ async def _poll(sessions: dict[Channel, str], deadman: bool | None = None) -> di
         item = json.loads(entry)
         if now - item["ts"] <= INBOX_MAX_AGE:
             messages.append({"channel": channel, "text": item["text"]})
+            # The tab is about to run it: typing starts now (and on WhatsApp, it shows as read).
+            code = sessions[channel]
+            await _set_busy(code, channel, True)
+            if item.get("id"):
+                await r.set(_last_msg_key(code, channel), item["id"], ex=WA_WINDOW_TTL)
+    await _keep_typing(sessions)
     return {"messages": messages}
 
 
@@ -448,19 +519,56 @@ async def _deliver(channel: Channel, address: str, text: str, images: list[str])
                 await send_telegram_photo(address, image_b64)
             except Exception as e:
                 logger.warning(f"Remote reply: failed to send image {i+1} to Telegram: {e}")
-        await send_telegram_text(address, text[:4096])
+        if text:
+            await send_telegram_text(address, text[:4096])
 
 
-class RemoteReplyRequest(BaseModel):
-    code: str = Field(..., description="The code the message arrived on.")
-    text: str = Field(..., min_length=1, max_length=MAX_TEXT)
-    images: list[str] | None = Field(None, description="Optional base64-encoded images (no data: prefix), e.g. from capture_screen.")
+async def _sessions(request: Request, whatsapp: str | None, telegram: str | None) -> tuple[dict[Channel, str], AuthenticatedUser | None]:
+    """
+    The sessions a /listen or /send request names, each under its own channel's trust rule:
+    the WhatsApp code must be the caller's (so a token is required only when one is given);
+    the Telegram code is enough on its own. Returns them with the caller, if signed in.
+    """
+    sessions: dict[Channel, str] = {}
+    user = None
+    if whatsapp:
+        user = await get_current_user(request)
+        sessions["whatsapp"] = await _require_owner(whatsapp, user.id)
+    if telegram:
+        sessions["telegram"] = _require_code(telegram)
+    if not sessions:
+        raise HTTPException(status_code=400, detail="Give a whatsapp and/or telegram code.")
+    return sessions, user
 
 
-MAX_REPLY_IMAGES = 3  # keep MMS/Telegram sends bounded; mirrors useMCP's MAX_REMOTE_IMAGES
+async def _charge_turn(user: AuthenticatedUser, turn_id: str) -> bool:
+    """WhatsApp quota is charged once per turn, however many messages the turn sends."""
+    from quota_manager import try_consume_for
+
+    r = await get_redis()
+    key = f"remote:turn:{user.id}:{turn_id}"
+    charged = await r.get(key)
+    if charged is None:
+        allowed, _usage_count, _reason = await try_consume_for(user, "whatsapp")
+        charged = "ok" if allowed else "over"
+        await r.set(key, charged, ex=TURN_TTL)
+    return charged == "ok"
 
 
-# --- Both channels in one long-poll ---
+async def _deprecated(route: str, caller: str) -> None:
+    """Log that an app build older than /remote/send used `route`, at most hourly per caller,
+    so the logs show who still has to update before the old routes can go."""
+    r = await get_redis()
+    if await r.set(f"remote:deprecated:{route}:{caller}", "1", nx=True, ex=DEPRECATED_LOG_EVERY):
+        logger.warning(f"Deprecated route {route} hit by {caller}: app build predates /remote/send")
+
+
+def _anon(code: str) -> str:
+    """A stable, non-secret tag for a Telegram code (the code itself is a credential)."""
+    return "tg-" + hashlib.sha256(code.encode()).hexdigest()[:8]
+
+
+# --- The two routes: IN and OUT ---
 
 @remote_router.get("/remote/listen", tags=["Remote"])
 async def remote_listen(
@@ -470,31 +578,63 @@ async def remote_listen(
     deadman: bool | None = None,
 ):
     """
-    Long-poll the inboxes of a WhatsApp code and/or a Telegram code in one request.
-    Each channel keeps its own trust rule: the WhatsApp code must be the caller's
-    (so a token is required only when one is given); the Telegram code is enough
-    on its own. deadman=1 arms the dead-man's switch for these sessions, deadman=0
-    disarms it.
+    IN: long-poll the inboxes of a WhatsApp code and/or a Telegram code in one request.
+    deadman=1 arms the dead-man's switch for these sessions, deadman=0 disarms it.
     """
-    sessions: dict[Channel, str] = {}
-    if whatsapp:
-        current_user = await get_current_user(request)
-        sessions["whatsapp"] = await _require_owner(whatsapp, current_user.id)
-    if telegram:
-        sessions["telegram"] = _require_code(telegram)
-    if not sessions:
-        raise HTTPException(status_code=400, detail="Give a whatsapp and/or telegram code.")
+    sessions, _user = await _sessions(request, whatsapp, telegram)
     return await _poll(sessions, deadman)
 
 
-# --- WhatsApp: owner-gated ---
+class RemoteSendRequest(BaseModel):
+    whatsapp: str | None = Field(None, description="The WhatsApp code to send to (must be the caller's).")
+    telegram: str | None = Field(None, description="The Telegram code to send to.")
+    turn_id: str = Field(..., min_length=1, max_length=64, description="One id per MCP turn: WhatsApp quota is charged once per turn.")
+    text: str | None = Field(None, max_length=MAX_TEXT)
+    image: str | None = Field(None, description="One base64-encoded image (no data: prefix), sent with `text`.")
+    done: bool = Field(False, description="The turn is over: stop showing typing.")
 
-@remote_router.get("/remote/inbox", tags=["Remote"])
-async def remote_inbox(code: str, current_user: AuthUser):
-    """Long-poll the WhatsApp inbox of one of the caller's codes. Superseded by
-    /remote/listen; kept for app builds that still poll per channel."""
-    return await _poll({"whatsapp": await _require_owner(code, current_user.id)})
 
+async def _send_item(channel: Channel, code: str, body: "RemoteSendRequest", user: AuthenticatedUser | None) -> str:
+    """Deliver one item to one paired phone/chat. Returns what happened, for the caller's log."""
+    address = await bound_address(code, channel)
+    if not address:
+        return "not_linked"
+    if channel == "whatsapp":
+        # Meta's 24h window: outside it, free-form sends fail later (63016). Dropped, not queued.
+        if not await whatsapp_window_open(address):
+            return "window_closed"
+        if not await _charge_turn(user, body.turn_id):
+            return "quota_exceeded"
+    try:
+        await _deliver(channel, address, body.text or "", [body.image] if body.image else [])
+    except Exception as e:
+        logger.warning(f"Remote send to {channel} failed: {e}")
+        return "failed"
+    # Hold typing back for a moment: a turn's `done` follows its last message right away.
+    await (await get_redis()).set(_typed_key(code, channel), "1", ex=TYPING_QUIET)
+    return "sent"
+
+
+@remote_router.post("/remote/send", tags=["Remote"])
+async def remote_send(body: RemoteSendRequest, request: Request):
+    """
+    OUT: one item of the tab's MCP conversation, to every session named. Items arrive in
+    order, one request each: a message (text, optionally with one image), and finally
+    `done`. Every item but `done` keeps the session busy, which keeps typing up between them.
+    """
+    from messaging import assert_content_allowed
+
+    sessions, user = await _sessions(request, body.whatsapp, body.telegram)
+    assert_content_allowed(body.text)
+    sent: dict[str, str] = {}
+    for channel, code in sessions.items():
+        await _set_busy(code, channel, not body.done)
+        if body.text or body.image:
+            sent[channel] = await _send_item(channel, code, body, user)
+    return {"sent": sent}
+
+
+# --- Status, for the settings card ---
 
 @remote_router.get("/remote/status", tags=["Remote"])
 async def remote_status(code: str, current_user: AuthUser):
@@ -506,20 +646,54 @@ async def remote_status(code: str, current_user: AuthUser):
     return await _status(await _require_owner(code, current_user.id), "whatsapp")
 
 
-@remote_router.post("/remote/reply", tags=["Remote"])
+@remote_router.get("/remote/telegram/status", tags=["Remote"])
+async def remote_telegram_status(code: str):
+    """Whether a code is paired on Telegram, to whom, and whether it was revoked."""
+    return await _status(_require_code(code), "telegram")
+
+
+# --- Deprecated: app builds from before /remote/listen and /remote/send ---
+# Each one logs (see _deprecated). Delete them once the logs stay quiet.
+
+class RemoteReplyRequest(BaseModel):
+    code: str = Field(..., description="The code the message arrived on.")
+    text: str = Field(..., min_length=1, max_length=MAX_TEXT)
+    images: list[str] | None = Field(None, description="Optional base64-encoded images (no data: prefix), e.g. from capture_screen.")
+
+
+MAX_REPLY_IMAGES = 3
+
+
+@remote_router.get("/remote/inbox", tags=["Remote"], deprecated=True)
+async def remote_inbox(code: str, current_user: AuthUser):
+    """Deprecated: use /remote/listen. Long-poll the WhatsApp inbox of one of the caller's codes."""
+    await _deprecated("/remote/inbox", current_user.id)
+    return await _poll({"whatsapp": await _require_owner(code, current_user.id)})
+
+
+@remote_router.get("/remote/telegram/inbox", tags=["Remote"], deprecated=True)
+async def remote_telegram_inbox(code: str):
+    """Deprecated: use /remote/listen. Long-poll the Telegram inbox of a code."""
+    code = _require_code(code)
+    await _deprecated("/remote/telegram/inbox", _anon(code))
+    return await _poll({"telegram": code})
+
+
+@remote_router.post("/remote/reply", tags=["Remote"], deprecated=True)
 async def remote_reply(request_data: RemoteReplyRequest, current_user: AuthUser):
-    """Send the MCP's answer back to the paired phone over WhatsApp, with any images the
-    model captured along the way. Charges the WhatsApp quota once, regardless of image count."""
+    """Deprecated: use /remote/send. Send the MCP's final answer to the paired phone over
+    WhatsApp. Charges the WhatsApp quota once, regardless of image count."""
     from messaging import WHATSAPP_WINDOW_CLOSED, assert_content_allowed
     from quota_manager import try_consume_for
 
+    await _deprecated("/remote/reply", current_user.id)
     code = await _require_owner(request_data.code, current_user.id)
+    # An old build's reply is its turn's end.
+    await _set_busy(code, "whatsapp", False)
     address = await bound_address(code, "whatsapp")
     if not address:
         raise HTTPException(status_code=404, detail="No WhatsApp linked to this code.")
 
-    # Meta's 24h window, as in /tools/send-whatsapp: outside it Twilio accepts the
-    # send and fails it later (63016), after we reported success and charged quota.
     if not await whatsapp_window_open(address):
         raise HTTPException(status_code=403, detail=WHATSAPP_WINDOW_CLOSED)
 
@@ -536,27 +710,15 @@ async def remote_reply(request_data: RemoteReplyRequest, current_user: AuthUser)
     return {"success": True}
 
 
-# --- Telegram: the code is the credential ---
-
-@remote_router.get("/remote/telegram/inbox", tags=["Remote"])
-async def remote_telegram_inbox(code: str):
-    """Long-poll the Telegram inbox of a code. No account: holding the code is enough.
-    Superseded by /remote/listen; kept for app builds that still poll per channel."""
-    return await _poll({"telegram": _require_code(code)})
-
-
-@remote_router.get("/remote/telegram/status", tags=["Remote"])
-async def remote_telegram_status(code: str):
-    """Whether a code is paired on Telegram, to whom, and whether it was revoked."""
-    return await _status(_require_code(code), "telegram")
-
-
-@remote_router.post("/remote/telegram/reply", tags=["Remote"])
+@remote_router.post("/remote/telegram/reply", tags=["Remote"], deprecated=True)
 async def remote_telegram_reply(request_data: RemoteReplyRequest):
-    """Send the MCP's answer back to the code's paired Telegram chat, with any captured images."""
+    """Deprecated: use /remote/send. Send the MCP's final answer to the code's paired Telegram chat."""
     from messaging import assert_content_allowed
 
-    address = await bound_address(_require_code(request_data.code), "telegram")
+    code = _require_code(request_data.code)
+    await _deprecated("/remote/telegram/reply", _anon(code))
+    await _set_busy(code, "telegram", False)
+    address = await bound_address(code, "telegram")
     if not address:
         raise HTTPException(status_code=404, detail="No Telegram chat linked to this code.")
 
