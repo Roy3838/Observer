@@ -146,10 +146,10 @@ const IterationStoreDebug: React.FC<IterationStoreDebugProps> = ({ agentId }) =>
               )}
 
               {/* Model Images */}
-              {iteration.modelImages && iteration.modelImages.length > 0 && (
+              {(iteration.modelImages?.length ?? iteration.modelImageCount ?? 0) > 0 && (
                 <div>
                   <div className="text-xs font-medium text-purple-600">
-                    Model Images: {iteration.modelImages.length}
+                    Model Images: {iteration.modelImages?.length ?? iteration.modelImageCount}
                   </div>
                 </div>
               )}

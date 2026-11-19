@@ -260,9 +260,12 @@ const AgentLogViewer: React.FC<AgentLogViewerProps> = ({
 
 
   // Handle card click
-  const handleCardClick = (iteration: IterationData, scrollContainer: HTMLElement) => {
+  const handleCardClick = async (iteration: IterationData, scrollContainer: HTMLElement) => {
     setScrollPosition(scrollContainer.scrollTop);
     setSelectedIteration(iteration);
+    // Read it back whole: memory drops older iterations' images while this view is open.
+    const full = await IterationStore.getIteration(iteration.id);
+    if (full) setSelectedIteration(current => current?.id === full.id ? full : current);
   };
 
   // Handle back to list
@@ -280,7 +283,11 @@ const AgentLogViewer: React.FC<AgentLogViewerProps> = ({
   // Handle export
   const handleExport = async () => {
     try {
-      await exportData(currentIterations, historicalSessions, {
+      // Memory only keeps the newest iterations' images: read the current session back whole.
+      const current = includeImages
+        ? await Promise.all(currentIterations.map(async it => (await IterationStore.getIteration(it.id)) ?? it))
+        : currentIterations;
+      await exportData(current, historicalSessions, {
         format: exportFormat,
         includeImages,
         agentId,
@@ -696,7 +703,7 @@ const AgentLogViewer: React.FC<AgentLogViewerProps> = ({
                 <div className="h-px bg-green-200 flex-grow"></div>
               </div>
               <div className="space-y-4">
-                {renderIterations(currentIterations.slice(0, maxEntries).reverse())}
+                {renderIterations(currentIterations.slice(-maxEntries).reverse())}
               </div>
             </>
           )}
@@ -731,7 +738,7 @@ const AgentLogViewer: React.FC<AgentLogViewerProps> = ({
                 
                 {/* Session Iterations */}
                 <div className="space-y-4">
-                  {renderIterations(session.iterations.slice(0, maxEntries).reverse())}
+                  {renderIterations(session.iterations.slice(-maxEntries).reverse())}
                 </div>
               </div>
             );

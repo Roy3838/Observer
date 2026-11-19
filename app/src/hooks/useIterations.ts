@@ -135,11 +135,12 @@ export function useHistoricalSessions(
 
   useEffect(() => {
     const fetchSessions = async () => {
-      const latest = await IterationStore.getHistoricalSessions(agentId);
+      // Poll text only; load the images only when the session list changed.
+      const latest = await IterationStore.getPastSessions(agentId);
 
       if (latest.length !== lastCountRef.current) {
         lastCountRef.current = latest.length;
-        setSessions(latest);
+        setSessions(await IterationStore.getPastSessions(agentId, { images: true }));
       }
     };
 

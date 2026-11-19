@@ -55,7 +55,7 @@ function sleepOrAbort(ms: number, signal?: AbortSignal): Promise<void> {
 
 /** Count images attached to an iteration without surfacing any base64 payloads. */
 function countIterationImages(it: IterationData): number {
-  let count = it.modelImages?.length || 0;
+  let count = it.modelImages?.length ?? it.modelImageCount ?? 0;
   for (const sensor of it.sensors) {
     if (sensor.type === 'screenshot' || sensor.type === 'camera') count += 1;
   }
@@ -77,23 +77,6 @@ function summarizeIteration(it: IterationData) {
     sensorTypes: Array.from(new Set(it.sensors.map(s => s.type))),
     imageCount: countIterationImages(it),
   };
-}
-
-/** Find a full iteration by id across the in-memory current session and persisted history. */
-async function findIteration(iterationId: string, agentId?: string): Promise<IterationData | undefined> {
-  const inMemory = IterationStore.getIteration(iterationId);
-  if (inMemory) return inMemory;
-
-  // Search persisted history. If agentId is known, restrict to that agent; otherwise
-  // we can't enumerate every agent cheaply, so require agentId for historical lookups.
-  if (agentId) {
-    const sessions = await IterationStore.getHistoricalSessions(agentId);
-    for (const session of sessions) {
-      const found = session.iterations.find(i => i.id === iterationId);
-      if (found) return found;
-    }
-  }
-  return undefined;
 }
 
 /**
@@ -390,35 +373,23 @@ export const TOOLS: ToolDefinition[] = [
     execute: async (args): Promise<ToolResult> => {
       const limit = typeof args.limit === 'number' && args.limit > 0 ? args.limit : 20;
 
-      // Current (in-memory) session iterations + persisted history.
-      const current = IterationStore.getIterationsForAgent(args.agent_id);
-      const historicalSessions = await IterationStore.getHistoricalSessions(args.agent_id);
-      const historical = historicalSessions.flatMap(s => s.iterations);
-
-      // De-dupe by id (current session may also appear in history), newest first.
-      const byId = new Map<string, IterationData>();
-      for (const it of [...historical, ...current]) byId.set(it.id, it);
-      const all = Array.from(byId.values()).sort(
-        (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
-      );
-
+      const runs = await IterationStore.getRuns(args.agent_id, { limit });
       return {
         data: {
           agent_id: args.agent_id,
-          total: all.length,
-          iterations: all.slice(0, limit).map(summarizeIteration),
+          iterations: runs.map(summarizeIteration),
         },
       };
     },
   },
   {
     name: 'get_iteration',
-    description: 'Get the full detail of one agent iteration, INCLUDING the screenshot/camera images it captured — use it to actually see what an agent saw. Two ways to call it: (1) pass iteration_id (from get_runs) to fetch that specific iteration, plus agent_id so historical iterations can be located; (2) pass ONLY agent_id to get that agent\'s most recent completed iteration. In mode (2) this BLOCKS (polling) until there is an iteration you have not seen yet: right after start_agent it waits for the first one, and calling it again waits for the NEXT one, so two calls always give you two different moments to compare. It waits up to 2 minutes; if nothing has completed by then it returns an error and you can get_status / stop_agent to investigate a stuck agent.',
+    description: 'Get the full detail of one agent iteration, INCLUDING the screenshot/camera images it captured — use it to actually see what an agent saw. Two ways to call it: (1) pass iteration_id (from get_runs) to fetch that specific iteration; (2) pass ONLY agent_id to get that agent\'s most recent completed iteration. In mode (2) this BLOCKS (polling) until there is an iteration you have not seen yet: right after start_agent it waits for the first one, and calling it again waits for the NEXT one, so two calls always give you two different moments to compare. It waits up to 2 minutes; if nothing has completed by then it returns an error and you can get_status / stop_agent to investigate a stuck agent.',
     parameters: {
       type: 'object',
       properties: {
         iteration_id: { type: 'string', description: 'The iteration id (from get_runs). Omit to get the agent\'s latest completed iteration, waiting for the first one if the agent was just started.' },
-        agent_id: { type: 'string', description: 'The owning agent id. Required when iteration_id is omitted; also needed to locate historical iterations.' },
+        agent_id: { type: 'string', description: 'The owning agent id. Required when iteration_id is omitted.' },
       },
     },
     multimodal: true,
@@ -438,9 +409,9 @@ export const TOOLS: ToolDefinition[] = [
         if (ctx.signal?.aborted) return { error: 'Cancelled.' };
 
         if (args.iteration_id) {
-          const it = await findIteration(args.iteration_id, args.agent_id);
+          const it = await IterationStore.getIteration(args.iteration_id);
           // A genuinely unknown id won't appear later — fail fast rather than waiting it out.
-          if (!it) return { error: `Iteration '${args.iteration_id}' not found. For historical iterations, include agent_id.` };
+          if (!it) return { error: `Iteration '${args.iteration_id}' not found.` };
           if (isIterationSettled(it) || Date.now() >= deadline) return iterationToResult(it);
         } else {
           // agent_id only → newest settled iteration of the current session; wait for the first.
@@ -449,16 +420,16 @@ export const TOOLS: ToolDefinition[] = [
           // A repeat call waits for a newer iteration: the second look must be a later moment.
           if (settled && settled.id !== lastSeenIteration.get(args.agent_id)) {
             lastSeenIteration.set(args.agent_id, settled.id);
-            return iterationToResult(settled);
+            return iterationToResult((await IterationStore.getIteration(settled.id)) ?? settled);
           }
-          // Stopped (its code called stopAgent(), or an error stopped it): the session was
-          // moved to IndexedDB, so nothing new will appear in memory. Return its last iteration.
+          // Stopped (its code called stopAgent(), or an error stopped it): its session is over,
+          // so nothing new will appear in memory. Return its last iteration.
           if (!isAgentLoopRunning(args.agent_id)) {
-            const [session] = await IterationStore.getHistoricalSessions(args.agent_id);
-            const last = session && [...session.iterations].reverse().find(isIterationSettled);
+            const recent = await IterationStore.getRuns(args.agent_id, { limit: 5 });
+            const last = recent.find(isIterationSettled);
             if (last) {
-              const result = iterationToResult(last);
-              const stopped = `The agent is STOPPED (since ${session.endTime ?? 'its last iteration'}): its code called stopAgent() or an error stopped it. This is its last iteration. If it stopped on the very first iterations while the job is still going, its condition is wrong: fix it before start_agent again.`;
+              const result = iterationToResult((await IterationStore.getIteration(last.id)) ?? last);
+              const stopped = `The agent is STOPPED (since ${last.endTime ?? 'its last iteration'}): its code called stopAgent() or an error stopped it. This is its last iteration. If it stopped on the very first iterations while the job is still going, its condition is wrong: fix it before start_agent again.`;
               return { ...result, data: { ...result.data, stopped } };
             }
           }

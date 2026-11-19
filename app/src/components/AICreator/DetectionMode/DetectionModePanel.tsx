@@ -102,7 +102,7 @@ const DetectionModePanel: React.FC<DetectionModePanelProps> = ({
     const loadHistory = async () => {
       setIsLoadingHistory(true);
       try {
-        const sessions = await IterationStore.getHistoricalSessions(selectedAgentId);
+        const sessions = await IterationStore.getPastSessions(selectedAgentId, { images: true });
         const images: ClassifiedImage[] = [];
 
         sessions.forEach(session => {

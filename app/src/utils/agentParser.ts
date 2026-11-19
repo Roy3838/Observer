@@ -234,28 +234,8 @@ export function stripAgentReferences(text: string): string {
  * @returns Array of recent iteration data
  */
 async function getRecentAgentRuns(agentId: string, count: number): Promise<IterationData[]> {
-  // Get current session runs
-  const currentRuns = IterationStore.getIterationsForAgent(agentId);
-
-  // Get historical runs if we need more
-  if (currentRuns.length >= count) {
-    return currentRuns.slice(-count); // Get last N runs
-  }
-
-  // Need to get historical data
-  const historicalSessions = await IterationStore.getHistoricalSessions(agentId);
-  const allRuns: IterationData[] = [...currentRuns];
-
-  // Add runs from most recent sessions until we have enough
-  for (const session of historicalSessions) {
-    const needed = count - allRuns.length;
-    const sessionRuns = session.iterations.slice(-needed); // Take LAST needed iterations
-    allRuns.unshift(...sessionRuns);
-
-    if (allRuns.length >= count) break;
-  }
-
-  return allRuns.slice(-count); // Return last N runs
+  // Oldest first, like the agent saw them
+  return (await IterationStore.getRuns(agentId, { limit: count, images: true })).reverse();
 }
 
 /**

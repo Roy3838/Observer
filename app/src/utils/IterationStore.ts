@@ -1,4 +1,13 @@
 // src/utils/IterationStore.ts
+//
+// Each iteration is written to IndexedDB once, when it finishes (iteration-end / iteration-skipped).
+// Memory holds only what the UI polls synchronously: the running sessions' iterations, with the
+// images of each agent's last KEEP_IMAGES finished iterations plus any in flight. Everything else
+// is read back from IndexedDB.
+//
+//   observer-iterations v1
+//     iterations  key: id   index agent_time: [agentId, startTime]   text only, no base64
+//     images      key: id                                            { id, images: string[] }
 
 import { LogEntry, Logger } from './logging';
 
@@ -25,13 +34,16 @@ export interface IterationData {
   sessionId: string;
   sessionIterationNumber: number; // 1, 2, 3... within this session
   startTime: string;
+  endTime?: string; // Set when it finishes: every tool call is in
   sensors: SensorData[];
   modelPrompt?: string;
-  modelImages?: string[]; // Base64 images sent to model
+  modelImages?: string[]; // Base64 images sent to model; absent on text-only reads (see getRuns({ images: true }))
+  modelImageCount?: number;
   modelResponse?: string;
   modelResponseTime?: string;
   tools: ToolCall[];
-  duration?: number;
+  duration?: number; // Seconds, start to finish
+  bytes?: number; // Approximate stored size
   hasError: boolean;
   isSkipped?: boolean; // True if iteration was skipped
   skipReason?: 'same_inputs' | 'network_error'; // Why the iteration was skipped
@@ -45,541 +57,238 @@ export interface AgentSession {
   iterations: IterationData[];
 }
 
+// ---- IndexedDB, in three helpers ---------------------------------------------
+
+const req = <T>(r: IDBRequest<T>) =>
+  new Promise<T>((ok, fail) => { r.onsuccess = () => ok(r.result); r.onerror = () => fail(r.error); });
+
+const done = (tx: IDBTransaction) =>
+  new Promise<void>((ok, fail) => { tx.oncomplete = () => ok(); tx.onerror = tx.onabort = () => fail(tx.error); });
+
+let dbPromise: Promise<IDBDatabase> | null = null;
+const db = () => dbPromise ??= new Promise<IDBDatabase>((ok, fail) => {
+  const open = indexedDB.open('observer-iterations', 1);
+  open.onupgradeneeded = () => {
+    open.result.createObjectStore('iterations', { keyPath: 'id' }).createIndex('agent_time', ['agentId', 'startTime']);
+    open.result.createObjectStore('images', { keyPath: 'id' });
+  };
+  open.onsuccess = () => ok(open.result);
+  open.onerror = () => fail(open.error);
+}).catch(e => { dbPromise = null; throw e; });
+
+// ISO timestamps sort as strings, so a time window is a key range on the index.
+const agentRange = (agentId: string, since = '', until = '￿') =>
+  IDBKeyRange.bound([agentId, since], [agentId, until]);
+
+// Finished iterations per agent that keep their images in memory (the log viewer shows 50).
+const KEEP_IMAGES = 50;
+
+const SENSORS = new Set(['screenshot', 'camera', 'ocr', 'audio', 'clipboard', 'memory', 'imemory']);
+const textOf = ({ modelImages, ...text }: IterationData): IterationData => text;
+const newestFirst = (a: IterationData, b: IterationData) => b.startTime.localeCompare(a.startTime);
+
+// ---- Store -------------------------------------------------------------------
+
 class IterationStoreClass {
-  private iterations = new Map<string, IterationData>();
-  private currentSessions = new Map<string, string>(); // agentId -> sessionId
-  private sessionIterationCounts = new Map<string, number>(); // sessionId -> count
+  private live = new Map<string, IterationData>();                     // running sessions + in-flight
+  private sessions = new Map<string, { id: string; count: number }>(); // agentId → current session
+  private withImages = new Map<string, string[]>();                     // agentId → finished iterations still holding images
+  private writes: Promise<void> = Promise.resolve();                    // serialized; every read awaits it
 
   constructor() {
-    // Subscribe to all log entries
-    Logger.addListener(this.handleLogEntry.bind(this));
-    // Load persisted data on startup
-    this.loadFromIndexedDB();
+    Logger.addListener(log => this.onLog(log));
   }
 
-  private handleLogEntry(log: LogEntry) {
-    const iterationId = log.details?.iterationId;
-    if (!iterationId) return;
+  private onLog(log: LogEntry) {
+    const id = log.details?.iterationId;
+    const type: string | undefined = log.details?.logType;
+    if (!id || !type) return;
+    const c = log.details.content;
+    const at = log.timestamp.toISOString();
 
-    // Get or create iteration
-    let iteration = this.iterations.get(iterationId);
-    if (!iteration) {
-      const agentId = log.source;
-      const sessionId = this.currentSessions.get(agentId);
-      
-      if (!sessionId) {
-        // Silently skip - iterations will be processed once session loads from IndexedDB
-        return;
-      }
-
-      // Get session iteration number
-      const currentCount = this.sessionIterationCounts.get(sessionId) || 0;
-      const sessionIterationNumber = currentCount + 1;
-      this.sessionIterationCounts.set(sessionId, sessionIterationNumber);
-
-      iteration = {
-        id: iterationId,
-        agentId,
-        sessionId,
-        sessionIterationNumber,
-        startTime: log.timestamp.toISOString(),
-        sensors: [],
-        tools: [],
-        hasError: false
-      };
-      this.iterations.set(iterationId, iteration);
-    }
-
-    // At this point, iteration is guaranteed to exist
-    const currentIteration = iteration;
-
-    // Process different log types
-    const logType = log.details?.logType;
-    
-    if (logType?.startsWith('sensor-')) {
-      this.processSensorLog(currentIteration, log);
-    } else if (logType === 'model-prompt') {
-      if (typeof log.details?.content === 'object') {
-        currentIteration.modelPrompt = log.details.content.modifiedPrompt;
-        currentIteration.modelImages = log.details.content.images || [];
-      } else {
-        currentIteration.modelPrompt = log.details?.content;
-        currentIteration.modelImages = [];
-      }
-    } else if (logType === 'model-response') {
-      currentIteration.modelResponse = typeof log.details?.content === 'string'
-        ? log.details.content
-        : '';
-      currentIteration.modelResponseTime = log.timestamp.toISOString();
-      this.calculateDuration(currentIteration);
-    } else if (logType === 'iteration-skipped') {
-      currentIteration.isSkipped = true;
-      const skipReason = log.details?.content?.reason;
-      if (skipReason === 'network_error') {
-        currentIteration.skipReason = 'network_error';
-        currentIteration.modelResponse = `Network error - iteration skipped: ${log.details?.content?.error || 'Connection failed'}`;
-      } else {
-        currentIteration.skipReason = 'same_inputs';
-        currentIteration.modelResponse = 'No significant change detected - iteration skipped to save resources.';
-      }
-      this.calculateDuration(currentIteration);
-    } else if (logType === 'tool-success' || logType === 'tool-error') {
-      this.processToolLog(currentIteration, log);
-    }
-
-    // Update error status
-    if (logType === 'tool-error') {
-      currentIteration.hasError = true;
-    }
-  }
-
-  private processSensorLog(iteration: IterationData, log: LogEntry) {
-    const logType = log.details?.logType;
-    const content = log.details?.content;
-
-    let sensorData: SensorData | null = null;
-
-    switch (logType) {
-      case 'sensor-screenshot':
-        sensorData = {
-          type: 'screenshot',
-          content: content,
-          timestamp: log.timestamp.toISOString(),
-          size: content?.size
-        };
-        break;
-      
-      case 'sensor-camera':
-        sensorData = {
-          type: 'camera',
-          content: content,
-          timestamp: log.timestamp.toISOString(),
-          size: content?.size
-        };
-        break;
-      
-      case 'sensor-ocr':
-        sensorData = {
-          type: 'ocr',
-          content: content,
-          timestamp: log.timestamp.toISOString()
-        };
-        break;
-      
-      case 'sensor-audio':
-        sensorData = {
-          type: 'audio',
-          content: content,
-          timestamp: log.timestamp.toISOString(),
-          source: content?.source
-        };
-        break;
-      
-      case 'sensor-clipboard':
-        sensorData = {
-          type: 'clipboard',
-          content: content,
-          timestamp: log.timestamp.toISOString()
-        };
-        break;
-      
-      case 'sensor-memory':
-        sensorData = {
-          type: 'memory',
-          content: content,
-          timestamp: log.timestamp.toISOString()
-        };
-        break;
-      
-      case 'sensor-imemory':
-        sensorData = {
-          type: 'imemory',
-          content: content,
-          timestamp: log.timestamp.toISOString(),
-          source: content?.sourceAgent,
-          imageCount: content?.imageCount
-        };
-        break;
-    }
-
-    if (sensorData) {
-      iteration.sensors.push(sensorData);
-    }
-  }
-
-  private processToolLog(iteration: IterationData, log: LogEntry) {
-    const isSuccess = log.details?.logType === 'tool-success';
-    const content = log.details?.content;
-
-    const toolCall: ToolCall = {
-      name: content?.tool || 'unknown',
-      status: isSuccess ? 'success' : 'error',
-      timestamp: log.timestamp.toISOString()
-    };
-
-    if (isSuccess) {
-      toolCall.params = content?.params;
-    } else {
-      toolCall.error = content?.error;
-      toolCall.params = content?.params; // Also save params for failed tools
-    }
-
-    iteration.tools.push(toolCall);
-  }
-
-  private calculateDuration(iteration: IterationData) {
-    if (iteration.modelResponseTime) {
-      const startTime = new Date(iteration.startTime).getTime();
-      const endTime = new Date(iteration.modelResponseTime).getTime();
-      iteration.duration = (endTime - startTime) / 1000; // in seconds
-    }
-  }
-
-  // IndexedDB setup
-  private async openIterationDB(): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open('IterationStoreDB', 1);
-      
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result);
-      
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        
-        // Store for current sessions tracking
-        if (!db.objectStoreNames.contains('currentSessions')) {
-          db.createObjectStore('currentSessions', { keyPath: 'agentId' });
-        }
-        
-        // Store for agent session history
-        if (!db.objectStoreNames.contains('agentSessions')) {
-          db.createObjectStore('agentSessions', { keyPath: 'key' }); // key will be agentId
-        }
-      };
-    });
-  }
-
-  private async loadFromIndexedDB() {
-    try {
-      const db = await this.openIterationDB();
-      
-      // Load current sessions
-      const tx = db.transaction('currentSessions', 'readonly');
-      const store = tx.objectStore('currentSessions');
-      const request = store.getAll();
-      
-      await new Promise<void>((resolve, reject) => {
-        request.onsuccess = () => {
-          const sessions = request.result;
-          sessions.forEach((item: { agentId: string, sessionId: string }) => {
-            this.currentSessions.set(item.agentId, item.sessionId);
-          });
-          resolve();
-        };
-        request.onerror = () => reject(request.error);
+    if (type === 'iteration-start') {
+      const session = this.sessions.get(log.source);
+      if (session) this.live.set(id, {
+        id, agentId: log.source, sessionId: session.id, sessionIterationNumber: ++session.count,
+        startTime: at, sensors: [], tools: [], hasError: false,
       });
-    } catch (error) {
-      Logger.error('IterationStore', 'Failed to load from IndexedDB', error);
+      return;
+    }
+
+    const it = this.live.get(id);
+    if (!it) return;
+
+    if (type.startsWith('sensor-') && SENSORS.has(type.slice(7))) {
+      it.sensors.push({
+        type: type.slice(7) as SensorData['type'], content: c, timestamp: at,
+        size: c?.size, source: c?.source ?? c?.sourceAgent, imageCount: c?.imageCount,
+      });
+    } else if (type === 'model-prompt') {
+      it.modelPrompt = typeof c === 'object' ? c.modifiedPrompt : c;
+      it.modelImages = typeof c === 'object' ? c.images ?? [] : [];
+    } else if (type === 'model-response') {
+      it.modelResponse = typeof c === 'string' ? c : '';
+      it.modelResponseTime = at;
+    } else if (type === 'tool-success' || type === 'tool-error') {
+      it.tools.push({
+        name: c?.tool ?? 'unknown', status: type === 'tool-success' ? 'success' : 'error',
+        params: c?.params, error: c?.error, timestamp: at,
+      });
+      it.hasError ||= type === 'tool-error';
+    } else if (type === 'iteration-skipped') {
+      it.isSkipped = true;
+      it.skipReason = c?.reason === 'network_error' ? 'network_error' : 'same_inputs';
+      it.modelResponse = it.skipReason === 'network_error'
+        ? `Network error - iteration skipped: ${c?.error || 'Connection failed'}`
+        : 'No significant change detected - iteration skipped to save resources.';
+      this.finish(it, at);
+    } else if (type === 'iteration-end') {
+      this.finish(it, at);
     }
   }
 
-  private async saveToIndexedDB() {
-    try {
-      const db = await this.openIterationDB();
-      const tx = db.transaction('currentSessions', 'readwrite');
-      const store = tx.objectStore('currentSessions');
-      
-      // Clear and rebuild current sessions
-      await new Promise<void>((resolve, reject) => {
-        const clearRequest = store.clear();
-        clearRequest.onsuccess = () => resolve();
-        clearRequest.onerror = () => reject(clearRequest.error);
-      });
-      
-      // Add all current sessions
-      for (const [agentId, sessionId] of this.currentSessions.entries()) {
-        await new Promise<void>((resolve, reject) => {
-          const request = store.add({ agentId, sessionId });
-          request.onsuccess = () => resolve();
-          request.onerror = () => reject(request.error);
-        });
-      }
-    } catch (error) {
-      Logger.error('IterationStore', 'Failed to save to IndexedDB', error);
-    }
+  /** The one write: the iteration is complete, so persist it and trim memory. */
+  private finish(it: IterationData, at: string) {
+    it.endTime = at;
+    it.duration = (Date.parse(at) - Date.parse(it.startTime)) / 1000;
+    it.modelImageCount = it.modelImages?.length ?? 0;
+    it.bytes = JSON.stringify(it).length;
+
+    const text = textOf(it), images = it.modelImages ?? [];
+    this.writes = this.writes.then(async () => {
+      const tx = (await db()).transaction(['iterations', 'images'], 'readwrite');
+      tx.objectStore('iterations').put(text);
+      if (images.length) tx.objectStore('images').put({ id: it.id, images });
+      await done(tx);
+    }).catch(e => { Logger.error('IterationStore', `Failed to save iteration ${it.id}`, e); });
+
+    // Only the last KEEP_IMAGES finished iterations keep their images in memory.
+    const kept = this.withImages.get(it.agentId) ?? [];
+    kept.push(it.id);
+    while (kept.length > KEEP_IMAGES) delete this.live.get(kept.shift()!)?.modelImages;
+    this.withImages.set(it.agentId, kept);
+
+    // Finished after its session ended (its own code called stopAgent()): it lives in IndexedDB now.
+    if (this.sessions.get(it.agentId)?.id !== it.sessionId) this.live.delete(it.id);
   }
 
-  private async saveSessionToIndexedDB(agentId: string, sessionId: string) {
-    try {
-      const db = await this.openIterationDB();
-      
-      // Get existing agent data or create new
-      const tx = db.transaction('agentSessions', 'readwrite');
-      const store = tx.objectStore('agentSessions');
-      
-      let agentData: { key: string, currentSession: string, sessions: Record<string, AgentSession> } = {
-        key: agentId,
-        currentSession: sessionId,
-        sessions: {}
-      };
+  // ---- Sessions ----------------------------------------------------------------
 
-      // Try to get existing data
-      const existingRequest = store.get(agentId);
-      await new Promise<void>((resolve, reject) => {
-        existingRequest.onsuccess = () => {
-          if (existingRequest.result) {
-            agentData = existingRequest.result;
-          }
-          resolve();
-        };
-        existingRequest.onerror = () => reject(existingRequest.error);
-      });
-
-      // Get all iterations for this session
-      const sessionIterations = this.getIterationsForSession(sessionId);
-      
-      agentData.currentSession = sessionId;
-      agentData.sessions[sessionId] = {
-        sessionId,
-        agentId,
-        startTime: sessionIterations.length > 0 ? sessionIterations[0].startTime : new Date().toISOString(),
-        iterations: sessionIterations
-      };
-
-      // Save updated data
-      await new Promise<void>((resolve, reject) => {
-        const request = store.put(agentData);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
-      
-    } catch (error) {
-      Logger.error('IterationStore', `Failed to save session ${sessionId} for agent ${agentId}`, error);
-    }
-  }
-
-  // Public API
   public startSession(agentId: string, sessionId: string) {
-    this.currentSessions.set(agentId, sessionId);
-    this.sessionIterationCounts.set(sessionId, 0);
-    this.saveToIndexedDB();
-    Logger.info('IterationStore', `Started session ${sessionId} for agent ${agentId}`);
+    this.sessions.set(agentId, { id: sessionId, count: 0 });
   }
 
+  /** Nothing to save: every finished iteration is already in IndexedDB. In-flight ones finish on their own. */
   public async endSession(agentId: string): Promise<void> {
-    const sessionId = this.currentSessions.get(agentId);
-    if (sessionId) {
-      // Save current session to persistent storage
-      await this.saveSessionToIndexedDB(agentId, sessionId);
-      
-      // Clean up current session data
-      this.currentSessions.delete(agentId);
-      this.sessionIterationCounts.delete(sessionId);
-      
-      // Remove iterations from memory (they're now persisted)
-      const iterationsToRemove = Array.from(this.iterations.values())
-        .filter(iteration => iteration.sessionId === sessionId);
-      
-      iterationsToRemove.forEach(iteration => {
-        this.iterations.delete(iteration.id);
-      });
-      
-      await this.saveToIndexedDB();
-
-      Logger.info('IterationStore', `Ended session ${sessionId} for agent ${agentId}`);
-    }
+    const session = this.sessions.get(agentId);
+    if (!session) return;
+    this.sessions.delete(agentId);
+    this.withImages.delete(agentId);
+    for (const it of this.live.values()) if (it.sessionId === session.id && it.endTime) this.live.delete(it.id);
+    await this.writes;
   }
+
+  // ---- Sync reads (current session, from memory; the UI polls these) -----------
 
   public getIterationsForAgent(agentId: string): IterationData[] {
-    // Only return current session iterations (from memory)
-    const currentSessionId = this.currentSessions.get(agentId);
-    if (!currentSessionId) return [];
-
-    return Array.from(this.iterations.values())
-      .filter(iteration => iteration.agentId === agentId && iteration.sessionId === currentSessionId)
+    const sessionId = this.sessions.get(agentId)?.id;
+    if (!sessionId) return [];
+    return [...this.live.values()]
+      .filter(it => it.sessionId === sessionId)
       .sort((a, b) => a.sessionIterationNumber - b.sessionIterationNumber);
-  }
-
-  public getLastToolsForAgent(agentId: string, limit: number = 3): ToolCall[] {
-    const iterations = this.getIterationsForAgent(agentId);
-    const allTools: ToolCall[] = [];
-
-    // Collect all tools from all iterations, most recent first
-    for (let i = iterations.length - 1; i >= 0; i--) {
-      const iteration = iterations[i];
-      // Add tools in reverse order (most recent first within the iteration)
-      for (let j = iteration.tools.length - 1; j >= 0; j--) {
-        allTools.push(iteration.tools[j]);
-        if (allTools.length >= limit) {
-          return allTools;
-        }
-      }
-    }
-
-    return allTools;
   }
 
   public getToolsFromLastIteration(agentId: string): ToolCall[] {
-    const iterations = this.getIterationsForAgent(agentId);
-    if (iterations.length === 0) return [];
-
-    // Get the most recent iteration
-    const lastIteration = iterations[iterations.length - 1];
-    return [...lastIteration.tools]; // Return copy of tools array
+    return [...(this.getIterationsForAgent(agentId).at(-1)?.tools ?? [])];
   }
 
-  public getIteration(iterationId: string): IterationData | undefined {
-    return this.iterations.get(iterationId);
+  // ---- Async reads (everything, from IndexedDB + memory) -----------------------
+
+  /** One iteration WITH its images. */
+  public async getIteration(id: string): Promise<IterationData | undefined> {
+    await this.writes;
+    const tx = (await db()).transaction(['iterations', 'images']);
+    const [stored, img] = await Promise.all([
+      req<IterationData | undefined>(tx.objectStore('iterations').get(id)),
+      req<{ images: string[] } | undefined>(tx.objectStore('images').get(id)),
+    ]);
+    const it = this.live.get(id) ?? stored;
+    return it && { ...it, modelImages: it.modelImages ?? img?.images ?? [] };
   }
 
-  public getIterationsForSession(sessionId: string): IterationData[] {
-    return Array.from(this.iterations.values())
-      .filter(iteration => iteration.sessionId === sessionId)
-      .sort((a, b) => a.sessionIterationNumber - b.sessionIterationNumber);
-  }
+  /** An agent's iterations across all sessions, newest first, text only unless `images`. */
+  public async getRuns(
+    agentId: string,
+    { limit = 20, since, until, images = false }: { limit?: number; since?: string; until?: string; images?: boolean } = {},
+  ): Promise<IterationData[]> {
+    await this.writes;
+    const index = (await db()).transaction('iterations').objectStore('iterations').index('agent_time');
+    const stored: IterationData[] = [];
+    await new Promise<void>((ok, fail) => {
+      const cursor = index.openCursor(agentRange(agentId, since, until), 'prev');
+      cursor.onsuccess = () => {
+        const c = cursor.result;
+        if (!c || stored.length >= limit) return ok();
+        stored.push(c.value);
+        c.continue();
+      };
+      cursor.onerror = () => fail(cursor.error);
+    });
 
-  public getAllIterations(): IterationData[] {
-    return Array.from(this.iterations.values())
-      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
-  }
-
-  public async getHistoricalSessions(agentId: string): Promise<AgentSession[]> {
-    try {
-      const db = await this.openIterationDB();
-      const tx = db.transaction('agentSessions', 'readonly');
-      const store = tx.objectStore('agentSessions');
-      const request = store.get(agentId);
-      
-      return new Promise((resolve, reject) => {
-        request.onsuccess = () => {
-          const result = request.result;
-          if (!result) {
-            resolve([]);
-            return;
-          }
-          
-          const sessions = (Object.values(result.sessions || {}) as AgentSession[]).sort((a: AgentSession, b: AgentSession) => 
-            new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
-          );
-          resolve(sessions);
-        };
-        request.onerror = () => reject(request.error);
-      });
-    } catch (error) {
-      Logger.error('IterationStore', `Failed to get historical sessions for agent ${agentId}`, error);
-      return [];
+    // Memory wins: it has the in-flight iteration, which isn't stored yet.
+    const byId = new Map(stored.map(it => [it.id, it]));
+    for (const it of this.live.values()) {
+      if (it.agentId === agentId && (!since || it.startTime >= since) && (!until || it.startTime <= until)) byId.set(it.id, it);
     }
+    const runs = [...byId.values()].sort(newestFirst).slice(0, limit);
+    if (!images) return runs.map(textOf);
+    return Promise.all(runs.map(async it => (await this.getIteration(it.id)) ?? it));
   }
+
+  /** Every session but the running one, newest first, iterations oldest first. Text only unless `images`. */
+  public async getPastSessions(agentId: string, { images = false }: { images?: boolean } = {}): Promise<AgentSession[]> {
+    const current = this.sessions.get(agentId)?.id;
+    let runs = (await this.getRuns(agentId, { limit: Infinity })).filter(it => it.sessionId !== current);
+    if (images) runs = await Promise.all(runs.map(async it => (await this.getIteration(it.id)) ?? it));
+
+    const sessions = new Map<string, AgentSession>();
+    for (const it of runs.reverse()) {
+      let s = sessions.get(it.sessionId);
+      if (!s) sessions.set(it.sessionId, s = { sessionId: it.sessionId, agentId, startTime: it.startTime, iterations: [] });
+      s.iterations.push(it);
+      s.endTime = it.endTime ?? s.endTime;
+    }
+    return [...sessions.values()].reverse();
+  }
+
+  // ---- Housekeeping ------------------------------------------------------------
 
   public async clearAllHistory(agentId: string): Promise<void> {
-    try {
-      // Clear current session data
-      const sessionId = this.currentSessions.get(agentId);
-      if (sessionId) {
-        // Remove all iterations for this session from memory
-        const iterationsToRemove = Array.from(this.iterations.values())
-          .filter(iteration => iteration.sessionId === sessionId);
+    for (const it of this.live.values()) if (it.agentId === agentId && it.endTime) this.live.delete(it.id);
+    this.withImages.delete(agentId);
+    const session = this.sessions.get(agentId);
+    if (session) session.count = 0;
 
-        iterationsToRemove.forEach(iteration => {
-          this.iterations.delete(iteration.id);
-        });
-
-        // Reset session iteration count
-        this.sessionIterationCounts.set(sessionId, 0);
-      }
-
-      // Clear from IndexedDB
-      const db = await this.openIterationDB();
-      const tx = db.transaction('agentSessions', 'readwrite');
-      const store = tx.objectStore('agentSessions');
-
-      await new Promise<void>((resolve, reject) => {
-        const request = store.delete(agentId);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
-
-      Logger.info('IterationStore', `Cleared all history for agent ${agentId}`);
-    } catch (error) {
-      Logger.error('IterationStore', `Failed to clear all history for agent ${agentId}`, error);
+    await this.writes;
+    const tx = (await db()).transaction(['iterations', 'images'], 'readwrite');
+    const ids = await req(tx.objectStore('iterations').index('agent_time').getAllKeys(agentRange(agentId)));
+    for (const id of ids) {
+      tx.objectStore('iterations').delete(id);
+      tx.objectStore('images').delete(id);
     }
+    await done(tx);
   }
 
-  public async getStorageUsage(agentId: string): Promise<{ currentSessionMB: number, totalHistoryMB: number }> {
-    // Calculate current session size
-    const currentIterations = this.getIterationsForAgent(agentId);
-    let currentSessionBytes = 0;
-
-    currentIterations.forEach(iteration => {
-      // Estimate size of iteration data
-      currentSessionBytes += this.estimateIterationSize(iteration);
-    });
-
-    // Calculate historical data size from IndexedDB
-    let totalHistoryBytes = currentSessionBytes;
-    try {
-      const historicalSessions = await this.getHistoricalSessions(agentId);
-      historicalSessions.forEach(session => {
-        session.iterations.forEach(iteration => {
-          totalHistoryBytes += this.estimateIterationSize(iteration);
-        });
-      });
-    } catch (error) {
-      Logger.error('IterationStore', `Failed to calculate historical storage for agent ${agentId}`, error);
-    }
-
-    return {
-      currentSessionMB: Number((currentSessionBytes / (1024 * 1024)).toFixed(2)),
-      totalHistoryMB: Number((totalHistoryBytes / (1024 * 1024)).toFixed(2))
-    };
+  public async getStorageUsage(agentId: string): Promise<{ currentSessionMB: number; totalHistoryMB: number }> {
+    const runs = await this.getRuns(agentId, { limit: Infinity });
+    const sessionId = this.sessions.get(agentId)?.id;
+    const mb = (its: IterationData[]) => +(its.reduce((n, it) => n + (it.bytes ?? 0), 0) / 2 ** 20).toFixed(2);
+    return { currentSessionMB: mb(runs.filter(it => it.sessionId === sessionId)), totalHistoryMB: mb(runs) };
   }
 
-  private estimateIterationSize(iteration: IterationData): number {
-    let size = 0;
-
-    // Base iteration data (rough estimate)
-    size += JSON.stringify({
-      id: iteration.id,
-      agentId: iteration.agentId,
-      sessionId: iteration.sessionId,
-      startTime: iteration.startTime,
-      modelPrompt: iteration.modelPrompt,
-      modelResponse: iteration.modelResponse,
-      tools: iteration.tools
-    }).length;
-
-    // Sensor data (images are the big ones)
-    iteration.sensors.forEach(sensor => {
-      if (sensor.type === 'screenshot' || sensor.type === 'camera') {
-        // Estimate base64 image size - typical screenshot might be 100-500KB
-        size += sensor.size || 300000; // Default 300KB if size not available
-      } else {
-        // Other sensor types are much smaller
-        size += JSON.stringify(sensor.content || '').length;
-      }
-    });
-
-    // Model images
-    if (iteration.modelImages) {
-      iteration.modelImages.forEach(image => {
-        // Base64 images
-        size += image.length * 0.75; // Base64 is ~33% larger than binary
-      });
-    }
-
-    return size;
-  }
-
-  // Debug method
   public debug() {
-    console.log('IterationStore Debug:', {
-      totalIterations: this.iterations.size,
-      currentSessions: Array.from(this.currentSessions.entries()),
-      sessionCounts: Array.from(this.sessionIterationCounts.entries()),
-      iterations: Array.from(this.iterations.values())
-    });
+    console.log('IterationStore', { sessions: [...this.sessions], live: [...this.live.values()] });
   }
 }
 
-// Export singleton instance
 export const IterationStore = new IterationStoreClass();

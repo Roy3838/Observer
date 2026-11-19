@@ -85,10 +85,13 @@ let mounts = 0;
  *  last image an agent's model saw, to check its crop. */
 async function agentReport(since = 0) {
   const agents = await Promise.all((await listAgents()).map(async agent => {
-    // stopAgent() moves the session's iterations to IndexedDB: read them back from there.
-    const saved = (await IterationStore.getHistoricalSessions(agent.id)).find(s => new Date(s.startTime).getTime() >= since);
+    // The running session, else the newest one that ended since `since` (stopAgent() ends it).
     const live = IterationStore.getIterationsForAgent(agent.id);
-    const iterations = live.length ? live : saved?.iterations ?? [];
+    const saved = live.length ? undefined
+      : (await IterationStore.getPastSessions(agent.id)).find(s => new Date(s.startTime).getTime() >= since);
+    // Memory only keeps the newest images, so read each iteration back whole.
+    const iterations = await Promise.all((live.length ? live : saved?.iterations ?? [])
+      .map(async it => (await IterationStore.getIteration(it.id)) ?? it));
     return {
       id: agent.id,
       model_name: agent.model_name,
