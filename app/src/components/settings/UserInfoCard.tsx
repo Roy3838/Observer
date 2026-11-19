@@ -88,7 +88,7 @@ const RemoteControlStatus: React.FC = () => {
     ? 'Not chatting yet — link WhatsApp or Telegram above'
     : `Chat linked via ${linkedChannels.map(c => (c === 'whatsapp' ? 'WhatsApp' : 'Telegram')).join(' · ')}${
         remote.enabled ? (remote.listening ? ' · listening' : ' · connecting…') : ''
-      }`;
+      }${remote.enabled && remote.deadman ? ' · alerts you if it stops' : ''}`;
 
   return (
     <div className="flex items-center justify-between gap-3 px-5 py-3">

@@ -65,7 +65,7 @@ export const MCPProvider: React.FC<MCPProviderProps> = ({ getToken, isUsingObSer
       {/* Dev-only: the two ways to feed the mobile status PiP, side by side. */}
       {import.meta.env.DEV && isMobile() && <PipDebugPanel />}
       {mcp.pendingUserInfo && (
-        <UserInfoModal key={mcp.pendingUserInfo.requestId} req={mcp.pendingUserInfo} onResolve={mcp.resolveUserInfo} />
+        <UserInfoModal key={mcp.pendingUserInfo.requestId} req={mcp.pendingUserInfo} onResolve={mcp.resolveUserInfo} remote={remote} />
       )}
     </MCPContext.Provider>
   );

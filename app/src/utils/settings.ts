@@ -337,6 +337,19 @@ class SettingsManager {
     public setRemoteControlEnabled(enabled: boolean): void {
         localStorage.setItem(this.REMOTE_CONTROL_KEY, enabled ? 'on' : 'off');
     }
+
+    // Dead-man's switch: while on, the linked phone/chat is told if this device stops
+    // reporting (locked, closed, offline). Off by default; armed when ask_user_info pairs WhatsApp/Telegram.
+    // Persisted so a reload keeps it armed instead of silently disarming it.
+    private readonly DEADMAN_KEY = 'observer-ai:settings:deadman';
+
+    public isDeadmanEnabled(): boolean {
+        return localStorage.getItem(this.DEADMAN_KEY) === 'on';
+    }
+
+    public setDeadmanEnabled(enabled: boolean): void {
+        localStorage.setItem(this.DEADMAN_KEY, enabled ? 'on' : 'off');
+    }
 }
 
 // Export a single instance

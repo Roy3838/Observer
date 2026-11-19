@@ -12,6 +12,9 @@
 //                     for the rest) and only returns once it works. The MCP never handles codes
 //                     itself. The test notification is what makes the browser / OS ask for
 //                     permission now, from a tap, instead of when the agent first fires.
+//                     Pairing WhatsApp/Telegram here also offers remote management (on by
+//                     default): chat with the session from the phone, and get told if
+//                     monitoring stops (the dead-man's switch).
 //   model           — local or cloud.
 //   lock_phone      — a button that asks for the permission lockPhone() needs (Screen Time on
 //                     iOS, "Display over other apps" on Android). The agent runs in the
@@ -37,12 +40,16 @@ import { captureScreen, captureCamera } from '../../mcp/capture';
 import { startStatusPip } from '@utils/statusPip';
 import { fetchStatus } from '../../mcp/remote';
 import type { NotifyMethod, UserInfoRequest, UserInfoResponse } from '../../mcp/types';
+import type { RemoteControlState } from '../../mcp/useRemoteControl';
 import type { PhoneChannel } from '@utils/whitelistCode';
 import { CONTACT_LABEL, CONTACT_PLACEHOLDER, contactError, contactValid, normalizeContact } from '@utils/contactInfo';
 
 interface UserInfoModalProps {
   req: UserInfoRequest;
   onResolve: (requestId: string, response: UserInfoResponse) => void;
+  /** Remote control, armed when kind='method' pairs WhatsApp/Telegram. Passed in rather than
+   *  read from MCPContext, which renders this modal. */
+  remote?: RemoteControlState;
 }
 
 type ContactMethod = 'discord' | 'pushover';
@@ -156,14 +163,15 @@ const Spinner: React.FC<{ label: string }> = ({ label }) => (
   </div>
 );
 
-/** Drawn check mark, then `onFinish` after a beat: nothing is left to decide. */
-const Done: React.FC<{ label: string; onFinish: () => void }> = ({ label, onFinish }) => {
+/** Drawn check mark, then `onFinish` after a beat. `children` (an option to glance at) gets a
+ *  longer beat via `durationMs`; whatever it says when the beat ends is what's kept. */
+const Done: React.FC<{ label: string; onFinish: () => void; durationMs?: number; children?: React.ReactNode }> = ({ label, onFinish, durationMs = 1200, children }) => {
   const finish = useRef(onFinish);
   finish.current = onFinish;
   useEffect(() => {
-    const t = setTimeout(() => finish.current(), 1200);
+    const t = setTimeout(() => finish.current(), durationMs);
     return () => clearTimeout(t);
-  }, []);
+  }, [durationMs]);
   return (
     <div className="flex flex-col items-center gap-3 py-4">
       <svg viewBox="0 0 52 52" className="h-14 w-14">
@@ -172,6 +180,7 @@ const Done: React.FC<{ label: string; onFinish: () => void }> = ({ label, onFini
           className="stroke-emerald-500 animate-check-draw" style={{ strokeDasharray: 40, strokeDashoffset: 40 }} />
       </svg>
       <p className="text-sm font-medium">{label}</p>
+      {children}
     </div>
   );
 };
@@ -326,12 +335,16 @@ async function silentValue(method: NotifyMethod, getToken: () => Promise<string 
   }
 }
 
-const MethodModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
+const MethodModal: React.FC<UserInfoModalProps> = ({ req, onResolve, remote }) => {
   const { getAccessToken } = useAuth();
   const [method, setMethod] = useState<NotifyMethod | null>(req.method ?? null);
   // 'checking' a saved connection, 'setup' to connect one, 'done' to show the check mark.
   const [phase, setPhase] = useState<'pick' | 'checking' | 'setup' | 'done'>(req.method ? 'checking' : 'pick');
   const [value, setValue] = useState('');
+  // Just paired a chat: remote management (chat from the phone + the dead-man's switch), on
+  // unless the user unticks it before the check mark finishes. Already-paired users skip this.
+  const [remoteOn, setRemoteOn] = useState(true);
+  const chat = method === 'whatsapp' || method === 'telegram';
 
   const resolve = useCallback((m: NotifyMethod, v: string) => onResolve(req.requestId, { value: v, method: m }), [onResolve, req.requestId]);
   const skip = () => onResolve(req.requestId, { value: '', skipped: true });
@@ -356,6 +369,14 @@ const MethodModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
   };
 
   const connected = (v: string) => { setValue(v); setPhase('done'); };
+  const finish = (m: NotifyMethod) => {
+    if (chat && remote) {
+      // Off disarms too: remote control off means nothing is listening for the phone.
+      if (remoteOn) remote.setDeadman(true);
+      else remote.setEnabled(false);
+    }
+    resolve(m, value);
+  };
   const choosePick = () => { setMethod(null); setPhase('pick'); };
 
   // A channel the user named, being checked: just the pill. Most returning users see nothing else.
@@ -388,7 +409,26 @@ const MethodModal: React.FC<UserInfoModalProps> = ({ req, onResolve }) => {
   return (
     <Sheet icon={meta.icon} title={phase === 'done' ? `${meta.label} is ready` : `Get alerts by ${meta.label}`} subtitle={phase === 'setup' ? req.reason : undefined} onClose={skip} onBack={back}>
       {phase === 'checking' && <Spinner label={`Checking ${meta.label}…`} />}
-      {phase === 'done' && <Done label={`${meta.label} connected`} onFinish={() => resolve(method, value)} />}
+      {phase === 'done' && (
+        <Done label={`${meta.label} connected`} onFinish={() => finish(method)} durationMs={chat && remote ? 4000 : undefined}>
+          {chat && remote && (
+            <label className="mt-2 w-full flex items-start gap-3 p-4 rounded-2xl ring-1 ring-zinc-200 dark:ring-zinc-800 text-left cursor-pointer">
+              <input
+                type="checkbox"
+                checked={remoteOn}
+                onChange={e => setRemoteOn(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-zinc-900 dark:accent-white"
+              />
+              <span>
+                <span className="block text-sm font-medium">Stay in touch from your phone</span>
+                <span className="block mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                  Control Observer from {meta.label}, and get a message if monitoring stops.
+                </span>
+              </span>
+            </label>
+          )}
+        </Done>
+      )}
       {phase === 'setup' && (
         isPhone(method) ? <PhoneSetup method={method} getToken={getAccessToken} onConnected={connected} />
           : method === 'telegram' ? <TelegramSetup onConnected={connected} />

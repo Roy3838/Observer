@@ -43,6 +43,9 @@ export interface RunnerDeps {
   signal?: AbortSignal;
   /** Called whenever the wire changes (new assistant/tool message appended). */
   onWireUpdate?: (wire: WireMessage[]) => void;
+  /** Called with each message the loop appends for the user to read: assistant turns and the
+   *  tool-images follow-up (not raw tool results). Remote control mirrors these to the phone. */
+  onMessage?: (message: WireMessage) => void;
   /** Streamed assistant prose for the live bubble. */
   onAssistantDelta?: (chunk: string) => void;
   /** Per-tool-call status transitions. */
@@ -56,6 +59,10 @@ function toolResultContent(result: ToolResult): string {
 }
 
 const CANCELLED: ToolResult = { error: 'Cancelled by user.' };
+
+/** The text of the user message that carries a turn's tool images (OpenAI tool messages are
+ *  text-only). Lets consumers tell it apart from what the user wrote. */
+export const TOOL_IMAGES_TEXT = 'Images from the tool result(s) above:';
 
 /**
  * Race a tool's `execute()` against the abort signal, so the loop unblocks the instant a new
@@ -134,11 +141,13 @@ export async function runConversation(wire: WireMessage[], deps: RunnerDeps): Pr
     const assistantContent = rawContent
       ? rawContent
       : hasToolCalls ? null : '​';
-    wire.push({
+    const assistantMessage: WireMessage = {
       role: 'assistant',
       content: assistantContent,
       tool_calls: assistant.tool_calls,
-    });
+    };
+    wire.push(assistantMessage);
+    deps.onMessage?.(assistantMessage);
     deps.onWireUpdate?.(wire);
 
     if (!hasToolCalls) {
@@ -193,22 +202,26 @@ export async function runConversation(wire: WireMessage[], deps: RunnerDeps): Pr
     // Multimodal results: OpenAI tool messages are text-only, so images ride in a
     // follow-up user message with image_url parts.
     if (pendingImages.length > 0) {
-      wire.push({
+      const imagesMessage: WireMessage = {
         role: 'user',
         content: [
-          { type: 'text', text: 'Images from the tool result(s) above:' },
+          { type: 'text', text: TOOL_IMAGES_TEXT },
           ...pendingImages.map(url => ({ type: 'image_url', image_url: { url } })),
         ],
-      });
+      };
+      wire.push(imagesMessage);
+      deps.onMessage?.(imagesMessage);
       deps.onWireUpdate?.(wire);
     }
   }
 
   // Cap hit.
-  wire.push({
+  const capMessage: WireMessage = {
     role: 'assistant',
     content: 'I\'ve reached the maximum number of steps for this request. Let me know how you\'d like to proceed.',
-  });
+  };
+  wire.push(capMessage);
+  deps.onMessage?.(capMessage);
   deps.onWireUpdate?.(wire);
   return wire;
 }

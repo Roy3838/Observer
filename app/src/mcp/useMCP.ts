@@ -39,6 +39,14 @@ export interface UseMCPOptions {
 /** Listener fired after any agent-mutating tool completes. Receives the tool name. */
 export type MutationListener = (toolName: string, args?: Record<string, any>) => void;
 
+/** One step of a turn, as it happens: the user message that opened it, each message the run
+ *  appends for the user to read, then `end` once it settles (finished, failed or interrupted).
+ *  Remote control mirrors these to the user's phone. */
+export type TurnEvent =
+  | { turnId: string; kind: 'message'; message: WireMessage }
+  | { turnId: string; kind: 'end' };
+export type TurnListener = (event: TurnEvent) => void;
+
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite-free';
 
 /** Logger source for everything the MCP agentic loop emits. */
@@ -56,25 +64,6 @@ function finalAssistantText(messages: WireMessage[]): string | undefined {
     if (text) return text;
   }
   return undefined;
-}
-
-/** Max images to carry back to a remote reply \u2014 keeps MMS/Telegram sends bounded. */
-const MAX_REMOTE_IMAGES = 3;
-
-/**
- * Images the runner collected from this turn's tool results (see runner.ts's
- * "Images from the tool result(s) above:" follow-up user message), most recent last.
- * Lets a remote reply (e.g. capture_screen) carry back what the agent actually saw.
- */
-function turnImages(messages: WireMessage[]): string[] {
-  const images: string[] = [];
-  for (const m of messages) {
-    if (m.role !== 'user' || !Array.isArray(m.content)) continue;
-    for (const part of m.content) {
-      if (part?.type === 'image_url' && part.image_url?.url) images.push(part.image_url.url);
-    }
-  }
-  return images.slice(-MAX_REMOTE_IMAGES);
 }
 
 const abortError = () => new DOMException('Stopped by user.', 'AbortError');
@@ -96,6 +85,15 @@ export function useMCP(options: UseMCPOptions) {
   const subscribeMutation = useCallback((listener: MutationListener) => {
     mutationListeners.current.add(listener);
     return () => { mutationListeners.current.delete(listener); };
+  }, []);
+
+  const turnListeners = useRef<Set<TurnListener>>(new Set());
+  const subscribeTurn = useCallback((listener: TurnListener) => {
+    turnListeners.current.add(listener);
+    return () => { turnListeners.current.delete(listener); };
+  }, []);
+  const emitTurn = useCallback((event: TurnEvent) => {
+    turnListeners.current.forEach(l => l(event));
   }, []);
 
   const [messages, setMessages] = useState<WireMessage[]>([]);
@@ -174,15 +172,14 @@ export function useMCP(options: UseMCPOptions) {
     setUserInfoQueue([]);
   }, []);
 
-  /** Runs one user turn. Resolves, once the run settles, with the run's final assistant text
-   *  and any images the model captured along the way (what remote control sends back to the
-   *  phone), or undefined if there was no final text.
+  /** Runs one user turn. Resolves, once the run settles, with the run's final assistant text,
+   *  or undefined if there was none. Each step is also announced to subscribeTurn listeners.
    *
    *  A new message always wins over whatever's currently running: rather than queuing behind
    *  a slow or hung tool call (e.g. capture_screen's picker with nobody there to click it),
    *  it interrupts that run — via the same abort path `stop()` uses — and waits for it to
    *  actually unwind before starting. */
-  const send = useCallback(async (userText: string, images?: string[]): Promise<{ text: string; images: string[] } | undefined> => {
+  const send = useCallback(async (userText: string, images?: string[]): Promise<string | undefined> => {
     if (inFlightRef.current) {
       interrupt();
       await inFlightRef.current.catch(() => {});
@@ -203,8 +200,11 @@ export function useMCP(options: UseMCPOptions) {
         })),
       ];
     }
-    wireRef.current.push({ role: 'user', content: userContent });
+    const turnId = crypto.randomUUID();
+    const userMessage: WireMessage = { role: 'user', content: userContent };
+    wireRef.current.push(userMessage);
     syncMessages();
+    emitTurn({ turnId, kind: 'message', message: userMessage });
     const turnStart = wireRef.current.length;
 
     const controller = new AbortController();
@@ -250,6 +250,7 @@ export function useMCP(options: UseMCPOptions) {
           context: { getToken, signal, requestUserInfo },
           signal,
           onWireUpdate: syncMessages,
+          onMessage: message => emitTurn({ turnId, kind: 'message', message }),
           // Drop stream chunks from an orphaned (aborted) model call so a killed run can't
           // keep repopulating the live bubble.
           onAssistantDelta: chunk => { if (!signal.aborted) setStreamingText(prev => prev + chunk); },
@@ -287,24 +288,25 @@ export function useMCP(options: UseMCPOptions) {
               quotaType: 'agent_creator',
             });
           }
-          wireRef.current.push({ role: 'assistant', content: `Sorry, I ran into an error: ${text}` });
+          const errorMessage: WireMessage = { role: 'assistant', content: `Sorry, I ran into an error: ${text}` };
+          wireRef.current.push(errorMessage);
           syncMessages();
+          emitTurn({ turnId, kind: 'message', message: errorMessage });
         }
       } finally {
         StreamManager.releaseStreamsForAgent(TURN_HOLDER);
         if (abortRef.current === controller) abortRef.current = null;
         setIsRunning(false);
         setStreamingText('');
+        emitTurn({ turnId, kind: 'end' });
       }
     })();
     inFlightRef.current = runPromise;
     await runPromise;
     if (inFlightRef.current === runPromise) inFlightRef.current = null;
 
-    const turnSlice = wireRef.current.slice(turnStart);
-    const text = finalAssistantText(turnSlice);
-    return text ? { text, images: turnImages(turnSlice) } : undefined;
-  }, [isUsingObServer, getToken, modelName, syncMessages, setStatus, requestUserInfo, interrupt]);
+    return finalAssistantText(wireRef.current.slice(turnStart));
+  }, [isUsingObServer, getToken, modelName, syncMessages, setStatus, requestUserInfo, interrupt, emitTurn]);
 
   /** Hard-stop the in-flight run: kill the loop and abandon any model call. Leaves the
    *  (sealed) conversation intact. */
@@ -360,6 +362,7 @@ export function useMCP(options: UseMCPOptions) {
     pendingUserInfo,
     resolveUserInfo,
     subscribeMutation,
+    subscribeTurn,
     conversations,
     activeConversationId,
     newConversation,

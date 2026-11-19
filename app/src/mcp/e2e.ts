@@ -118,7 +118,7 @@ function createApi(h: () => E2EHandles) {
   return {
     isAuthenticated: async () => !!(await h().getToken()().catch(() => undefined)),
     /** One user turn. Resolves when the MCP's run settles, with its final text. */
-    send: async (prompt: string) => (await h().mcp().send(prompt))?.text ?? '',
+    send: async (prompt: string) => (await h().mcp().send(prompt)) ?? '',
     stop: () => h().mcp().stop(),
     runningAgentIds: () => getRunningAgentIds(),
     /** The live conversation; if it's empty (the provider re-mounted mid-run, so its state is
