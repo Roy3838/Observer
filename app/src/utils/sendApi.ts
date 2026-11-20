@@ -236,40 +236,50 @@ async function handleStreamingResponseWithTools(
     const data = line.slice(6);
     if (data === '[DONE]') return true;
 
+    let parsed: any;
     try {
-      const parsed = JSON.parse(data);
-      const choice = parsed.choices?.[0];
-      if (!choice) return false;
-
-      const delta = choice.delta || {};
-
-      if (delta.reasoning && onReasoningChunk) {
-        onReasoningChunk(delta.reasoning);
-      }
-
-      if (delta.content) {
-        fullContent += delta.content;
-        if (onStreamChunk) onStreamChunk(delta.content);
-      }
-
-      if (Array.isArray(delta.tool_calls)) {
-        for (const tc of delta.tool_calls) {
-          const acc = accumulatorFor(tc);
-          if (tc.id) acc.id = tc.id;
-          if (tc.function?.name) acc.name = tc.function.name;
-          if (tc.function?.arguments) acc.arguments += tc.function.arguments;
-          // Gemini 2.5+ may deliver the thought_signature in any chunk for this call
-          // (sometimes a content-less one), so capture it whenever it appears.
-          if (tc.extra_content) acc.extra_content = tc.extra_content;
-        }
-      }
-
-      if (choice.finish_reason) finishReason = choice.finish_reason;
-    } catch (parseError) {
+      parsed = JSON.parse(data);
+    } catch {
       // A complete line that still won't parse is a real anomaly now that partial
       // lines are buffered — surface it instead of silently losing the event.
       console.warn('Dropped unparseable stream event:', data.slice(0, 200));
+      return false;
     }
+
+    // The proxy reports an upstream failure inside the 200 stream as `data: {"error": ...}`
+    // (no `choices`). Throw it so the caller shows the error instead of an empty turn.
+    if (parsed.error) {
+      const err = parsed.error;
+      throw new Error(typeof err === 'string' ? err : err.message ?? JSON.stringify(err));
+    }
+
+    const choice = parsed.choices?.[0];
+    if (!choice) return false;
+
+    const delta = choice.delta || {};
+
+    if (delta.reasoning && onReasoningChunk) {
+      onReasoningChunk(delta.reasoning);
+    }
+
+    if (delta.content) {
+      fullContent += delta.content;
+      if (onStreamChunk) onStreamChunk(delta.content);
+    }
+
+    if (Array.isArray(delta.tool_calls)) {
+      for (const tc of delta.tool_calls) {
+        const acc = accumulatorFor(tc);
+        if (tc.id) acc.id = tc.id;
+        if (tc.function?.name) acc.name = tc.function.name;
+        if (tc.function?.arguments) acc.arguments += tc.function.arguments;
+        // Gemini 2.5+ may deliver the thought_signature in any chunk for this call
+        // (sometimes a content-less one), so capture it whenever it appears.
+        if (tc.extra_content) acc.extra_content = tc.extra_content;
+      }
+    }
+
+    if (choice.finish_reason) finishReason = choice.finish_reason;
     return false;
   };
 
