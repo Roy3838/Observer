@@ -5,6 +5,7 @@ import { getAgentMemory, getAgentImageMemory } from './agent_database';
 import { captureScreenImage } from './screenCapture';
 import { captureCameraImage } from './cameraCapture';
 import { StreamManager } from './streamManager';
+import { isJsonPrompt, jsonEscape } from './localLlm/systemOne';
 
 
 // Define the result structure
@@ -320,6 +321,10 @@ const processors: Record<string, { regex: RegExp, handler: ProcessorFunction }> 
 
 export async function preProcess(agentId: string, systemPrompt: string, iterationId?: string): Promise<PreProcessorResult> {
   let modifiedPrompt = systemPrompt;
+  // A JSON System One request (decision models): text a sensor splices in ($MEMORY, $CLIPBOARD, ...)
+  // sits inside a JSON string, so it's escaped and a quote or newline can't break the parse.
+  // Image sensors replace their placeholder with '' and are unaffected.
+  const jsonPrompt = isJsonPrompt(systemPrompt);
   const result: PreProcessorResult = {
     modifiedPrompt,
     images: [],
@@ -366,7 +371,7 @@ export async function preProcess(agentId: string, systemPrompt: string, iteratio
         
         let replacement = placeholder; // Default to keeping the placeholder if no replacementText
         if (processorResult.replacementText !== undefined) {
-          replacement = processorResult.replacementText;
+          replacement = jsonPrompt ? jsonEscape(processorResult.replacementText) : processorResult.replacementText;
         }
         tempPrompt += replacement;
 

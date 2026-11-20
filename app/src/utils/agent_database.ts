@@ -3,6 +3,7 @@
 //
 import { dispatchMemoryUpdate } from '@components/MemoryManager';
 import yaml from 'js-yaml';
+import type { AgentClassification } from '@/mcp/ontology/schema';
 
 export interface CompleteAgent {
   id: string;
@@ -12,6 +13,8 @@ export interface CompleteAgent {
   system_prompt: string;
   loop_interval_seconds: number;
   only_on_significant_change?: boolean;
+  /** Set by the MCP: the agent's place in the ontology (mcp/ontology). UI-made agents have none. */
+  classification?: AgentClassification;
 }
 
 // Database setup
@@ -104,9 +107,10 @@ export async function saveAgent(
     model_name: agent.model_name,
     system_prompt: agent.system_prompt,
     loop_interval_seconds: agent.loop_interval_seconds,
-    only_on_significant_change: agent.only_on_significant_change
+    only_on_significant_change: agent.only_on_significant_change,
+    classification: agent.classification
   };
-  
+
   const configStore = tx.objectStore(CONFIG_STORE);
   await new Promise<void>((resolve, reject) => {
     const request = configStore.put(agentConfig);
@@ -229,6 +233,7 @@ async function getAgentConfig(agentId: string): Promise<{
   system_prompt: string;
   loop_interval_seconds: number;
   only_on_significant_change?: boolean;
+  classification?: AgentClassification;
 } | null> {
   const db = await openDB();
   
@@ -454,6 +459,7 @@ export interface AgentExport {
   system_prompt: string;
   loop_interval_seconds: number;
   only_on_significant_change?: boolean;
+  classification?: AgentClassification;
   code: string;
   memory: string;
 }
@@ -485,7 +491,8 @@ export async function importAgentFromFile(file: File): Promise<CompleteAgent> {
           model_name: agentData.model_name,
           system_prompt: agentData.system_prompt,
           loop_interval_seconds: agentData.loop_interval_seconds,
-          only_on_significant_change: agentData.only_on_significant_change
+          only_on_significant_change: agentData.only_on_significant_change,
+          classification: agentData.classification
         };
         
         await saveAgent(agent, agentData.code);
@@ -557,6 +564,7 @@ export async function exportAgentToFile(agentId: string): Promise<Blob> {
     system_prompt: agent.system_prompt,
     loop_interval_seconds: agent.loop_interval_seconds,
     only_on_significant_change: agent.only_on_significant_change,
+    ...(agent.classification ? { classification: agent.classification } : {}), // js-yaml can't dump undefined
     code,
     memory
   };

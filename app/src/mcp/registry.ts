@@ -38,6 +38,8 @@ import { getPhoneLockStatus, phoneLockPermissionName, browserNotifyReady } from 
 import { SensorSettings } from '@utils/settings';
 import { normalizeWhitelistCode } from '@utils/whitelistCode';
 import { fetchStatus } from './remote';
+import { CLASSIFICATION_PARAM, parseClassification } from './ontology/schema';
+import { checkAgent, formatRejection, formatWarnings } from './ontology/check';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -169,6 +171,34 @@ function checkNotifications(agentCode: string): string | null {
     return "start_agent blocked by pre-flight: system_notify() hasn't been tested on this computer. Call ask_user_info kind='method' channel='system' so the user accepts a test notification, then start_agent again.";
   }
   return null;
+}
+
+/**
+ * create_agent / edit_agent: check the agent against its classification (ontology 'save' rules)
+ * and save it only if nothing is broken. Errors go back to the model as one list to repair.
+ */
+async function saveCheckedAgent(tool: 'create_agent' | 'edit_agent', agent: CompleteAgent, code: string, rawClassification: unknown): Promise<ToolResult> {
+  const parsed = parseClassification(rawClassification);
+  if (!parsed.value) return { error: `${tool}: ${parsed.error}` };
+  const classification = parsed.value;
+
+  const { errors, warnings } = checkAgent('save', { agent, code, classification });
+  if (errors.length) return { error: formatRejection(tool, classification, errors) };
+
+  try {
+    const saved = await saveAgent({ ...agent, classification }, code);
+    return { data: { saved: true, id: saved.id, name: saved.name, ...(warnings.length ? { warnings: formatWarnings(warnings) } : {}) } };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** get_iteration: the ontology's 'verify' warnings for an iteration of a classified agent (does it show what `now` says?). */
+async function withVerifyWarnings(agentId: string, it: IterationData, result: ToolResult): Promise<ToolResult> {
+  const agent = await getAgent(agentId);
+  if (!agent?.classification || !result.data) return result;
+  const { warnings } = checkAgent('verify', { agent, code: (await getAgentCode(agentId)) ?? '', classification: agent.classification, iteration: it });
+  return warnings.length ? { ...result, data: { ...result.data, warnings: formatWarnings(warnings) } } : result;
 }
 
 /** The iteration get_iteration last returned per agent (agent_id mode), so a repeat call waits for a newer one. */
@@ -321,6 +351,7 @@ export const TOOLS: ToolDefinition[] = [
           description: a.description,
           model_name: a.model_name,
           loop_interval_seconds: a.loop_interval_seconds,
+          classification: a.classification,
           running: isAgentLoopRunning(a.id),
         })),
       };
@@ -420,7 +451,8 @@ export const TOOLS: ToolDefinition[] = [
           // A repeat call waits for a newer iteration: the second look must be a later moment.
           if (settled && settled.id !== lastSeenIteration.get(args.agent_id)) {
             lastSeenIteration.set(args.agent_id, settled.id);
-            return iterationToResult((await IterationStore.getIteration(settled.id)) ?? settled);
+            const full = (await IterationStore.getIteration(settled.id)) ?? settled;
+            return withVerifyWarnings(args.agent_id, full, iterationToResult(full));
           }
           // Stopped (its code called stopAgent(), or an error stopped it): its session is over,
           // so nothing new will appear in memory. Return its last iteration.
@@ -428,7 +460,8 @@ export const TOOLS: ToolDefinition[] = [
             const recent = await IterationStore.getRuns(args.agent_id, { limit: 5 });
             const last = recent.find(isIterationSettled);
             if (last) {
-              const result = iterationToResult((await IterationStore.getIteration(last.id)) ?? last);
+              const full = (await IterationStore.getIteration(last.id)) ?? last;
+              const result = await withVerifyWarnings(args.agent_id, full, iterationToResult(full));
               const stopped = `The agent is STOPPED (since ${last.endTime ?? 'its last iteration'}): its code called stopAgent() or an error stopped it. This is its last iteration. If it stopped on the very first iterations while the job is still going, its condition is wrong: fix it before start_agent again.`;
               return { ...result, data: { ...result.data, stopped } };
             }
@@ -480,13 +513,14 @@ export const TOOLS: ToolDefinition[] = [
         system_prompt: { type: 'string', description: 'The system prompt, including any $SENSOR placeholders ($SCREEN, $MEMORY, $CLIPBOARD, ...).' },
         loop_interval_seconds: { type: 'number', description: 'Seconds between agent iterations. Optional — defaults to 30. Use shorter (~5–15s) for live screen/camera watchers, longer for periodic checks.' },
         code: { type: 'string', description: 'JavaScript run after each model response (agent-code API: response, or decision.noul for a decision model, sendEmail(), appendMemory(), overlay(), startAgent(), stopAgent(), ...).' },
+        classification: CLASSIFICATION_PARAM,
       },
-      required: ['id', 'name', 'model_name', 'system_prompt', 'code'],
+      required: ['id', 'name', 'model_name', 'system_prompt', 'code', 'classification'],
     },
     multimodal: false,
     execute: async (args): Promise<ToolResult> => {
-      if (!/\$(?:SCREEN|CAMERA|MICROPHONE|CLIPBOARD|MEMORY|LOCATION)\b/.test(args.system_prompt)) {
-        return { error: 'The system_prompt must include at least one sensor placeholder (e.g. $SCREEN, $CAMERA, $MICROPHONE, $CLIPBOARD, $MEMORY, $LOCATION). Agents without a sensor have no perception — add one and try again.' };
+      if (!/\$(?:SCREEN|CAMERA|MICROPHONE|CLIPBOARD|MEMORY|IMEMORY|LOCATION)\b/.test(args.system_prompt)) {
+        return { error: 'The system_prompt must include at least one sensor placeholder (e.g. $SCREEN, $CAMERA, $MICROPHONE, $CLIPBOARD, $MEMORY, $IMEMORY, $LOCATION). Agents without a sensor have no perception — add one and try again.' };
       }
       const agent: CompleteAgent = {
         id: args.id,
@@ -496,12 +530,7 @@ export const TOOLS: ToolDefinition[] = [
         system_prompt: args.system_prompt,
         loop_interval_seconds: args.loop_interval_seconds ?? 30,
       };
-      try {
-        const saved = await saveAgent(agent, args.code);
-        return { data: { saved: true, id: saved.id, name: saved.name } };
-      } catch (e) {
-        return { error: e instanceof Error ? e.message : String(e) };
-      }
+      return saveCheckedAgent('create_agent', agent, args.code, args.classification);
     },
   },
   {
@@ -517,8 +546,9 @@ export const TOOLS: ToolDefinition[] = [
         system_prompt: { type: 'string', description: 'The system prompt.' },
         loop_interval_seconds: { type: 'number', description: 'Seconds between agent iterations. Optional — omit to keep the agent\'s current interval.' },
         code: { type: 'string', description: 'JavaScript run after each model response (agent-code API).' },
+        classification: CLASSIFICATION_PARAM,
       },
-      required: ['id', 'name', 'model_name', 'system_prompt', 'code'],
+      required: ['id', 'name', 'model_name', 'system_prompt', 'code', 'classification'],
     },
     multimodal: false,
     execute: async (args): Promise<ToolResult> => {
@@ -535,12 +565,7 @@ export const TOOLS: ToolDefinition[] = [
         system_prompt: args.system_prompt,
         loop_interval_seconds: args.loop_interval_seconds ?? existing.loop_interval_seconds ?? 30,
       };
-      try {
-        const saved = await saveAgent(agent, args.code);
-        return { data: { saved: true, id: saved.id, name: saved.name } };
-      } catch (e) {
-        return { error: e instanceof Error ? e.message : String(e) };
-      }
+      return saveCheckedAgent('edit_agent', agent, args.code, args.classification);
     },
   },
   {
@@ -744,6 +769,16 @@ export const TOOLS: ToolDefinition[] = [
         const code = (await getAgentCode(args.id)) ?? '';
         const blocked = await checkContactCodes(code, ctx.getToken) ?? await checkPhoneLock(code) ?? checkNotifications(code);
         if (blocked) return { error: blocked };
+        // Ontology 'start' rules: a cropped agent has its crop, a gate's scribe exists.
+        if (agent.classification) {
+          const all = await listAgents();
+          const { errors } = checkAgent('start', {
+            agent, code, classification: agent.classification,
+            crop: { screen: !!getAgentCrop(args.id, 'screen'), camera: !!getAgentCrop(args.id, 'camera') },
+            findAgent: id => all.find(a => a.id === id) ?? null,
+          });
+          if (errors.length) return { error: formatRejection('start_agent', agent.classification, errors) };
+        }
         await startAgentLoop(args.id, ctx.getToken);
         // The agent owns its streams now, so the share ends when it stops.
         releaseCaptureHolds(getRequiredStreamsForPrompt(agent.system_prompt));

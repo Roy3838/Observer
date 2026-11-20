@@ -51,7 +51,7 @@ export interface SystemOneRequest {
 export interface NoulAnswer {
   type: 'noul';
   noul: number;                       // P(yes)
-  // Set by the agent loop on a plain-text prompt's answer (see withNoulTrend):
+  // Set by the agent loop on every noul answer (see withNoulTrend):
   start?: number;                     // mean noul of the run's first iterations
   dropped?: boolean;                  // noul has stayed well below `start` for a few iterations
 }
@@ -61,6 +61,10 @@ export interface ChoiceAnswer {
   choice: string;
   probabilities: Record<string, number>;
   confidence: number;
+  // Set by the agent loop (see withNoulTrend):
+  start?: string;                     // the label that won the run's first iterations
+  start_probability?: number;         // its mean probability over those iterations
+  left?: boolean;                     // its probability has stayed well below that for a few iterations
 }
 
 export interface ScoreAnswer {
@@ -244,10 +248,20 @@ export interface PreparedDecision {
   branches: DecisionBranch[];
 }
 
+/** A prompt that starts with '{' is a JSON System One request; anything else is one plain-text noul question. */
+export function isJsonPrompt(prompt: string): boolean {
+  return prompt.trimStart().startsWith('{');
+}
+
+/** Text made safe to splice inside a JSON string (preProcess fills a JSON prompt's sensors with it). */
+export function jsonEscape(text: string): string {
+  return JSON.stringify(text).slice(1, -1);
+}
+
 // Agent prompt (+ images) → the System One request, and the state text with images placed.
 function parsePrompt(prompt: string, images: string[]): { single: boolean; request: SystemOneRequest; stateText: string } {
   const trimmed = prompt.trim();
-  const single = !trimmed.startsWith('{');
+  const single = !isJsonPrompt(trimmed);
 
   let request: SystemOneRequest;
   if (single) {
@@ -264,6 +278,18 @@ function parsePrompt(prompt: string, images: string[]): { single: boolean; reque
     stateText = stateText ? `${markers}\n${stateText}` : markers;
   }
   return { single, request, stateText };
+}
+
+/**
+ * Check a decision prompt without running it: the same parse and <image:N> checks a real
+ * iteration does, with `imageCount` placeholder images. Throws the error the iteration would hit.
+ * Returns whether it's a plain-text prompt and its questions.
+ */
+export function validateDecisionPrompt(prompt: string, imageCount: number): { single: boolean; questions: Record<string, Question> } {
+  const images = Array.from({ length: imageCount }, () => '');
+  const { single, request, stateText } = parsePrompt(prompt, images);
+  contentParts(stateText, images);
+  return { single, questions: request.questions };
 }
 
 /**
@@ -427,23 +453,57 @@ const START_ITERATIONS = 3;   // their mean noul is the run's start level
 const DROP = 0.15;            // this far below the start counts as down
 const HOLD = 3;               // iterations in a row down before `dropped`
 
-const trends = new Map<string, { first: number[]; down: number }>();
+// The same idea for a choice question: the label that wins the first iterations is where the run
+// started, and its probability staying DROP below that for HOLD iterations means the state left
+// it, even when no other single label clears a threshold. (Unlike `dropped`, not yet measured on
+// e2e runs: the constants are borrowed from noul.)
 
-/** Forget an agent's trend: call when its run starts or stops. */
+// One trend per question, keyed `${agentId}:${questionId}`; a plain-text prompt's one question is 'decision'.
+interface Trend { first: number[]; firstChoice: Record<string, number>[]; down: number }
+const trends = new Map<string, Trend>();
+
+/** Forget an agent's trends: call when its run starts or stops. */
 export function resetNoulTrend(agentId: string): void {
-  trends.delete(agentId);
+  for (const key of [...trends.keys()]) if (key.startsWith(`${agentId}:`)) trends.delete(key);
 }
 
-/** Add `start` and `dropped` to a plain-text prompt's answer; JSON-prompt answers pass through. */
-export function withNoulTrend<D extends Decision | null | undefined>(agentId: string, decision: D): D {
-  if (!decision || !isAnswer(decision) || decision.type !== 'noul') return decision;
-  const trend = trends.get(agentId) ?? { first: [], down: 0 };
-  trends.set(agentId, trend);
-  if (trend.first.length < START_ITERATIONS) {
-    trend.first.push(decision.noul);
-    return { ...decision, dropped: false };
+const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+function trendAnswer(key: string, answer: Answer): Answer {
+  if (answer.type === 'score') return answer;
+  const trend = trends.get(key) ?? { first: [], firstChoice: [], down: 0 };
+  trends.set(key, trend);
+
+  if (answer.type === 'noul') {
+    if (trend.first.length < START_ITERATIONS) {
+      trend.first.push(answer.noul);
+      return { ...answer, dropped: false };
+    }
+    const start = mean(trend.first);
+    trend.down = answer.noul < start - DROP ? trend.down + 1 : 0;
+    return { ...answer, start: round6(start), dropped: trend.down >= HOLD };
   }
-  const start = trend.first.reduce((a, b) => a + b, 0) / trend.first.length;
-  trend.down = decision.noul < start - DROP ? trend.down + 1 : 0;
-  return { ...decision, start: round6(start), dropped: trend.down >= HOLD };
+
+  if (trend.firstChoice.length < START_ITERATIONS) {
+    trend.firstChoice.push(answer.probabilities);
+    return { ...answer, left: false };
+  }
+  const labels = Object.keys(answer.probabilities);
+  const means = labels.map(l => mean(trend.firstChoice.map(p => p[l] ?? 0)));
+  const best = means.indexOf(Math.max(...means));
+  const start = labels[best], startProbability = means[best];
+  trend.down = (answer.probabilities[start] ?? 0) < startProbability - DROP ? trend.down + 1 : 0;
+  return { ...answer, start, start_probability: round6(startProbability), left: trend.down >= HOLD };
+}
+
+/**
+ * Add the run trend to every answer: `start` / `dropped` on noul answers, `start` /
+ * `start_probability` / `left` on choice answers, for plain-text and JSON prompts alike.
+ */
+export function withNoulTrend<D extends Decision | null | undefined>(agentId: string, decision: D): D {
+  if (!decision) return decision;
+  if (isAnswer(decision)) return trendAnswer(`${agentId}:decision`, decision) as D;
+  return Object.fromEntries(
+    Object.entries(decision).map(([id, answer]) => [id, trendAnswer(`${agentId}:${id}`, answer)]),
+  ) as D;
 }

@@ -10,6 +10,7 @@
 //     images      key: id                                            { id, images: string[] }
 
 import { LogEntry, Logger } from './logging';
+import type { Decision } from './localLlm/systemOne';
 
 export interface SensorData {
   type: 'screenshot' | 'camera' | 'ocr' | 'audio' | 'clipboard' | 'memory' | 'imemory';
@@ -41,6 +42,7 @@ export interface IterationData {
   modelImageCount?: number;
   modelResponse?: string;
   modelResponseTime?: string;
+  decision?: Decision; // Decision models: the structured answer (with its run trend), not just the display string
   tools: ToolCall[];
   duration?: number; // Seconds, start to finish
   bytes?: number; // Approximate stored size
@@ -128,6 +130,7 @@ class IterationStoreClass {
       it.modelImages = typeof c === 'object' ? c.images ?? [] : [];
     } else if (type === 'model-response') {
       it.modelResponse = typeof c === 'string' ? c : '';
+      if (log.details.decision) it.decision = log.details.decision;
       it.modelResponseTime = at;
     } else if (type === 'tool-success' || type === 'tool-error') {
       it.tools.push({

@@ -350,6 +350,9 @@ export async function executeAgentIteration(agentId: string): Promise<void> {
       }
     }
 
+    // Decision answers get their run trend (start / dropped / left) before anything reads them
+    const decision = withNoulTrend(agentId, output.decision);
+
     // Log based on source
     if (fromCache) {
       Logger.info(agentId, `Using cached response - no significant change detected`, {
@@ -359,12 +362,13 @@ export async function executeAgentIteration(agentId: string): Promise<void> {
       });
     } else {
       // Decision models log a one-line summary so every response surface (cards, history, get_runs) shows it
-      const displayResponse = output.response ?? (output.decision ? formatDecision(output.decision) : '');
-      Logger.info(agentId, `Response`, { logType: 'model-response', iterationId, content: displayResponse });
+      // and the structured answer rides along so the iteration keeps it (IterationData.decision).
+      const displayResponse = output.response ?? (decision ? formatDecision(decision) : '');
+      Logger.info(agentId, `Response`, { logType: 'model-response', iterationId, content: displayResponse, decision: decision ?? undefined });
     }
 
     try {
-      await postProcess(agentId, output.response, agentCode, iterationId, loopData.getToken, preprocessResult, withNoulTrend(agentId, output.decision));
+      await postProcess(agentId, output.response, agentCode, iterationId, loopData.getToken, preprocessResult, decision);
       Logger.debug(agentId, `postProcess completed successfully`, { iterationId });
 
       // Clear subscriber transcripts for next loop window
