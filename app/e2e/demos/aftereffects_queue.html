@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<!-- Adobe After Effects on a Mac rendering a queue of six comps. The dial is the pair of buttons at
+     the top right of the Render Queue: Pause and Stop while it renders, Render and Queue in AME when
+     it doesn't. Holds rendering comp 2 of 6 (never past 40%) until the suite starts it; then it ends
+     by ?outcome=:
+       success    the comps finish one by one (each marked 'comp_done') until all six are Done
+       fail       comps 2 and 3 finish, then comp 4 and everything after it turns to "Failed at ..."
+                  within seconds and the queue is over
+       next_comp  the trigger is comp 2 finishing and comp 3 starting; the queue goes on
+     The header stays at 1% for a second as each comp starts; the buttons don't change.
+     Source Sans 3 (fonts/) stands in for Adobe Clean. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>After Effects</title>
+<link rel="stylesheet" href="fonts/inter.css">
+<link rel="stylesheet" href="fonts/source-sans.css">
+<link rel="stylesheet" href="desktop_assets/macos.css">
+<style>
+  .ae { flex: 1; min-height: 0; display: flex; flex-direction: column; background: #111; color: #d0d0d0; font: 12.5px/1.35 'Source Sans 3', 'Source Sans Pro', -apple-system, sans-serif; }
+  .ae .top { height: 28px; background: #232323; position: relative; display: grid; place-items: center; color: #a8a8a8; }
+  .ae .top .mac-lights { position: absolute; left: 12px; }
+  .ae .tools { height: 32px; background: #1d1d1d; border-bottom: 1px solid #000; display: flex; align-items: center; gap: 15px; padding: 0 14px; color: #bdbdbd; }
+  .ae .tools .on { background: #1473e6; color: #fff; border-radius: 4px; padding: 2px 7px; }
+  .ae .tools .ws { margin-left: auto; display: flex; gap: 22px; }
+  .ae .tools .ws b { color: #fff; font-weight: 600; border-bottom: 2px solid #ddd; }
+  .ae .up { flex: 1; min-height: 0; display: grid; grid-template-columns: 250px 1fr 220px; gap: 3px; padding-top: 3px; }
+  .ae .p { background: #1d1d1d; min-height: 0; overflow: hidden; }
+  .ae .p .h { padding: 6px 12px; display: flex; gap: 18px; color: #9d9d9d; }
+  .ae .p .h b { color: #eee; font-weight: 600; border-bottom: 2px solid #ddd; padding-bottom: 2px; }
+  .ae .proj div.r { display: flex; gap: 8px; padding: 1px 12px; align-items: center; }
+  .ae .proj .sw, .rq .sw { width: 11px; height: 11px; background: #b59a6d; border-radius: 1px; flex: none; display: inline-block; }
+  .ae .proj .ty { margin-left: auto; color: #8f8f8f; }
+  .ae .comp { display: flex; flex-direction: column; }
+  .ae .comp .v { flex: 1; min-height: 0; display: grid; place-items: center; background: #161616; }
+  .ae .comp canvas { width: 380px; height: 214px; background: #000; }
+  .ae .comp .f { height: 25px; padding: 3px 12px; display: flex; gap: 22px; color: #a8a8a8; }
+  .ae .comp .f i { font-style: normal; color: #4b9cf5; }
+  .rq { height: 446px; margin-top: 3px; background: #1d1d1d; border: 1.5px solid #3f82d8; display: flex; flex-direction: column; min-height: 0; }
+  .rq .tabs { padding: 6px 14px; display: flex; gap: 26px; color: #9d9d9d; }
+  .rq .tabs b { color: #eee; font-weight: 600; border-bottom: 2px solid #ddd; padding-bottom: 2px; }
+  .rq .cur { height: 46px; display: flex; align-items: center; background: #171717; padding: 0 14px; font-size: 14px; }
+  .rq .cur .bar { width: 260px; height: 16px; border-radius: 8px; background: #232323; overflow: hidden; margin: 0 14px; }
+  .rq .cur .bar i { display: block; height: 100%; background: #5eaaf7; border-radius: 8px; }
+  .rq .cur .n { width: 46px; } .rq .cur .fr { width: 112px; }
+  .rq .cur .lab { color: #bdbdbd; font-weight: 600; margin: 0 10px 0 18px; }
+  .rq .cur.idle { color: #6f6f6f; } .rq .cur.idle .lab { color: #6f6f6f; }
+  .pill { border: 1.7px solid #cfcfcf; border-radius: 17px; padding: 5px 15px; color: #ededed; font-weight: 600; display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; }
+  .pill.off { border-color: #4d4d4d; color: #6a6a6a; }
+  .pill .sq { width: 13px; height: 13px; border-radius: 3px; background: #ba444f; border: 2px solid #e88; }
+  .rq .btns { margin-left: auto; display: flex; gap: 14px; }
+  .rq .hd, .rq .it { display: grid; grid-template-columns: 22px 52px 24px 28px 190px 160px 190px 1fr; align-items: center; padding: 0 8px; }
+  .rq .hd { height: 21px; background: #1a1a1a; color: #b5b5b5; border-bottom: 1px solid #0d0d0d; }
+  .rq .list { flex: 1; min-height: 0; overflow: hidden; }
+  .rq .it { height: 18px; background: #2d2d2d; }
+  .rq .it b { color: #e4e4e4; font-weight: 600; }
+  .rq .it.now { background: #4b4b4b; }
+  .rq .sub { height: 16.5px; line-height: 16.5px; display: grid; grid-template-columns: 24px 118px 270px 70px 1fr; padding-left: 26px; color: #bdbdbd; white-space: nowrap; }
+  .rq .sub b { text-align: right; padding-right: 10px; font-weight: 600; }
+  .rq .sub i { font-style: normal; color: #4b9cf5; } .rq .over i { color: #a8a8a8; }
+  .rq .ft { height: 29px; display: flex; align-items: center; padding: 0 14px; border-top: 1px solid #0d0d0d; }
+  .rq .ft span { width: 225px; } .rq .ft b { font-weight: 600; color: #e4e4e4; margin-right: 6px; }
+  .rq .ft .nq { margin-left: auto; width: auto; color: #a8a8a8; }
+</style>
+<script src="demo-contract.js"></script>
+<script src="desktop_assets/macos.js"></script>
+</head>
+<body>
+<div class="mac-window full"><div class="ae">
+  <div class="top"><div class="mac-lights"><i></i><i></i><i></i></div>Adobe After Effects 2026 - Northlight/Harbor Launch/harbor_launch.aep *</div>
+  <div class="tools"><span>⌂</span><span class="on">➤</span><span>✋</span><span>⌕</span><span>⟲</span><span>▭</span><span>✎</span><span>T</span><span>⌇</span><span>☐ Snapping</span><span class="ws"><b>Default</b><span>Review</span><span>Learn</span><span>Small Screen</span><span>Standard</span><span>Libraries</span></span></div>
+  <div class="up">
+    <div class="p proj"><div class="h"><b>Project</b><span>Effect Controls (none)</span></div><div id="proj"></div></div>
+    <div class="p comp"><div class="h"><b id="compName">Composition Hero_16x9</b></div><div class="v"><canvas id="cv" width="640" height="360"></canvas></div><div class="f"><i>50 %</i><span>(Quarter) ▾</span><i>+0.0</i><span id="tc">0;00;00;00</span></div></div>
+    <div class="p"><div class="h"><b>Properties: No Selection</b></div><div class="h" style="margin-top:70px"><b>Effects &amp; Presets</b></div></div>
+  </div>
+  <div class="rq">
+    <div class="tabs"><span><i class="sw"></i> Hero_16x9</span><span><i class="sw"></i> Logo_Reveal</span><b>✕ Render Queue ≡</b></div>
+    <div class="cur" id="cur"></div>
+    <div class="hd"><span></span><span>Render</span><span>◆</span><span>#</span><span>Comp Name</span><span>Status</span><span>Started</span><span>Render Time</span></div>
+    <div class="list" id="list"></div>
+    <div class="ft"><span><b>Message:</b><em id="msg" style="font-style:normal"></em></span><span><b>RAM:</b><em id="ram" style="font-style:normal"></em></span><span style="width:330px"><b>Renders Started:</b><em id="rs" style="font-style:normal"></em></span><span class="nq">☐ Notify when queue completes</span></div>
+  </div>
+</div></div>
+<script>
+  Mac.mount({ app: 'After Effects', menus: ['File', 'Edit', 'Composition', 'Layer', 'Effect', 'Animation', 'View', 'Window', 'Help'], battery: 91 });
+  const $ = id => document.getElementById(id);
+  const hms = s => [s / 3600, s / 60 % 60, s % 60].map(n => String(Math.floor(n)).padStart(2, '0')).join(':');
+  const dur = s => s < 60 ? `${Math.max(1, Math.round(s))} Seconds` : `${Math.floor(s / 60)} Min, ${Math.round(s % 60)} Sec`;
+
+  const ITEMS = [
+    ['Teaser_9x16', 900, 'H.264 - Match Render Settings - 40 Mbps', 'teaser_9x16.mp4'],
+    ['Hero_16x9', 2880, 'Apple ProRes 422 HQ', 'hero_16x9.mov'],
+    ['Hero_1x1', 2880, 'Apple ProRes 422 HQ', 'hero_1x1.mov'],
+    ['Product_Spin', 1440, 'Apple ProRes 4444', 'product_spin.mov'],
+    ['Logo_Reveal', 240, 'Apple ProRes 4444', 'logo_reveal.mov'],
+    ['End_Card', 360, 'H.264 - Match Render Settings - 40 Mbps', 'end_card.mp4'],
+  ].map(([name, frames, mod, out]) => ({ name, frames, mod, out, status: 'Queued', started: '-', time: '-' }));
+  Object.assign(ITEMS[0], { status: 'Done', started: '10/12/26, 9:17:26 AM', time: '19 Min, 12 Sec' });
+
+  $('proj').innerHTML = [['Assets', 'Folder'], ['Audio', 'Folder'], ...ITEMS.map(i => [i.name, 'Composition']), ['harbor_drone.mov', 'ProRes']]
+    .map(([n, t]) => `<div class="r"><i class="sw" style="background:${t === 'Folder' ? '#d8c13a' : t === 'ProRes' ? '#9fb7c7' : '#b59a6d'}"></i>${n}<span class="ty">${t}</span></div>`).join('');
+
+  // The frame being rendered: a harbor at dusk and a boat crossing it.
+  const ctx = $('cv').getContext('2d');
+  const frame = p => {
+    const sky = ctx.createLinearGradient(0, 0, 0, 220);
+    sky.addColorStop(0, '#1b2a5c'); sky.addColorStop(1, '#f19a6b');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, 640, 220);
+    ctx.fillStyle = '#ffd9a0'; ctx.beginPath(); ctx.arc(470, 150 + p * 60, 34, 0, 7); ctx.fill();
+    ctx.fillStyle = '#16324f'; ctx.fillRect(0, 215, 640, 145);
+    ctx.fillStyle = 'rgba(255,220,170,.25)'; for (let i = 0; i < 14; i++) ctx.fillRect(400 + Math.sin(i * 2 + p * 60) * 40, 225 + i * 9, 120 - i * 5, 2);
+    const x = -80 + p * 700;
+    ctx.fillStyle = '#0c1826'; ctx.beginPath(); ctx.moveTo(x, 235); ctx.lineTo(x + 110, 235); ctx.lineTo(x + 90, 258); ctx.lineTo(x + 18, 258); ctx.fill();
+    ctx.fillStyle = '#e9e3d6'; ctx.beginPath(); ctx.moveTo(x + 54, 130); ctx.lineTo(x + 54, 230); ctx.lineTo(x + 104, 230); ctx.fill();
+  };
+
+  let cur = 1, k = 0.18, startedAt = Date.now() - 260000;
+  // The menu bar's clock starts at 9:41:00 on load; these are its seconds.
+  const loadedAt = Date.now();
+  const stamp = () => `10/12/26, ${Mac.time().replace(' ', `:${String(Math.floor((Date.now() - loadedAt) / 1000) % 60).padStart(2, '0')} `)}`;
+  Object.assign(ITEMS[1], { status: 'Rendering', started: '10/12/26, 9:36:40 AM' });
+
+  const renderList = () => {
+    $('list').innerHTML = ITEMS.map((i, n) => {
+      const over = i.status === 'Done' || i.status.startsWith('Failed');
+      return `<div class="it${i.status === 'Rendering' ? ' now' : ''}"><span>⌄</span><span>${i.status === 'Queued' ? '☑' : ''}</span><span><i class="sw"></i></span><span>${n + 1}</span><b>${i.name}</b><span>${i.status}</span><span>${i.started}</span><span>${i.time}</span></div>
+        <div class="${over ? 'over' : ''}"><div class="sub"><span>›</span><b>Render Settings:</b><i>Best Settings</i><b>Log:</b><span>Errors Only ⌄</span></div><div class="sub"><span>›</span><b>Output Module:</b><i>${i.mod}</i><b>Output To:</b><i>${i.out}</i></div></div>`;
+    }).join('');
+  };
+  // The header: the dial is the two buttons at its right.
+  const renderHead = () => {
+    const on = cur !== null, blank = !on, kk = Math.max(k, 0.005);
+    const f = on ? ITEMS[cur].frames : 0, el = (Date.now() - startedAt) / 1000;
+    $('cur').className = on ? 'cur' : 'cur idle';
+    $('cur').innerHTML = `<span>› &nbsp;<b style="font-weight:600">Current Render</b></span><span class="bar"><i style="width:${on ? k * 100 : 0}%"></i></span><span class="n">${on ? Math.floor(Math.max(k, 0) * 100) : 0}%</span><span class="fr">(${blank ? '-- of --' : `${Math.floor(k * f)} of ${f}`})</span>
+      <span class="lab">Elapsed:</span><span style="width:74px">${blank ? '--:--:--' : hms(el)}</span><span class="lab">Remaining:</span><span style="width:74px">${blank ? '--:--:--' : hms(el / kk * (1 - kk))}</span>
+      <span class="btns">${on ? '<span class="pill">❚❚ Pause</span><span class="pill"><i class="sq"></i>Stop</span>' : '<span class="pill off">▚ Render</span><span class="pill off">Me Queue in AME</span>'}</span>`;
+    $('msg').textContent = on ? `Rendering ${cur + 1} of ${ITEMS.length}` : '';
+    $('ram').textContent = on ? '71% used of 64.0 GB' : '';
+    $('rs').textContent = on ? '10/12/26, 9:17:26 AM' : '';
+    if (on) { $('compName').textContent = `Composition ${ITEMS[cur].name}`; frame(Math.max(k, 0)); $('tc').textContent = `0;00;${String(Math.floor(k * f / 24) % 60).padStart(2, '0')};${String(Math.floor(k * f) % 24).padStart(2, '0')}`; }
+  };
+  const begin = n => { cur = n; k = 0.01; startedAt = Date.now(); Object.assign(ITEMS[n], { status: 'Rendering', started: stamp() }); renderList(); renderHead(); };
+  const finish = (status, secs) => {
+    Object.assign(ITEMS[cur], { status, time: dur(secs) });
+    if (status === 'Done') demo.mark('comp_done', { comp: cur + 1 });
+  };
+  const queueOver = () => { cur = null; renderList(); renderHead(); demo.trigger(); };
+
+  renderList(); renderHead();
+  let hold = setInterval(() => { if (k < 0.4) k = Math.min(0.4, k + 0.0008); renderHead(); }, 1000);
+
+  // Renders comp `cur` from where it is to `to` over ms, then calls next. The header stays at 1%
+  // for the first second of a comp.
+  const run = (ms, to, next) => {
+    const from = k, at = Date.now(), lead = from <= 0.01 ? Math.min(1000, ms / 3) : 0;
+    const step = setInterval(() => {
+      const t = Date.now() - at;
+      if (t >= ms) { clearInterval(step); k = to; renderHead(); next(); return; }
+      k = t < lead ? 0.01 : from + (to - from) * (t - lead) / (ms - lead);
+      renderHead();
+    }, 250);
+  };
+
+  demo.onStart = durationMs => {
+    clearInterval(hold);
+    if (demo.outcome === 'next_comp') {
+      run(durationMs, 1, () => {
+        finish('Done', 1460);
+        begin(2);
+        demo.trigger();
+        const go = () => run(900000, 0.9, () => {});
+        go();
+      });
+      return;
+    }
+    if (demo.outcome === 'success') {
+      // Comps 2 to 6, the long ones first.
+      const share = [0.3, 0.3, 0.2, 0.1, 0.1];
+      const nextComp = () => {
+        const i = cur - 1;
+        run(durationMs * share[i], 1, () => {
+          finish('Done', [1460, 1385, 1012, 148, 96][i]);
+          if (cur === ITEMS.length - 1) queueOver(); else { begin(cur + 1); nextComp(); }
+        });
+      };
+      nextComp();
+      return;
+    }
+    // fail: 2 and 3 finish, 4 dies, and 5 and 6 go down with it.
+    const cascade = Math.min(8000, durationMs * 0.3), rest = durationMs - cascade;
+    run(rest * 0.4, 1, () => {
+      finish('Done', 1460); begin(2);
+      run(rest * 0.4, 1, () => {
+        finish('Done', 1385); begin(3);
+        run(rest * 0.2, 0.41, () => {
+          finish('Failed at 0;00;24;14', 415); begin(4);
+          run(cascade / 2, 0.02, () => {
+            finish('Failed at 0;00;00;00', 4); begin(5);
+            run(cascade / 2, 0.02, () => { finish('Failed at 0;00;00;00', 3); queueOver(); });
+          });
+        });
+      });
+    });
+  };
+</script>
+</body>
+</html>

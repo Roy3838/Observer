@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<!-- COMSOL Multiphysics (6.4 on Windows, light theme) computing a time-dependent study of a heat sink.
+     The dial is the right end of the status bar: a Cancel button (a circled X) and a green progress
+     bar while it computes, nothing when it doesn't. Holds computing (the bar creeps up and never
+     passes 30%) until the suite starts it; then it ends by ?outcome=:
+       success  the bar is gone, the solution time is in Messages and the plot is drawn
+       fail     the bar is gone, an Error dialog is up and Error 1 is under the solver in the tree
+       blink    the trigger is the bar going away for 6 s between solver stages; then it goes on
+     Segoe UI, with Open Sans (fonts/) standing in elsewhere. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>heat_sink_transient.mph - COMSOL Multiphysics</title>
+<link rel="stylesheet" href="fonts/open-sans.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 12px/1.35 "Segoe UI", "Open Sans", sans-serif; color: #1c1c1c; background: #f0f0f0; display: flex; flex-direction: column; overflow: hidden; }
+  .title { height: 30px; display: flex; align-items: center; gap: 13px; padding: 0 12px; color: #348dc9; }
+  .title .t { color: #1c1c1c; margin-left: 10px; }
+  .title .win { margin-left: auto; display: flex; gap: 24px; color: #1c1c1c; }
+  .tabs { height: 28px; display: flex; gap: 22px; padding: 4px 22px 0; }
+  .tabs .on { color: #2a6fb5; border-bottom: 2px solid #348dc9; }
+  .ribbon { height: 92px; margin: 0 6px 6px; background: #fafbff; border-radius: 6px; display: flex; }
+  .g { display: flex; gap: 14px; padding: 8px 12px 20px; border-right: 1px solid #dfe2ea; position: relative; }
+  .g > em { position: absolute; left: 0; right: 0; bottom: 4px; text-align: center; font-style: normal; font-size: 11px; }
+  .b { text-align: center; line-height: 1.2; white-space: nowrap; font-size: 11.5px; }
+  .b i { display: block; font-style: normal; font-size: 21px; line-height: 30px; color: #348dc9; }
+  .main { flex: 1; min-height: 0; display: grid; grid-template-columns: 270px 300px 1fr; gap: 6px; padding: 0 6px; }
+  .pane { background: #fafbff; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .pane h3 { margin: 0; padding: 6px 10px 2px; font: 400 17px "Segoe UI", "Open Sans", sans-serif; color: #2f4f8f; }
+  .pane .sub { padding: 0 10px 4px; color: #2f4f8f; }
+  .flt { margin: 2px 8px 4px; border: 1px solid #c8ccd6; background: #fff; color: #9a9a9a; padding: 1px 6px; }
+  .tree { margin: 0 8px 8px; background: #fff; border: 1px solid #d5d8e0; flex: 1; padding: 4px; line-height: 18px; white-space: nowrap; overflow: hidden; }
+  .tree .sel { background: #dbdbdd; }
+  .tree i { font-style: normal; color: #348dc9; }
+  .sec { border-top: 1px solid #dfe2ea; padding: 6px 12px; color: #2f4f8f; }
+  .fld { display: grid; grid-template-columns: 94px 1fr; padding: 3px 12px; align-items: center; }
+  .fld span + span { background: #efeff2; border: 1px solid #d5d8e0; padding: 2px 8px; }
+  .col3 { display: flex; flex-direction: column; gap: 6px; min-height: 0; min-width: 0; }
+  .gfx { flex: 1; min-height: 0; background: #fafbff; display: flex; flex-direction: column; }
+  .wt { display: flex; gap: 20px; padding: 6px 12px 0; }
+  .wt .on { color: #2a6fb5; border-bottom: 2px solid #348dc9; padding-bottom: 3px; }
+  .gt { padding: 4px 12px; color: #348dc9; display: flex; gap: 12px; }
+  .cv { flex: 1; min-height: 0; position: relative; background: linear-gradient(#f7faff, #e6f2fe); }
+  .cv svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .msgs { height: 158px; background: #fafbff; display: flex; flex-direction: column; }
+  .msgs .body { flex: 1; margin: 6px 8px 8px; background: #fff; border: 1px solid #d5d8e0; padding: 4px 8px; line-height: 17px; overflow: hidden; }
+  .status { height: 30px; display: flex; align-items: center; justify-content: flex-end; padding: 0 14px; position: relative; }
+  .status .mem { position: absolute; left: 63%; }
+  .status .busy { display: flex; align-items: center; gap: 10px; }
+  .status .busy.off { visibility: hidden; }
+  .status .x { width: 17px; height: 17px; border: 1.6px solid #348dcc; border-radius: 50%; color: #348dcc; display: grid; place-items: center; font-size: 11px; line-height: 1; }
+  .status .bar { width: 200px; height: 15px; background: #e6e6e6; border: 1px solid #bcbcbc; }
+  .status .bar i { display: block; height: 100%; background: #06b025; }
+  .status .pi { width: 17px; height: 7px; border: 1px solid #348dcc; background: linear-gradient(90deg, #06b025 60%, #fff 60%); }
+  .dlg { position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%); width: 440px; background: #fff; border: 1px solid #348dc9; box-shadow: 0 12px 34px rgba(0,0,0,.28); display: none; z-index: 9; }
+  .dlg.show { display: block; }
+  .dlg .h { padding: 8px 12px; display: flex; gap: 8px; align-items: center; }
+  .dlg .h .e { width: 16px; height: 16px; border-radius: 50%; background: #c8234f; color: #fff; display: grid; place-items: center; font-size: 10px; }
+  .dlg .h .c { margin-left: auto; }
+  .dlg h5 { margin: 4px 14px 12px; font: 400 16px "Segoe UI", "Open Sans", sans-serif; color: #2f7fc0; }
+  .dlg p { margin: 0 14px 16px; line-height: 18px; white-space: pre-line; }
+  .dlg .f { background: #f0f0f0; padding: 10px 14px; text-align: right; }
+  .dlg .f span { display: inline-block; border: 1.5px solid #0078d7; background: #e1e1e1; padding: 2px 26px; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="title"><span>▣</span><span>▢</span><span>📂︎</span><span>▤</span><span>▶</span><span>↶</span><span>↷</span><span>✂</span><span>⧉</span><span class="t">heat_sink_transient.mph - COMSOL Multiphysics</span><span class="win"><span>–</span><span>▢</span><span>✕</span></span></div>
+<div class="tabs"><span>File</span><span>Home</span><span>Definitions</span><span>Geometry</span><span>Materials</span><span>Physics</span><span>Mesh</span><span class="on">Study</span><span>Results</span><span>Developer</span></div>
+<div class="ribbon">
+  <div class="g"><div class="b"><i>＝</i>Compute</div><div class="b"><i>∿</i>Study<br>1 ▾</div><div class="b"><i>∿₊</i>Add<br>Study</div><em>Study</em></div>
+  <div class="g"><div class="b"><i>▤</i>Select Study<br>Step ▾</div><div class="b"><i>⟲</i>Update<br>Solution</div><div class="b"><i>＝₀</i>Get Initial<br>Value</div><em>Study Steps</em></div>
+  <div class="g"><div class="b"><i>▦</i>Show Default<br>Solver</div><div class="b"><i>⌗</i>Solver<br>Configurations ▾</div><em>Solver</em></div>
+  <div class="g"><div class="b"><i>▥</i>Parametric<br>Sweep</div><div class="b"><i>ƒ</i>Function<br>Sweep</div><div class="b"><i>▧</i>Batch</div><div class="b"><i>▨</i>Cluster<br>Computing</div><em>Study Extensions</em></div>
+  <div class="g"><div class="b"><i>◔</i>Optimization<br>▾</div><em>Optimization</em></div>
+</div>
+<div class="main">
+  <div class="pane"><h3>Model Builder</h3><div class="flt">Type filter text</div><div class="tree" id="tree"></div></div>
+  <div class="pane"><h3>Settings</h3><div class="sub">Time Dependent<br>＝ Compute &nbsp; ⟲ Update Solution</div>
+    <div class="fld"><span>Label:</span><span>Time Dependent</span></div>
+    <div class="sec">⌄ Study Settings</div>
+    <div class="fld"><span>Time unit:</span><span>s ▾</span></div><div class="fld"><span>Output times:</span><span>range(0,10,7200)</span></div><div class="fld"><span>Tolerance:</span><span>User controlled ▾</span></div><div class="fld"><span>Relative:</span><span>0.001</span></div>
+    <div class="sec">› Results While Solving</div><div class="sec">⌄ Physics and Variables Selection</div>
+    <div class="fld"><span>Heat Transfer</span><span>☑ Solve for</span></div><div class="fld"><span>Laminar Flow</span><span>☑ Solve for</span></div>
+    <div class="sec">› Values of Dependent Variables</div><div class="sec">› Mesh Selection</div><div class="sec">› Adaptation</div><div class="sec">› Study Extensions</div></div>
+  <div class="col3">
+    <div class="gfx"><div class="wt"><span class="on">Graphics</span><span>Convergence Plot 1 ✕</span></div><div class="gt"><span>⊕</span><span>⊖</span><span>⌕</span><span>✥</span><span>↻</span><span>▣</span><span>◧</span><span>▦</span></div>
+      <div class="cv"><svg viewBox="0 0 660 360" preserveAspectRatio="xMidYMid meet">
+        <defs><linearGradient id="hot" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#e8321f"/><stop offset=".35" stop-color="#ffb020"/><stop offset=".65" stop-color="#8fe04a"/><stop offset="1" stop-color="#23a6e0"/></linearGradient></defs>
+        <g id="sink" stroke="#333" fill="#b9bfc8"></g><g id="legend" font-size="11" font-family="Segoe UI, Open Sans, sans-serif" style="display:none"><rect x="590" y="60" width="16" height="230" fill="url(#hot)" stroke="#333"/><text x="612" y="68">296</text><text x="612" y="180">332</text><text x="612" y="292">368</text><text x="596" y="50">K</text></g>
+        <text x="14" y="22" font-size="12" id="ptitle"></text>
+        <g stroke-width="2.5"><path d="M50 320V285" stroke="#1f5fd0"/><path d="M50 320 84 330" stroke="#e0261c"/><path d="M50 320 26 334" stroke="#2fa52f"/></g><g font-size="11"><text x="46" y="280">z</text><text x="88" y="334">x</text><text x="16" y="342">y</text></g>
+      </svg></div></div>
+    <div class="msgs"><div class="wt"><span class="on">Messages ✕</span><span>Progress</span><span>Log</span><span>Table ✕</span></div><div class="body" id="msgs"></div></div>
+  </div>
+</div>
+<div class="status"><span class="mem" id="mem">6.12 GB | 6.94 GB</span><span class="busy" id="busy"><span class="x">✕</span><span class="bar"><i id="bar"></i></span><span class="pi"></span></span></div>
+<div class="dlg" id="dlg"><div class="h"><span class="e">✕</span>Error<span class="c">✕</span></div><h5>The following feature has encountered a problem:</h5>
+  <p> - Feature: Time-Dependent Solver 1 (sol1/t1)
+Nonlinear solver did not converge.
+Maximum number of Newton iterations reached.
+Time : 2841.7
+Last time step is not converged.</p><div class="f"><span>OK</span></div></div>
+<script>
+  const $ = id => document.getElementById(id);
+
+  // The heat sink: a base plate and nine fins, in a simple oblique view.
+  const poly = (pts, cls) => `<polygon class="${cls || ''}" points="${pts.map(p => p.join(',')).join(' ')}"/>`;
+  let g = poly([[130, 270], [470, 270], [550, 225], [210, 225]]) + poly([[130, 270], [470, 270], [470, 292], [130, 292]]) + poly([[470, 270], [550, 225], [550, 247], [470, 292]]);
+  for (let i = 0; i < 9; i++) {
+    const x = 138 + i * 38;
+    g += poly([[x, 268], [x + 80, 223], [x + 80, 85], [x, 130]], 'fin') + poly([[x, 130], [x + 80, 85], [x + 90, 85], [x + 10, 130]], 'fin') + poly([[x, 130], [x + 10, 130], [x + 10, 268], [x, 268]], 'fin');
+  }
+  $('sink').innerHTML = g;
+
+  const tree = failed => {
+    const r = (d, t, icon, text, sel) => `<div class="${sel ? 'sel' : ''}" style="padding-left:${d * 14}px">${t} <i>${icon}</i> ${text}</div>`;
+    $('tree').innerHTML = r(0, '⌄', '◆', 'heat_sink_transient.mph <em>(root)</em>') + r(1, '›', '◍', 'Global Definitions') + r(1, '⌄', '▣', 'Component 1 <em>(comp1)</em>')
+      + r(2, '›', '≡', 'Definitions') + r(2, '›', '▲', 'Geometry 1') + r(2, '›', '●', 'Materials') + r(2, '›', '♨', 'Heat Transfer in Solids and Fluids <em>(ht)</em>') + r(2, '›', '≋', 'Laminar Flow <em>(spf)</em>') + r(2, '›', '✣', 'Multiphysics') + r(2, '›', '△', 'Mesh 1')
+      + r(1, '⌄', '∿', 'Study 1') + r(2, '', '◷', 'Step 1: Time Dependent', 1) + r(2, '⌄', '⌗', 'Solver Configurations') + r(3, '⌄', '▤', 'Solution 1 <em>(sol1)</em>') + r(4, '', '▸', 'Compile Equations') + r(4, '', 'u', 'Dependent Variables 1') + r(4, failed ? '⌄' : '›', '◷', 'Time-Dependent Solver 1')
+      + (failed ? r(5, '', '<span style="color:#d1242f">⊗</span>', 'Error 1') : '') + r(1, '⌄', '▥', 'Results') + r(2, '›', '▦', 'Datasets') + r(2, '', '≣', 'Derived Values');
+  };
+  tree(false);
+
+  const LOG = ['[Oct 12, 2026, 9:08 AM] Complete mesh consists of 418622 domain elements, 39480 boundary elements, and 3364 edge elements.', '[Oct 12, 2026, 9:10 AM] Number of degrees of freedom solved for: 1153204 (plus 48310 internal DOFs).'];
+  $('msgs').innerHTML = LOG.join('<br>');
+
+  // The dial.
+  let pct = 22;
+  const show = p => { pct = p; $('bar').style.width = `${p}%`; };
+  const busy = on => $('busy').classList.toggle('off', !on);
+  show(pct);
+  // The memory readout changes whether or not it's computing.
+  setInterval(() => { const m = 6.1 + Math.random() * 0.2; $('mem').textContent = `${m.toFixed(2)} GB | ${(m + 0.82).toFixed(2)} GB`; }, 9000);
+  const hold = setInterval(() => { if (pct < 30) show(Math.min(30, pct + 0.04)); }, 1500);
+
+  const end = ok => {
+    busy(false);
+    if (ok) {
+      $('msgs').innerHTML = [...LOG, '[Oct 12, 2026, 9:44 AM] Solution time (Study 1 (std1)): 2046 s. (34 minutes, 6 seconds)'].join('<br>');
+      document.querySelectorAll('#sink .fin').forEach(f => f.setAttribute('fill', 'url(#hot)'));
+      $('legend').style.display = '';
+      $('ptitle').textContent = 'Time=7200 s    Surface: Temperature (K)';
+    } else {
+      tree(true);
+      $('dlg').classList.add('show');
+    }
+    demo.trigger();
+  };
+
+  demo.onStart = durationMs => {
+    clearInterval(hold);
+    const from = pct, at = Date.now(), to = demo.outcome === 'success' ? 99 : demo.outcome === 'blink' ? 46 : 58;
+    const step = setInterval(() => {
+      const k = Math.min(1, (Date.now() - at) / durationMs);
+      if (k < 1) { show(from + (to - from) * k); return; }
+      clearInterval(step);
+      if (demo.outcome !== 'blink') { end(demo.outcome === 'success'); return; }
+      busy(false);
+      demo.mark('blink');
+      demo.trigger();
+      setTimeout(() => {
+        show(2);
+        busy(true);
+        setInterval(() => { if (pct < 60) show(pct + 0.1); }, 1500);
+      }, 6000);
+    }, 500);
+  };
+</script>
+</body>
+</html>

@@ -221,6 +221,20 @@ function scoreAd(run: Run): Score {
   return { verdict: notes.length ? 'PARTIAL' : 'PASS', metrics, notes };
 }
 
+/** "When the new UI rolls out in my app, save an image of it." Marked 'live' when it's on screen: an
+ *  image saved by the end of the grace period (a one-minute loop is fine), none before. Never live: no image at all. */
+function scoreRollout(run: Run): Score {
+  const saves = run.events.filter(e => e.type === 'image_memory' && e.ok && e.imageCount > 0).map(e => e.t);
+  const live = marks(run, 'live')[0]?.t;
+  const sinceStart = (t: number) => Math.round((t - run.startT) / 1000);
+  const metrics = { liveAtS: live === undefined ? null : sinceStart(live), savesS: saves.map(sinceStart), alerts: alertTimes(run).length };
+  if (live === undefined) {
+    return saves.length ? { verdict: 'FAIL', metrics, notes: ['saved an image though the new UI never showed'] } : { verdict: 'PASS', metrics, notes: [] };
+  }
+  const early = saves.filter(t => t < live);
+  if (!saves.some(t => t >= live)) return { verdict: 'FAIL', metrics, notes: ['no image saved once the new UI showed'] };
+  return early.length ? { verdict: 'PARTIAL', metrics, notes: [`${early.length} image(s) saved before it was live`] } : { verdict: 'PASS', metrics, notes: [] };
+}
 
 // ---- Agent shapes over time (the e2e matrix) ------------------------------------
 
@@ -458,6 +472,29 @@ const CHECKS: Record<string, Check> = {
       if (away.length >= 1 && !after.length) return { verdict: 'PARTIAL', metrics, notes: away.length < 2 ? ['alerted once, not again'] : ['alerted before going to X'] };
       return { verdict: 'FAIL', metrics, notes: after.length ? ['kept alerting after getting back to work'] : ['never alerted while on X'] };
     },
+  },
+  rollout_live: {
+    // The "coming soon" card shows early; the new UI 3 minutes in.
+    runMs: 180_000,
+    graceMs: 90_000,
+    score: scoreRollout,
+  },
+  rollout_never: {
+    runMs: 240_000,
+    graceMs: 60_000,
+    score: scoreRollout,
+  },
+  github_overdue: {
+    // Still in progress at 5 minutes and after: an alert between 4 and 8, like maria_deadline.
+    runMs: 300_000,
+    graceMs: 180_000,
+    score: run => scoreWindow(run, run.startT + 240_000, run.startT + 240_000, run.startT + 480_000),
+  },
+  github_overdue_finished: {
+    // It finishes 3 minutes in: the deadline never comes.
+    runMs: 180_000,
+    graceMs: 300_000,
+    score: scoreSilent,
   },
   maria_deadline: {
     // Maria never replies (Carlos does, 3 minutes in): an alert around 5 minutes after the start,

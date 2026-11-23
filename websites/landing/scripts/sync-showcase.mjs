@@ -26,7 +26,8 @@ const problems = [];
 for (const f of new Set(GROUND_TRUTH.map(file))) {
   const shown = GROUND_TRUTH.filter(u => file(u) === f && u.show);
   if (shown.length !== 1) problems.push(`demo ${f} has ${shown.length} use cases with \`show\` (needs exactly one)`);
-  if (!existsSync(join(demos, f))) problems.push(`demo ${f} isn't in app/e2e/demos/`);
+  // A demo page still to be built is in its own case's `requires`: left off the site, not an error.
+  if (!existsSync(join(demos, f)) && !GROUND_TRUTH.some(u => file(u) === f && u.requires?.includes(f))) problems.push(`demo ${f} isn't in app/e2e/demos/`);
 }
 // Opened without ?outcome= (here and in the app's tutorial), a demo ends by its data-outcome on
 // demo-contract.js, else success: that ending has to be one its shown pair alerts on.
@@ -47,11 +48,11 @@ if (problems.length) {
 
 // The suite asks for a browser notification; the site shows the channel's phrase instead.
 const items = GROUND_TRUTH
-  .filter(u => u.show && !u.requires?.some(f => !existsSync(join(demos, f)))) // recordings not added yet
+  .filter(u => u.show && !u.requires?.some(f => !existsSync(join(demos, f)))) // recordings or pages not added yet
   .map(u => {
     const [f, query = ''] = u.demo.split('?');
     const channel = u.then === NOTIFY ? { id: u.show.channel, label: CHANNELS[u.show.channel].label } : null;
-    return { id: u.id, file: f, query, when: u.when, then: channel ? CHANNELS[u.show.channel].phrase : u.show.then ?? u.then, channel };
+    return { id: u.id, who: u.who, file: f, query, when: u.when, then: channel ? CHANNELS[u.show.channel].phrase : u.show.then ?? u.then, channel };
   });
 mkdirSync(join(landing, 'src/generated'), { recursive: true });
 writeFileSync(join(landing, 'src/generated/showcase.json'), JSON.stringify({ items }, null, 2));

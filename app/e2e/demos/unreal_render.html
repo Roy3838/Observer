@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<!-- Unreal Editor (UE 5) rendering a sequence of three camera cuts with Movie Render Queue. The dial is
+     the Movie Pipeline Render (Preview) window: while it's up, "Pipeline State: Producing Frames" in
+     green at the lower left. When the render is over the window closes and the editor and the Movie
+     Render Queue are there instead. Holds in cut 1 of 3 (never past 30%), 31 minutes in, until the suite
+     starts it; then it ends by ?outcome=:
+       success   the cuts finish one after another (each marked 'cut_done') and the window closes
+       fail      the window closes in cut 2, and the Message Log is up with the render's errors
+       next_cut  the trigger is cut 1 of 3 finishing and cut 2 of 3 starting; the render goes on
+     The preview, the editor and the queue are drawn from Epic's and users' screenshots, and the error
+     lines are from one. The frame around the Message Log and an empty Status after a render are
+     inferred. Heebo (fonts/) for Roboto's shapes. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Unreal Editor</title>
+<link rel="stylesheet" href="fonts/heebo.css">
+<link rel="stylesheet" href="fonts/jetbrains-mono.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 11.5px/1.35 Heebo, Roboto, sans-serif; color: #c0c0c0; background: #151515; display: flex; flex-direction: column; overflow: hidden; }
+  .menu { height: 24px; display: flex; gap: 22px; align-items: center; padding: 0 12px; }
+  .menu .u, .u { width: 18px; height: 18px; border: 1.5px solid #bbb; border-radius: 50%; display: grid; place-items: center; font: 700 10px Heebo; color: #ddd; flex: none; }
+  .menu .r { margin-left: auto; display: flex; gap: 24px; }
+  .lvl { height: 24px; padding-left: 46px; } .lvl span { background: #242424; display: inline-block; padding: 4px 34px 4px 12px; border-radius: 4px 4px 0 0; }
+  .tool { height: 34px; background: #242424; display: flex; gap: 16px; align-items: center; padding: 0 12px; }
+  .tool .m { background: #0f0f0f; border-radius: 4px; padding: 4px 12px; } .tool .r { margin-left: auto; }
+  .mid { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px 1fr 210px 200px; gap: 3px; padding-top: 3px; }
+  .p { background: #1a1a1a; min-height: 0; overflow: hidden; }
+  .p .h { background: #151515; height: 24px; display: flex; align-items: center; gap: 16px; padding: 0 10px; }
+  .p .h b { background: #242424; font-weight: 400; padding: 4px 10px; align-self: stretch; }
+  .srch { background: #0f0f0f; border: 1px solid #333; border-radius: 10px; margin: 6px 8px; padding: 2px 10px; color: #777; }
+  .act { background: #383838; border-radius: 4px; margin: 4px 8px; padding: 8px 12px; display: flex; gap: 12px; }
+  .row { padding: 2px 10px; white-space: nowrap; } .sec { background: #2f2f2f; padding: 4px 8px; font-weight: 600; margin-top: 1px; }
+  .kv { display: grid; grid-template-columns: 1fr 78px; padding: 3px 10px; } .kv span + span { background: #0f0f0f; border: 1px solid #333; border-radius: 3px; padding: 0 6px; }
+  .vp { background: linear-gradient(#27384a, #6b7d86 55%, #30312b 56%, #1c1d19); }
+  .seq { height: 214px; margin-top: 3px; background: #1a1a1a; display: grid; grid-template-columns: 300px 1fr; grid-template-rows: 24px 26px 1fr 24px; }
+  .seq .h { grid-column: 1 / 3; background: #151515; } .seq .h span { background: #242424; display: inline-block; padding: 4px 30px 4px 10px; }
+  .seq .t { grid-column: 1 / 3; padding: 4px 12px; display: flex; gap: 14px; }
+  .seq .l { background: #2f2f2f; padding: 6px 12px; line-height: 24px; }
+  .seq .k { background: #262626; position: relative; }
+  .seq .k i { position: absolute; top: 8px; height: 46px; background: linear-gradient(90deg, #41566a, #7b8c93); border: 1px solid #111; }
+  .seq .k u { position: absolute; left: 0; right: 0; top: 62px; height: 70px; background: #454545; }
+  .seq .f { grid-column: 1 / 3; padding: 3px 110px; letter-spacing: 8px; }
+  .foot { height: 28px; background: #151515; display: flex; gap: 22px; align-items: center; padding: 0 12px; }
+  .foot .c { background: #0f0f0f; border: 1px solid #333; border-radius: 3px; width: 180px; padding: 1px 8px; color: #666; } .foot .r { margin-left: auto; display: flex; gap: 20px; }
+  .win { position: absolute; box-shadow: 0 14px 40px rgba(0,0,0,.6); display: none; flex-direction: column; overflow: hidden; border-radius: 6px; }
+  .win.on { display: flex; }
+  .pv { left: 180px; top: 48px; width: 920px; height: 560px; background: #000; color: #fff; border: 1px solid #444; }
+  .pv .tb { height: 28px; background: #fff; color: #111; display: flex; align-items: center; gap: 9px; padding: 0 12px; } .pv .tb .u { border-color: #111; color: #111; } .pv .tb .w { margin-left: auto; display: flex; gap: 26px; }
+  .pv canvas { width: 540px; height: 304px; margin: 12px auto 0; display: block; }
+  .pv .ti { text-align: center; font: 700 26px/1.1 Heebo; margin-top: 8px; } .pv .lq { text-align: center; color: #b1b1b1; font: 500 14px Heebo; }
+  .pv .inf { position: absolute; top: 404px; width: 290px; font: 500 14.5px/19px Heebo; } .pv .inf h3 { margin: 0 0 8px; font: 700 23px Heebo; }
+  .pv .inf div { display: flex; justify-content: space-between; } .pv .inf .g { color: #c0ff6c; font-weight: 700; }
+  .q { left: 284px; top: 76px; width: 570px; height: 390px; background: #1a1a1a; border: 1px solid #333; }
+  .q .tb, .ml .tb { height: 30px; background: #151515; display: flex; align-items: center; gap: 10px; padding: 0 10px; } .q .tb b, .ml .tb b { background: #242424; font-weight: 400; padding: 6px 26px 6px 12px; align-self: stretch; } .tb .w { margin-left: auto; display: flex; gap: 20px; }
+  .q .bt { height: 30px; background: #242424; display: flex; gap: 8px; align-items: center; padding: 0 6px; } .q .bt span { background: #383838; border-radius: 3px; padding: 3px 10px; } .q .bt em { margin-left: auto; font-style: normal; }
+  .q .g { display: grid; grid-template-columns: 26px 130px 110px 190px 1fr; padding: 4px 4px; } .q .g.h { background: #2f2f2f; } .q .g.s { background: #40576f; color: #fff; }
+  .q .ft { margin-top: auto; height: 34px; background: #242424; display: flex; gap: 6px; justify-content: flex-end; align-items: center; padding: 0 6px; } .q .ft span { background: #0070e0; color: #fff; font-weight: 600; border-radius: 3px; padding: 3px 16px; }
+  .ml { left: 250px; top: 300px; width: 840px; height: 220px; background: #1a1a1a; border: 1px solid #333; }
+  .ml .bd { flex: 1; padding: 8px 10px; font: 11.5px/21px 'JetBrains Mono', ui-monospace, Menlo, monospace; white-space: nowrap; overflow: hidden; } .ml .w1 { color: #e8b11c; } .ml .e1 { color: #e0362c; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="menu"><span class="u">U</span><span>File</span><span>Edit</span><span>Window</span><span>Tools</span><span>Build</span><span>Select</span><span>Actor</span><span>Help</span><span class="r"><span>Northlight</span><span>–</span><span>❐</span><span>✕</span></span></div>
+<div class="lvl"><span><b style="color:#f0a020">▲</b> Lighthouse_Main</span></div>
+<div class="tool"><span>💾︎</span><span class="m">➤ Selection Mode ▾</span><span style="color:#8bc24a">✚</span><span>⚏</span><span>🎬︎</span><span style="color:#8bc24a">▶</span><span>❙▶</span><span>■</span><span>⏏</span><span>Platforms ▾</span><span class="r">✻ Settings ▾</span></div>
+<div class="mid">
+  <div class="p"><div class="h"><b>Place Actors ✕</b></div><div class="srch">⌕ Search Classes</div><div style="text-align:center">BASIC</div><div class="act">● Actor</div><div class="act">♟ Character</div><div class="act">♟ Pawn</div><div class="act">☀ Point Light</div><div class="act">⚑ Player Start</div><div class="act">▣ Trigger Box</div></div>
+  <div class="p vp"></div>
+  <div class="p"><div class="h"><b>Outliner ✕</b></div><div class="srch">⌕ Search...</div><div class="row" style="background:#2f2f2f">Item Label ▴ &nbsp; &nbsp; Type</div><div class="row">▾ Lighthouse_Main (Editor)</div><div class="row">&nbsp; ▾ 📁︎ Environment</div><div class="row">&nbsp; &nbsp; Cliff_01</div><div class="row">&nbsp; &nbsp; Cliff_02</div><div class="row">&nbsp; &nbsp; Ocean</div><div class="row">&nbsp; &nbsp; Tower</div><div class="row">&nbsp; CineCam_A</div><div class="row">&nbsp; CineCam_B</div><div class="row">&nbsp; CineCam_C</div><div class="row">&nbsp; DirectionalLight</div><div class="row">&nbsp; SkyAtmosphere</div></div>
+  <div class="p"><div class="h"><span>Details</span><b>World Settings ✕</b></div><div class="srch">⌕ Search</div><div class="sec">▾ World Partition Setup</div><div class="kv"><span>Enable Streaming</span><span>☑</span></div><div class="sec">▾ Game Mode</div><div class="kv"><span>GameMode Override</span><span>None ▾</span></div><div class="sec">▾ World</div><div class="kv"><span>Kill Z</span><span>-1048575.0</span></div><div class="sec">▾ Physics</div><div class="kv"><span>Global Gravity Z</span><span>0.0</span></div><div class="sec">▾ Broadphase</div></div>
+</div>
+<div class="seq"><div class="h"><span>Sequencer ✕</span></div><div class="t"><span style="color:#8bc24a">✚ Track</span><span style="color:#777">⌕ Search Tracks</span><span style="color:#f0a020">0000</span><span style="margin-left:auto">SEQ_Lighthouse</span></div>
+  <div class="l">🎬︎ Camera Cuts<br>▾ CineCam_A<br>&nbsp; Current Aperture &nbsp; 2.8<br>&nbsp; Current Focal Length &nbsp; 35.0</div><div class="k"><i style="left:60px;width:260px"></i><i style="left:322px;width:260px"></i><i style="left:584px;width:260px"></i><u></u></div><div class="f">⏺⏮◀▶⏭</div></div>
+<div class="foot"><span>Content Drawer</span><span>Output Log</span><span>Cmd ▾</span><span class="c">Enter Console Command</span><span class="r"><span>Trace</span><span>Derived Data</span><span>All Saved</span><span>Revision Control ▾</span></span></div>
+
+<div class="win q on"><div class="tb"><span class="u">U</span><b>🎬︎ Movie Render Queue ✕</b><span class="w"><span>–</span><span>▢</span><span>✕</span></span></div><div class="bt"><span style="color:#8bc24a">✚ <span style="color:#c0c0c0;background:none;padding:0">Render</span></span><span>–</span><em>Unsaved Queue * ▾</em></div>
+  <div class="g h"><span></span><span>Job</span><span>Settings</span><span>Output</span><span>Status</span></div><div class="g s"><span style="color:#f0b020">●</span><span>SEQ_Lighthouse</span><span>LighthouseFinal</span><span>{project_dir}/Saved/MovieRenders</span><span></span></div>
+  <div class="ft"><span>Render (Local)</span><span>Render (Remote)</span></div></div>
+<div class="win ml" id="ml"><div class="tb"><b>Message Log ✕</b><span class="w"><span>–</span><span>▢</span><span>✕</span></span></div><div class="bd"><span class="w1">⚠</span> [CineCam_B] Due to Temporal sub-sampling or handle frames, evaluation will occur outside of shot boundaries<br><span class="e1">⚠</span> Not all frames were fully submitted by the time rendering was torn down! Frames will be missing from output!<br><span class="e1">⚠</span> Not all frames were fully submitted by the time rendering was torn down! Frames will be missing from output!<br><span class="e1">⚠</span> Not all frames were fully submitted by the time rendering was torn down! Frames will be missing from output!</div></div>
+<div class="win pv on" id="pv"><div class="tb"><span class="u">U</span><span id="tb"></span><span class="w"><span>–</span><span style="color:#bbb">▢</span><span>✕</span></span></div>
+  <canvas id="cv" width="640" height="360"></canvas><div class="ti">Render Preview</div><div class="lq">(Low Quality)</div>
+  <div class="inf" style="left:12px"><h3>Overall</h3><div><span>Current Sequence:</span><span>SEQ_Lighthouse</span></div><div><span>Total Frames:</span><span id="tf"></span></div><div><span>Elapsed Time:</span><span id="el"></span></div><div><span>Est. Time Remaining:</span><span id="er"></span></div><div><span>Pipeline State:</span><span class="g">Producing Frames</span></div></div>
+  <div class="inf" style="right:12px"><h3 style="text-align:right">Current Camera Cut</h3><div><span>Cut Name:</span><span id="cn"></span></div><div><span>Frame:</span><span id="cf"></span></div><div><span>Sub Sample:</span><span id="ss"></span></div><div><span>Cut State:</span><span class="g">Rendering</span></div></div></div>
+<script>
+  const $ = id => document.getElementById(id);
+  const CUTS = ['SH0010', 'SH0020', 'SH0030'], PER = 480, TOTAL = 1440;
+  const ctx = $('cv').getContext('2d');
+  const hms = s => `[${[s / 3600, s / 60 % 60, s % 60].map(n => String(Math.floor(n)).padStart(2, '0')).join(':')}]`;
+  const pad = n => String(n).padStart(2, '0');
+
+  // The frame being rendered: a lighthouse at dusk, its beam turning, from a camera per cut.
+  const draw = (cut, f) => {
+    const g = ctx.createLinearGradient(0, 0, 0, 360);
+    g.addColorStop(0, ['#16223f', '#2a1f45', '#10303f'][cut]); g.addColorStop(0.6, '#c9805a'); g.addColorStop(0.61, '#1b3140'); g.addColorStop(1, '#0b151c');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 640, 360);
+    const x = [430, 200, 320][cut], s = [1, 1.5, 0.7][cut];
+    ctx.fillStyle = `rgba(255,236,170,.28)`; const a = Math.sin(f / 18) * 0.5;
+    ctx.beginPath(); ctx.moveTo(x, 120); ctx.lineTo(x - 420, 60 + a * 160); ctx.lineTo(x - 420, 170 + a * 160); ctx.fill();
+    ctx.fillStyle = '#161a18'; ctx.beginPath(); ctx.moveTo(x - 170 * s, 300); ctx.lineTo(x - 60 * s, 226); ctx.lineTo(x + 90 * s, 222); ctx.lineTo(x + 210 * s, 300); ctx.fill();
+    ctx.fillStyle = '#e8e2d6'; ctx.beginPath(); ctx.moveTo(x - 20 * s, 226); ctx.lineTo(x - 12 * s, 128); ctx.lineTo(x + 12 * s, 128); ctx.lineTo(x + 20 * s, 226); ctx.fill();
+    ctx.fillStyle = '#b23a30'; ctx.fillRect(x - 16 * s, 165, 32 * s, 20); ctx.fillStyle = '#ffe9a8'; ctx.fillRect(x - 9 * s, 110, 18 * s, 18);
+  };
+
+  // It has been going for 31 minutes when the page loads.
+  const loadedAt = Date.now();
+  let frame = 388;
+  const show = () => {
+    const f = Math.min(TOTAL - 1, Math.floor(frame)), cut = Math.floor(f / PER), cf = f % PER, p = Math.floor(f / TOTAL * 100);
+    const el = 31 * 60 + 12 + (Date.now() - loadedAt) / 1000;
+    $('tb').textContent = `Movie Pipeline Render (Preview) [Job 1/1 Total] Current Job: ${p}% Completed.`;
+    $('tf').textContent = `${f} of ${TOTAL} (${p}%)`;
+    $('el').textContent = hms(el);
+    $('er').textContent = hms(el / f * (TOTAL - f));
+    $('cn').textContent = `${CUTS[cut]} (${cut + 1} of 3)`;
+    $('cf').textContent = `${cf + 1} of ${PER} (${pad(Math.floor((cf + 1) / PER * 100))}%)`;
+    $('ss').textContent = `${Math.floor(frame % 1 * 64)} of 64`;
+    draw(cut, f);
+  };
+  show();
+  const hold = setInterval(() => { if (frame < 430) frame += 0.1; show(); }, 1000);
+
+  const close = failed => { $('pv').classList.remove('on'); if (failed) $('ml').classList.add('on'); demo.trigger(); };
+
+  demo.onStart = durationMs => {
+    clearInterval(hold);
+    const from = frame, at = Date.now(), next = demo.outcome === 'next_cut';
+    const to = next ? PER : demo.outcome === 'success' ? TOTAL : 790;
+    let cut = 0;
+    const step = setInterval(() => {
+      const k = Math.min(1, (Date.now() - at) / durationMs);
+      frame = Math.min(from + (to - from) * k, next && k < 1 ? PER - 0.1 : Infinity);
+      const c = Math.min(2, Math.floor(frame / PER));
+      while (cut < c) demo.mark('cut_done', { cut: ++cut });
+      show();
+      if (k < 1) return;
+      clearInterval(step);
+      if (!next) { close(demo.outcome !== 'success'); return; }
+      demo.trigger();
+      setInterval(() => { if (frame < 900) frame += 0.2; show(); }, 1000);
+    }, 250);
+  };
+</script>
+</body>
+</html>

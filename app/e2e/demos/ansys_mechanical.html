@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<!-- Ansys Mechanical (2026 R1 layout) solving a nonlinear static structural analysis of a bracket.
+     The dial is the left end of the status bar: a progress bar, pause, a red stop square and
+     "(31%) Solving the mathematical model..." while it solves, "Ready" when it isn't. Holds solving
+     (the percentage creeps up and never passes 38%) until the suite starts it; then it ends by ?outcome=:
+       success  it solves: "Ready", green checks in the Outline, the results filled in
+       fail     it can't converge at 62%: "Ready" again, red lightning bolts in the Outline, two
+                messages in the status bar and an error pop-up that hides itself after 5 s
+       blink    holds on "Overall Progress..." instead; the trigger is "Ready" between meshing and
+                solving, and then it goes on solving. Ansys' own recording shows it for 1.5 s; here
+                it's 6, so an agent that looks every 5 s sees it once.
+     Segoe UI, with Open Sans (fonts/) standing in elsewhere. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>A : Static Structural - Mechanical</title>
+<link rel="stylesheet" href="fonts/open-sans.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 12px/1.3 "Segoe UI", "Open Sans", sans-serif; color: #1b1b1b; background: #f5f6f7; display: flex; flex-direction: column; overflow: hidden; }
+  .title { height: 30px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: #f0f0f0; }
+  .title .app { width: 16px; height: 16px; background: #1b1b1b; border-radius: 2px; display: grid; place-items: center; color: #ffb71b; font-size: 11px; }
+  .title .ctx { align-self: stretch; display: grid; place-items: center; padding: 0 14px; background: #cfe0f2; border-top: 3px solid #2b6cb8; color: #2b5f9b; }
+  .title .win { margin-left: auto; display: flex; gap: 22px; font-size: 13px; }
+  .tabs { height: 26px; display: flex; align-items: stretch; background: #f0f0f0; border-bottom: 1px solid #d5d5d5; }
+  .tabs span { padding: 5px 16px; }
+  .tabs .file { background: #0072c6; color: #fff; padding: 5px 20px; }
+  .tabs .on { background: #fff; border: 1px solid #d5d5d5; border-bottom: 0; margin-bottom: -1px; }
+  .tabs .ql { margin: 3px 12px 3px auto; width: 170px; background: #fff; border: 1px solid #c8c8c8; color: #9a9a9a; padding: 1px 6px; }
+  .ribbon { height: 92px; display: flex; background: #fff; border-bottom: 1px solid #d0d0d0; }
+  .grp { display: flex; gap: 12px; padding: 8px 12px 20px; border-right: 1px solid #e0e0e0; position: relative; align-items: flex-start; }
+  .grp > em { position: absolute; left: 0; right: 0; bottom: 3px; text-align: center; font-style: normal; color: #666; font-size: 11px; }
+  .big { text-align: center; line-height: 1.2; }
+  .big i { display: block; font-style: normal; font-size: 26px; line-height: 34px; }
+  .col { line-height: 19px; white-space: nowrap; }
+  .dim { color: #a5a5a5; }
+  .sel { border: 1px solid #c8c8c8; padding: 0 6px; display: inline-block; min-width: 110px; background: #fff; }
+  .main { flex: 1; min-height: 0; display: grid; grid-template-columns: 318px 1fr; gap: 4px; padding-top: 2px; }
+  .left { display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+  .pane { background: #fff; border: 1px solid #d0d0d0; display: flex; flex-direction: column; min-height: 0; }
+  .pane > h4 { margin: 0; padding: 3px 8px; font-weight: 400; background: #e6e6e6; display: flex; justify-content: space-between; }
+  .pane.active > h4 { background: #0072c6; color: #fff; }
+  .find { padding: 4px 6px; border-bottom: 1px solid #eee; display: flex; gap: 4px; }
+  .find span { border: 1px solid #c8c8c8; padding: 1px 6px; flex: 1; color: #9a9a9a; }
+  .tree { padding: 4px 6px; line-height: 18px; overflow: hidden; }
+  .tree div { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .tree b { font-weight: 700; }
+  .tree .s { width: 13px; text-align: center; font-weight: 700; }
+  .ok { color: #2fa52f; } .run { color: #36a336; } .bad { color: #e0261c; }
+  .ic { width: 13px; height: 12px; border-radius: 2px; flex: none; }
+  .det { width: 100%; border-collapse: collapse; }
+  .det td { border: 1px solid #dcdcdc; padding: 1px 6px; height: 19px; }
+  .det td:first-child { width: 46%; }
+  .det .h td { font-weight: 700; background: #f3f3f3; }
+  .det .v { background: #f0f0f0; }
+  .right { display: flex; flex-direction: column; min-width: 0; }
+  .gtools { height: 28px; background: #f0f0f0; border: 1px solid #d0d0d0; display: flex; align-items: center; gap: 12px; padding: 0 10px; color: #444; }
+  .view { flex: 1; min-height: 0; position: relative; background: linear-gradient(#6f8fe0, #a9bdf0 45%, #ffffff); overflow: hidden; }
+  .view .cap { position: absolute; left: 14px; top: 12px; line-height: 17px; }
+  .view .cap b { display: block; }
+  .view svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .status { height: 24px; background: #007acc; color: #fff; display: flex; align-items: center; padding: 0 10px; font-size: 12.5px; }
+  .status .l { display: flex; align-items: center; gap: 9px; min-width: 360px; }
+  .status .bar { width: 100px; height: 14px; background: #e6e6e6; border: 1px solid #bcbcbc; padding: 1px; }
+  .status .bar i { display: block; height: 100%; background: #06b025; }
+  .status .pz { color: #f5c518; font-weight: 900; letter-spacing: 1px; }
+  .status .st { width: 13px; height: 13px; background: #ed1c24; border: 1px solid #fff; }
+  .status .r { margin-left: auto; display: flex; gap: 22px; }
+  .pop { position: absolute; right: 14px; bottom: 14px; width: 400px; background: #fff; border: 1px solid #b5b5b5; box-shadow: 0 4px 14px rgba(0,0,0,.25); padding: 12px 14px; display: none; gap: 10px; z-index: 5; }
+  .pop.show { display: flex; }
+  .pop .x { width: 22px; height: 22px; border-radius: 50%; background: #e0261c; color: #fff; display: grid; place-items: center; font-weight: 800; flex: none; }
+  .pop b { display: block; margin-bottom: 3px; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="title"><span class="app">⚙</span><span class="ctx">Context</span><span>A : Static Structural - Mechanical</span><span class="win"><span>–</span><span>▢</span><span>✕</span></span></div>
+<div class="tabs"><span class="file">File</span><span class="on">Home</span><span>Solution</span><span>Display</span><span>Selection</span><span>Automation</span><span>Add-ons</span><span>Learning and Support</span><span class="ql">Quick Launch</span></div>
+<div class="ribbon">
+  <div class="grp"><div class="big dim"><i>⧉</i>Duplicate</div><div class="col dim">✂ Cut<br>⧉ Copy<br>▤ Paste</div><div class="col"><span class="dim">✕ Delete</span><br>⌕ Find<br>⊢ Tree ▾</div><em>Outline</em></div>
+  <div class="grp"><div class="col"><span class="sel">My Computer ▾</span><br>☑ Distributed<br>Cores <span class="sel" style="min-width:40px">4</span></div><div class="big" id="solveBtn"><i style="color:#e0a800">⚡</i>Solve</div><div class="big dim"><i>▥</i>Resource<br>Prediction</div><em>Solve</em></div>
+  <div class="grp"><div class="big"><i style="color:#3d9b3d">▦</i>Analysis</div><div class="col">▣ Named Selection<br><span class="dim">✳ Coordinate System</span><br>◈ Remote Point</div><div class="col"><span class="dim">▤ Commands</span><br>▭ Comment<br>▥ Chart</div><div class="col">▣ Images ▾<br>▧ Section Plane<br>▨ Annotation</div><em>Insert</em></div>
+  <div class="grp"><div class="big"><i>▤</i>Tools</div><em>&nbsp;</em></div>
+  <div class="grp"><div class="big"><i style="color:#2b8ad6">▦</i>Layout</div><em>&nbsp;</em></div>
+</div>
+<div class="main">
+  <div class="left">
+    <div class="pane active" style="flex:1.55"><h4><span>Outline</span><span>▾ ⊥ ▢ ✕</span></h4>
+      <div class="find"><span style="color:#1b1b1b">Name ▾</span><span>Search Outline</span></div><div class="tree" id="tree"></div></div>
+    <div class="pane" style="flex:1"><h4><span>Details of "Solution (A6)"</span><span>▾ ⊥ ▢ ✕</span></h4><table class="det" id="det"></table></div>
+  </div>
+  <div class="right">
+    <div class="gtools"><span>⊕</span><span>⊖</span><span>▣</span><span>◧</span><span>⟳</span><span>✥</span><span>⌕</span><span>Select</span><span>↖ Mode ▾</span><span>▤</span><span>▥</span><span>▦</span><span>▧</span><span style="margin-left:auto">▤ Clipboard ▾</span><span>[ Empty ]</span></div>
+    <div class="view">
+      <svg viewBox="0 0 950 560" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="m1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d5dae0"/><stop offset="1" stop-color="#9aa4af"/></linearGradient>
+          <linearGradient id="m2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b9c2cc"/><stop offset="1" stop-color="#7d8894"/></linearGradient>
+          <linearGradient id="res" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#1111ff"/><stop offset=".25" stop-color="#00d5ff"/><stop offset=".5" stop-color="#1ee01e"/><stop offset=".75" stop-color="#fff200"/><stop offset="1" stop-color="#ff1a0a"/></linearGradient>
+          <pattern id="mesh" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="skewX(-20)"><path d="M0 0H18M0 0V18M0 18 18 0" stroke="#27313b" stroke-opacity=".28" fill="none"/></pattern>
+        </defs>
+        <g id="part">
+          <path class="f" d="M250 400 430 470 740 350 560 290Z" fill="url(#m1)" stroke="#39434d"/>
+          <path class="f" d="M250 400V430L430 502V470Z" fill="url(#m2)" stroke="#39434d"/>
+          <path class="f" d="M430 470V502L740 380V350Z" fill="#8c97a3" stroke="#39434d"/>
+          <path class="f" d="M330 372 380 130Q395 96 432 110L470 126Q500 140 494 176L478 318Z" fill="url(#m1)" stroke="#39434d"/>
+          <path class="f" d="M478 318 494 176Q500 140 470 126L494 118Q524 130 518 168L506 310Z" fill="url(#m2)" stroke="#39434d"/>
+          <path d="M250 400 430 470 740 350 560 290ZM330 372 380 130Q395 96 432 110L470 126Q500 140 494 176L478 318Z" fill="url(#mesh)"/>
+          <ellipse cx="437" cy="172" rx="27" ry="31" fill="#6b87d3" stroke="#39434d"/>
+          <ellipse cx="330" cy="410" rx="20" ry="9" fill="#5c6670" stroke="#39434d"/><ellipse cx="640" cy="352" rx="20" ry="9" fill="#5c6670" stroke="#39434d"/><ellipse cx="470" cy="436" rx="20" ry="9" fill="#5c6670" stroke="#39434d"/>
+        </g>
+        <g font-size="12" font-family="Segoe UI, Open Sans, sans-serif"><text x="330" y="528">0.00</text><text x="430" y="528">50.00</text><text x="530" y="528">100.00 (mm)</text>
+          <rect x="340" y="534" width="50" height="8"/><rect x="390" y="534" width="50" height="8" fill="#fff" stroke="#000"/><rect x="440" y="534" width="50" height="8"/><rect x="490" y="534" width="50" height="8" fill="#fff" stroke="#000"/>
+          <g stroke-width="3"><path d="M850 490V440" stroke="#2fa52f"/><path d="M850 490 895 508" stroke="#e0261c"/><path d="M850 490 812 508" stroke="#1f5fd0"/></g><text x="846" y="434" fill="#2fa52f">Y</text><text x="900" y="514" fill="#e0261c">X</text><text x="798" y="514" fill="#1f5fd0">Z</text></g>
+      </svg>
+      <div class="cap" id="cap"></div>
+      <div class="pop" id="pop"><span class="x">✕</span><div><b>Error</b>The solver engine was unable to converge on a solution for the nonlinear problem as constrained.</div></div>
+    </div>
+  </div>
+</div>
+<div class="status"><div class="l" id="left"></div><div class="r"><span id="msgs">No Messages</span><span>No Selection</span><span>▲ Metric (mm, kg, N, s, mV, mA)</span><span>Degrees</span><span>rad/s</span><span>Celsius</span></div></div>
+<script>
+  const $ = id => document.getElementById(id);
+  const BOLT = '<svg width="11" height="14" viewBox="0 0 11 14" style="vertical-align:-2px"><path fill="currentColor" d="M6.8 0 1 8h3.4L3 14l7-8.6H6.2L9 0z"/></svg>';
+  const ICON = { ok: ['✓', 'ok'], run: [BOLT, 'run'], bad: [BOLT, 'bad'] };
+
+  // The Outline. `solve` is how the environment and everything under Solution stand.
+  const tree = solve => {
+    const row = (depth, toggle, st, color, text, bold) => {
+      const [g, c] = st ? ICON[st] : ['', ''];
+      return `<div style="padding-left:${depth * 16}px"><span style="width:9px">${toggle}</span><span class="s ${c}">${g}</span><span class="ic" style="background:${color}"></span>${bold ? `<b>${text}</b>` : text}</div>`;
+    };
+    $('tree').innerHTML = row(0, '', '', '#c9921a', 'Project*', 1) + row(0, '−', '', '#c7a45a', 'Model (A4)', 1)
+      + row(1, '+', 'ok', '#c7a45a', 'Geometry Imports') + row(1, '+', 'ok', '#6f9ccc', 'Geometry') + row(1, '+', 'ok', '#c7a45a', 'Materials')
+      + row(1, '+', 'ok', '#55a7c9', 'Coordinate Systems') + row(1, '+', 'ok', '#c7a45a', 'Connections') + row(1, '', 'ok', '#8fb4d9', 'Mesh')
+      + row(1, '−', solve, '#4bb64b', 'Static Structural (A5)', 1) + row(2, '', 'ok', '#7f6fd0', 'Analysis Settings') + row(2, '', 'ok', '#4f80c9', 'Fixed Support') + row(2, '', 'ok', '#d08a3a', 'Bearing Load')
+      + row(2, '−', solve, '#c7a45a', 'Solution (A6)', 1) + row(3, '', solve, '#d9c15a', 'Solution Information') + row(3, '', solve, '#4bb64b', 'Total Deformation') + row(3, '', solve, '#4bb64b', 'Equivalent Stress');
+  };
+  const details = (state, t) => {
+    $('det').innerHTML = [['h', 'Adaptive Mesh Refinement'], ['Max Refinement Loops', '1.'], ['Refinement Depth', '2.'], ['h', 'Information'], ['Status', state], ['MAPDL Elapsed Time', t], ['MAPDL Memory Used', t && '3.4 GB'], ['h', 'Post Processing'], ['Beam Section Results', 'No'], ['On Demand Stress/Strain', 'No']]
+      .map(([a, b]) => a === 'h' ? `<tr class="h"><td colspan="2">${b}</td></tr>` : `<tr><td>${a}</td><td class="v">${b}</td></tr>`).join('');
+  };
+  const caption = lines => { $('cap').innerHTML = `<b>A: Static Structural</b>${lines}`; };
+
+  // The dial.
+  const busy = (pct, text) => {
+    $('left').innerHTML = `<span class="bar"><i style="width:${pct}%"></i></span><span class="pz">❚❚</span><span class="st"></span><span>${text}</span>`;
+  };
+  const solving = pct => busy(pct, `(${Math.floor(pct)}%) Solving the mathematical model...`);
+  const ready = () => { $('left').textContent = 'Ready'; };
+
+  // It has been going for half an hour when the page loads.
+  const loadedAt = Date.now();
+  const elapsed = () => { const s = 31 * 60 + Math.floor((Date.now() - loadedAt) / 1000); return `${Math.floor(s / 60)} m ${s % 60} s`; };
+
+  let pct = 31;
+  const blink = demo.outcome === 'blink';
+  tree('run'); details('Solve Required', ''); caption('Static Structural<br>Time: 1. s');
+  if (blink) busy(6, 'Overall Progress...'); else solving(pct);
+  let hold = setInterval(() => { if (!blink && pct < 38) solving(pct = Math.min(38, pct + 0.05)); }, 1500);
+
+  const creep = () => { hold = setInterval(() => { if (pct < 60) solving(pct += 0.1); }, 1500); };
+
+  const end = ok => {
+    ready();
+    tree(ok ? 'ok' : 'bad');
+    details(ok ? 'Done' : 'Solve Failed', elapsed());
+    if (ok) {
+      caption('Total Deformation<br>Type: Total Deformation<br>Unit: mm<br>Time: 1. s<br>Max: 0.4182<br>Min: 0');
+      document.querySelectorAll('#part .f').forEach(f => f.setAttribute('fill', 'url(#res)'));
+    } else {
+      $('msgs').textContent = '⚠ 2 Messages';
+      $('pop').classList.add('show');
+      setTimeout(() => $('pop').classList.remove('show'), 5000);
+    }
+    demo.trigger();
+  };
+
+  demo.onStart = durationMs => {
+    clearInterval(hold);
+    const from = pct, at = Date.now();
+    if (blink) {
+      setTimeout(() => {
+        ready();
+        demo.mark('blink');
+        demo.trigger();
+        setTimeout(() => {
+          busy(10, '(10%) Building mathematical model...');
+          setTimeout(() => { pct = 18; solving(pct); creep(); }, 4000);
+        }, 6000);
+      }, durationMs);
+      return;
+    }
+    const to = demo.outcome === 'success' ? 99 : 62;
+    const step = setInterval(() => {
+      const k = Math.min(1, (Date.now() - at) / durationMs);
+      if (k < 1) { solving(pct = from + (to - from) * k); return; }
+      clearInterval(step);
+      end(demo.outcome === 'success');
+    }, 500);
+  };
+</script>
+</body>
+</html>

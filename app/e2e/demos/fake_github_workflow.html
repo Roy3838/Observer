@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Copied from video/demos/fake_github_workflow.html and reworked for app/e2e: the run is already going on load, holds mid-build until the suite starts it, then ends by ?outcome=. -->
+<!-- Copied from video/demos/fake_github_workflow.html and reworked for app/e2e: the run is already going on load, holds mid-build until the suite starts it, then ends by ?outcome=. overdue: it hangs on the step it's on, only the clocks run, and it never ends; the trigger is the end of the run, with the summary still In progress. A run of 2 minutes or less (the landing page) is a time lapse that gets to 2 hours there. -->
 <!-- saved from url=(0060)https://github.com/Roy3838/Observer/actions/runs/37359884122 -->
 <html lang="en" data-color-mode="light" data-light-theme="light_high_contrast" data-dark-theme="dark_high_contrast" data-a11y-animated-images="system" data-a11y-link-underlines="true" data-turbo-loaded="" class="js-focus-visible" data-js-focus-visible=""><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><style type="text/css">.turbo-progress-bar {
   position: fixed;
@@ -650,6 +650,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // run to TOTAL (success) or FAIL_AT (fail, with the Windows build still going) over the
     // duration demo.start() gives.
     const HOLD_FROM = 20, HOLD_TO = 45, FAIL_AT = 95;
+    const LAPSE_TO = 2 * 3600, LAPSE_MAX_MS = 120000;
     const loadedAt = performance.now();
     let run = null;
     let failedAt   = null;                                   // sim-seconds when "Workflow file" was clicked; freezes the run red
@@ -749,6 +750,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const $ = id => document.getElementById(id);
     const fmt = s => {
         s = Math.max(0, Math.floor(s));
+        if (s >= 3600) return Math.floor(s / 3600) + 'h ' + Math.floor(s % 3600 / 60) + 'm ' + (s % 60) + 's';
         return s >= 60 ? Math.floor(s / 60) + 'm ' + (s % 60) + 's' : s + 's';
     };
     // Banner glyphs: the success check it ships with, and the failure X lifted from ICONS.
@@ -838,7 +840,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const st = state(job, now);
         setHTML($('log-ico'), ICONS[st]);
         $('log-title').textContent = job.name;
-        $('log-meta').textContent = st === 'queued' ? 'Queued' : fmt(Math.min(now, job.end) - job.start);
+        $('log-meta').textContent = st === 'queued' ? 'Queued' : fmt(Math.min(now, job.end) - job.start + (st === 'running' ? overdueExtra(now) : 0));
 
         const box = $('steps');
         let html = '';
@@ -846,7 +848,7 @@ document.addEventListener('DOMContentLoaded', () => {
         job.steps.forEach(step => {
             const ss = stepState(step, now, st);
             const idle = ss === 'pending' || ss === 'skipped';
-            const dur = fmt(Math.min(now, step.end) - step.start);
+            const dur = fmt(Math.min(now, step.end) - step.start + (ss === 'running' ? overdueExtra(now) : 0));
             html += '<div class="step-head ' + (idle ? 'pending' : '') + '"><span class="chev">' + (ss === 'running' || ss === 'fail' ? '▼' : '▶') + '</span>' +
                     ICONS[ss] + '<span>' + step.name + '</span><span class="stime">' + (idle ? '' : dur) + '</span></div>';
             if (ss === 'running' || ss === 'fail') {
@@ -893,7 +895,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         JOBS.forEach(job => {
             const st = startedAt == null ? 'queued' : state(job, t);
-            const dur = (st === 'queued' || st === 'skipped') ? '' : fmt(Math.min(t, job.end) - job.start);
+            const dur = (st === 'queued' || st === 'skipped') ? '' : fmt(Math.min(t, job.end) - job.start + (st === 'running' ? overdueExtra(t) : 0));
             setHTML(nodeEls[job.id].querySelector('.nicon'), ICONS[st]);
             nodeEls[job.id].querySelector('.ntime').textContent = dur;
             nodeEls[job.id].classList.toggle('selected', job.id === selected);
@@ -909,7 +911,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const s = startedAt == null ? 'queued' : done ? (failed ? 'fail' : 'success') : 'running';
         setHTML($('hdr-status'), s === 'queued' ? ICONS.queued : ICONS[s]);
         $('sum-text').textContent = done ? (failed ? 'Failure' : 'Success') : (startedAt == null ? 'Not started' : 'In progress');
-        $('sum-time').textContent = startedAt == null ? '–' : fmt(t);
+        $('sum-time').textContent = startedAt == null ? '–' : fmt(t + overdueExtra(t));
 
         $('sum-art').textContent = done && !failed ? '1' : '–';
         // Rebuilt spinners would restart at 0deg; pin them all to the document timeline so they stay in phase.
@@ -933,11 +935,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const simNow = () => {
         if (!run) return HOLD_FROM + (HOLD_TO - HOLD_FROM) * (1 - Math.exp(-(performance.now() - loadedAt) / 600000));
         const f = Math.min((performance.now() - run.at) / run.durationMs, 1);
+        if (demo.outcome === 'overdue') return run.from;
         return run.from + ((demo.outcome === 'success' ? TOTAL : FAIL_AT) - run.from) * f;
+    };
+    // overdue: what the clocks show beyond where the build hangs.
+    const overdueExtra = t => {
+        if (!run || demo.outcome !== 'overdue') return 0;
+        const ms = performance.now() - run.at;
+        if (run.durationMs > LAPSE_MAX_MS) return ms / 1000;
+        return (LAPSE_TO - run.from) * Math.min(ms / run.durationMs, 1) + Math.max(0, ms - run.durationMs) / 1000;
     };
     // A timer, not requestAnimationFrame: the suite captures this page from a background tab.
     const tick = () => {
         if (run && performance.now() - run.at >= run.durationMs) {
+            if (demo.outcome === 'overdue') { renderAll(); demo.trigger(); return; }
             clearInterval(raf);
             if (demo.outcome === 'success') frozen = TOTAL;
             else frozen = failedAt = FAIL_AT;

@@ -1,91 +1,116 @@
 <!DOCTYPE html>
-<!-- A DataAnnotation-style task: six model runs, each a blue dot while it works and a green check
-     when it's done. The annotator waits for all six. Runs finish one by one along the way, so
-     "5 of 6 done" comes before the end and isn't it. ?outcome=success: the last run finishes.
-     fail: a run errors out instead. -->
+<!-- A project page on a data annotation platform: the worker sent one prompt to two models, three runs
+     each, and waits for all six before rating them. Each run is a row: a blue dot and "Working…" while
+     it runs, a green check and its answer when it's done. Holds with two of six done; runs finish one by
+     one along the way, so "5 of 6" comes before the end and isn't it. ?outcome=success: the last run
+     finishes. fail: the last run errors out instead.
+     The frame (a blue bar with the pay so far and Transfer Funds) follows public descriptions of
+     DataAnnotation's dashboard; the project, the prompt and the answers are made up. Figtree (fonts/). -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Task · Payroll reconciliation workpaper</title>
-<script src="demo-contract.js"></script>
+<title>Project</title>
+<link rel="stylesheet" href="fonts/figtree.css">
 <style>
+  :root { --blue: #1d4ed8; --ink: #17202e; --mute: #64708a; --line: #dde3ee; --bg: #f3f6fb; }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: #f4f5f7; color: #1f2328; }
-  header { background: #fff; border-bottom: 1px solid #e3e5e8; padding: 12px 28px; display: flex; justify-content: space-between; align-items: center; }
-  header b { font-size: 16px; }
-  header .timer { color: #59636e; font-size: 13px; }
-  main { max-width: 1000px; margin: 24px auto; padding: 0 20px; }
-  .prompt { background: #fff; border: 1px solid #e3e5e8; border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; }
-  .prompt h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #59636e; margin: 0 0 6px; }
-  .tabs { display: flex; gap: 18px; border-bottom: 1px solid #e3e5e8; margin-bottom: 0; }
-  .tabs span { padding: 8px 2px; color: #59636e; }
-  .tabs .on { color: #1f2328; border-bottom: 2px solid #2563eb; font-weight: 600; }
-  .runs { background: #fff; border: 1px solid #e3e5e8; border-radius: 10px; overflow: hidden; margin-top: 12px; }
-  .run { display: grid; grid-template-columns: 28px 1fr auto 28px 28px 20px; gap: 14px; align-items: center; padding: 14px 18px; border-bottom: 1px solid #eef0f2; font-size: 17px; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.45 Figtree, -apple-system, "Segoe UI", sans-serif; display: flex; flex-direction: column; overflow: hidden; }
+  .fund { background: var(--blue); color: #fff; height: 46px; display: flex; align-items: center; gap: 26px; padding: 0 26px; }
+  .fund a { color: #dbe6ff; } .fund a.on { color: #fff; font-weight: 600; }
+  .fund .sum { margin-left: auto; }
+  .fund .tf { border: 1.5px solid #fff; border-radius: 18px; padding: 4px 16px; font-weight: 600; }
+  .crumb { padding: 14px 26px 0; color: var(--mute); display: flex; justify-content: space-between; }
+  .shell { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px 1fr; gap: 20px; padding: 12px 26px 16px; }
+  .box { background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+  aside.box { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  aside h1 { margin: 0; font-size: 18px; line-height: 1.25; }
+  aside .tag { align-self: flex-start; background: #e3edff; color: var(--blue); font-weight: 600; font-size: 12px; border-radius: 10px; padding: 2px 10px; }
+  aside dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 5px 0; color: var(--mute); }
+  aside dd { margin: 0; color: var(--ink); font-weight: 600; }
+  aside ol { margin: 0; padding-left: 18px; color: var(--mute); line-height: 1.7; }
+  aside ol .now { color: var(--ink); font-weight: 600; }
+  .work { display: flex; flex-direction: column; min-height: 0; padding: 18px 20px; }
+  .ask { background: var(--bg); border-radius: 10px; padding: 11px 15px; margin-bottom: 14px; }
+  .ask small { display: block; color: var(--mute); font-weight: 600; }
+  .tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line); }
+  .tabs span { padding: 7px 2px; color: var(--mute); }
+  .tabs .on { color: var(--ink); border-bottom: 2px solid var(--blue); font-weight: 600; }
+  .runs { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-top: 14px; }
+  .run { display: grid; grid-template-columns: 28px 1fr auto 24px 24px 20px; gap: 14px; align-items: center; padding: 15px 18px; border-bottom: 1px solid #eef1f6; font-size: 17px; }
   .run:last-child { border-bottom: 0; }
-  .dot { width: 14px; height: 14px; border-radius: 50%; background: #2f6fed; margin: 0 auto; }
-  .dot.working { animation: pulse 1.4s ease-in-out infinite; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; background: #2f6fed; margin: 0 auto; animation: pulse 1.4s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .35; } }
-  .ok { width: 22px; height: 22px; border: 2px solid #1a9c5b; border-radius: 50%; color: #1a9c5b; display: grid; place-items: center; font-size: 13px; font-weight: 800; }
-  .err { width: 22px; height: 22px; border-radius: 50%; background: #d1242f; color: #fff; display: grid; place-items: center; font-size: 14px; font-weight: 800; }
+  .ok, .err { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 800; }
+  .ok { border: 2px solid #1a9c5b; color: #1a9c5b; }
+  .err { background: #d1242f; color: #fff; }
   .txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .run.done .txt { text-decoration: underline; }
   .run.failed .txt { color: #d1242f; }
-  .model { background: #eef0f2; border-radius: 6px; padding: 3px 10px; font-size: 14px; color: #59636e; }
-  .ic { color: #8c959f; text-align: center; }
-  .foot { display: flex; justify-content: space-between; margin-top: 14px; color: #59636e; font-size: 14px; }
-  .foot button { background: #2563eb; color: #fff; border: 0; border-radius: 6px; padding: 9px 18px; font-weight: 600; }
-  .foot button:disabled { background: #b6c6ea; }
+  .model { background: #eef1f6; border-radius: 6px; padding: 3px 10px; font-size: 14px; color: var(--mute); }
+  .ic { color: #8c97ab; text-align: center; }
+  .end { margin-top: auto; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding-top: 14px; }
+  .end #summary { font-weight: 600; }
+  .end button { font: 600 14px Figtree, sans-serif; background: var(--blue); color: #fff; border: 0; border-radius: 20px; padding: 10px 24px; }
+  .end button:disabled { background: #c3d0ea; }
 </style>
+<script src="demo-contract.js"></script>
 </head>
 <body>
-<header><b>Rate &amp; compare · Audit workpaper task</b><span class="timer" id="timer"></span></header>
-<main>
-  <div class="prompt"><h2>Prompt</h2>Prepare an audit-style FY2023 payroll reconciliation workpaper from the attached ledgers and save it to /workdir.</div>
-  <div class="tabs"><span class="on">Runs</span><span>Rubric</span><span>Instructions</span></div>
-  <div class="runs" id="runs"></div>
-  <div class="foot"><span id="summary"></span><button id="next" disabled>Continue to rating</button></div>
-</main>
+<div class="fund"><a class="on">Projects</a><a>Qualifications</a><a>Report Time</a><span class="sum">Reported, not cashed out: <b>$148.50</b></span><span class="tf">Transfer Funds</span></div>
+<div class="crumb"><span>Projects › Side-by-side agent runs</span><span id="timer"></span></div>
+<div class="shell">
+  <aside class="box">
+    <span class="tag">Priority</span><h1>Side-by-side agent runs</h1>
+    <dl><dt>Pay</dt><dd>$27.00 / hr</dd><dt>Tasks available</dt><dd>112</dd><dt>Created</dt><dd>Oct 9</dd></dl>
+    <ol><li>Write a prompt</li><li class="now">Wait for all six runs</li><li>Rate each run</li><li>Explain your choice</li></ol>
+  </aside>
+  <section class="box work">
+    <div class="ask"><small>Your prompt</small>Plan a three-day trip to a fictional island and save the itinerary as a file.</div>
+    <div class="tabs"><span class="on">Runs</span><span>Rubric</span><span>Instructions</span></div>
+    <div class="runs" id="runs"></div>
+    <div class="end"><span id="summary"></span><button id="next" disabled>Start rating</button></div>
+  </section>
+</div>
 <script>
+  const $ = id => document.getElementById(id);
   const RUNS = [
-    ['Workpaper saved to **`/workdir/FY2023_Payroll_Reconciliation.xlsx`**', 'Opus 5'],
-    ['The workpaper is delivered at **`/workdir/FY2023_Payroll_Reconciliation_v2.xlsx`**', 'Opus 5'],
-    ['The workpaper is saved at **`/workdir/FY2023_Payroll_Rec.xlsx`**', 'Opus 5'],
-    ['Completed the audit-style payroll reconciliation workpaper and saved it', 'GPT 5.6'],
-    ['Completed and saved the audit-style workpaper: `/workdir/FY23_payroll.xlsx`', 'GPT 5.6'],
-    ['Completed and saved the audit-style workpaper: [Download FY2023_Payroll.xlsx]', 'GPT 5.6'],
+    ['Itinerary saved to **`/workdir/island_itinerary.md`**', 'Model A'],
+    ['The itinerary is delivered at **`/workdir/island_itinerary_v2.md`**', 'Model A'],
+    ['The itinerary is saved at **`/workdir/island_plan.md`**', 'Model A'],
+    ['Completed the three-day island itinerary and saved it', 'Model B'],
+    ['Completed and saved the itinerary: `/workdir/itinerary.md`', 'Model B'],
+    ['Completed and saved the itinerary: [Download itinerary.md]', 'Model B'],
   ];
   const ERROR = 'Run failed: sandbox timed out after 45 min (exit code 137)';
-  // Each run: 'working' | 'done' | 'failed'. Two are done when the page loads.
+  // Each run: 'working' | 'done' | 'failed'. Runs 3 and 5 are done when the page loads.
   const state = ['working', 'working', 'done', 'working', 'done', 'working'];
   const loadedAt = Date.now();
 
-  const render = () => {
-    document.getElementById('runs').innerHTML = RUNS.map(([text, model], i) => {
+  const paint = () => {
+    $('runs').innerHTML = RUNS.map(([text, model], i) => {
       const s = state[i];
-      const icon = s === 'done' ? '<span class="ok">✓</span>' : s === 'failed' ? '<span class="err">!</span>' : '<span class="dot working"></span>';
-      const label = s === 'working' ? `Run ${i + 1} — Working…` : s === 'failed' ? `Run ${i + 1} — ${ERROR}` : `Run ${i + 1} — ${text}`;
-      return `<div class="run ${s}">${icon}<span class="txt">${label}</span><span class="model">${model}</span><span class="ic">⟳</span><span class="ic">🗑</span><span class="ic">⌄</span></div>`;
+      const icon = { done: '<span class="ok">✓</span>', failed: '<span class="err">!</span>', working: '<span class="dot"></span>' }[s];
+      const label = { done: text, failed: ERROR, working: 'Working…' }[s];
+      return `<div class="run ${s}">${icon}<span class="txt">Run ${i + 1} — ${label}</span><span class="model">${model}</span><span class="ic">⟳</span><span class="ic">🗑</span><span class="ic">⌄</span></div>`;
     }).join('');
     const done = state.filter(s => s === 'done').length;
-    const failed = state.includes('failed');
-    document.getElementById('summary').textContent = failed ? `${done} of 6 runs complete · 1 run failed` : `${done} of 6 runs complete`;
-    document.getElementById('next').disabled = done < 6;
+    $('summary').textContent = `${done} of 6 runs complete${state.includes('failed') ? ' · 1 run failed' : ''}`;
+    $('next').disabled = done < 6;
   };
-  setInterval(() => {
-    const m = Math.floor((Date.now() - loadedAt) / 60000) + 38;
-    document.getElementById('timer').textContent = `Time on task: ${Math.floor(m / 60)}h ${m % 60}m`;
-  }, 1000);
-  render();
+  const settle = (i, s) => { state[i] = s; paint(); };
+  const clock = () => {
+    const m = 38 + Math.floor((Date.now() - loadedAt) / 60000);
+    $('timer').textContent = `Time on this task: ${Math.floor(m / 60)}h ${m % 60}m`;
+  };
+  paint(); clock(); setInterval(clock, 1000);
 
   demo.onStart = durationMs => {
-    // Runs 1, 2 and 4 finish along the way; run 6 is last.
-    [[0, 0.3], [3, 0.55], [1, 0.8]].forEach(([i, f]) => setTimeout(() => { state[i] = 'done'; render(); demo.mark('run_done', { run: i + 1 }); }, durationMs * f));
-    setTimeout(() => {
-      state[5] = demo.outcome === 'success' ? 'done' : 'failed';
-      render();
-      demo.trigger();
-    }, durationMs);
+    // Runs 1, 4 and 2 finish along the way; run 6 is last.
+    for (const [i, part] of [[0, 0.3], [3, 0.55], [1, 0.8]]) {
+      setTimeout(() => { settle(i, 'done'); demo.mark('run_done', { run: i + 1 }); }, durationMs * part);
+    }
+    setTimeout(() => { settle(5, demo.outcome === 'success' ? 'done' : 'failed'); demo.trigger(); }, durationMs);
   };
 </script>
 </body>

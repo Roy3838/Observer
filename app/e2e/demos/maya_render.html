@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<!-- Maya's Arnold RenderView rendering a still. The dial is the status bar under the picture: it starts
+     with "rendering |" and has a progress bar at its right while it renders; when it stops, both are
+     gone and the line starts with the time. Holds rendering, 31 minutes in (the bar never passes 40%),
+     until the suite starts it; then it ends by ?outcome=:
+       success    the bar reaches 100%: no "rendering", no bar, a clean picture
+       fail       the render stops at 58%: the same status bar, over a picture that's still noisy
+       next_pass  the trigger is the progress bar starting over at 0% for the next sampling pass, with
+                  "rendering" still there; it goes on
+     The rendering and finished bars are drawn from Autodesk's screenshots. How the bar looks after a
+     render dies, and the bar starting over between passes, are inferred. Open Sans (fonts/). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Arnold RenderView</title>
+<link rel="stylesheet" href="fonts/open-sans.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 12px/1.3 "Open Sans", sans-serif; color: #d0d0d0; background: #444; display: flex; flex-direction: column; overflow: hidden; }
+  .title { height: 26px; background: #fff; color: #1c1c1c; display: flex; align-items: center; gap: 8px; padding: 0 8px; }
+  .title i { width: 14px; height: 14px; background: linear-gradient(#2aa5c9, #147a9c); color: #fff; font: 700 10px/14px "Open Sans"; text-align: center; }
+  .title .win { margin-left: auto; display: flex; gap: 34px; padding-right: 10px; }
+  .menu { height: 28px; display: flex; gap: 17px; align-items: center; padding: 0 11px; }
+  .tools { height: 38px; display: flex; gap: 13px; align-items: center; padding: 0 7px; border-bottom: 1px solid #333; }
+  .dd { background: #5d5d5d; padding: 3px 6px; display: flex; justify-content: space-between; }
+  .sep { width: 1px; align-self: stretch; background: #2b2b2b; }
+  .tools .sl { width: 100px; height: 2px; background: #111; position: relative; } .tools .sl i { position: absolute; left: 48px; top: -7px; width: 4px; height: 16px; background: #bbb; }
+  .tools .num { background: #2b2b2b; width: 34px; padding: 2px 6px; }
+  .tools .stop { width: 15px; height: 15px; background: #de3a3c; }
+  .tools .r { margin-left: auto; display: flex; gap: 15px; align-items: center; padding-right: 8px; }
+  .mid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 330px; gap: 8px; padding: 9px 11px 0; }
+  .buf { background: #000; min-height: 0; overflow: hidden; display: grid; place-items: center; }
+  .buf canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .side { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+  .side .t { display: flex; gap: 2px; } .side .t span { background: #3a3a3a; padding: 3px 11px; } .side .t .on { background: #5d5d5d; }
+  .side .bs { display: flex; gap: 6px; } .side .bs span { background: #5d5d5d; padding: 4px 7px; white-space: nowrap; font-size: 11px; }
+  .side .ls { background: #2b2b2b; border: 1px solid #5285a6; height: 150px; }
+  .side .ls div { padding: 3px 26px; border-left: 6px solid #8fc4e6; background: #555; margin-bottom: 1px; } .side .ls .on { background: #5285a6; }
+  .side .sec { background: #5d5d5d; padding: 4px 10px; font-weight: 600; }
+  .side .f { display: grid; grid-template-columns: 110px 1fr; gap: 6px 8px; padding: 2px 6px; align-items: center; }
+  .side .f span:nth-child(odd) { text-align: right; } .side .f span:nth-child(even) { background: #2b2b2b; padding: 2px 6px; }
+  .status { height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px; margin-top: 6px; }
+  .status .line { flex: 1; background: #515151; height: 30px; display: flex; align-items: center; padding: 0 2px; }
+  .status .pb { width: 91px; height: 14px; border: 1px solid #222; border-radius: 3px; background: #2d2d2e; position: relative; visibility: hidden; }
+  .status .pb.on { visibility: visible; }
+  .status .pb i { display: block; height: 100%; background: #5285a6; border-radius: 2px; }
+  .status .pb b { position: absolute; inset: -2px 0 0; text-align: center; font-weight: 600; color: #fff; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="title"><i>M</i>Arnold RenderView<span class="win"><span>–</span><span>❐</span><span>✕</span></span></div>
+<div class="menu"><span>File</span><span>Window</span><span>View</span><span>Render</span></div>
+<div class="tools"><span class="dd" style="width:90px">Beauty<span>▾</span></span><span class="dd" style="width:146px">heroCamShape<span>▾</span></span><span class="sep"></span><span>☀</span><span>🔒︎</span><span class="sep"></span><span style="font-size:9px;border:1px solid #bbb;border-radius:50%;padding:3px 2px">RGB</span><span>◑</span><span>1:1</span><span class="sep"></span><span style="color:#4fb3bf">▣</span><span class="sep"></span><span>✺</span><span class="sl"><i></i></span><span class="num">0</span><span class="sep"></span><span style="color:#4fb3bf;font-size:10px">▤ LOG</span><span class="r"><i class="stop"></i><span>↻</span><span>•))</span><span>◧</span></span></div>
+<div class="mid">
+  <div class="buf"><canvas id="cv" width="920" height="600"></canvas></div>
+  <div class="side"><div class="t"><span class="on">Post</span><span>Display</span><span>Pixel</span></div><div class="bs"><span>Add Imager ▾</span><span>Remove Imager</span><span>Import Imagers</span></div>
+    <div class="ls"><div class="on">aiImagerDenoiserOidn1</div><div>aiImagerTonemap1</div></div>
+    <div class="sec">▾ &nbsp; Common</div><div class="f"><span>Enable</span><span>✓</span><span>Layer Selection</span><span>RGBA</span></div>
+    <div class="sec">▾ &nbsp; Main</div><div class="f"><span>Render Device</span><span>auto ▾</span><span>Output Suffix</span><span>&nbsp;</span><span>Albedo</span><span>denoise_albedo_noisy</span></div></div>
+</div>
+<div class="status"><span class="line" id="line"></span><span class="pb" id="pb"><i id="bar"></i><b id="pct"></b></span><span>📷︎</span><span>⌃</span></div>
+<script>
+  const $ = id => document.getElementById(id);
+  const ctx = $('cv').getContext('2d');
+
+  // The picture: a robot toy on a table, noisier the earlier in the render it is (0 clean, 1 noisy).
+  const scene = noise => {
+    const g = ctx.createLinearGradient(0, 0, 0, 600);
+    g.addColorStop(0, '#8fa3ad'); g.addColorStop(0.62, '#c8ced0'); g.addColorStop(0.63, '#8a6a4c'); g.addColorStop(1, '#4e3826');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 920, 600);
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(470, 498, 190, 26, 0, 0, 7); ctx.fill();
+    const body = ctx.createLinearGradient(330, 0, 600, 0); body.addColorStop(0, '#e9a33b'); body.addColorStop(0.5, '#ffd27a'); body.addColorStop(1, '#a5651a');
+    ctx.fillStyle = body; ctx.fillRect(360, 270, 210, 180); ctx.fillRect(395, 130, 140, 112);
+    ctx.fillStyle = '#5d6b73'; ctx.fillRect(445, 242, 40, 28); ctx.fillRect(385, 450, 50, 46); ctx.fillRect(495, 450, 50, 46); ctx.fillRect(318, 290, 42, 120); ctx.fillRect(570, 290, 42, 120); ctx.fillRect(460, 96, 10, 34);
+    ctx.fillStyle = '#23303a'; ctx.fillRect(412, 152, 106, 46);
+    ctx.fillStyle = '#7ff0ff'; ctx.beginPath(); ctx.arc(440, 175, 13, 0, 7); ctx.arc(490, 175, 13, 0, 7); ctx.fill();
+    ctx.fillStyle = '#d3453c'; ctx.beginPath(); ctx.arc(465, 92, 12, 0, 7); ctx.fill();
+    ctx.fillStyle = '#b87a2b'; ctx.fillRect(392, 300, 146, 70);
+    if (noise <= 0) return;
+    const img = ctx.getImageData(0, 0, 920, 600), d = img.data;
+    for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 120 * noise; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+    ctx.putImageData(img, 0, 0);
+  };
+
+  const loadedAt = Date.now();
+  const clock = () => { const s = 31 * 60 + 9 + Math.floor((Date.now() - loadedAt) / 1000); return [s / 3600, s / 60 % 60, s % 60].map(n => String(Math.floor(n)).padStart(2, '0')).join(':'); };
+  const rest = '1920x1080 | CPU | heroCamShape (1:1) | samples 8/3/2/2/6/2 | 9184.31 MB';
+
+  // The dial.
+  let pct = 27, time = null;
+  const show = () => {
+    const on = time === null;
+    $('line').textContent = on ? `rendering | ${clock()} | ${rest}` : `${time} | ${rest}`;
+    $('pb').classList.toggle('on', on);
+    $('bar').style.width = `${pct}%`;
+    $('pct').textContent = `${Math.floor(pct)}%`;
+  };
+  scene(0.5); show();
+  let creep = setInterval(() => { if (pct < 40) pct += 0.04; show(); }, 1000);
+
+  demo.onStart = durationMs => {
+    clearInterval(creep);
+    const pass = demo.outcome === 'next_pass', from = pct, to = demo.outcome === 'fail' ? 58 : 100, at = Date.now();
+    const step = setInterval(() => {
+      const k = Math.min(1, (Date.now() - at) / durationMs);
+      pct = from + (to - from) * k;
+      if (k === 1) {
+        clearInterval(step);
+        if (pass) {
+          pct = 0; scene(0.3);
+          setInterval(() => { if (pct < 60) pct += 0.1; show(); }, 1000);
+        } else {
+          time = clock();
+          scene(demo.outcome === 'success' ? 0 : 0.45);
+        }
+        show();
+        demo.trigger();
+        return;
+      }
+      show();
+    }, 500);
+  };
+</script>
+</body>
+</html>

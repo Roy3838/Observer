@@ -1,5 +1,5 @@
-// "What do you need monitored?": two big wheels, When … then …, spinning through everything
-// Observer is for, with each pair's live demo underneath.
+// Who uses Observer: three big wheels, "Engineers tell Observer: When … then …", spinning through
+// everyone Observer is for, with each pair's live demo underneath.
 //
 // Everything here comes from the ground truth (app/src/utils/groundTruth.ts, via
 // scripts/sync-showcase.mjs): the pairs are the ones the MCP e2e suite tests, and the stage runs the
@@ -10,7 +10,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Phone, MessageCircle, MessageSquare, Mail, Hash, Send, NotebookPen, Clapperboard, ChevronLeft, ChevronRight, ExternalLink, Check, type LucideIcon } from 'lucide-react';
 import data from './generated/showcase.json';
 
-interface Pair { id: string; file: string; query: string; when: string; then: string; channel: { id: string; label: string } | null }
+interface Pair { id: string; who: string; file: string; query: string; when: string; then: string; channel: { id: string; label: string } | null }
 
 /** What the Then says when it fires: the moment for an alert ("My battery is low"), what got done
  *  for a log ("Log all the topics"). The demo itself shows the rest. */
@@ -41,7 +41,7 @@ const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia
 /** One line of text that swaps phrase by phrase. Each word sits in its own clipped slot and rises
  *  into place a beat after the one before it; the outgoing phrase leaves the same way, upward
  *  (or downward when going back), so there is only ever one crisp phrase on screen. */
-const Wheel = ({ items, index, delay = 0, className = '' }: { items: string[]; index: number; delay?: number; className?: string }) => {
+const Wheel = ({ items, index, delay = 0, className = '', right = false }: { items: string[]; index: number; delay?: number; className?: string; /** Set against the right edge, so fixed text can follow it on the line. */ right?: boolean }) => {
   const n = items.length;
   // How much each item has to shrink to fit the line's width (on a phone, the long ones do).
   const ref = useRef<HTMLDivElement>(null);
@@ -69,8 +69,8 @@ const Wheel = ({ items, index, delay = 0, className = '' }: { items: string[]; i
           <span
             key={i}
             aria-hidden={k !== 0}
-            className={`absolute left-0 top-0 whitespace-nowrap leading-[1.3] ${className}`}
-            style={{ transform: `scale(${fit[i]})`, transformOrigin: 'left center', pointerEvents: k === 0 ? 'auto' : 'none' }}
+            className={`absolute ${right ? 'right-0' : 'left-0'} top-0 whitespace-nowrap leading-[1.3] ${className}`}
+            style={{ transform: `scale(${fit[i]})`, transformOrigin: right ? 'right center' : 'left center', pointerEvents: k === 0 ? 'auto' : 'none' }}
           >
             {words.map((w, j) => {
               // Entering words stagger left to right; leaving words go together, a touch faster.
@@ -112,6 +112,7 @@ const UseCaseShowcase = () => {
 
   const pair = PAIRS[index];
   const Icon = iconFor(pair);
+  const whos = useMemo(() => PAIRS.map(p => p.who), []);
   const whens = useMemo(() => PAIRS.map(p => p.when), []);
   const thens = useMemo(() => PAIRS.map(p => p.then), []);
 
@@ -128,26 +129,26 @@ const UseCaseShowcase = () => {
     return () => ro.disconnect();
   }, []);
 
-  // The heading lives at the bottom of the hero, which is taller than its content; pull this
-  // section up so the wheels sit right under the heading instead of after the hero's empty tail.
+  // The hero is taller than its content, which ends with its buttons; pull this section up so the
+  // wheels sit right under them instead of after the hero's empty tail.
   const [pullUp, setPullUp] = useState(0);
   useLayoutEffect(() => {
     const measure = () => {
-      const h = document.getElementById('use-cases-heading');
+      const h = document.getElementById('hero-cta');
       const sec = sectionRef.current;
       if (!h || !sec) return;
       const vh = window.innerHeight;
       const y = window.scrollY;
       const eye = document.getElementById('eye-container')?.offsetHeight ?? 80;
       // The hero sticks to the screen while the eye shrinks (280px -> 80px), then rests centred on
-      // 100vh. Work out where the heading ends up once it rests, in page coordinates.
+      // 100vh. Work out where the buttons end up once it rests, in page coordinates.
       const fixed = getComputedStyle(h.offsetParent ?? h).position === 'fixed'
         || getComputedStyle(h.closest('.pointer-events-none') ?? h).position === 'fixed';
       const r = h.getBoundingClientRect();
-      const headingBottom = fixed ? vh + (r.bottom - vh / 2) - (eye - 80) / 2 : r.bottom + y;
+      const ctaBottom = fixed ? vh + (r.bottom - vh / 2) - (eye - 80) / 2 : r.bottom + y;
       const prev = parseFloat(sec.style.marginTop) || 0;
       const sectionTop = sec.getBoundingClientRect().top + y - prev;
-      setPullUp(Math.max(0, sectionTop - headingBottom - 48));
+      setPullUp(Math.max(0, sectionTop - ctaBottom - (window.innerWidth < 768 ? 64 : 96)));
     };
     measure();
     window.addEventListener('resize', measure);
@@ -198,6 +199,7 @@ const UseCaseShowcase = () => {
   return (
     <section
       id="use-cases"
+      aria-label="Who uses Observer"
       ref={sectionRef}
       style={{ marginTop: -pullUp }}
       onMouseEnter={() => setHover(true)}
@@ -205,9 +207,12 @@ const UseCaseShowcase = () => {
       className="relative pt-4 pb-24 md:pb-36 bg-[#0D1321] overflow-hidden"
     >
       <div className="relative container mx-auto px-6 max-w-6xl">
-        {/* The heading lives in the hero (ObserverLanding) so it shows as soon as scrolling starts. */}
-        {/* When … then … */}
+        {/* Who, then what they'd say: "Engineers tell Observer: When … then …" */}
         <div className="mx-auto max-w-5xl font-golos font-semibold tracking-[-0.035em] text-[clamp(1.15rem,4vw,3.4rem)] leading-none">
+          <div className="mb-[0.45em] flex gap-x-[0.3em] whitespace-nowrap">
+            <div className="flex-1 min-w-0"><Wheel items={whos} index={index} right className="text-white" /></div>
+            <span className="leading-[1.3] text-[#5C6975]">tell Observer:</span>
+          </div>
           <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-[0.35em] gap-y-[0.15em]">
             <span className="leading-[1.3] text-[#5C6975] text-right">When</span>
             <div className="min-w-0"><Wheel items={whens} index={index} className="text-white" /></div>

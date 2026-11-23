@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<!-- Nuke rendering two Write nodes with the Frame Server while the artist keeps comping. The dial is the
+     Status column of the Background Renders panel: "In Progress" in orange while a render runs,
+     "Completed" or "Error" when it's over. Holds with Write3 and Write4 In Progress (Write1 and Write2
+     already Completed) until the suite starts it; then it ends by ?outcome=:
+       success   Write3 completes along the way (marked 'render_done'), then Write4 does
+       fail      Write3 completes along the way, then Write4 ends in "Error" (100% too, as in Nuke)
+       one_done  the trigger is Write3 completing while Write4 is still In Progress, and stays that way
+     Drawn from Foundry's own screenshots of the panel and the Nuke window; two renders running at the
+     same time is inferred from its one-row-per-render list. Open Sans (fonts/) for Nuke's font. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>harbor_comp_v012.nk - Nuke</title>
+<link rel="stylesheet" href="fonts/open-sans.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 12px/1.35 Verdana, "Open Sans", sans-serif; color: #c8c8c8; background: #222224; display: flex; flex-direction: column; overflow: hidden; }
+  .title { height: 28px; background: #efefef; color: #1c1c1c; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+  .title i { width: 15px; height: 15px; border-radius: 50%; background: radial-gradient(#222 25%, #f2b632 28%); }
+  .title .win { margin-left: auto; display: flex; gap: 22px; }
+  .menu { height: 26px; background: #323232; display: flex; gap: 20px; align-items: center; padding: 0 12px; }
+  .main { flex: 1; min-height: 0; display: grid; grid-template-columns: 34px 1fr 350px; gap: 4px; }
+  .bar { background: #323232; display: flex; flex-direction: column; gap: 13px; align-items: center; padding-top: 12px; color: #a9a9a9; font-size: 15px; }
+  .left { display: grid; grid-template-rows: 340px 1fr; gap: 4px; min-width: 0; min-height: 0; }
+  .pane { background: #323232; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+  .tabs { height: 25px; background: #222224; display: flex; }
+  .tabs span { padding: 4px 12px; border-right: 1px solid #161616; color: #c8c8c8; }
+  .tabs .cm { width: 22px; padding: 4px 0 0 5px; } .tabs .cm b { display: block; width: 11px; height: 14px; background: #777; }
+  .tabs .on { background: #323232; color: #f7931e; }
+  .tabs em { font-style: normal; margin-left: 10px; background: #555; color: #222; border-radius: 50%; padding: 0 4px; font-size: 10px; }
+  .sub { display: flex; padding: 8px 8px 0; }
+  .sub span { padding: 4px 13px; background: #2a2a2a; border: 1px solid #222; border-bottom: 0; }
+  .sub .on { background: #3a3a3a; }
+  .tbl { margin: 0 8px 8px; border: 1px solid #222; background: #3a3a3a; flex: 1; }
+  .r { display: grid; grid-template-columns: 300px 76px 80px 112px 150px 1fr; min-height: 36px; border-bottom: 1px solid #333; align-items: center; }
+  .r > * { padding: 2px 6px; }
+  .r.h { min-height: 24px; background: #323232; }
+  .r.h > * { border-right: 1px solid #222; }
+  .pb { text-align: center; position: relative; padding-right: 26px; }
+  .pb div { height: 7px; border: 1px solid #1d1d1d; border-radius: 4px; background: #2a2a2a; overflow: hidden; margin-top: 1px; }
+  .pb div i { display: block; height: 100%; background: #f7931e; }
+  .pb .x { position: absolute; right: 6px; top: 12px; width: 13px; height: 13px; border-radius: 50%; background: #bd5a1a; color: #222; display: grid; place-items: center; font-size: 9px; font-weight: 800; }
+  .st { text-align: center; }
+  .st.go { color: #f7931e; } .st.over { color: #d3f230; }
+  .graph { flex: 1; position: relative; background: #323232; min-height: 0; }
+  .graph svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .props { padding: 6px 8px; }
+  .ph { background: #3c3c3c; border-top: 2px solid #777; display: flex; gap: 8px; padding: 4px 8px; align-items: center; }
+  .ph span.nm { background: #262626; flex: 1; padding: 1px 6px; }
+  .k { display: grid; grid-template-columns: 96px 1fr; gap: 4px 8px; align-items: center; padding: 8px 4px; }
+  .k span:nth-child(odd) { text-align: right; color: #b5b5b5; }
+  .k span:nth-child(even) { background: #262626; border: 1px solid #202020; padding: 1px 6px; white-space: nowrap; overflow: hidden; }
+  .k .btn { background: #505050 !important; width: 74px; text-align: center; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="title"><i></i>harbor_comp_v012.nk [modified] - Nuke<span class="win"><span>–</span><span>▢</span><span>✕</span></span></div>
+<div class="menu"><span>File</span><span>Edit</span><span>Workspace</span><span>Viewer</span><span>Render</span><span>Cache</span><span>Help</span></div>
+<div class="main">
+  <div class="bar"><span>▤</span><span>✎</span><span>◷</span><span>☰</span><span>◍</span><span>▦</span><span>◐</span><span>⎌</span><span>✥</span><span>▣</span><span>✳</span><span>⌘</span></div>
+  <div class="left">
+    <div class="pane"><div class="tabs"><span class="cm"><b></b></span><span>Viewer1<em>✕</em></span><span class="on">Background Renders<em>✕</em></span></div>
+      <div class="sub"><span class="on">Renders</span><span>Logs</span></div><div class="tbl" id="tbl"></div></div>
+    <div class="pane"><div class="tabs"><span class="cm"><b></b></span><span class="on">Node Graph<em>✕</em></span><span>Curve Editor<em>✕</em></span><span>Dope Sheet<em>✕</em></span></div>
+      <div class="graph"><svg viewBox="0 0 880 330" preserveAspectRatio="xMidYMid meet" font-size="11" font-family="Verdana, Open Sans, sans-serif" text-anchor="middle">
+        <g stroke="#000" stroke-width="1.5" fill="none"><path d="M250 92V122M250 144V176M430 72V187H292M250 198V216M250 226 130 262M250 226 250 262M250 226 370 262M250 226 490 262"/></g>
+        <g stroke="#222"><rect x="212" y="24" width="76" height="68" fill="#b5b5b5"/><rect x="218" y="29" width="64" height="38" fill="#5c7f99"/><path d="M218 56 250 44 282 56V67H218Z" fill="#2d4656"/><rect x="392" y="22" width="76" height="50" fill="#b5b5b5"/>
+        <rect x="208" y="122" width="84" height="22" fill="#7ba6d6"/><rect x="208" y="176" width="84" height="22" fill="#4f6fa8"/><circle cx="250" cy="221" r="5" fill="#ddd"/>
+        <rect x="90" y="262" width="80" height="22" fill="#d6b04a"/><rect x="210" y="262" width="80" height="22" fill="#d6b04a"/><rect x="330" y="262" width="80" height="22" fill="#d6b04a"/><rect x="450" y="262" width="80" height="22" fill="#d6b04a"/></g>
+        <g fill="#111"><text x="250" y="82">Read1</text><text x="430" y="51">Read2</text><text x="250" y="137">Grade1</text><text x="250" y="191">Merge1 (over)</text><text x="130" y="277">Write1</text><text x="250" y="277">Write2</text><text x="370" y="277">Write3</text><text x="490" y="277">Write4</text></g>
+      </svg></div></div>
+  </div>
+  <div class="pane"><div class="tabs"><span class="cm"><b></b></span><span class="on">Properties<em>✕</em></span></div>
+    <div class="props"><div class="ph"><span>▼</span><span>◎</span><span class="nm">Write4</span><span>?</span><span>❐</span><span>✕</span></div>
+      <div class="sub" style="padding-left:0"><span class="on">Write</span><span>OCIO</span><span>Python</span><span>Node</span></div>
+      <div style="background:#3a3a3a"><div class="k"><span>channels</span><span>rgb ▾ &nbsp; ☒ red ☒ green ☒ blue</span><span>file</span><span>renders/harbor_denoise.####.exr</span><span>proxy</span><span>&nbsp;</span><span>frame</span><span>expression ▾</span><span>colorspace</span><span>default (linear) ▾</span><span>views</span><span>main ▾</span><span>file type</span><span>exr ▾</span><span>datatype</span><span>16 bit half ▾</span><span>compression</span><span>Zip (1 scanline) ▾</span><span>render order</span><span>1</span><span></span><span class="btn">Render</span><span>frame range</span><span>1001 &nbsp; 1480</span><span>missing frames</span><span>error ▾</span></div></div></div></div>
+</div>
+<script>
+  const $ = id => document.getElementById(id);
+  // Newest first, as the panel lists them. `p` is the percentage.
+  const ROWS = [
+    { node: 'Write4', file: '0914_42.683000_10-12-2026', range: '1001-1480', p: 12, st: 'In Progress' },
+    { node: 'Write3', file: '0912_31.148000_10-12-2026', range: '1001-1480', p: 46, st: 'In Progress' },
+    { node: 'Write2', file: '0855_06.619000_10-12-2026', range: '1001-1120', p: 100, st: 'Completed' },
+    { node: 'Write1', file: '0851_34.568000_10-12-2026', range: '1001-1120', p: 100, st: 'Completed' },
+  ];
+  const [W4, W3] = ROWS;
+  const paint = () => {
+    $('tbl').innerHTML = '<div class="r h"><span>File Name</span><span>Node</span><span>Views</span><span>Frame Range</span><span>Progress</span><span>Status</span></div>' + ROWS.map(r => {
+      const go = r.st === 'In Progress';
+      return `<div class="r"><span>c:/temp/frameserver/tmp_harbor_comp.<br>${r.file}.nk</span><span>${r.node}</span><span>main</span><span>${r.range}</span><span class="pb">${Math.floor(r.p)} %<div><i style="width:${r.p}%"></i></div>${go ? '<span class="x">✕</span>' : ''}</span><span class="st ${go ? 'go' : 'over'}">${r.st}</span></div>`;
+    }).join('');
+  };
+  paint();
+  let hold = setInterval(() => { if (W3.p < 55) W3.p += 0.05; if (W4.p < 20) W4.p += 0.04; paint(); }, 1500);
+
+  // Moves a render from where it is to `to` over ms, then calls next.
+  const run = (row, to, ms, next) => {
+    const from = row.p, at = Date.now();
+    const step = setInterval(() => {
+      const k = Math.min(1, (Date.now() - at) / ms);
+      row.p = from + (to - from) * k;
+      if (k === 1) { clearInterval(step); next(); }
+      paint();
+    }, 250);
+  };
+
+  demo.onStart = durationMs => {
+    clearInterval(hold);
+    const one = demo.outcome === 'one_done', t3 = one ? durationMs : durationMs * 0.5;
+    run(W3, 100, t3, () => {
+      W3.st = 'Completed';
+      demo.mark('render_done', { node: 'Write3' });
+      paint();
+      if (one) demo.trigger();
+    });
+    if (one) { run(W4, 40, durationMs, () => setInterval(() => { if (W4.p < 70) W4.p += 0.05; paint(); }, 1500)); return; }
+    run(W4, 100, durationMs, () => {
+      W4.st = demo.outcome === 'success' ? 'Completed' : 'Error';
+      paint();
+      demo.trigger();
+    });
+  };
+</script>
+</body>
+</html>

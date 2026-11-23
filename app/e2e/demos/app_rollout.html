@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<!-- A grocery app in production, mirrored from a phone, while its team waits for a redesign that is
+     switched on from the backend: no release, no deployment, nothing to hook. The home screen
+     refreshes itself every 10 s; the promo card rotates on each refresh, and one of the cards says the
+     new look is coming soon, which isn't it. Holds on the old UI until the suite starts it; then it
+     ends by ?outcome=:
+       success  a refresh at durationMs brings the new UI, and it stays (marked 'live')
+       fail     it never comes; the demo still triggers at durationMs so the run ends -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pantry · mirrored</title>
+<link rel="stylesheet" href="fonts/figtree.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; display: grid; place-items: center; background: #dfe3e8; font: 14px/1.4 Figtree, -apple-system, sans-serif; color: #1c2430; }
+  .win { width: 420px; border-radius: 14px; background: #f7f7f8; box-shadow: 0 24px 60px rgba(20,30,50,.3); overflow: hidden; }
+  .win .bar { height: 30px; display: flex; align-items: center; justify-content: center; position: relative; font-size: 12.5px; color: #555; }
+  .win .bar i { position: absolute; top: 9px; width: 12px; height: 12px; border-radius: 50%; }
+  .phone { height: 735px; margin: 0 10px 10px; border-radius: 34px; border: 8px solid #14161a; background: #fff; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+  .st { display: flex; justify-content: space-between; padding: 9px 24px 3px; font-weight: 600; font-size: 13px; }
+  .spin { position: absolute; left: 50%; top: 40px; width: 22px; height: 22px; margin-left: -11px; border: 3px solid #d7dbe0; border-top-color: #6b7482; border-radius: 50%; animation: r .8s linear infinite; opacity: 0; transition: opacity .2s; z-index: 2; }
+  .spin.on { opacity: 1; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  .scr { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  /* The old UI: plain lists, green, a tab bar with words. */
+  .old header { padding: 8px 18px; border-bottom: 1px solid #e8eaed; display: flex; justify-content: space-between; align-items: center; }
+  .old header b { font-size: 20px; color: #2e7d32; }
+  .old .promo { margin: 12px 16px; padding: 13px 16px; border-radius: 6px; min-height: 76px; }
+  .old .promo b { display: block; font-size: 15px; }
+  .old h3 { margin: 6px 18px; font-size: 15px; }
+  .old .row { display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid #eef0f2; }
+  .old .row span:first-child { width: 42px; height: 42px; border-radius: 6px; background: #f1f3f4; display: grid; place-items: center; font-size: 24px; }
+  .old .row em { margin-left: auto; font-style: normal; border: 1px solid #2e7d32; color: #2e7d32; padding: 3px 12px; border-radius: 4px; }
+  .old .buy { margin: auto 16px 10px; background: #2e7d32; color: #fff; text-align: center; padding: 12px; border-radius: 4px; font-weight: 600; }
+  .old nav { display: flex; justify-content: space-around; padding: 10px 0 16px; border-top: 1px solid #e8eaed; font-size: 12px; color: #7a828c; }
+  .old nav b { color: #2e7d32; }
+  /* The new UI: big rounded tiles, a floating cart, a dark floating tab bar. */
+  .new { background: #fff6ec; }
+  .new header { padding: 10px 20px 4px; }
+  .new header small { color: #8a6d55; } .new header b { display: block; font-size: 27px; line-height: 1.1; color: #3a1d5c; }
+  .new .srch { margin: 10px 18px; background: #fff; border-radius: 22px; padding: 11px 18px; color: #a08d7d; box-shadow: 0 3px 12px rgba(90,50,20,.08); }
+  .new .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 4px 18px; }
+  .new .tile { border-radius: 24px; padding: 14px; height: 138px; display: flex; flex-direction: column; justify-content: space-between; font-weight: 700; font-size: 16px; }
+  .new .tile span { font-size: 42px; line-height: 1; }
+  .new .cart { margin: auto 18px 8px; background: #ff6b2c; color: #fff; border-radius: 26px; padding: 14px 20px; display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; }
+  .new nav { margin: 0 18px 14px; background: #3a1d5c; border-radius: 28px; padding: 12px 0; display: flex; justify-content: space-around; font-size: 20px; }
+</style>
+<script src="demo-contract.js"></script>
+</head>
+<body>
+<div class="win"><div class="bar"><i style="left:12px;background:#ff5f57"></i><i style="left:32px;background:#febc2e"></i><i style="left:52px;background:#28c840"></i>iPhone Mirroring</div>
+  <div class="phone"><div class="st"><span id="clock">9:41</span><span>5G ▮▮▮ 78%</span></div><div class="spin" id="spin"></div><div class="scr" id="scr"></div></div></div>
+<script>
+  const $ = id => document.getElementById(id);
+  const PROMOS = [
+    ['#e8f5e9', 'Free delivery over $35', 'This week on every order'],
+    ['#ede7f6', 'A new look is coming soon', 'We\'re redesigning Pantry. Stay tuned!'],
+    ['#fff3e0', '20% off fresh bread', 'From the bakery, until Sunday'],
+    ['#e3f2fd', 'Refer a friend, get $10', 'They get $10 too'],
+  ];
+  const ITEMS = [['🥑', 'Avocados', '$1.29 each'], ['🥖', 'Sourdough loaf', '$4.50'], ['🍓', 'Strawberries', '$3.99 / lb'], ['🥛', 'Whole milk', '$2.89'], ['🧀', 'Cheddar', '$5.25']];
+
+  let promo = 0, live = false, due = false;
+  const draw = () => {
+    if (live) {
+      $('scr').className = 'scr new';
+      $('scr').innerHTML = `<header><small>Hi there</small><b>What's cooking<br>today?</b></header><div class="srch">⌕ &nbsp;Search 4,000 groceries</div>
+        <div class="tiles"><div class="tile" style="background:#ffd9c2"><span>🍓</span>Fruit</div><div class="tile" style="background:#d8f0cf"><span>🥑</span>Veggies</div><div class="tile" style="background:#e5daf7"><span>🥖</span>Bakery</div><div class="tile" style="background:#cfe8fb"><span>🥛</span>Dairy</div></div>
+        <div class="cart"><span>🛒 2 items</span><span>Swipe to pay · $5.79</span></div><nav><span>🏠</span><span>🔍</span><span>❤️</span><span>👤</span></nav>`;
+      return;
+    }
+    const [bg, t, s] = PROMOS[promo];
+    $('scr').className = 'scr old';
+    $('scr').innerHTML = `<header><b>Pantry</b><span>🛒 2</span></header><div class="promo" style="background:${bg}"><b>${t}</b>${s}</div><h3>Buy it again</h3>
+      ${ITEMS.map(([e, n, p]) => `<div class="row"><span>${e}</span><span>${n}<br><small style="color:#7a828c">${p}</small></span><em>Add</em></div>`).join('')}
+      <div class="buy">Checkout ($5.79)</div><nav><b>Home</b><span>Aisles</span><span>Orders</span><span>Account</span></nav>`;
+  };
+  draw();
+
+  // The app refreshes itself: the spinner, then whatever the backend says now.
+  const refresh = () => {
+    $('spin').classList.add('on');
+    setTimeout(() => {
+      $('spin').classList.remove('on');
+      promo = (promo + 1) % PROMOS.length;
+      const goesLive = due && !live;
+      if (goesLive) live = true;
+      draw();
+      if (goesLive) { demo.mark('live'); demo.trigger(); }
+    }, 900);
+  };
+  const EVERY = Number(new URLSearchParams(location.search).get('refresh')) || 10000;
+  let timer = setInterval(refresh, EVERY);
+
+  const clock = () => { $('clock').textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M/, ''); };
+  clock(); setInterval(clock, 10000);
+
+  demo.truth = { outcome: demo.outcome };
+  demo.onStart = durationMs => {
+    setTimeout(() => {
+      if (demo.outcome !== 'success') { demo.trigger(); return; }
+      // Refresh now, not whenever the next one is due: the landing page only waits so long.
+      due = true;
+      clearInterval(timer);
+      refresh();
+      timer = setInterval(refresh, EVERY);
+    }, durationMs);
+  };
+</script>
+</body>
+</html>
