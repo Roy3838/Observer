@@ -219,7 +219,7 @@ const ObserverHero: React.FC<ObserverHeroProps> = ({ onShowTutorial }) => {
 
       {/* Pinned behind the form at a fixed spot — absolutely positioned so it never moves
           when the textarea above grows with wrapped text. */}
-      <div className="absolute left-1/2 -translate-x-1/2 top-[72%] md:top-[64%] scale-90 md:scale-100 origin-top pointer-events-auto z-0">
+      <div className="absolute left-1/2 -translate-x-1/2 top-[72%] md:top-[64%] scale-90 md:scale-100 [@media(max-height:500px)]:!scale-[0.6] origin-top pointer-events-auto z-0">
         <RecipeInline onPromptChange={prompt => { if (!userEdited) setValue(prompt); }} />
       </div>
     </div>

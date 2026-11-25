@@ -1,14 +1,11 @@
 // src/components/Observer/AgentLiveStateContext.tsx
 //
-// Keeps each agent's live status/progress/last-word state alive independently of whether its
-// card is currently rendered inline (in the chat transcript) or floating (in the overlay) —
-// those are two different component instances in two different subtrees, so computing this
-// state locally inside AgentLiveCard (as a first pass did) meant popping a card out — or
-// docking it back — silently reset its progress ring and last-word ticker to blank, because
-// the new instance started from scratch. One hidden "keeper" per relevant agent id runs the
-// actual event-driven tracking (mirrors AgentCard's state machine) and reports into a shared
-// map that both AgentLiveCard render modes read from, so the underlying state survives the
-// swap.
+// Keeps each running agent's live status/progress/last-word state independent of its card in
+// the chat, which comes and goes: it isn't rendered in other conversations, and a restarted
+// agent's card moves to its latest start_agent call. Computing this inside AgentLiveCard would
+// reset its progress ring and last-word ticker every time. One hidden "keeper" per agent id
+// runs the event-driven tracking (mirrors AgentCard's state machine) and reports into a shared
+// map that the cards and the mobile status window read from.
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Logger, LogEntry } from '@utils/logging';

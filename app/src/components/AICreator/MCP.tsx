@@ -29,8 +29,7 @@ import type { GemmaModelState, NativeModelState } from '@utils/localLlm/types';
 import { ModelManager, type Model } from '@utils/ModelManager';
 import { ModelRow, RowButtonGhost } from '@components/ModelCard/ModelRow';
 import RecipeMini from './RecipeMini';
-import AgentLiveCard from '@components/Observer/AgentLiveCard';
-import { useFloatingAgents } from '@components/Observer/FloatingAgentsContext';
+import AgentChatCard, { PINNED_CARD_HEIGHT } from '@components/Observer/AgentChatCard';
 
 // Synthetic owner id for voice dictation. Mirrors SettingsTab's TEST_AGENT_ID pattern:
 // StreamManager treats it like any agent, so transcription routes through the same
@@ -58,9 +57,9 @@ interface MCPProps {
    *  permanently docked surface like the Observer tab. Defaults to true so existing callers
    *  (GetStarted, MCPPanel) are visually unaffected. */
   boxed?: boolean;
-  /** Docked-surface extras (Observer tab only) — when provided, a `create_agent` tool call
-   *  renders a live AgentLiveCard inline in the transcript instead of just a status chip,
-   *  which the user can drag out into the floating overlay (see FloatingAgentsContext). */
+  /** Docked-surface extras (Observer tab only) — when provided, a successful `start_agent`
+   *  call renders the agent's live card in the transcript, whether or not the agent was
+   *  created in this conversation (see AgentChatCard). */
   agents?: CompleteAgent[];
   runningAgents?: Set<string>;
   startingAgents?: Set<string>;
@@ -445,7 +444,6 @@ const MCP: React.FC<MCPProps> = ({
     setModelName,
   } = useMCPContext();
 
-  const { isFloating, dock, setDockTarget, getSlotSize, flyToCorner } = useFloatingAgents();
   const [liveStreams, setLiveStreams] = useState<StreamState>(StreamManager.getCurrentState());
   useEffect(() => {
     StreamManager.addListener(setLiveStreams);
@@ -453,19 +451,29 @@ const MCP: React.FC<MCPProps> = ({
   }, []);
 
   // Each screen reacts to agent mutations in its own way; register this screen's reaction.
-  useEffect(() => subscribeMutation((toolName, args) => {
+  useEffect(() => subscribeMutation((toolName) => {
     onRefresh?.();
-    // A started agent leaves the chat for the top-right corner so it stays visible on scroll.
-    if (toolName === 'start_agent' && typeof args?.id === 'string') flyToCorner(args.id);
     // Mirror the old "Save → close modal" UX once an agent is actually persisted.
     if (toolName === 'create_agent' || toolName === 'edit_agent') {
       onSaveComplete?.();
     }
-  }), [subscribeMutation, onRefresh, onSaveComplete, flyToCorner]);
+  }), [subscribeMutation, onRefresh, onSaveComplete]);
 
   const [userInput, setUserInput] = useState('');
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  // How many running cards may pin to the top of the transcript: about a third of its height,
+  // so a landscape phone keeps room to read.
+  const [maxPinned, setMaxPinned] = useState(1);
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() =>
+      setMaxPinned(Math.max(1, Math.floor(el.clientHeight / 3 / PINNED_CARD_HEIGHT))));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasInitialMessageSet = useRef(false);
 
@@ -642,6 +650,27 @@ const MCP: React.FC<MCPProps> = ({
       }
     }
 
+    // One card per agent, at its latest successful start_agent: agent id → that call's id.
+    const cardCalls = new Map<string, string>();
+    if (agents) {
+      for (const block of merged) {
+        if (block.type !== 'tools') continue;
+        for (const tc of block.calls) {
+          if (tc.function.name !== 'start_agent') continue;
+          const resultMsg = messages.find(m => m.role === 'tool' && m.tool_call_id === tc.id);
+          if (!resultMsg) continue; // still running
+          let startedId: string | undefined;
+          try { startedId = JSON.parse(resultMsg.content as string)?.id; } catch { /* malformed/error result — nothing to show */ }
+          if (!startedId) continue;
+          cardCalls.delete(startedId); // re-insert, so the map stays in transcript order
+          cardCalls.set(startedId, tc.id);
+        }
+      }
+    }
+    const pinnable = [...cardCalls.keys()]
+      .filter(id => runningAgents?.has(id) || startingAgents?.has(id))
+      .slice(-maxPinned);
+
     return merged.map((block, idx) => {
       if (block.type === 'user') {
         return (
@@ -676,8 +705,11 @@ const MCP: React.FC<MCPProps> = ({
       }
       // tools
       const { calls, batches } = block as { calls: ToolCall[]; batches: ToolCall[][] };
+      // Cards are siblings of the tools block, not children of it: sticky needs them directly
+      // inside the scroll container (see AgentChatCard).
       return (
-        <div key={idx} className="flex flex-col items-start w-full">
+        <React.Fragment key={idx}>
+        <div className="flex flex-col items-start w-full">
           <WorkingGroup batches={batches} toolStatus={toolStatus} messages={messages} />
           {calls.some(tc => tc.function.name === 'download_model') && (
             <DownloadModelProgress choice={downloadChoice(calls.find(tc => tc.function.name === 'download_model')!)} />
@@ -687,54 +719,26 @@ const MCP: React.FC<MCPProps> = ({
             .map(tc => (
               <CheckWhitelistGate key={tc.id} toolCallId={tc.id} status={toolStatus.get(tc.id)} onCancel={stop} />
             ))}
-          {agents && calls
-            .filter(tc => tc.function.name === 'create_agent')
-            .map(tc => {
-              const resultMsg = messages.find(m => m.role === 'tool' && m.tool_call_id === tc.id);
-              if (!resultMsg) return null; // still running
-              let createdId: string | undefined;
-              try { createdId = JSON.parse(resultMsg.content as string)?.id; } catch { /* malformed/error result — nothing to show */ }
-              if (!createdId) return null;
-              const agentObj = agents.find(a => a.id === createdId);
-              if (!agentObj) return null; // agents list hasn't refreshed yet
-
-              if (isFloating(createdId)) {
-                // Registered as this agent's dock target — dragging the floating card back
-                // onto this specific pill (not just "anywhere in the chat") is what re-docks
-                // it; see FloatingAgentsContext.tsx for why the hit zone has to be this small.
-                // Same footprint as the inline card it stands in for, so the transcript
-                // doesn't reflow when the card leaves or comes back.
-                const slot = getSlotSize(createdId);
-                return (
-                  <div key={tc.id} className="mt-2 w-full">
-                    <button
-                      ref={(el) => setDockTarget(createdId!, el)}
-                      onClick={() => dock(createdId!)}
-                      style={slot ? { width: slot.width, height: slot.height } : undefined}
-                      className="max-w-[350px] w-full min-h-[72px] flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 text-xs text-gray-500 hover:bg-gray-100 transition-colors px-4 text-center"
-                    >
-                      <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
-                      <span><span className="font-medium text-gray-700">{agentObj.name}</span> is floating — drop it here (or tap) to bring back</span>
-                    </button>
-                  </div>
-                );
-              }
-
-              return (
-                <div key={tc.id} className="mt-2 w-full">
-                  <AgentLiveCard
-                    agent={agentObj}
-                    isRunning={runningAgents?.has(createdId) ?? false}
-                    isStarting={startingAgents?.has(createdId) ?? false}
-                    streams={liveStreams}
-                    mode="inline"
-                    onToggle={onToggleAgent ?? (() => {})}
-                    onSelectAgent={onSelectAgent}
-                  />
-                </div>
-              );
-            })}
         </div>
+        {calls.map(tc => {
+          const agent = agents?.find(a => cardCalls.get(a.id) === tc.id);
+          if (!agent) return null; // not a card's call, or the agents list hasn't refreshed yet
+          const pinIndex = pinnable.indexOf(agent.id);
+          return (
+            <AgentChatCard
+              key={tc.id}
+              agent={agent}
+              isRunning={runningAgents?.has(agent.id) ?? false}
+              isStarting={startingAgents?.has(agent.id) ?? false}
+              streams={liveStreams}
+              onToggle={onToggleAgent ?? (() => {})}
+              onSelectAgent={onSelectAgent}
+              scrollerRef={scrollerRef}
+              pinIndex={pinIndex === -1 ? null : pinIndex}
+            />
+          );
+        })}
+        </React.Fragment>
       );
     });
   };
@@ -771,7 +775,7 @@ const MCP: React.FC<MCPProps> = ({
   return (
     <div className={`flex flex-col ${heightClass} relative ${boxed ? 'bg-white rounded-lg border border-purple-200' : 'bg-transparent'}`}>
       {/* Chat Messages */}
-      <div className={boxed ? 'flex-1 p-3 md:p-4 space-y-3 md:space-y-4 overflow-y-auto' : 'flex-1 p-4 md:p-6 space-y-3 md:space-y-4 overflow-y-auto'}>
+      <div ref={scrollerRef} className={boxed ? 'flex-1 p-3 md:p-4 space-y-3 md:space-y-4 overflow-y-auto' : 'flex-1 p-4 md:p-6 space-y-3 md:space-y-4 overflow-y-auto'}>
         {messages.length === 0 && (
           <div className="flex justify-start">
             <div className={assistantBubbleClass}>

@@ -1185,7 +1185,10 @@ function AppContent() {
           localServerOnline={localServerOnline}
         />
 
-        <main className="relative w-full min-w-0 pt-4 px-2 md:px-4 wide:px-4 max-w-7xl mx-auto pb-20 md:pb-4">
+        <main className={`relative w-full min-w-0 pt-4 px-2 md:px-4 wide:px-4 max-w-7xl mx-auto ${
+          // The Observer tab ends in its own footer, so it sits at the bottom edge.
+          activeTab === 'observerChat' ? 'pb-[max(0.5rem,env(safe-area-inset-bottom))]' : 'pb-20 md:pb-4'
+        }`}>
         {error && <ErrorDisplay message={error} />}
 
         {/* My Agents Tab — kept mounted (not `hidden`/display:none) when inactive, so it still
@@ -1340,7 +1343,7 @@ function AppContent() {
         </div>
 
         {/* Observer Tab — default landing view, chat-first. Stays mounted (hidden, not
-            unmounted) like myAgents above, so RunningAgentsStrip's agentIterationStart/
+            unmounted) like myAgents above, so AgentLiveStateProvider's agentIterationStart/
             agentSleepStart/agentSleepEnd listeners and liveStatus don't reset on tab
             switch — that reset was what made status look stale until the next event fired. */}
         <div className={activeTab !== 'observerChat' ? 'hidden' : 'px-0 md:px-4 h-full'}>
