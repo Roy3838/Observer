@@ -14,6 +14,7 @@ import { useMCPContext } from '../../mcp/MCPContext';
 import { parseRemotePrompt, type RemoteChannel } from '../../mcp/remote';
 import { parseAgentPrompt } from '../../mcp/agentWake';
 import type { ToolCall, WireMessage } from '../../mcp/types';
+import { TOOL_IMAGES_TEXT } from '../../mcp/runner';
 import { Logger, type WhitelistChannel } from '@utils/logging';
 import { StreamManager, StreamState } from '@utils/streamManager';
 import type { CompleteAgent } from '@utils/agent_database';
@@ -183,7 +184,7 @@ const ToolCallDetailModal: React.FC<{
 // moment, not a stack of separate messages — so they're merged into a single compact,
 // auto-collapsing panel instead of one spaced-out chip row per turn (see grouping logic
 // in renderMessages below).
-const WorkingGroup: React.FC<{ batches: ToolCall[][]; toolStatus: Map<string, ToolStatusEntry>; messages: WireMessage[] }> = ({ batches, toolStatus, messages }) => {
+const WorkingGroup: React.FC<{ batches: ToolCall[][]; toolStatus: Map<string, ToolStatusEntry>; messages: WireMessage[]; lastImage?: string }> = ({ batches, toolStatus, messages, lastImage }) => {
   const calls = batches.flat();
   const isRunning = calls.some(tc => toolStatus.get(tc.id)?.status === 'running');
   const lastCall = calls[calls.length - 1];
@@ -221,7 +222,11 @@ const WorkingGroup: React.FC<{ batches: ToolCall[][]; toolStatus: Map<string, To
         <span className={`text-xs font-medium ${isRunning ? 'text-gray-600 dark:text-gray-300 animate-pulse' : 'text-gray-500 dark:text-gray-400'}`}>
           {isRunning ? 'Working…' : hasError ? 'Finished with errors' : `Used ${calls.length} tool${calls.length > 1 ? 's' : ''}`}
         </span>
-        <ChevronDown className={`h-3 w-3 ml-auto text-gray-400 transition-transform flex-shrink-0 ${collapsed ? '-rotate-90' : ''}`} />
+        {lastImage && (
+          // Latest frame the model captured in this run, so the user sees what it saw.
+          <img src={lastImage} alt="Last capture" className="ml-auto h-6 w-10 flex-shrink-0 object-cover rounded border border-gray-200 dark:border-gray-600" />
+        )}
+        <ChevronDown className={`h-3 w-3 ${lastImage ? '' : 'ml-auto '} text-gray-400 transition-transform flex-shrink-0 ${collapsed ? '-rotate-90' : ''}`} />
       </button>
       {!collapsed && (
         <div className="px-2.5 pb-2 space-y-1">
@@ -233,6 +238,9 @@ const WorkingGroup: React.FC<{ batches: ToolCall[][]; toolStatus: Map<string, To
               {bi < batches.length - 1 && <span className="text-gray-300 dark:text-gray-600 text-[10px]">·</span>}
             </div>
           ))}
+          {lastImage && (
+            <img src={lastImage} alt="Last capture" className="mt-1 max-h-32 w-auto rounded border border-gray-200 dark:border-gray-600" />
+          )}
         </div>
       )}
       {inspecting && (
@@ -606,15 +614,21 @@ const MCP: React.FC<MCPProps> = ({
   type Block =
     | { type: 'user'; text: string; images: any[]; remote?: RemoteChannel; agent?: string }
     | { type: 'text'; content: string }
-    | { type: 'tools'; calls: ToolCall[] };
+    | { type: 'tools'; calls: ToolCall[]; lastImage?: string };
 
   const renderMessages = () => {
     const blocks: Block[] = [];
 
     for (const msg of messages) {
       if (msg.role === 'tool') continue;
-      if (msg.role === 'user' && Array.isArray(msg.content)
-        && msg.content[0]?.text?.startsWith('Images from the tool result')) continue;
+      // The tool-images follow-up isn't shown as a message: its newest image becomes the
+      // thumbnail of the tools block it belongs to (the one just before it).
+      if (msg.role === 'user' && Array.isArray(msg.content) && msg.content[0]?.text === TOOL_IMAGES_TEXT) {
+        const url = msg.content.filter((p: any) => p.type === 'image_url').pop()?.image_url?.url;
+        const owner = blocks[blocks.length - 1];
+        if (url && owner?.type === 'tools') owner.lastImage = url;
+        continue;
+      }
 
       if (msg.role === 'user') {
         const text = typeof msg.content === 'string'
@@ -637,14 +651,15 @@ const MCP: React.FC<MCPProps> = ({
     }
 
     // Merge consecutive 'tools' blocks.
-    const merged: (Block | { type: 'tools'; calls: ToolCall[]; batches: ToolCall[][] })[] = [];
+    const merged: (Block | { type: 'tools'; calls: ToolCall[]; batches: ToolCall[][]; lastImage?: string })[] = [];
     for (const block of blocks) {
       const prev = merged[merged.length - 1];
       if (block.type === 'tools' && prev && prev.type === 'tools') {
         (prev as any).calls.push(...block.calls);
         (prev as any).batches.push(block.calls);
+        if (block.lastImage) (prev as any).lastImage = block.lastImage;
       } else if (block.type === 'tools') {
-        merged.push({ type: 'tools', calls: [...block.calls], batches: [block.calls] });
+        merged.push({ type: 'tools', calls: [...block.calls], batches: [block.calls], lastImage: block.lastImage });
       } else {
         merged.push(block);
       }
@@ -704,13 +719,13 @@ const MCP: React.FC<MCPProps> = ({
         );
       }
       // tools
-      const { calls, batches } = block as { calls: ToolCall[]; batches: ToolCall[][] };
+      const { calls, batches, lastImage } = block as { calls: ToolCall[]; batches: ToolCall[][]; lastImage?: string };
       // Cards are siblings of the tools block, not children of it: sticky needs them directly
       // inside the scroll container (see AgentChatCard).
       return (
         <React.Fragment key={idx}>
         <div className="flex flex-col items-start w-full">
-          <WorkingGroup batches={batches} toolStatus={toolStatus} messages={messages} />
+          <WorkingGroup batches={batches} toolStatus={toolStatus} messages={messages} lastImage={lastImage} />
           {calls.some(tc => tc.function.name === 'download_model') && (
             <DownloadModelProgress choice={downloadChoice(calls.find(tc => tc.function.name === 'download_model')!)} />
           )}
