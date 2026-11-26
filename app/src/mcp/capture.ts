@@ -210,6 +210,9 @@ export async function captureCamera(cameraId?: string): Promise<ToolResult> {
 
   try {
     const frame = await grabVideoFrame(stream);
+    // Nudge the model to try another camera before concluding "not on camera" from the first
+    // one it opened.
+    const cameraCount = (await StreamManager.getAvailableCameraDevices()).length;
     return {
       data: {
         captured: true,
@@ -217,6 +220,9 @@ export async function captureCamera(cameraId?: string): Promise<ToolResult> {
         width: frame.width,
         height: frame.height,
         note: 'Camera is live and will be reused by start_agent — no second prompt.',
+        ...(cameraCount > 1 && {
+          other_cameras: `This device has ${cameraCount} cameras. If this frame doesn't show what the user wants watched, call list_cameras and try another camera before concluding it isn't on camera. Phones list several back cameras (wide, ultra wide, telephoto) that all point the same way: check one front and one back.`,
+        }),
       },
       images: [frame.dataUrl],
     };
