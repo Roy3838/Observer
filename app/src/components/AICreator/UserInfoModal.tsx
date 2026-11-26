@@ -12,9 +12,9 @@
 //                     for the rest) and only returns once it works. The MCP never handles codes
 //                     itself. The test notification is what makes the browser / OS ask for
 //                     permission now, from a tap, instead of when the agent first fires.
-//                     Pairing WhatsApp/Telegram here also offers remote management (on by
-//                     default): chat with the session from the phone, and get told if
-//                     monitoring stops (the dead-man's switch).
+//                     A code paired on WhatsApp/Telegram then asks, once: mirror this
+//                     conversation (chat from the phone, and get told if monitoring stops), or
+//                     alerts only.
 //   model           — local or cloud.
 //   lock_phone      — a button that asks for the permission lockPhone() needs (Screen Time on
 //                     iOS, "Display over other apps" on Android). The agent runs in the
@@ -38,7 +38,7 @@ import { isDesktop, isIOS } from '@utils/platform';
 import { requestPhoneLockPermission, sendTestNotification, browserNotifyReady } from '@utils/handlers/utils';
 import { captureScreen, captureCamera } from '../../mcp/capture';
 import { startStatusPip } from '@utils/statusPip';
-import { fetchStatus } from '../../mcp/remote';
+import { fetchStatus, type RemoteChannel } from '../../mcp/remote';
 import type { NotifyMethod, UserInfoRequest, UserInfoResponse } from '../../mcp/types';
 import type { RemoteControlState } from '../../mcp/useRemoteControl';
 import type { PhoneChannel } from '@utils/whitelistCode';
@@ -47,7 +47,7 @@ import { CONTACT_LABEL, CONTACT_PLACEHOLDER, contactError, contactValid, normali
 interface UserInfoModalProps {
   req: UserInfoRequest;
   onResolve: (requestId: string, response: UserInfoResponse) => void;
-  /** Remote control, armed when kind='method' pairs WhatsApp/Telegram. Passed in rather than
+  /** Remote control: kind='method' sets a pairing's mirror. Passed in rather than
    *  read from MCPContext, which renders this modal. */
   remote?: RemoteControlState;
 }
@@ -163,15 +163,17 @@ const Spinner: React.FC<{ label: string }> = ({ label }) => (
   </div>
 );
 
-/** Drawn check mark, then `onFinish` after a beat. `children` (an option to glance at) gets a
- *  longer beat via `durationMs`; whatever it says when the beat ends is what's kept. */
-const Done: React.FC<{ label: string; onFinish: () => void; durationMs?: number; children?: React.ReactNode }> = ({ label, onFinish, durationMs = 1200, children }) => {
+/** Drawn check mark, then `onFinish` after a beat. With `children` (a question) it waits for the
+ *  answer instead: whoever just paired is still looking at their phone. */
+const Done: React.FC<{ label: string; onFinish: () => void; children?: React.ReactNode }> = ({ label, onFinish, children }) => {
+  const asking = !!children;
   const finish = useRef(onFinish);
   finish.current = onFinish;
   useEffect(() => {
-    const t = setTimeout(() => finish.current(), durationMs);
+    if (asking) return;
+    const t = setTimeout(() => finish.current(), 1200);
     return () => clearTimeout(t);
-  }, [durationMs]);
+  }, [asking]);
   return (
     <div className="flex flex-col items-center gap-3 py-4">
       <svg viewBox="0 0 52 52" className="h-14 w-14">
@@ -335,19 +337,35 @@ async function silentValue(method: NotifyMethod, getToken: () => Promise<string 
   }
 }
 
+/** The pairing behind a method's code, when it's one that can mirror. A call's code is paired
+ *  either by SMS, which can't, or on WhatsApp. */
+function mirrorChannel(method: NotifyMethod, code: string): RemoteChannel | null {
+  if (method === 'whatsapp' || method === 'telegram') return method;
+  return method === 'voice' && SensorSettings.pairingChannelFor(code, 'voice') === 'whatsapp' ? 'whatsapp' : null;
+}
+
 const MethodModal: React.FC<UserInfoModalProps> = ({ req, onResolve, remote }) => {
   const { getAccessToken } = useAuth();
   const [method, setMethod] = useState<NotifyMethod | null>(req.method ?? null);
-  // 'checking' a saved connection, 'setup' to connect one, 'done' to show the check mark.
+  // 'checking' a saved connection, 'setup' to connect one, 'done' to show the check mark
+  // (and ask about the mirror, if its pairing hasn't been asked yet).
   const [phase, setPhase] = useState<'pick' | 'checking' | 'setup' | 'done'>(req.method ? 'checking' : 'pick');
   const [value, setValue] = useState('');
-  // Just paired a chat: remote management (chat from the phone + the dead-man's switch), on
-  // unless the user unticks it before the check mark finishes. Already-paired users skip this.
-  const [remoteOn, setRemoteOn] = useState(true);
-  const chat = method === 'whatsapp' || method === 'telegram';
+  const [asking, setAsking] = useState<RemoteChannel | null>(null);
 
   const resolve = useCallback((m: NotifyMethod, v: string) => onResolve(req.requestId, { value: v, method: m }), [onResolve, req.requestId]);
   const skip = () => onResolve(req.requestId, { value: '', skipped: true });
+
+  /** The pairing to ask about: one that can mirror, and that the user hasn't answered for. */
+  const unanswered = (m: NotifyMethod, code: string): RemoteChannel | null => {
+    const channel = remote ? mirrorChannel(m, code) : null;
+    return channel && SensorSettings.getMirror(channel) === null ? channel : null;
+  };
+  const connected = (v: string) => {
+    setValue(v);
+    setAsking(method && unanswered(method, v));
+    setPhase('done');
+  };
 
   // Whenever a method is chosen, try it silently first.
   useEffect(() => {
@@ -355,8 +373,9 @@ const MethodModal: React.FC<UserInfoModalProps> = ({ req, onResolve, remote }) =
     let cancelled = false;
     silentValue(method, getAccessToken).then(v => {
       if (cancelled) return;
-      if (v !== null) resolve(method, v);
-      else setPhase('setup');
+      if (v === null) setPhase('setup');
+      else if (unanswered(method, v)) connected(v);
+      else resolve(method, v);
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -368,13 +387,8 @@ const MethodModal: React.FC<UserInfoModalProps> = ({ req, onResolve, remote }) =
     setPhase('checking');
   };
 
-  const connected = (v: string) => { setValue(v); setPhase('done'); };
-  const finish = (m: NotifyMethod) => {
-    if (chat && remote) {
-      // Off disarms too: remote control off means nothing is listening for the phone.
-      if (remoteOn) remote.setDeadman(true);
-      else remote.setEnabled(false);
-    }
+  const finish = (m: NotifyMethod, mirror = false) => {
+    if (asking) remote?.setMirror(asking, mirror);
     resolve(m, value);
   };
   const choosePick = () => { setMethod(null); setPhase('pick'); };
@@ -407,26 +421,23 @@ const MethodModal: React.FC<UserInfoModalProps> = ({ req, onResolve, remote }) =
 
   const meta = METHODS[method];
   return (
-    <Sheet icon={meta.icon} title={phase === 'done' ? `${meta.label} is ready` : `Get alerts by ${meta.label}`} subtitle={phase === 'setup' ? req.reason : undefined} onClose={skip} onBack={back}>
+    <Sheet icon={meta.icon} title={phase === 'done' ? `${meta.label} is ready` : `Get alerts by ${meta.label}`} subtitle={phase === 'setup' ? req.reason : undefined} onClose={phase === 'done' ? () => finish(method) : skip} onBack={back}>
       {phase === 'checking' && <Spinner label={`Checking ${meta.label}…`} />}
       {phase === 'done' && (
-        <Done label={`${meta.label} connected`} onFinish={() => finish(method)} durationMs={chat && remote ? 4000 : undefined}>
-          {chat && remote && (
-            <label className="mt-2 w-full flex items-start gap-3 p-4 rounded-2xl ring-1 ring-zinc-200 dark:ring-zinc-800 text-left cursor-pointer">
-              <input
-                type="checkbox"
-                checked={remoteOn}
-                onChange={e => setRemoteOn(e.target.checked)}
-                className="mt-0.5 h-4 w-4 accent-zinc-900 dark:accent-white"
-              />
-              <span>
-                <span className="block text-sm font-medium">Stay in touch from your phone</span>
-                <span className="block mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-                  Control Observer from {meta.label}, and get a message if monitoring stops.
-                </span>
-              </span>
-            </label>
-          )}
+        <Done label={`${meta.label} connected`} onFinish={() => finish(method)}>
+          {asking && ([
+            [true, 'Mirror this conversation', `Follow and control this chat from ${METHODS[asking].label}, and get a message if monitoring stops.`],
+            [false, 'Alerts only', 'Just the notifications your micro-agents send.'],
+          ] as const).map(([mirror, title, detail]) => (
+            <button
+              key={title}
+              onClick={() => finish(method, mirror)}
+              className="w-full p-4 rounded-2xl ring-1 ring-zinc-200 dark:ring-zinc-800 text-left hover:ring-zinc-900 dark:hover:ring-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-all"
+            >
+              <span className="block text-sm font-medium">{title}</span>
+              <span className="block mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{detail}</span>
+            </button>
+          ))}
         </Done>
       )}
       {phase === 'setup' && (

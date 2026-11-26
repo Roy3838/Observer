@@ -5,6 +5,7 @@ import { WhisperSettings, TranscriptionMode, WhisperDevice } from './whisper/typ
 import { getDefaultWhisperSettings, migrateWhisperModelId } from '../config/whisper-models';
 import { generateWhitelistCode, type PhoneChannel } from './whitelistCode';
 import type { WhitelistChannel } from './logging';
+import type { RemoteChannel } from '../mcp/remote';
 
 class SettingsManager {
     // --- PRIVATE CONSTANTS FOR LOCALSTORAGE KEYS ---
@@ -325,30 +326,33 @@ class SettingsManager {
     /** Mints a fresh Telegram code, e.g. after the chat sent /stop and revoked the old one. */
     public rotateTelegramCode(): string { return this.rotateCode(this.TELEGRAM_CODE_KEY); }
 
-    // --- REMOTE CONTROL ---
-    // Whether this browser listens for messages the user sends from their linked
-    // WhatsApp/Telegram. On by default: linking a phone is already an explicit action.
-    private readonly REMOTE_CONTROL_KEY = 'observer-ai:settings:remoteControl';
+    // --- MIRROR ---
+    // Per pairing (WhatsApp, Telegram; SMS has none): whether that phone/chat mirrors the MCP
+    // conversation, can talk to it, and is told if this device stops reporting. One package,
+    // and off until the user says so; off means it only gets what agents send.
+    private readonly MIRROR_KEY = 'observer-ai:settings:mirror';
+    // The dead-man's switch before it was part of the mirror. Read once, by seedMirror.
+    private readonly LEGACY_DEADMAN_KEY = 'observer-ai:settings:deadman';
 
-    public isRemoteControlEnabled(): boolean {
-        return localStorage.getItem(this.REMOTE_CONTROL_KEY) !== 'off';
+    /** The user's answer for this pairing, or null if they haven't been asked. */
+    public getMirror(channel: RemoteChannel): 'on' | 'off' | null {
+        const stored = localStorage.getItem(`${this.MIRROR_KEY}:${channel}`);
+        return stored === 'on' || stored === 'off' ? stored : null;
     }
 
-    public setRemoteControlEnabled(enabled: boolean): void {
-        localStorage.setItem(this.REMOTE_CONTROL_KEY, enabled ? 'on' : 'off');
+    public setMirror(channel: RemoteChannel, on: boolean): void {
+        localStorage.setItem(`${this.MIRROR_KEY}:${channel}`, on ? 'on' : 'off');
     }
 
-    // Dead-man's switch: while on, the linked phone/chat is told if this device stops
-    // reporting (locked, closed, offline). Off by default; armed when ask_user_info pairs WhatsApp/Telegram.
-    // Persisted so a reload keeps it armed instead of silently disarming it.
-    private readonly DEADMAN_KEY = 'observer-ai:settings:deadman';
-
-    public isDeadmanEnabled(): boolean {
-        return localStorage.getItem(this.DEADMAN_KEY) === 'on';
-    }
-
-    public setDeadmanEnabled(enabled: boolean): void {
-        localStorage.setItem(this.DEADMAN_KEY, enabled ? 'on' : 'off');
+    /**
+     * One-time, the first time it's known whether a phone/chat is linked: one that already had
+     * the dead-man's switch keeps its mirror (the server would otherwise report this device as
+     * stopped). 'ask' marks it done, so a channel linked later is asked about, not seeded.
+     */
+    public seedMirror(channel: RemoteChannel, linked: boolean): void {
+        const key = `${this.MIRROR_KEY}:${channel}`;
+        if (localStorage.getItem(key) !== null) return;
+        localStorage.setItem(key, linked && localStorage.getItem(this.LEGACY_DEADMAN_KEY) === 'on' ? 'on' : 'ask');
     }
 }
 

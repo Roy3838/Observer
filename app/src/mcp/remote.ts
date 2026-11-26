@@ -69,22 +69,21 @@ function listenParams(sessions: RemoteSessions, token: string | undefined, deadm
  * tells the server those sessions are active; while no tab is polling, the phone gets "no
  * Observer session is active" instead. WhatsApp is skipped while there is no token.
  *
- * `deadman` arms (or, false, disarms) the dead-man's switch: once polls stop arriving, the
- * server tells the linked phone/chat that monitoring stopped.
+ * Each poll also arms the dead-man's switch: once they stop arriving, the server tells the
+ * linked phone/chat that monitoring stopped. disarmDeadman first to stop on purpose.
  */
 export async function listenInbox(opts: {
   sessions: RemoteSessions;
   getToken: TokenProvider;
   signal: AbortSignal;
-  deadman: boolean;
   onMessage: (message: RemoteMessage) => void;
 }): Promise<void> {
-  const { sessions, getToken, signal, deadman, onMessage } = opts;
+  const { sessions, getToken, signal, onMessage } = opts;
   let backoff = 1000;
 
   while (!signal.aborted) {
     const token = sessions.whatsapp ? await getToken().catch(() => undefined) : undefined;
-    const params = listenParams(sessions, token, deadman);
+    const params = listenParams(sessions, token, true);
     if (!params.toString()) {
       await sleep(backoff, signal);
       backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
@@ -120,7 +119,7 @@ export async function listenInbox(opts: {
 
 /**
  * Disarm the dead-man's switch for `sessions` when the tab is about to stop polling on purpose
- * (remote control turned off), so that silence isn't read as the device going dark. The server
+ * (its mirror turned off), so that silence isn't read as the device going dark. The server
  * answers a disarming poll at once; the timeout only covers a server that had nothing armed.
  */
 export async function disarmDeadman(sessions: RemoteSessions, getToken: TokenProvider): Promise<void> {

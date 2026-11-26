@@ -1,17 +1,18 @@
 // src/mcp/useRemoteControl.ts
 //
-// Remote control: messages the user sends from their linked WhatsApp/Telegram are injected into
-// whatever MCP conversation is open in this tab, and that conversation is mirrored back to every
-// linked phone/chat as it happens — whoever started the turn (the phone, the desktop, an agent).
+// Remote control, for each linked WhatsApp/Telegram the user chose to mirror to: messages sent
+// from it are injected into whatever MCP conversation is open in this tab, and that conversation
+// is mirrored back to it as it happens — whoever started the turn (the phone, the desktop, an
+// agent). A linked phone/chat that isn't mirrored only gets what agents send.
 // Mounted once, by MCPProvider, so it keeps listening while the chat panel is closed —
 // "watch this for me", walk away, "how's it going?".
 //
 // `send` ignores calls while a run is in flight, so messages wait in a queue and are drained
 // one at a time whenever the MCP is idle.
 //
-// The dead-man's switch rides on the same long-poll: with `deadman` on, the server tells the
-// linked phone/chat if this tab stops polling (device locked, app killed, offline). It implies
-// remote control: turning remote control off disarms it first, so that silence isn't an alarm.
+// The dead-man's switch is part of the mirror and rides on the same long-poll: the server tells
+// the phone/chat if this tab stops polling (device locked, app killed, offline). Turning a mirror
+// off disarms it first, so that silence isn't an alarm.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TokenProvider } from '@utils/main_loop';
@@ -25,11 +26,9 @@ import type { UseMCPReturn } from './useMCP';
 
 /** What the settings card renders. `status` is the server's view; the rest is this tab's. */
 export interface RemoteControlState {
-  enabled: boolean;
-  setEnabled: (enabled: boolean) => void;
-  /** The linked phone/chat is told if this device stops reporting. Implies `enabled`. */
-  deadman: boolean;
-  setDeadman: (deadman: boolean) => void;
+  /** Per channel: its phone/chat mirrors the conversation (once linked). */
+  mirror: Record<RemoteChannel, boolean>;
+  setMirror: (channel: RemoteChannel, on: boolean) => void;
   /** Per channel: null until its first status fetch answers (or while there is no code, or
    *  for WhatsApp no token). Telegram needs no sign-in. */
   status: Record<RemoteChannel, RemoteStatus | null>;
@@ -82,47 +81,38 @@ export function useRemoteControl(
   // Bumped to re-run the drain effect when a message arrives or a remote run finishes.
   const [wake, setWake] = useState(0);
 
-  const [enabled, setEnabledState] = useState(() => SensorSettings.isRemoteControlEnabled());
-  const [deadman, setDeadmanState] = useState(() => SensorSettings.isDeadmanEnabled());
+  const [mirror, setMirrorState] = useState<Record<RemoteChannel, boolean>>(() => ({
+    whatsapp: SensorSettings.getMirror('whatsapp') === 'on',
+    telegram: SensorSettings.getMirror('telegram') === 'on',
+  }));
   const [status, setStatus] = useState<Record<RemoteChannel, RemoteStatus | null>>({ whatsapp: null, telegram: null });
-  // The linked channels' codes, as JSON so the listener only restarts when they actually change.
-  const [sessionKey, setSessionKey] = useState('{}');
-  const sessionKeyRef = useRef(sessionKey);
-  sessionKeyRef.current = sessionKey;
-  const deadmanRef = useRef(deadman);
-  deadmanRef.current = deadman;
+  const [linked, setLinked] = useState<RemoteSessions>({});
+  const linkedRef = useRef(linked);
+  linkedRef.current = linked;
+  // The one gate: linked and mirrored. As JSON so the listener only restarts on a real change.
+  const sessionKey = JSON.stringify(Object.fromEntries(
+    CHANNELS.filter(c => linked[c] && mirror[c]).map(c => [c, linked[c]]),
+  ));
   // The last answer per channel, and the code it was for: a failed status fetch falls back to it.
   const lastStatus = useRef<Partial<Record<RemoteChannel, { code: string; status: RemoteStatus }>>>({});
   const [listening, setListening] = useState(false);
   const [lastMessageAt, setLastMessageAt] = useState<number | null>(null);
 
-  const setDeadman = useCallback((next: boolean) => {
-    SensorSettings.setDeadmanEnabled(next);
-    setDeadmanState(next);
-    // Turning it off while listening needs nothing more: the listener restarts and its next
-    // poll carries deadman=0.
-    if (next) {
-      SensorSettings.setRemoteControlEnabled(true);
-      setEnabledState(true);
+  const setMirror = useCallback((channel: RemoteChannel, on: boolean) => {
+    const code = linkedRef.current[channel];
+    if (!on && code && SensorSettings.getMirror(channel) === 'on') {
+      // Its polls are about to stop for good: disarm first, or the silence reads as an alarm.
+      disarmDeadman({ [channel]: code }, () => getTokenRef.current());
     }
+    SensorSettings.setMirror(channel, on);
+    setMirrorState(prev => ({ ...prev, [channel]: on }));
   }, []);
 
-  const setEnabled = useCallback((next: boolean) => {
-    if (!next && deadmanRef.current) {
-      // The listener is about to stop for good: disarm first, or the silence reads as an alarm.
-      disarmDeadman(JSON.parse(sessionKeyRef.current) as RemoteSessions, () => getTokenRef.current());
-      SensorSettings.setDeadmanEnabled(false);
-      setDeadmanState(false);
-    }
-    SensorSettings.setRemoteControlEnabled(next);
-    setEnabledState(next);
-  }, []);
-
-  // Only channels with a linked phone/chat are polled, all in one request: most tabs have nothing
-  // linked and so hold no connection open at all.
+  // Only mirrored phones/chats are polled, all in one request: most tabs have none and so hold
+  // no connection open at all.
   useEffect(() => {
     const sessions = JSON.parse(sessionKey) as RemoteSessions;
-    if (!enabled || Object.keys(sessions).length === 0) {
+    if (Object.keys(sessions).length === 0) {
       setListening(false);
       return;
     }
@@ -133,7 +123,6 @@ export function useRemoteControl(
       sessions,
       getToken: () => getTokenRef.current(),
       signal: controller.signal,
-      deadman,
       onMessage: message => {
         Logger.info('MCP', `Remote message received via ${message.channel}`);
         setLastMessageAt(Date.now());
@@ -145,23 +134,24 @@ export function useRemoteControl(
       // would otherwise leave the UI reading "connecting…" while the new loop polls happily.
     }).finally(() => { if (listenerRef.current === controller) setListening(false); });
     return () => controller.abort();
-  }, [enabled, sessionKey, deadman]);
+  }, [sessionKey]);
 
   // The link itself lives on the server and changes when the user scans a QR on their phone,
   // so it is polled rather than derived from anything in this tab, and re-checked as soon as a
-  // pairing UI sees a link. Runs even when disabled: the settings card still wants to say what
-  // a re-enable would connect to.
+  // pairing UI sees a link. Covers unmirrored channels too: the settings card shows them.
   useEffect(() => {
     let cancelled = false;
     const check = async () => {
       const token = await getTokenRef.current().catch(() => undefined);
       const results = await Promise.all(CHANNELS.map(async channel => {
         const code = codeFor(channel);
+        if (!code) SensorSettings.seedMirror(channel, false);
         if (!code || (channel === 'whatsapp' && !token)) return { channel, code, status: null };
         // A blip (network, 5xx) keeps the last answer for this code instead of reading as
         // unlinked, which would drop the listener and have the phone told no session is open.
         const prev = lastStatus.current[channel];
         const status = await tryFetchStatus(channel, code, token) ?? (prev?.code === code ? prev.status : null);
+        if (status) SensorSettings.seedMirror(channel, status.linked);
         return { channel, code, status };
       }));
       if (cancelled) return;
@@ -171,7 +161,13 @@ export function useRemoteControl(
         if (code && status?.linked) sessions[channel] = code;
       }
       setStatus(Object.fromEntries(results.map(r => [r.channel, r.status])) as Record<RemoteChannel, RemoteStatus | null>);
-      setSessionKey(JSON.stringify(sessions));
+      setLinked(sessions);
+      // Picks up a seeded mirror (or one turned on in another tab). Never turns one off:
+      // that has to disarm first, see setMirror.
+      setMirrorState(prev => ({
+        whatsapp: prev.whatsapp || SensorSettings.getMirror('whatsapp') === 'on',
+        telegram: prev.telegram || SensorSettings.getMirror('telegram') === 'on',
+      }));
     };
     check();
     const interval = window.setInterval(check, STATUS_POLL_MS);
@@ -181,7 +177,7 @@ export function useRemoteControl(
       clearInterval(interval);
       window.removeEventListener(REMOTE_LINKED_EVENT, check);
     };
-  }, [enabled, lastMessageAt]);
+  }, [lastMessageAt]);
 
   useEffect(() => {
     // No mcp.isRunning gate: mcp.send() now interrupts whatever's in flight (a hung tool call
@@ -200,12 +196,12 @@ export function useRemoteControl(
       });
   }, [mcp.isRunning, mcp.send, wake]);
 
-  // The mirror: each step of every turn goes to the linked phones/chats as it happens, one
+  // The mirror: each step of every turn goes to the mirrored phones/chats as it happens, one
   // request at a time so they arrive in order. Tool images wait for the next text and ride
   // with it (one per message); tool calls and raw results stay on the desktop.
   useEffect(() => {
     const sessions = JSON.parse(sessionKey) as RemoteSessions;
-    if (!enabled || Object.keys(sessions).length === 0) return;
+    if (Object.keys(sessions).length === 0) return;
     let chain = Promise.resolve();
     let image: string | undefined;
     const forward = (to: RemoteSessions, item: PhoneItem) => {
@@ -235,7 +231,7 @@ export function useRemoteControl(
         forward(echo.to, { turnId, text: echo.text, image: images.at(-1) });
       }
     });
-  }, [enabled, sessionKey, mcp.subscribeTurn]);
+  }, [sessionKey, mcp.subscribeTurn]);
 
-  return { enabled, setEnabled, deadman, setDeadman, status, listening, lastMessageAt };
+  return { mirror, setMirror, status, listening, lastMessageAt };
 }

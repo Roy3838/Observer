@@ -9,6 +9,7 @@ import WhitelistQR from '@components/whitelist/WhitelistQR';
 import TelegramQR from '@components/whitelist/TelegramQR';
 import Switch from './Switch';
 import { useMCPContext } from '../../mcp/MCPContext';
+import { CHANNEL_NAME, type RemoteChannel } from '../../mcp/remote';
 import type { UserInfoKind } from '../../mcp/types';
 import {
   CONTACT_LABEL, CONTACT_PLACEHOLDER, contactError, contactValid, normalizeContact,
@@ -74,29 +75,23 @@ const ContactRow: React.FC<{ kind: UserInfoKind }> = ({ kind }) => {
   );
 };
 
-/**
- * Chatting with Observer from a paired phone/chat — same codes, same card, just a different
- * channel capability. `status` comes from the API (only the server knows which phone/chat
- * paired); `listening` is this tab holding the session open — with it off, the bot tells the
- * phone no session is active.
- */
-const RemoteControlStatus: React.FC = () => {
+/** A linked phone/chat's mirror: on, it follows and controls the conversation and is told if
+ *  monitoring stops; off, it only gets what agents send. */
+const MirrorSwitch: React.FC<{ channel: RemoteChannel }> = ({ channel }) => {
   const { remote } = useMCPContext();
-  const linkedChannels = (['whatsapp', 'telegram'] as const).filter(c => remote.status[c]?.linked);
-
-  const status = linkedChannels.length === 0
-    ? 'Not chatting yet — link WhatsApp or Telegram above'
-    : `Chat linked via ${linkedChannels.map(c => (c === 'whatsapp' ? 'WhatsApp' : 'Telegram')).join(' · ')}${
-        remote.enabled ? (remote.listening ? ' · listening' : ' · connecting…') : ''
-      }${remote.enabled && remote.deadman ? ' · alerts you if it stops' : ''}`;
-
+  if (!remote.status[channel]?.linked) return null;
+  const on = remote.mirror[channel];
   return (
-    <div className="flex items-center justify-between gap-3 px-5 py-3">
-      <p className="text-xs text-gray-500 dark:text-gray-400 min-w-0">{status}</p>
+    <div className="mt-3 flex items-center justify-between gap-3">
+      <p className="text-xs text-gray-500 dark:text-gray-400 min-w-0">
+        {on
+          ? `Mirrors the conversation · ${remote.listening ? 'listening' : 'connecting…'} · alerts you if it stops`
+          : 'Alerts only'}
+      </p>
       <Switch
-        checked={remote.enabled}
-        onChange={() => remote.setEnabled(!remote.enabled)}
-        label="Toggle remote control"
+        checked={on}
+        onChange={() => remote.setMirror(channel, !on)}
+        label={`Mirror the conversation to ${CHANNEL_NAME[channel]}`}
       />
     </div>
   );
@@ -113,7 +108,8 @@ const CodeRow: React.FC<{
   rotateConfirm: string;
   onRotate: () => void;
   setup?: React.ReactNode;
-}> = ({ title, description, code, connected, name, qr, rotateConfirm, onRotate, setup }) => {
+  mirror?: RemoteChannel;
+}> = ({ title, description, code, connected, name, qr, rotateConfirm, onRotate, setup, mirror }) => {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
@@ -166,6 +162,8 @@ const CodeRow: React.FC<{
           </button>
         </div>
       ) : setup}
+
+      {code && mirror && <MirrorSwitch channel={mirror} />}
 
       {code && showQR && (
         <div className="mt-4 flex flex-col items-center rounded-xl bg-white border border-gray-200 py-4">
@@ -228,6 +226,7 @@ const UserInfoCard: React.FC = () => {
         code={isAuthenticated ? waCode : null}
         connected={waConnected}
         name={remote.status.whatsapp?.name}
+        mirror="whatsapp"
         qr={code => <WhitelistQR code={code} channel="whatsapp" />}
         rotateConfirm={ROTATE_CONFIRM}
         onRotate={() => setWaCode(SensorSettings.rotateWhitelistCode())}
@@ -254,12 +253,11 @@ const UserInfoCard: React.FC = () => {
         code={telegram.code}
         connected={telegram.linked}
         name={telegram.status?.name}
+        mirror="telegram"
         qr={code => <TelegramQR code={code} />}
         rotateConfirm={ROTATE_CONFIRM}
         onRotate={telegram.rotate}
       />
-
-      <RemoteControlStatus />
 
       {KINDS.map(kind => <ContactRow key={kind} kind={kind} />)}
     </section>
