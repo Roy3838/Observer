@@ -85,6 +85,9 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const callRe = (fn: string, flags = '') => new RegExp(`(?<![\\w.$])${esc(fn)}\\s*\\(`, flags);
 const calls = (code: string, fn: string) => callRe(fn).test(code);
 
+/** Every literal `sleep(ms)` duration in the code, in ms. */
+const sleepsMs = (code: string) => [...code.matchAll(/(?<![\w.$])sleep\s*\(\s*([\d_]+)/g)].map(m => Number(m[1].replace(/_/g, '')));
+
 const has = (prompt: string, sensor: string) => new RegExp(`\\$${sensor}(?![A-Z_])`).test(prompt);
 
 /** The argument text of every `fn(...)` call, parentheses balanced. */
@@ -404,8 +407,7 @@ export const RULES: Rule[] = [
     applies: ctx => ctx.cls.cardinality === 'every' && (ctx.agent.loop_interval_seconds ?? 30) < 60
       && PAID_SENDS.some(fn => calls(stripComments(ctx.code), fn)),
     check: ctx => {
-      const sleeps = [...stripComments(ctx.code).matchAll(/(?<![\w.$])sleep\s*\(\s*([\d_]+)/g)].map(m => Number(m[1].replace(/_/g, '')));
-      return sleeps.some(ms => ms >= 60000) ? null : 'call / sendSms / sendWhatsapp cost money: await sleep(60000) after them on an every-time agent.';
+      return sleepsMs(stripComments(ctx.code)).some(ms => ms >= 60000) ? null : 'call / sendSms / sendWhatsapp cost money: await sleep(60000) after them on an every-time agent.';
     },
   },
   {
@@ -507,7 +509,8 @@ export const RULES: Rule[] = [
       if (ctx.agent.model_name !== 'clef-flash') out.push('a scout runs on clef-flash.');
       if (calls(code, 'stopAgent')) out.push('a scout never stops itself: the screen share would end with it.');
       if (!calls(code, 'mcp')) out.push('a scout wakes you with await mcp("...").');
-      if (!calls(code, 'getMemory')) out.push('a scout wakes you once: guard mcp() with a memory flag (getMemory / setMemory).');
+      // No memory flag: if you haven't replaced the scout a minute after it woke you, it wakes you again.
+      if (!sleepsMs(code).some(ms => ms >= 60000)) out.push('a scout wakes you at most once a minute: await sleep(60000) right after mcp().');
       return out;
     },
   },

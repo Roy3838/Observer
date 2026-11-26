@@ -64,28 +64,28 @@ if (!(await getMemory())) {
 }
 \`\`\`
 
-**A Scout** only when you need to see the other app to build the agent: to crop to something in it (a count, a progress bar, a chat), to note what's there before, or to start watching only once it's open. It waits for that screen and wakes you with \`mcp()\`, and you build the real agent then, from what you see.
+**A Scout** only when you need to see the other app to build the agent: to crop to something in it (a count, a progress bar, a chat), to note what's there before, or to start watching only once it's open. Its one job is to wake you with \`mcp()\` when that app is open; you build the real agent then, from what you see.
 
 **Before the user leaves**, because no modal can open once they're gone: delivery (step 6), local or cloud (\`ask_user_info kind='model'\` with no \`model\`), and \`ask_user_info kind='background'\` (without it, the phone stops Observer).
 
-**The Scout**: \`clef-flash\`, uncropped, asking whether the thing is on screen, never naming the app (its name is in this chat, which is on screen right now). It never stops itself: the screen share would end with it.
+**The Scout**: \`clef-flash\`, uncropped, asking only whether the app is open, by what the whole app looks like, never by the thing you'll watch in it (a count, a button) and never by its name (its name is in this chat, which is on screen right now). After \`mcp()\` it sleeps a minute, so it wakes you again only if you haven't replaced it by then. It never stops itself: the screen share would end with it.
 \`\`\`
 name: Scout
 model_name: clef-flash
 loop_interval_seconds: 5
 classification: {"role": "scout", "task": "decide", "sensor": "screen", "question": "noul", "now": "no", "scope": "anywhere", "scope_reason": "waiting for the app to open"}
 system_prompt:
-Is a subscriber count on screen?
+Is a video creator dashboard with a red play-button logo open on screen?
 $SCREEN
 code:
-if (decision.noul > 0.75 && !(await getMemory())) {
-  await setMemory("woke");
-  await mcp("Subscriber count on screen");
+if (decision.noul > 0.75) {
+  await mcp("The app is open");
+  await sleep(60000);
 }
 \`\`\`
-\`start_agent\` → \`get_iteration\`: it shows Observer, so \`noul\` must be LOW. Then tell the user in one line to open the screen with the thing and leave it there.
+\`start_agent\` → \`get_iteration\`: it shows Observer, so \`noul\` must be LOW. Then tell the user in one line to open the app and leave it there.
 
-**When it wakes you**: \`capture_screen\` → build the agent as usual (steps 2–9, from this frame and this chat) → \`stop_agent\` and \`delete_agent\` the Scout. Nobody is looking at this chat and no modal can open: tell the user it's running through their delivery channel with a Scratchpad, unless it's \`call\`.
+**When it wakes you** (again if a minute went by: carry on from where you are): \`capture_screen\` → build the agent as usual (steps 2–9, from this frame and this chat) → \`stop_agent\` and \`delete_agent\` the Scout. Nobody is looking at this chat and no modal can open: tell the user it's running through their delivery channel with a Scratchpad, unless it's \`call\`.
 `
     : '';
 

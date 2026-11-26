@@ -219,10 +219,10 @@ await stopAgent();`,
   {
     name: 'Scout',
     model: 'clef-flash',
-    prompt: 'Is a subscriber count on screen?\n$SCREEN',
-    code: `if (decision.noul > 0.75 && !(await getMemory())) {
-  await setMemory("woke");
-  await mcp("Subscriber count on screen");
+    prompt: 'Is a video creator dashboard with a red play-button logo open on screen?\n$SCREEN',
+    code: `if (decision.noul > 0.75) {
+  await mcp("The app is open");
+  await sleep(60000);
 }`,
     cls: { role: 'scout', task: 'decide', sensor: 'screen', question: 'noul', now: 'no', scope: 'anywhere', scope_reason: 'waiting for the app to open' },
   },
@@ -255,6 +255,7 @@ for (const c of RECIPES) {
 // ---- Broken variants: each must fail with its rule -------------------------------
 
 const [finish, pigeon, , nag, sequence, , , , gate] = RECIPES;
+const scout = RECIPES.find(r => r.cls.role === 'scout')!;
 const variant = (base: Case, name: string, over: Partial<Case>): Case => ({ ...base, ...over, name, cls: { ...base.cls, ...(over.cls ?? {}) } });
 
 const BROKEN: [string, Case][] = [
@@ -272,6 +273,7 @@ const BROKEN: [string, Case][] = [
   ['T2', variant(sequence, 'branches on .choice', { code: 'if (decision.stage.choice === "failed") { await stopAgent(); }' })],
   ['T4', variant(nag, 'nag that stops', { code: nag.code + '\nawait stopAgent();' })],
   ['K1', variant(pigeon, 'once without stopAgent', { code: 'if (decision.noul > 0.75) { notify("Maria replied", "New message"); }' })],
+  ['R1', variant(scout, 'scout that wakes you on every iteration', { code: 'if (decision.noul > 0.75) { await mcp("The app is open"); }' })],
   ['K3', variant(finish, 'paid every-time on a fast loop', { cls: { cardinality: 'every' } as AgentClassification, code: 'if (decision.noul < 0.25 || decision.dropped) { await call("tree-book-shower-golden", "stopped"); await setMemory("x"); }' })],
   ['N1', variant(finish, 'channel voice delivered by notify', { code: 'if (decision.noul < 0.25 || decision.dropped) { notify("Done", "stopped"); await stopAgent(); }' })],
   ['N2', variant(finish, 'unawaited call', { code: 'if (decision.noul < 0.25 || decision.dropped) { call("tree-book-shower-golden", "stopped"); await stopAgent(); }' })],
