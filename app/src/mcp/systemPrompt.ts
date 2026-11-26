@@ -16,6 +16,7 @@
 //      function tools and must never be "called" here.
 
 import { isDesktop, isMobile } from '@utils/platform';
+import { SOUND_NAMES } from '@utils/handlers/utils';
 
 export default function getMcpSystemPrompt(): string {
   const desktop = isDesktop();
@@ -184,7 +185,7 @@ An agent is a \`system_prompt\` and a \`code\` body, run every \`loop_interval_s
 3. The code (JavaScript, inside an async function) acts on it.
 
 You never call these; you write them into \`code\`:
-Notifications: \`notify(title, message)\` (browser, text only), \`sound(name?, volume?)\`, \`sendEmail(email, message, images?)\`, \`sendTelegram(code, message, images?)\`, \`sendWhatsapp(code, message, images?)\`, \`sendSms(code, message, images?)\`, \`call(code, message)\`, \`sendDiscord(webhook, message, images?)\`, \`sendPushover(user_token, message, images?)\`.${appTools}
+Notifications: \`notify(title, message)\` (browser, text only), \`sound(name?, volume?)\` (name is one of ${SOUND_NAMES.map(s => `"${s}"`).join(', ')}, or an audio URL the user gave you; no other names exist, so leave it out when unsure),\`sendEmail(email, message, images?)\`, \`sendTelegram(code, message, images?)\`, \`sendWhatsapp(code, message, images?)\`, \`sendSms(code, message, images?)\`, \`call(code, message)\`, \`sendDiscord(webhook, message, images?)\`, \`sendPushover(user_token, message, images?)\`.${appTools}
 Memory: \`await getMemory()\`, \`await setMemory(content)\`, \`await appendMemory(content)\`. Control: \`await stopAgent()\`, \`await startAgent(id)\`, \`time()\`, \`await sleep(ms)\`, \`await mcp(note)\` (wakes YOU in this chat with a short note, like \`mcp("No new strokes in 5 minutes")\`, when the outcome needs your judgment: feedback, a summary. The agent only watches and records; you read its memory with \`get_agent\` and what it saw with \`get_runs\` / \`get_iteration\`, then stop it when you're done with it).
 Images: \`screen\` and \`camera\` are already arrays of images. "Save / keep / store a screenshot or picture of it" → \`await appendImageMemory(screen)\` (adds to this agent's image memory; \`await setImageMemory(screen)\` replaces it; \`await getImageMemory()\` reads it back). Pass \`screen\` as is, never \`[screen]\`. \`$IMEMORY\` in a system_prompt shows the model the saved images (a reference to compare against); \`$IMEMORY@other_agent\` shows another agent's.
 Video: the screen and camera are recorded all the time. \`await getVideo('screen' | 'camera')\` returns the video since the last iteration as an array (empty if too short); pass it as the 4th argument, \`videos\`, of \`sendEmail\` / \`sendTelegram\` / \`sendWhatsapp\` / \`sendSms\` / \`sendDiscord\`: \`await sendTelegram(code, "Max is at the door", camera, await getVideo('camera'))\`. "Save a clip / record it" → \`await startClip()\` on the event (the clip starts from the beginning of the current iteration), \`markClip(label)\` to label a moment, \`await stopClip()\` once it's over; clips are saved to Observer's recordings.

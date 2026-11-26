@@ -51,6 +51,7 @@ function run(c: Case) {
     crop: c.crop,
     findAgent: c.agents ? id => (c.agents![id] ? { classification: c.agents![id] } : null) : undefined,
     iteration: c.iteration ? { sessionIterationNumber: 1, tools: [], ...c.iteration } as IterationData : undefined,
+    sounds: ['ping', 'bell'],
   };
   return runRules(c.stage ?? 'save', ctx);
 }
@@ -274,6 +275,7 @@ const BROKEN: [string, Case][] = [
   ['K3', variant(finish, 'paid every-time on a fast loop', { cls: { cardinality: 'every' } as AgentClassification, code: 'if (decision.noul < 0.25 || decision.dropped) { await call("tree-book-shower-golden", "stopped"); await setMemory("x"); }' })],
   ['N1', variant(finish, 'channel voice delivered by notify', { code: 'if (decision.noul < 0.25 || decision.dropped) { notify("Done", "stopped"); await stopAgent(); }' })],
   ['N2', variant(finish, 'unawaited call', { code: 'if (decision.noul < 0.25 || decision.dropped) { call("tree-book-shower-golden", "stopped"); await stopAgent(); }' })],
+  ['N5', variant(finish, 'made-up sound name', { code: 'if (decision.noul < 0.25 || decision.dropped) { sound("alarm"); await call("tree-book-shower-golden", "stopped"); await stopAgent(); }' })],
   ['N3', variant(sequence, '[screen]', { code: sequence.code.replace(', screen)', ', [screen])') })],
   ['G1', variant(gate, 'gate that never starts its scribe', { code: gate.code.replace('await startAgent("door_scribe");', '') })],
   ['P1', variant(finish, 'region agent started without a crop', { stage: 'start', crop: { screen: false, camera: false } })],
@@ -287,6 +289,13 @@ for (const [id, c] of BROKEN) {
   const hit = [...errors, ...warnings].filter(v => v.id === id);
   if (hit.length) pass(`${id} catches: ${c.name}`);
   else fail(`${id} should catch "${c.name}"; got ${[...errors, ...warnings].map(v => v.id).join(', ') || 'nothing'}`);
+}
+
+// Sound names that exist (N5 must stay quiet).
+for (const call of ['sound()', 'sound("ping")', "sound('bell', 0.8)", 'sound("https://example.com/a.wav")', 'sound(name)', 'sound(`${x}`)']) {
+  const c = variant(finish, call, { code: `if (decision.noul < 0.25 || decision.dropped) { ${call}; await call("tree-book-shower-golden", "stopped"); await stopAgent(); }` });
+  const hit = run(c).errors.filter(v => v.id === 'N5');
+  hit.length ? fail(`N5 should allow ${call}: ${hit[0].message}`) : pass(`N5 allows ${call}`);
 }
 
 // ---- Engine: run trends on every answer (E2) -------------------------------------

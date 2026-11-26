@@ -38,6 +38,8 @@ export interface RuleContext {
   findAgent?: (id: string) => { classification?: AgentClassification } | null;
   /** verify stage. */
   iteration?: IterationData;
+  /** Names sound() accepts (bundled + aliases). Unset: sound names aren't checked (rule N5). */
+  sounds?: string[];
 }
 
 export interface Rule {
@@ -444,6 +446,22 @@ export const RULES: Rule[] = [
       const code = stripComments(ctx.code);
       const bare = IMAGE_SENDS.filter(fn => callArgs(code, fn).some(a => !/\b(screen|camera|imemory)\b/.test(a)));
       return bare.length ? `attach the frame to ${bare.join(', ')}: pass screen (or camera) as the images argument.` : null;
+    },
+  },
+  {
+    // A made-up name ("alarm", "chime") only fails when the agent fires, so it's caught here.
+    id: 'N5', stage: 'save', severity: 'error', onCustom: true,
+    applies: ctx => !!ctx.sounds && calls(stripComments(ctx.code), 'sound'),
+    check: ctx => {
+      const bad = new Set<string>();
+      for (const args of callArgs(stripComments(ctx.code), 'sound')) {
+        const m = args.match(/^\s*(["'`])((?:(?!\1)[^\\]|\\.)*)\1\s*(?:,|$)/);
+        if (!m || (m[1] === '`' && m[2].includes('${'))) continue; // no name, or not a literal
+        const name = m[2];
+        if (!ctx.sounds!.includes(name) && !/^(https?:|data:|blob:|\/)/.test(name)) bad.add(name);
+      }
+      return [...bad].map(name =>
+        `sound("${name}"): there is no sound named "${name}". Use one of ${ctx.sounds!.map(s => `"${s}"`).join(', ')}, leave the name out (sound()), or pass an audio URL the user gave you.`);
     },
   },
 

@@ -6,6 +6,7 @@
 // the LLM proposes, the rules check.
 
 import { ModelManager } from '@utils/ModelManager';
+import { KNOWN_SOUNDS } from '@utils/handlers/utils';
 import type { IterationData } from '@utils/IterationStore';
 import type { AgentClassification } from './schema';
 import { strategyOf, describeClassification } from './derive';
@@ -41,6 +42,7 @@ export function checkAgent(stage: Stage, input: CheckInput): CheckResult {
     crop: input.crop,
     findAgent: input.findAgent,
     iteration: input.iteration,
+    sounds: KNOWN_SOUNDS,
   };
   return runRules(stage, ctx);
 }
