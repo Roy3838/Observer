@@ -434,6 +434,16 @@ export async function executeAgentIteration(agentId: string): Promise<void> {
       return; // Skip iteration, don't stop agent
     }
 
+    // HTTP 422 from the API (intermittent streaming-pipeline bug) - skip iteration, keep the loop alive
+    if (/^API error: 422\b/.test(rawMsg)) {
+      Logger.warn(agentId, `Server error (422) - skipping iteration: ${rawMsg}`, {
+        logType: 'iteration-skipped',
+        iterationId,
+        content: { reason: 'server_error', error: rawMsg }
+      });
+      return; // Skip iteration, don't stop agent
+    }
+
     Logger.error(agentId, `Iteration failed`, {
       logType: 'iteration-end',
       iterationId,

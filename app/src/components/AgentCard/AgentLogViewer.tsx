@@ -336,14 +336,15 @@ const AgentLogViewer: React.FC<AgentLogViewerProps> = ({
 
       // Render minimal card for skipped iterations
       if (iteration.isSkipped) {
-        const isNetworkError = iteration.skipReason === 'network_error';
+        const isNetworkError = iteration.skipReason === 'network_error' || iteration.skipReason === 'server_error';
         const borderColor = isNetworkError ? 'border-red-200' : 'border-orange-200';
         const bgColor = isNetworkError ? 'bg-red-50' : 'bg-orange-50';
         const dotColor = isNetworkError ? 'bg-red-500' : 'bg-orange-500';
         const textColor = isNetworkError ? 'text-red-700' : 'text-orange-700';
         const labelBg = isNetworkError ? 'bg-red-100' : 'bg-orange-100';
         const labelText = isNetworkError ? 'text-red-600' : 'text-orange-600';
-        const skipMessage = isNetworkError ? 'Network Error' : 'Same Inputs';
+        const skipMessage = iteration.skipReason === 'server_error' ? 'Server Error'
+          : isNetworkError ? 'Network Error' : 'Same Inputs';
 
         return (
           <div

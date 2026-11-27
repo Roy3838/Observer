@@ -79,7 +79,7 @@ const ModelStatePanel: React.FC<{
   sleepProgress?: number;
   loopDurationMs?: number;
   sleepDurationMs?: number;
-  skipReason?: 'same_inputs' | 'network_error' | null;
+  skipReason?: 'same_inputs' | 'network_error' | 'server_error' | null;
   isOverrun?: boolean;
 }> = ({ status, capture, changeDetectionData, onSettingsClick, onWake, onClick, loopProgress, sleepProgress, loopDurationMs, sleepDurationMs, skipReason, isOverrun }) => {
   const statusInfo = useMemo(() => {
@@ -91,6 +91,8 @@ const ModelStatePanel: React.FC<{
       case 'SLEEPING': return { icon: null, text: 'Sleeping...', color: 'text-blue-600' }; // Icon handled separately
       case 'SKIPPED': return skipReason === 'network_error'
         ? { icon: <Clock className="w-5 h-5" />, text: 'Skipped due to Network Error, Waiting...', color: 'text-red-500' }
+        : skipReason === 'server_error'
+        ? { icon: <Clock className="w-5 h-5" />, text: 'Skipped due to Server Error, Waiting...', color: 'text-red-500' }
         : { icon: <Clock className="w-5 h-5" />, text: 'Reused Model Call, Waiting...', color: 'text-gray-500' };
       case 'WAITING': return { icon: <Clock className="w-5 h-5" />, text: 'Waiting for next cycle...', color: 'text-gray-500' };
       default: return { icon: <div />, text: 'Idle', color: 'text-gray-400' };
@@ -341,7 +343,7 @@ interface ActiveAgentViewProps {
     sleepProgress?: number;
     loopDurationMs?: number;
     sleepDurationMs?: number;
-    skipReason?: 'same_inputs' | 'network_error' | null;
+    skipReason?: 'same_inputs' | 'network_error' | 'server_error' | null;
     isOverrun?: boolean;
     onActivity?: (agentId: string) => void;
 }

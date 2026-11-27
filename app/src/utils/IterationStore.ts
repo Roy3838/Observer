@@ -48,7 +48,7 @@ export interface IterationData {
   bytes?: number; // Approximate stored size
   hasError: boolean;
   isSkipped?: boolean; // True if iteration was skipped
-  skipReason?: 'same_inputs' | 'network_error'; // Why the iteration was skipped
+  skipReason?: 'same_inputs' | 'network_error' | 'server_error'; // Why the iteration was skipped
 }
 
 export interface AgentSession {
@@ -140,9 +140,11 @@ class IterationStoreClass {
       it.hasError ||= type === 'tool-error';
     } else if (type === 'iteration-skipped') {
       it.isSkipped = true;
-      it.skipReason = c?.reason === 'network_error' ? 'network_error' : 'same_inputs';
+      it.skipReason = c?.reason === 'network_error' || c?.reason === 'server_error' ? c.reason : 'same_inputs';
       it.modelResponse = it.skipReason === 'network_error'
         ? `Network error - iteration skipped: ${c?.error || 'Connection failed'}`
+        : it.skipReason === 'server_error'
+        ? `Server error - iteration skipped: ${c?.error || 'Unprocessable request'}`
         : 'No significant change detected - iteration skipped to save resources.';
       this.finish(it, at);
     } else if (type === 'iteration-end') {

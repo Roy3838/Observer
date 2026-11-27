@@ -76,7 +76,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
   const [sleepDurationMs, setSleepDurationMs] = useState(0);
   const [isSleeping, setIsSleeping] = useState(false);
   const [currentModel, setCurrentModel] = useState(agent.model_name);
-  const [skipReason, setSkipReason] = useState<'same_inputs' | 'network_error' | null>(null);
+  const [skipReason, setSkipReason] = useState<'same_inputs' | 'network_error' | 'server_error' | null>(null);
   const initialModelRef = useRef(agent.model_name);
   const loopStartTimeRef = useRef(0);
   const loopDurationRef = useRef(0);
@@ -178,10 +178,12 @@ const AgentCard: React.FC<AgentCardProps> = ({
         if (log.details?.logType === 'model-prompt') setLiveStatus('THINKING');
         else if (log.details?.logType === 'iteration-skipped') {
           setLiveStatus('SKIPPED');
-          const reason = log.details?.content?.reason as 'same_inputs' | 'network_error' | undefined;
+          const reason = log.details?.content?.reason as 'same_inputs' | 'network_error' | 'server_error' | undefined;
           setSkipReason(reason || 'same_inputs');
           if (reason === 'network_error') {
             setLastResponse(`Network error - iteration skipped: ${log.details?.content?.error || 'Connection failed'}`);
+          } else if (reason === 'server_error') {
+            setLastResponse(`Server error - iteration skipped: ${log.details?.content?.error || 'Unprocessable request'}`);
           } else {
             setLastResponse('No significant change detected - reused model call to save resources.');
           }
