@@ -72,7 +72,7 @@ if (!(await getMemory())) {
 \`\`\`
 name: Scout
 model_name: clef-flash
-loop_interval_seconds: 5
+loop_interval_seconds: 10
 classification: {"role": "scout", "task": "decide", "sensor": "screen", "question": "noul", "now": "no", "scope": "anywhere", "scope_reason": "waiting for the app to open"}
 system_prompt:
 Is a video creator dashboard with a red play-button logo open on screen?
@@ -198,14 +198,14 @@ A decision model answers a question about the image with probabilities, never te
 - **Crop** first (2b). Read the \`box_2d\` off the \`capture_screen\` frame${desktop ? ', never off a `see_screen_target` thumbnail' : ''}, then \`capture_screen\` with the \`agent_id\`: if text is cut or the label is missing, crop again. On camera the object must fill the frame: if it doesn't, crop with \`set_camera_crop\` and check with \`capture_camera\` with the \`agent_id\`.
 - **noul** (one yes/no): the system_prompt is the question as plain text, then the sensor. The code reads \`decision.noul\` (P(yes)), and the trigger follows from \`now\`: **now "yes"** → exactly \`decision.noul < 0.25 || decision.dropped\`; **now "no"** → exactly \`decision.noul > 0.75\`. \`decision.dropped\` means noul stayed well below where the run started for 3 iterations: it catches endings that only look a little different (a full red bar where the percentage was). Never change the thresholds.
 - **choice** (one label of several): the system_prompt is a JSON request (format below). The code reads \`decision.<id>.probabilities.<label>\` and acts on exactly \`> 0.75\`, written out in full like that in every comparison. \`decision.<id>.left\` means the label it started on (\`now\`) has faded for 3 iterations without another clearly winning. Never branch on \`decision.<id>.choice\`: it wins even at 40%.
-- **loop_interval_seconds:** 5 (states: 5–10).
+- **loop_interval_seconds:** 10 (states: 10–30).
 - **Verify:** the first iterations must answer \`now\` (now "yes" → HIGH noul, e.g. 0.97; now "no" → LOW). If not, the crop or the question is wrong; never change the threshold.
 
 **Dials.** Crop to ONLY the text or value that shows the job is still running: the percentage ("38%"), the "Uploading 12 items" line, the "Exporting…" caption, the time left. Not the progress bar, the panel or the dialog: when a job fails, those usually stay on screen (a red bar, "1 upload failed", "Export failed" in the same dialog), so a crop on them can't tell running from failed. The text is what disappears or changes on every ending. Leave a margin so a longer value ("100%", "12 minutes left") still fits: every character inside, at least ~60px tall. Ask whether it STILL SHOWS that in-progress text, naming the text, never a bar, panel, popup or dialog, never the process: "Is there a download percentage below 100% on screen?", "Does it say 'Uploading' with items or time left?" That's \`now: "yes"\`, and it catches every ending (done, failed, cancelled, the UI moved on), so it also covers "tell me if it fails". Word the message neutrally ("Your download stopped: it finished or failed"), since a yes/no can't tell how it ended.
 \`\`\`
 name: Finish Line
 model_name: clef-flash
-loop_interval_seconds: 5
+loop_interval_seconds: 10
 classification: {"role": "watcher", "task": "decide", "sensor": "screen", "target": "dial", "shape": "event", "cardinality": "once", "scope": "region", "question": "noul", "now": "yes", "channel": "voice"}
 system_prompt:
 Is there a download percentage below 100% on screen?
@@ -220,7 +220,7 @@ When the user wants to know HOW it ended ("tell me if the upload finished or fai
 \`\`\`
 name: Upload Courier
 model_name: clef-flash
-loop_interval_seconds: 5
+loop_interval_seconds: 10
 classification: {"role": "watcher", "task": "decide", "sensor": "screen", "target": "dial", "shape": "event", "cardinality": "once", "scope": "region", "question": "choice", "now": "uploading", "channel": "telegram"}
 system_prompt:
 {"questions": {"upload": {"type": "choice", "instructions": "What does the upload status say?", "criteria": {"uploading": "still uploading, with items or time left", "done": "the upload finished", "failed": "the upload failed or was cancelled"}}}}
@@ -241,7 +241,7 @@ if (decision.upload.probabilities.done > 0.75) {
 \`\`\`
 name: Carrier Pigeon
 model_name: clef-flash
-loop_interval_seconds: 5
+loop_interval_seconds: 10
 classification: {"role": "watcher", "task": "decide", "sensor": "screen", "target": "state", "shape": "event", "cardinality": "once", "scope": "region", "question": "noul", "now": "no", "channel": "browser"}
 system_prompt:
 The newest message in this WhatsApp chat is the user's own: "Can you send it to me?". Is there a newer message from Maria below it?
@@ -277,7 +277,7 @@ await appendMemory("[" + time() + "] " + response);
 \`\`\`
 name: Doorman
 model_name: clef-flash
-loop_interval_seconds: 5
+loop_interval_seconds: 10
 classification: {"role": "gate", "task": "decide", "sensor": "camera", "target": "object", "shape": "event", "cardinality": "every", "question": "noul", "now": "no", "scope": "anywhere", "scope_reason": "a person can be anywhere in the doorway view", "triggers": "door_scribe"}
 system_prompt:
 Is there a person in frame?
